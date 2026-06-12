@@ -1,0 +1,21 @@
+CONFIGURACION
+
+
+
+-------------------------------------------------------------------------------------
+EXCEL NOTA DE VENTAS 
+-------------------------------------------------------------------------------------
+
+UBICACIONES
+FECHA:C2
+COTIZACION:H1
+CONTACTO:C5
+EMPRESA:C6
+EMAIL:C7
+RAZON_SOCIAL:I5
+RUT:I6
+FUENTE:I7
+PRODUCTO:B10,B11,B12,B13,B14,B15,B16,B17
+DESCRIPCION:C19
+OBSERVACIONES:C20
+OTROS:F23,F24,F25,F26,F27,F28,F29,F30

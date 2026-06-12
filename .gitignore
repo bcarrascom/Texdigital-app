@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Builds de PyInstaller
+build/
+dist/
+*.spec
+
+# Carpetas locales que no se versionan
+outputs/
+templates/

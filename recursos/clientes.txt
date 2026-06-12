@@ -1,0 +1,3 @@
+# Formato: Empresa|Rut|Razon Social
+# Una empresa por línea. Las líneas que comienzan con # son comentarios.
+Empresa Ejemplo|12.345.678-9|Ejemplo S.A.
