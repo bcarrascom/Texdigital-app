@@ -17,28 +17,22 @@ if sys.platform == "win32":
         except Exception:
             pass
 
-# Reutilizar paleta, fuentes y helpers del cotizador backlight
-from ui.cotizador_backlight import (
+# Paleta, fuentes y helpers compartidos
+from ui.estilos import (
     COLORES,
-    FUENTE_CABECERA,
     FUENTE_SUBTITULO,
     FUENTE_TITULO,
     FUENTE_LABEL,
     FUENTE_MEDIDA,
-    FUENTE_BTN,
-    FUENTE_AVISO,
-    FUENTE_NAV,
-    FUENTE_TABLA_CAB,
-    FUENTE_TABLA,
-    FUENTE_TOTAL,
     MAX_LADO,
     MARGEN,
-    CANVAS_W,
-    CANVAS_H,
     _construir_cabecera,
     _centrar,
-    _btn_label,
 )
+
+# Pantallas compartidas
+from ui.pantalla_inicio import PantallaInicio
+from ui.pantalla_medidas_base import PantallaMedidasBase
 
 # Widget de autocompletado ya existente
 from ui.formulario_cliente import EntradaAutocompletado
@@ -71,138 +65,24 @@ def _calc_ml(d: dict) -> tuple[float | None, float | None]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Pantalla inicial — nombre del trabajo y cantidad de productos
-# ══════════════════════════════════════════════════════════════════════════════
-
-class _PantallaInicio(tk.Frame):
-
-    def __init__(self, parent, on_confirmar):
-        super().__init__(parent, bg=COLORES["fondo"])
-        self.pack(fill="both", expand=True)
-        self._on_confirmar   = on_confirmar
-        self._btn_habilitado = False
-        self._var_nombre     = tk.StringVar()
-        self._var_cantidad   = tk.StringVar()
-        self._var_nombre.trace_add("write",   self._actualizar_btn)
-        self._var_cantidad.trace_add("write", self._actualizar_btn)
-        self._construir_ui()
-
-    def _construir_ui(self):
-        tk.Frame(self, bg=COLORES["fondo"]).pack(fill="both", expand=True)
-
-        cuerpo = tk.Frame(self, bg=COLORES["fondo"], padx=80)
-        cuerpo.pack(fill="x")
-
-        tk.Label(cuerpo, text="Cotizacion nueva",
-                 font=FUENTE_SUBTITULO, bg=COLORES["fondo"],
-                 fg=COLORES["texto_suave"]).pack(anchor="w")
-        tk.Label(cuerpo, text="Nuevo trabajo",
-                 font=FUENTE_TITULO, bg=COLORES["fondo"],
-                 fg=COLORES["texto"], justify="left").pack(anchor="w", pady=(6, 16))
-
-        # Campo: Nombre del trabajo
-        tk.Label(cuerpo, text="Nombre del trabajo",
-                 font=FUENTE_LABEL, bg=COLORES["fondo"],
-                 fg=COLORES["texto_suave"]).pack(anchor="w")
-        tk.Entry(cuerpo, textvariable=self._var_nombre,
-                 font=FUENTE_MEDIDA, width=30,
-                 relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
-                 insertbackground=COLORES["texto"],
-                 highlightthickness=1, highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"],
-                 ).pack(anchor="w", ipady=8, ipadx=8)
-
-        tk.Frame(cuerpo, bg=COLORES["fondo"], height=14).pack()
-
-        # Campo: Cantidad de productos
-        tk.Label(cuerpo, text="Cantidad de productos",
-                 font=FUENTE_LABEL, bg=COLORES["fondo"],
-                 fg=COLORES["texto_suave"]).pack(anchor="w")
-        vcmd = (self.register(self._validar), "%P")
-        tk.Entry(cuerpo, textvariable=self._var_cantidad,
-                 validate="key", validatecommand=vcmd,
-                 font=FUENTE_MEDIDA, width=8,
-                 relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
-                 insertbackground=COLORES["texto"],
-                 highlightthickness=1, highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=8, ipadx=8)
-
-        self._btn = _btn_label(cuerpo, "Comenzar →")
-        self._btn.pack(anchor="e", pady=(20, 0))
-
-        tk.Frame(self, bg=COLORES["fondo"]).pack(fill="both", expand=True)
-
-        self.winfo_toplevel().bind("<Return>", lambda _: self._confirmar())
-
-    def _validar(self, valor):
-        return valor == "" or valor.isdigit()
-
-    def _actualizar_btn(self, *_):
-        try:
-            ok = int(self._var_cantidad.get()) >= 1 and self._var_nombre.get().strip() != ""
-        except ValueError:
-            ok = False
-        self._btn_habilitado = ok
-        if ok:
-            self._btn.config(bg=COLORES["btn_enabled"], cursor="hand2")
-            self._btn.bind("<Button-1>", lambda _: self._confirmar())
-            self._btn.bind("<Enter>",
-                lambda _: self._btn.config(bg=COLORES["btn_en_hover"]))
-            self._btn.bind("<Leave>",
-                lambda _: self._btn.config(bg=COLORES["btn_enabled"]))
-        else:
-            self._btn.config(bg=COLORES["btn_disabled"], cursor="arrow")
-            self._btn.unbind("<Button-1>")
-            self._btn.unbind("<Enter>")
-            self._btn.unbind("<Leave>")
-
-    def _confirmar(self):
-        try:
-            cantidad = int(self._var_cantidad.get())
-            nombre   = self._var_nombre.get().strip()
-            if cantidad >= 1 and nombre:
-                self.winfo_toplevel().unbind("<Return>")
-                self._on_confirmar(cantidad, nombre)
-        except ValueError:
-            pass
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # Pantalla de medidas por producto
 # ══════════════════════════════════════════════════════════════════════════════
 
-class _PantallaMedidas(tk.Frame):
+class _PantallaMedidas(PantallaMedidasBase):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, on_siguiente, on_nav):
-        super().__init__(parent, bg=COLORES["fondo"])
-        self.pack(fill="both", expand=True)
-
-        self._ventana_raiz   = ventana_raiz
-        self._indice         = indice
-        self._total          = total
-        self._datos_todos    = datos_todos
-        self._on_siguiente   = on_siguiente
-        self._on_nav         = on_nav
-        self._btn_habilitado = False
-        self._omitir_activo  = False
+        super().__init__(parent, ventana_raiz, indice, total,
+                          datos_previos, datos_todos, on_siguiente, on_nav)
 
         if datos_previos:
             producto_ini = datos_previos.get("producto", "")
             textil_ini   = datos_previos.get("textil", "")
-            alto_ini     = str(datos_previos["alto"])
-            ancho_ini    = str(datos_previos["ancho"])
-            cant_ini     = str(datos_previos["cantidad"])
-            tema_ini     = datos_previos.get("tema", "")
         else:
-            producto_ini = textil_ini = alto_ini = ancho_ini = cant_ini = tema_ini = ""
+            producto_ini = textil_ini = ""
 
         self._var_producto = tk.StringVar(value=producto_ini)
         self._var_textil   = tk.StringVar(value=textil_ini)
-        self._var_alto     = tk.StringVar(value=alto_ini)
-        self._var_ancho    = tk.StringVar(value=ancho_ini)
-        self._var_cant     = tk.StringVar(value=cant_ini)
-        self._var_tema     = tk.StringVar(value=tema_ini)
 
         self._construir_ui()
 
@@ -215,32 +95,8 @@ class _PantallaMedidas(tk.Frame):
         self._actualizar()
         ventana_raiz.bind("<Return>", lambda _: self._enter_sig())
 
-    def _enter_sig(self):
-        if self._btn_habilitado:
-            self._siguiente()
-
-    # ── UI ────────────────────────────────────────────────────────────────────
-    def _construir_ui(self):
-        # ── Barra de navegación ───────────────────────────────────────────────
-        nav = tk.Frame(self, bg=COLORES["fondo"], pady=12)
-        nav.pack(fill="x", padx=40)
-        tk.Label(nav, text="Producto", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(side="left", padx=(0, 10))
-        self._nav_cuadros = []
-        for i in range(self._total):
-            c = tk.Label(nav, text=str(i + 1), font=FUENTE_NAV,
-                         width=3, pady=4, relief="flat", cursor="hand2")
-            c.pack(side="left", padx=3)
-            c.bind("<Button-1>", lambda _, idx=i: self._on_nav(idx))
-            self._nav_cuadros.append(c)
-        self._actualizar_nav()
-
-        tk.Frame(self, bg=COLORES["borde"], height=1).pack(fill="x", padx=30)
-
-        # ── Sección superior: selección de producto y textil ──────────────────
-        sup = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=18)
-        sup.pack(fill="x")
-
+    # ── Sección superior: selección de producto y textil ──────────────────────
+    def _construir_seccion_superior(self, sup):
         tk.Label(sup,
                  text=f"Nuevo producto  ·  Producto {self._indice + 1} de {self._total}",
                  font=FUENTE_SUBTITULO, bg=COLORES["fondo"],
@@ -274,112 +130,7 @@ class _PantallaMedidas(tk.Frame):
             width=28,
         ).pack(anchor="w")
 
-        self._lbl_ancho_tela = tk.Label(sup, text="", font=FUENTE_AVISO,
-                                        bg=COLORES["fondo"], fg=COLORES["texto_suave"])
-        self._lbl_ancho_tela.pack(anchor="w", pady=(6, 0))
-
-        # ── Sección inferior: medidas + canvas ────────────────────────────────
-        inf = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=18)
-        inf.pack(fill="both", expand=True)
-
-        tk.Label(inf, text="Medidas", font=FUENTE_TITULO,
-                 bg=COLORES["fondo"], fg=COLORES["texto"]).pack(anchor="w", pady=(0, 12))
-
-        col_izq = tk.Frame(inf, bg=COLORES["fondo"])
-        col_izq.pack(side="left", anchor="n")
-
-        fila_inp = tk.Frame(col_izq, bg=COLORES["fondo"])
-        fila_inp.pack(anchor="w")
-        self._crear_input(fila_inp, "Ancho (m)", self._var_ancho).pack(side="left", padx=(0, 16))
-        self._crear_input(fila_inp, "Alto (m)",  self._var_alto).pack(side="left", padx=(0, 16))
-        self._crear_input(fila_inp, "Cantidad",  self._var_cant).pack(side="left")
-
-        fila_tema = tk.Frame(col_izq, bg=COLORES["fondo"])
-        fila_tema.pack(anchor="w", pady=(14, 0))
-        tk.Label(fila_tema, text="Tema", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        tk.Entry(fila_tema, textvariable=self._var_tema,
-                 font=FUENTE_MEDIDA, width=28,
-                 relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
-                 insertbackground=COLORES["texto"], highlightthickness=1,
-                 highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=6, ipadx=6)
-
-        self._lbl_rotacion = tk.Label(col_izq, text="", font=FUENTE_AVISO,
-                                      bg=COLORES["fondo"], fg=COLORES["texto_suave"])
-        self._lbl_rotacion.pack(anchor="w", pady=(10, 0))
-
-        self._lbl_error = tk.Label(col_izq, text="", font=FUENTE_AVISO,
-                                   bg=COLORES["fondo"], fg=COLORES["error"],
-                                   wraplength=500, justify="left")
-        self._lbl_error.pack(anchor="w", pady=(4, 0))
-
-        self._btn_omitir = tk.Label(
-            col_izq, text="Omitir restricción ⚠",
-            font=FUENTE_BTN, bg=COLORES["secundario"],
-            fg="#FFFFFF", padx=16, pady=8, cursor="hand2",
-        )
-        self._btn_omitir.bind("<Button-1>", lambda _: self._omitir_restriccion())
-        self._btn_omitir.bind("<Enter>", lambda _: self._btn_omitir.config(bg="#C8881A"))
-        self._btn_omitir.bind("<Leave>", lambda _: self._btn_omitir.config(bg=COLORES["secundario"]))
-        # No se empaqueta hasta que haya error
-
-        # Canvas a la derecha
-        self._canvas = tk.Canvas(inf, width=CANVAS_W, height=CANVAS_H,
-                                 bg=COLORES["fondo"], highlightthickness=0)
-        self._canvas.place(relx=1.0, rely=0.5, anchor="e")
-
-        # Botón siguiente
-        es_ultimo = (self._indice == self._total - 1)
-        self._btn_sig = _btn_label(
-            self._ventana_raiz,
-            "Confirmar ✓" if es_ultimo else "Siguiente →"
-        )
-        self._btn_sig.place(relx=1.0, rely=1.0, anchor="se", x=-30, y=-20)
-
-    def _crear_input(self, parent, etiqueta, variable):
-        c = tk.Frame(parent, bg=COLORES["fondo"])
-        tk.Label(c, text=etiqueta, font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        vcmd = (self.register(self._validar_numero), "%P")
-        tk.Entry(c, textvariable=variable, validate="key", validatecommand=vcmd,
-                 font=FUENTE_MEDIDA, width=8, relief="flat", bd=0,
-                 bg="#FFFFFF", fg=COLORES["texto"], insertbackground=COLORES["texto"],
-                 highlightthickness=1, highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"]).pack(ipady=6, ipadx=6)
-        return c
-
-    def _actualizar_nav(self):
-        for i, c in enumerate(self._nav_cuadros):
-            if i == self._indice:
-                c.config(bg=COLORES["nav_activo"],   fg="#FFFFFF")
-            elif self._datos_todos[i] is not None:
-                c.config(bg=COLORES["nav_completo"], fg="#FFFFFF")
-            else:
-                c.config(bg=COLORES["nav_inactivo"], fg="#FFFFFF")
-
-    # ── Validación ─────────────────────────────────────────────────────────────
-    def _validar_numero(self, valor):
-        if valor == "":
-            return True
-        v2 = valor.replace(",", ".")
-        try:
-            float(v2); return True
-        except ValueError:
-            return v2.endswith(".") and v2.count(".") == 1
-
-    def _parse_float(self, var):
-        try:
-            return float(var.get().replace(",", "."))
-        except ValueError:
-            return None
-
-    def _parse_int(self, var):
-        try:
-            v = int(var.get())
-            return v if v > 0 else None
-        except ValueError:
-            return None
+        self._crear_lbl_ancho_tela(sup)
 
     # ── Lógica ────────────────────────────────────────────────────────────────
     def _ancho_max_textil(self) -> float | None:
@@ -447,17 +198,6 @@ class _PantallaMedidas(tk.Frame):
             self._dibujar_rect(alto, ancho, COLORES["rect_relleno"])
             self._set_btn(prod_ok and tex_ok and cant is not None)
 
-    def _omitir_restriccion(self):
-        self._omitir_activo = True
-        self._actualizar()
-
-    def _dibujar_vacio(self):
-        self._canvas.delete("all")
-        self._canvas.create_text(CANVAS_W // 2, CANVAS_H // 2,
-                                 text="Ingresa medidas para\nver la proporción",
-                                 font=FUENTE_LABEL, fill=COLORES["borde"],
-                                 justify="center")
-
     def _dibujar_rect(self, alto, ancho, color=None):
         self._canvas.delete("all")
         if color is None:
@@ -480,22 +220,6 @@ class _PantallaMedidas(tk.Frame):
                                  font=FUENTE_MEDIDA, fill=COLORES["texto"],
                                  anchor="e", angle=90)
 
-    # ── Botón ─────────────────────────────────────────────────────────────────
-    def _set_btn(self, habilitado: bool):
-        self._btn_habilitado = habilitado
-        if habilitado:
-            self._btn_sig.config(bg=COLORES["btn_enabled"], cursor="hand2")
-            self._btn_sig.bind("<Button-1>", lambda _: self._siguiente())
-            self._btn_sig.bind("<Enter>",
-                lambda _: self._btn_sig.config(bg=COLORES["btn_en_hover"]))
-            self._btn_sig.bind("<Leave>",
-                lambda _: self._btn_sig.config(bg=COLORES["btn_enabled"]))
-        else:
-            self._btn_sig.config(bg=COLORES["btn_disabled"], cursor="arrow")
-            self._btn_sig.unbind("<Button-1>")
-            self._btn_sig.unbind("<Enter>")
-            self._btn_sig.unbind("<Leave>")
-
     def _siguiente(self):
         self._on_siguiente({
             "producto": self._var_producto.get().strip(),
@@ -507,7 +231,6 @@ class _PantallaMedidas(tk.Frame):
         })
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════════════════════
 # Ventana principal — gestiona el flujo completo
 # ══════════════════════════════════════════════════════════════════════════════
@@ -547,7 +270,8 @@ class CotizacionNueva(tk.Tk):
         self._area = tk.Frame(self, bg=COLORES["fondo"])
         self._area.pack(fill="both", expand=True)
 
-        _PantallaInicio(self._area, on_confirmar=self._on_inicio_confirmado)
+        PantallaInicio(self._area, subtitulo="Cotizacion nueva",
+                       on_confirmar=self._on_inicio_confirmado)
 
     # ── Navegación ────────────────────────────────────────────────────────────
     def _limpiar(self):

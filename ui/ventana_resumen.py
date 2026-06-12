@@ -20,7 +20,7 @@ Uso:
 
 import tkinter as tk
 
-from ui.cotizador_backlight import (
+from ui.estilos import (
     COLORES,
     FUENTE_CABECERA,
     FUENTE_SUBTITULO,
