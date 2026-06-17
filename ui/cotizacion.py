@@ -246,8 +246,8 @@ class CotizacionNueva(tk.Tk):
             self.TAM_INICIO  = (_esc.px(800), _esc.px(730))
             self.TAM_MEDIDAS = (_esc.px(1100), _esc.px(1250))
         else:
-            self.TAM_INICIO  = (800, 560)
-            self.TAM_MEDIDAS = (960, 960)
+            self.TAM_INICIO  = (_esc.px(800), _esc.px(560))
+            self.TAM_MEDIDAS = (_esc.px(960), _esc.px(960))
         self.title("Ingresar Cotización")
         self.configure(bg=COLORES["fondo"])
         self.resizable(False, False)
