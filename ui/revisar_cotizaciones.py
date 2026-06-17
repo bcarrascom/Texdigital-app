@@ -11,6 +11,7 @@ import sys
 import tkinter as tk
 from tkinter import messagebox
 
+from core import escala as _esc
 from core.repositorio_cotizaciones import carpeta_json, carpeta_excel
 
 COLORES = {
@@ -47,8 +48,8 @@ def _abrir_archivo(path: str):
 
 class VentanaCotizaciones(tk.Toplevel):
 
-    ANCHO = 680
-    ALTO  = 460
+    ANCHO = _esc.px(720)
+    ALTO  = _esc.px(720)
 
     def __init__(self, parent):
         super().__init__(parent)
