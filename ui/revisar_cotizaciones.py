@@ -9,31 +9,37 @@ import os
 import subprocess
 import sys
 import tkinter as tk
-from tkinter import messagebox
+import tkinter.ttk as ttk
 
 from core import escala as _esc
 from core.repositorio_cotizaciones import carpeta_json, carpeta_excel
 
 COLORES = {
-    "fondo":       "#F5F3EE",
-    "acento":      "#1A3A5C",
-    "texto":       "#1C1C1C",
-    "texto_suave": "#6B6B6B",
-    "borde":       "#D8D4CC",
-    "lista_sel":   "#C8D4FF",
-    "ok":          "#27AE60",
-    "error":       "#C0392B",
+    "fondo":        "#F5F3EE",
+    "acento":       "#1A3A5C",
+    "acento_hover": "#245480",
+    "texto":        "#1C1C1C",
+    "texto_suave":  "#6B6B6B",
+    "borde":        "#D8D4CC",
+    "lista_sel":    "#C8D4FF",
+    "fila_par":     "#FFFFFF",
+    "fila_impar":   "#F0F4FA",
+    "hover":        "#E0E5EC",
+    "ok":           "#27AE60",
+    "error":        "#C0392B",
 }
 
 if sys.platform == "darwin":
     FUENTE_TITULO = ("Helvetica Neue", 14, "bold")
     FUENTE_LABEL  = ("Helvetica Neue", 11)
     FUENTE_LISTA  = ("Helvetica Neue", 12)
+    FUENTE_HEAD   = ("Helvetica Neue", 11, "bold")
     FUENTE_BTN    = ("Helvetica Neue", 12, "bold")
 else:
     FUENTE_TITULO = ("Georgia", 13, "bold")
     FUENTE_LABEL  = ("Segoe UI", 10)
     FUENTE_LISTA  = ("Segoe UI", 11)
+    FUENTE_HEAD   = ("Segoe UI", 10, "bold")
     FUENTE_BTN    = ("Segoe UI", 10, "bold")
 
 
@@ -48,7 +54,7 @@ def _abrir_archivo(path: str):
 
 class VentanaCotizaciones(tk.Toplevel):
 
-    ANCHO = _esc.px(720)
+    ANCHO = _esc.px(880)
     ALTO  = _esc.px(720)
 
     def __init__(self, parent):
@@ -60,8 +66,11 @@ class VentanaCotizaciones(tk.Toplevel):
         self.lift()
         self.focus_force()
 
-        self._entradas = []  # lista de (numero_int, empresa, fecha, json_path)
+        self._entradas    = []
+        self._iid_tags    = {}   # iid → tag original ("par"/"impar")
+        self._hover_iid   = None
         self._cargar_cotizaciones()
+        self._aplicar_estilo()
         self._construir_ui()
 
     # ── Carga ──────────────────────────────────────────────────────────────────
@@ -71,15 +80,43 @@ class VentanaCotizaciones(tk.Toplevel):
         entradas = []
         for archivo in sorted(carpeta.glob("*.json")):
             try:
-                datos = json.loads(archivo.read_text(encoding="utf-8"))
-                num    = int(datos.get("Cotizacion", archivo.stem))
+                datos   = json.loads(archivo.read_text(encoding="utf-8"))
+                num     = int(datos.get("Cotizacion", archivo.stem))
                 empresa = datos.get("Empresa", "—")
                 fecha   = datos.get("Fecha", "—")
                 entradas.append((num, empresa, fecha, archivo))
             except Exception:
                 pass
-        # Más reciente primero (mayor número arriba)
         self._entradas = sorted(entradas, key=lambda e: e[0], reverse=True)
+
+    # ── Estilo ttk ─────────────────────────────────────────────────────────────
+
+    def _aplicar_estilo(self):
+        s = ttk.Style(self)
+        s.theme_use("clam")
+        s.configure("Cotiz.Treeview",
+            background=COLORES["fila_par"],
+            foreground=COLORES["texto"],
+            fieldbackground=COLORES["fila_par"],
+            rowheight=_esc.px(28),
+            font=FUENTE_LISTA,
+            borderwidth=0,
+        )
+        s.configure("Cotiz.Treeview.Heading",
+            background=COLORES["acento"],
+            foreground="#FFFFFF",
+            font=FUENTE_HEAD,
+            relief="flat",
+            padding=(_esc.px(8), _esc.px(6)),
+        )
+        s.map("Cotiz.Treeview",
+            background=[("selected", COLORES["lista_sel"])],
+            foreground=[("selected", COLORES["texto"])],
+        )
+        s.map("Cotiz.Treeview.Heading",
+            background=[("active", COLORES["acento_hover"])],
+            relief=[("active", "flat")],
+        )
 
     # ── UI ─────────────────────────────────────────────────────────────────────
 
@@ -92,51 +129,65 @@ class VentanaCotizaciones(tk.Toplevel):
                  fg="#FFFFFF").pack(anchor="w")
 
         # Instrucción
-        tk.Label(self, text="Doble clic sobre una fila para abrir el Excel correspondiente.",
+        tk.Label(self,
+                 text="Doble clic sobre una fila para abrir el Excel correspondiente.",
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w", padx=20, pady=(12, 6))
 
-        # Listbox + scrollbar
-        frame_lista = tk.Frame(self, bg=COLORES["fondo"])
-        frame_lista.pack(fill="both", expand=True, padx=20)
+        # Tabla
+        frame_tree = tk.Frame(self, bg=COLORES["fondo"])
+        frame_tree.pack(fill="both", expand=True, padx=20)
 
-        scrollbar = tk.Scrollbar(frame_lista, orient="vertical")
+        scrollbar = ttk.Scrollbar(frame_tree, orient="vertical")
         scrollbar.pack(side="right", fill="y")
 
-        self._listbox = tk.Listbox(
-            frame_lista,
-            font=FUENTE_LISTA,
-            bg="#FFFFFF",
-            fg=COLORES["texto"],
-            selectbackground=COLORES["lista_sel"],
-            selectforeground=COLORES["texto"],
-            activestyle="none",
-            relief="flat",
-            highlightthickness=1,
-            highlightbackground=COLORES["borde"],
-            highlightcolor=COLORES["acento"],
+        self._tree = ttk.Treeview(
+            frame_tree,
+            columns=("num", "empresa", "fecha"),
+            show="headings",
+            style="Cotiz.Treeview",
             yscrollcommand=scrollbar.set,
+            selectmode="browse",
         )
-        self._listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=self._listbox.yview)
+        self._tree.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self._tree.yview)
+
+        # Encabezados
+        self._tree.heading("num",     text="N°",      anchor="w")
+        self._tree.heading("empresa", text="Empresa", anchor="w")
+        self._tree.heading("fecha",   text="Fecha",   anchor="w")
+
+        # Anchos de columna
+        self._tree.column("num",     width=_esc.px(80),  minwidth=60,  anchor="w", stretch=False)
+        self._tree.column("empresa", width=_esc.px(530), minwidth=200, anchor="w", stretch=True)
+        self._tree.column("fecha",   width=_esc.px(210), minwidth=100, anchor="w", stretch=False)
+
+        # Colores por fila
+        self._tree.tag_configure("par",   background=COLORES["fila_par"])
+        self._tree.tag_configure("impar", background=COLORES["fila_impar"])
+        self._tree.tag_configure("hover", background=COLORES["hover"])
 
         if self._entradas:
-            for num, empresa, fecha, _ in self._entradas:
-                self._listbox.insert(
-                    tk.END,
-                    f"  N° {num:04d}   {empresa:<35}   {fecha}",
-                )
+            for i, (num, empresa, fecha, _) in enumerate(self._entradas):
+                tag = "par" if i % 2 == 0 else "impar"
+                iid = str(num)
+                self._iid_tags[iid] = tag
+                self._tree.insert("", tk.END, iid=iid,
+                                  values=(f"{num:04d}", empresa, fecha),
+                                  tags=(tag,))
         else:
-            self._listbox.insert(tk.END, "  No hay cotizaciones guardadas.")
-            self._listbox.config(state="disabled")
+            self._tree.insert("", tk.END,
+                              values=("—", "No hay cotizaciones guardadas.", "—"))
 
-        self._listbox.bind("<Double-Button-1>", self._on_doble_clic)
+        self._tree.bind("<Double-Button-1>", self._on_doble_clic)
+        self._tree.bind("<Motion>",          self._on_hover_motion)
+        self._tree.bind("<Leave>",           self._on_hover_leave)
 
         # Mensaje de estado
         self._lbl_estado = tk.Label(
             self, text="", font=FUENTE_LABEL,
             bg=COLORES["fondo"], fg=COLORES["error"],
-            wraplength=620, justify="left",
+            wraplength=_esc.px(830), justify="left",
         )
         self._lbl_estado.pack(anchor="w", padx=20, pady=(6, 0))
 
@@ -148,21 +199,22 @@ class VentanaCotizaciones(tk.Toplevel):
         )
         btn_cerrar.pack(anchor="e", padx=20, pady=(8, 16))
         btn_cerrar.bind("<Button-1>", lambda _: self.destroy())
-        btn_cerrar.bind("<Enter>", lambda _: btn_cerrar.config(bg="#245480"))
+        btn_cerrar.bind("<Enter>", lambda _: btn_cerrar.config(bg=COLORES["acento_hover"]))
         btn_cerrar.bind("<Leave>", lambda _: btn_cerrar.config(bg=COLORES["acento"]))
 
     # ── Acción doble clic ──────────────────────────────────────────────────────
 
     def _on_doble_clic(self, _):
-        sel = self._listbox.curselection()
+        sel = self._tree.selection()
         if not sel or not self._entradas:
             return
-        idx = sel[0]
-        num, _, _, _ = self._entradas[idx]
+        try:
+            num = int(sel[0])
+        except ValueError:
+            return
 
         ruta_excel = carpeta_excel() / f"Cotización {num:04d}.xlsx"
         if not ruta_excel.exists():
-            # Intentar sin cero-relleno por si el archivo fue creado con otro formato
             ruta_excel = carpeta_excel() / f"Cotización {num}.xlsx"
 
         if ruta_excel.exists():
@@ -174,6 +226,25 @@ class VentanaCotizaciones(tk.Toplevel):
                      f"Buscado en: {carpeta_excel()}",
                 fg=COLORES["error"],
             )
+
+    # ── Hover ──────────────────────────────────────────────────────────────────
+
+    def _on_hover_motion(self, event):
+        iid = self._tree.identify_row(event.y)
+        if iid == self._hover_iid:
+            return
+        if self._hover_iid:
+            self._tree.item(self._hover_iid,
+                            tags=(self._iid_tags.get(self._hover_iid, "par"),))
+        self._hover_iid = iid
+        if iid:
+            self._tree.item(iid, tags=("hover",))
+
+    def _on_hover_leave(self, _):
+        if self._hover_iid:
+            self._tree.item(self._hover_iid,
+                            tags=(self._iid_tags.get(self._hover_iid, "par"),))
+            self._hover_iid = None
 
     # ── Utilidades ─────────────────────────────────────────────────────────────
 
