@@ -2,11 +2,10 @@
 core/escala.py
 Escalado adaptativo de la interfaz según la resolución de pantalla.
 
-En macOS, ajusta el factor para que las ventanas más grandes quepan en pantalla.
-En otros sistemas, el factor es siempre 1.0 (sin escalado).
+Calcula un factor de escala para que las ventanas más grandes siempre
+quepan en la pantalla actual, en cualquier SO y resolución.
 """
 
-import sys
 import tkinter as _tk
 
 # Dimensiones de las ventanas más grandes que NO tienen scroll:
@@ -17,20 +16,20 @@ _MAX_H = 960
 
 
 def _calcular() -> float:
-    """Calcula el factor de escala según la resolución de pantalla (solo en macOS)."""
-    if sys.platform != "darwin":
-        return 1.0
+    """
+    Calcula el factor de escala midiendo la pantalla con una ventana Tk temporal.
+    Funciona en Windows, macOS y Linux.  Nunca supera 1.0 (solo escala hacia abajo).
+    """
     tmp = _tk.Tk()
     tmp.withdraw()
     sw = tmp.winfo_screenwidth()
     sh = tmp.winfo_screenheight()
     tmp.destroy()
-    # 95 % del ancho disponible y 90 % del alto (resto lo ocupa la barra del SO)
+    # 95 % del ancho y 90 % del alto disponibles (el resto lo ocupa la barra del SO)
     f = min(sw * 0.95 / _MAX_W, sh * 0.90 / _MAX_H, 1.0)
     return max(round(f, 3), 0.60)   # mínimo 0.60 para no encoger demasiado
 
 
-# Factor global; en Windows/Linux siempre es 1.0
 F: float = _calcular()
 
 

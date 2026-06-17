@@ -19,6 +19,8 @@ if sys.platform == "win32":
         except Exception:
             pass
 
+from core import escala as _esc
+
 fecha_actual = datetime.now().strftime("%Y/%m/%d")
 
 COLORES = {
@@ -138,7 +140,7 @@ class VentanaPrincipal(tk.Tk):
         self.configure(bg=COLORES["fondo"])
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", lambda: sys.exit(0))
-        self._centrar_ventana(1080, 820)
+        self._centrar_ventana(_esc.px(1080), _esc.px(820))
         self._construir_ui()
 
     def _construir_ui(self):
