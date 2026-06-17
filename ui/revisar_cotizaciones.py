@@ -47,8 +47,8 @@ def _abrir_archivo(path: str):
 
 class VentanaCotizaciones(tk.Toplevel):
 
-    ANCHO = 680
-    ALTO  = 460
+    ANCHO = 720
+    ALTO  = 720
 
     def __init__(self, parent):
         super().__init__(parent)
