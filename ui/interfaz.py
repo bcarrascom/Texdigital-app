@@ -138,7 +138,7 @@ class VentanaPrincipal(tk.Tk):
         self.configure(bg=COLORES["fondo"])
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", lambda: sys.exit(0))
-        self._centrar_ventana(1080, 640)
+        self._centrar_ventana(1080, 820)
         self._construir_ui()
 
     def _construir_ui(self):
@@ -175,7 +175,8 @@ class VentanaPrincipal(tk.Tk):
         # Las 4 columnas tienen el mismo peso
         for i in range(4):
             grid.columnconfigure(i, weight=1, uniform="col")
-        grid.rowconfigure(0, weight=1)
+        grid.rowconfigure(0, weight=3)
+        grid.rowconfigure(1, weight=1)
 
         # ── Columna 0: Cotizador Backlight ──
         col0 = tk.Frame(grid, bg=COLORES["fondo"])
@@ -219,6 +220,29 @@ class VentanaPrincipal(tk.Tk):
             subtitulo="Esta sección\nestá por definir.",
         ).grid(row=0, column=3, sticky="nsew")
 
+        # ── Fila 1: botón Revisar Cotizaciones (ancho = col0+col1, alto = 1/3 de fila 0) ──
+        btn_revisar = tk.Frame(grid, bg=COLORES["acento"], cursor="hand2")
+        btn_revisar.grid(row=1, column=0, columnspan=2,
+                         sticky="nsew", padx=(0, 12), pady=(10, 0))
+
+        lbl_revisar = tk.Label(btn_revisar, text="Revisar Cotizaciones",
+                               font=FUENTE_BTN, bg=COLORES["acento"],
+                               fg="#FFFFFF")
+        lbl_revisar.pack(expand=True)
+
+        def _revisar_enter(_):
+            btn_revisar.config(bg=COLORES["acento_hover"])
+            lbl_revisar.config(bg=COLORES["acento_hover"])
+
+        def _revisar_leave(_):
+            btn_revisar.config(bg=COLORES["acento"])
+            lbl_revisar.config(bg=COLORES["acento"])
+
+        for w in (btn_revisar, lbl_revisar):
+            w.bind("<Enter>",    _revisar_enter)
+            w.bind("<Leave>",    _revisar_leave)
+            w.bind("<Button-1>", lambda _: self._abrir_revisar_cotizaciones())
+
     # ── Callbacks ─────────────────────────────────────────────────────────────
     def _abrir_cotizador_backlight(self):
         from ui.cotizador_backlight import CotizadorBacklight
@@ -229,6 +253,10 @@ class VentanaPrincipal(tk.Tk):
         from ui.cotizacion import CotizacionNueva
         self.destroy()
         CotizacionNueva().mainloop()
+
+    def _abrir_revisar_cotizaciones(self):
+        from ui.revisar_cotizaciones import VentanaCotizaciones
+        VentanaCotizaciones(self)
 
     def _centrar_ventana(self, ancho, alto):
         self.update_idletasks()
