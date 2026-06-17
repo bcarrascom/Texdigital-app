@@ -47,10 +47,11 @@ COL_TEMA      = "L"   # tema
 def exportar_cotizacion_backlight(
     datos_cliente: dict,
     datos_productos: list[dict],
+    destino_dir: Path | None = None,
 ) -> str:
     """
     Crea una copia de la plantilla, rellena los datos y la guarda
-    en la carpeta de Descargas.
+    en destino_dir (si se pasa) o en la carpeta de Descargas.
     Devuelve la ruta del archivo generado como string.
     """
 
@@ -63,7 +64,8 @@ def exportar_cotizacion_backlight(
     # ── Crear copia ────────────────────────────────────────────────────────────
     cot = datos_cliente.get("cotizacion", "0000")
     nombre_archivo = f"Cotización {cot}.xlsx"
-    destino = _carpeta_descargas() / nombre_archivo
+    carpeta = destino_dir if destino_dir is not None else _carpeta_descargas()
+    destino = carpeta / nombre_archivo
     shutil.copy2(PLANTILLA, destino)
 
     wb = openpyxl.load_workbook(destino)
@@ -189,6 +191,7 @@ _HOJAS_SOLO_BACKLIGHT = {"nv textil (bl)", "op cajas", "op telas"}
 def exportar_cotizacion_nueva(
     datos_cliente: dict,
     datos_productos: list[dict],
+    destino_dir: Path | None = None,
 ) -> str:
     """
     Crea una cotización no-backlight desde la misma plantilla,
@@ -202,7 +205,8 @@ def exportar_cotizacion_nueva(
         )
 
     cot = datos_cliente.get("cotizacion", "0000")
-    destino = _carpeta_descargas() / f"Cotización {cot}.xlsx"
+    carpeta = destino_dir if destino_dir is not None else _carpeta_descargas()
+    destino = carpeta / f"Cotización {cot}.xlsx"
     shutil.copy2(PLANTILLA, destino)
 
     wb = openpyxl.load_workbook(destino)

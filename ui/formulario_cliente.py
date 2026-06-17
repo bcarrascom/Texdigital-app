@@ -29,6 +29,11 @@ from core.repositorio import (
     cargar_contactos,
     guardar_contacto,
 )
+from core.repositorio_cotizaciones import (
+    siguiente_numero,
+    guardar_cotizacion,
+    carpeta_excel,
+)
 
 COLORES = {
     "fondo":        "#E1E1E1",
@@ -213,6 +218,27 @@ class EntradaAutocompletado(tk.Frame):
         self._opciones = opciones
 
 
+def _mapear_producto(d: dict) -> dict:
+    """Convierte un dict interno de producto al esquema JSON de cotización."""
+    if "tela" in d:
+        return {
+            "Tela":     d.get("tela", ""),
+            "Caja":     d.get("caja", ""),
+            "Ancho":    float(d.get("ancho", 0.0)),
+            "Alto":     float(d.get("alto", 0.0)),
+            "Cantidad": int(d.get("cantidad", 0)),
+            "Tema":     d.get("tema", ""),
+        }
+    return {
+        "Producto": d.get("producto", ""),
+        "Textil":   d.get("textil", ""),
+        "Ancho":    float(d.get("ancho", 0.0)),
+        "Alto":     float(d.get("alto", 0.0)),
+        "Cantidad": int(d.get("cantidad", 0)),
+        "Tema":     d.get("tema", ""),
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Ventana del formulario de cliente
 # ══════════════════════════════════════════════════════════════════════════════
@@ -248,6 +274,8 @@ class FormularioCliente(tk.Toplevel):
         self._datos_guardados   = False
         self._contacto_guardado = False
         self._formateando_rut   = False
+        self._exportado         = False
+        self._num_cotizacion_defecto = str(siguiente_numero()).zfill(4)
 
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
         self._centrar(self.ANCHO, self.ALTO)
@@ -433,7 +461,7 @@ class FormularioCliente(tk.Toplevel):
 
         # ── Grupo 3: Fecha / Cotización / Terminaciones Caja ─────────────────
         self._var_fecha         = tk.StringVar(value=datetime.now().strftime("%d/%m/%Y"))
-        self._var_cotizacion    = tk.StringVar()
+        self._var_cotizacion    = tk.StringVar(value=self._num_cotizacion_defecto)
         self._var_terminaciones = tk.StringVar(value="CAJA TERMINADA")
 
         fila3 = tk.Frame(cuerpo, bg=COLORES["fondo"])
@@ -515,16 +543,16 @@ class FormularioCliente(tk.Toplevel):
             _fila_btn.pack(fill="x", pady=(16, 4))
 
             self._btn_nueva = tk.Label(
-                _fila_btn, text="← Nueva Cotización",
-                font=FUENTE_BTN, bg=COLORES["secundario"],
+                _fila_btn, text="← Cancelar",
+                font=FUENTE_BTN, bg=COLORES["error"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
             self._btn_nueva.pack(side="left")
             self._btn_nueva.bind("<Button-1>", lambda _: self._nueva_cotizacion())
             self._btn_nueva.bind("<Enter>",
-                lambda _: self._btn_nueva.config(bg="#C8881A"))
+                lambda _: self._btn_nueva.config(bg="#A93226"))
             self._btn_nueva.bind("<Leave>",
-                lambda _: self._btn_nueva.config(bg=COLORES["secundario"]))
+                lambda _: self._btn_nueva.config(bg=COLORES["error"]))
 
             self._lbl_export_estado = tk.Label(
                 _fila_btn, text="", font=FUENTE_LABEL,
@@ -534,7 +562,7 @@ class FormularioCliente(tk.Toplevel):
             self._lbl_export_estado.pack(side="left", expand=True)
 
             self._btn_exportar = tk.Label(
-                _fila_btn, text="Exportar Excel →",
+                _fila_btn, text="Guardar y Exportar →",
                 font=FUENTE_BTN, bg=COLORES["btn_enabled"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
@@ -547,7 +575,7 @@ class FormularioCliente(tk.Toplevel):
         else:
             # En Windows los botones flotan sobre la ventana usando place
             self._btn_exportar = tk.Label(
-                self, text="Exportar Excel →",
+                self, text="Guardar y Exportar →",
                 font=FUENTE_BTN, bg=COLORES["btn_enabled"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
@@ -559,16 +587,16 @@ class FormularioCliente(tk.Toplevel):
                 lambda _: self._btn_exportar.config(bg=COLORES["btn_enabled"]))
 
             self._btn_nueva = tk.Label(
-                self, text="← Nueva Cotización",
-                font=FUENTE_BTN, bg=COLORES["secundario"],
+                self, text="← Cancelar",
+                font=FUENTE_BTN, bg=COLORES["error"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
             self._btn_nueva.place(relx=0.0, rely=1.0, anchor="sw", x=30, y=-20)
             self._btn_nueva.bind("<Button-1>", lambda _: self._nueva_cotizacion())
             self._btn_nueva.bind("<Enter>",
-                lambda _: self._btn_nueva.config(bg="#C8881A"))
+                lambda _: self._btn_nueva.config(bg="#A93226"))
             self._btn_nueva.bind("<Leave>",
-                lambda _: self._btn_nueva.config(bg=COLORES["secundario"]))
+                lambda _: self._btn_nueva.config(bg=COLORES["error"]))
 
             self._lbl_export_estado = tk.Label(
                 self, text="", font=FUENTE_LABEL,
@@ -700,7 +728,19 @@ class FormularioCliente(tk.Toplevel):
             return False, "El N° de Cotización debe tener exactamente 4 dígitos."
         return True, ""
 
-    # ── Exportar ───────────────────────────────────────────────────────────────
+    # ── Estado del botón Cancelar / Nueva Cotización ─────────────────────────
+
+    def _modo_cancelar(self):
+        self._btn_nueva.config(text="← Cancelar", bg=COLORES["error"])
+        self._btn_nueva.bind("<Enter>", lambda _: self._btn_nueva.config(bg="#A93226"))
+        self._btn_nueva.bind("<Leave>", lambda _: self._btn_nueva.config(bg=COLORES["error"]))
+
+    def _modo_nueva_cot(self):
+        self._btn_nueva.config(text="← Nueva Cotización", bg=COLORES["secundario"])
+        self._btn_nueva.bind("<Enter>", lambda _: self._btn_nueva.config(bg="#C8881A"))
+        self._btn_nueva.bind("<Leave>", lambda _: self._btn_nueva.config(bg=COLORES["secundario"]))
+
+    # ── Exportar + Guardar ────────────────────────────────────────────────────
 
     def _exportar(self):
         ok, msg = self._campos_ok()
@@ -725,27 +765,56 @@ class FormularioCliente(tk.Toplevel):
         if self._incluir_terminaciones:
             datos_cliente["terminaciones_caja"] = self._var_terminaciones.get()
 
-        # Llamar al exportador de Excel
         try:
+            # ── Excel ─────────────────────────────────────────────────────────
+            carpeta_xls = carpeta_excel()
             if self._incluir_terminaciones:
                 from excel.generador_documentos import exportar_cotizacion_backlight
-                ruta = exportar_cotizacion_backlight(
+                ruta_xls = exportar_cotizacion_backlight(
                     datos_cliente=datos_cliente,
                     datos_productos=self._datos_productos,
+                    destino_dir=carpeta_xls,
                 )
             else:
                 from excel.generador_documentos import exportar_cotizacion_nueva
-                ruta = exportar_cotizacion_nueva(
+                ruta_xls = exportar_cotizacion_nueva(
                     datos_cliente=datos_cliente,
                     datos_productos=self._datos_productos,
+                    destino_dir=carpeta_xls,
                 )
+
+            # ── JSON ──────────────────────────────────────────────────────────
+            fuente_raw = datos_cliente.get("fuente", "")
+            try:
+                fuente_val = float(fuente_raw)
+            except (ValueError, TypeError):
+                fuente_val = 0.0
+
+            json_dict = {
+                "Cotizacion":       int(datos_cliente["cotizacion"]),
+                "Fecha":            datos_cliente["fecha"],
+                "Empresa":          datos_cliente["empresa"],
+                "RUT":              datos_cliente["rut"],
+                "Razon Social":     datos_cliente["razon_social"],
+                "Contacto":         datos_cliente["contacto"],
+                "Email":            datos_cliente["email"],
+                "Fuente":           fuente_val,
+                "Condicion de pago": datos_cliente["condicion"],
+                "Descripcion":      datos_cliente["descripcion"],
+                "Observaciones":    datos_cliente["observaciones"],
+                "productos":        [_mapear_producto(d) for d in self._datos_productos],
+            }
+            ruta_json = guardar_cotizacion(json_dict)
+
             self._lbl_export_estado.config(
-                text=f"✓ Exportado correctamente:\n{ruta}",
+                text=f"✓ Guardado correctamente:\n{ruta_xls}\n{ruta_json}",
                 fg=COLORES["ok"],
             )
+            self._modo_nueva_cot()
+
         except Exception as e:
             self._lbl_export_estado.config(
-                text=f"⚠ Error al exportar: {e}",
+                text=f"⚠ Error al guardar: {e}",
                 fg=COLORES["error"],
             )
 
