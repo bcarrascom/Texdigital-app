@@ -154,7 +154,57 @@ class VentanaCotizaciones(tk.Toplevel):
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w", padx=20, pady=(12, 6))
 
-        # Tabla
+        # ── Footer empacado ANTES del árbol para que expand=True no lo tape ──
+
+        # Barra de botones
+        frame_botones = tk.Frame(self, bg=COLORES["fondo"])
+        frame_botones.pack(side="bottom", fill="x", padx=20, pady=(8, 16))
+
+        frame_izq = tk.Frame(frame_botones, bg=COLORES["fondo"])
+        frame_izq.pack(side="left")
+
+        self._btn_eliminar = tk.Label(
+            frame_izq, text="Eliminar",
+            font=FUENTE_BTN, bg=self._C_ELIM_OFF,
+            fg="#FFFFFF", padx=16, pady=8, cursor="arrow",
+        )
+        self._btn_eliminar.pack(side="left", padx=(0, 8))
+
+        self._btn_multi = tk.Label(
+            frame_izq, text="Seleccionar múltiples",
+            font=FUENTE_BTN, bg=self._C_MULTI_OFF,
+            fg=COLORES["texto"], padx=16, pady=8, cursor="hand2",
+        )
+        self._btn_multi.pack(side="left")
+
+        btn_cerrar = tk.Label(
+            frame_botones, text="Cerrar",
+            font=FUENTE_BTN, bg=COLORES["acento"],
+            fg="#FFFFFF", padx=18, pady=8, cursor="hand2",
+        )
+        btn_cerrar.pack(side="right")
+
+        self._btn_eliminar.bind("<Enter>",    self._on_elim_enter)
+        self._btn_eliminar.bind("<Leave>",    self._on_elim_leave)
+        self._btn_eliminar.bind("<Button-1>", self._on_eliminar)
+
+        self._btn_multi.bind("<Enter>",    self._on_multi_enter)
+        self._btn_multi.bind("<Leave>",    self._on_multi_leave)
+        self._btn_multi.bind("<Button-1>", self._toggle_multi_select)
+
+        btn_cerrar.bind("<Button-1>", lambda _: self.destroy())
+        btn_cerrar.bind("<Enter>", lambda _: btn_cerrar.config(bg=COLORES["acento_hover"]))
+        btn_cerrar.bind("<Leave>", lambda _: btn_cerrar.config(bg=COLORES["acento"]))
+
+        # Mensaje de estado (también bottom, encima del barra de botones)
+        self._lbl_estado = tk.Label(
+            self, text="", font=FUENTE_LABEL,
+            bg=COLORES["fondo"], fg=COLORES["error"],
+            wraplength=_esc.px(830), justify="left",
+        )
+        self._lbl_estado.pack(side="bottom", anchor="w", padx=20, pady=(0, 4))
+
+        # ── Tabla (al final, recibe todo el espacio restante) ──
         frame_tree = tk.Frame(self, bg=COLORES["fondo"])
         frame_tree.pack(fill="both", expand=True, padx=20)
 
@@ -202,54 +252,12 @@ class VentanaCotizaciones(tk.Toplevel):
         self._tree.bind("<Motion>",           self._on_hover_motion)
         self._tree.bind("<Leave>",            self._on_hover_leave)
         self._tree.bind("<<TreeviewSelect>>", lambda _: self._on_selection_change())
-
-        # Mensaje de estado
-        self._lbl_estado = tk.Label(
-            self, text="", font=FUENTE_LABEL,
-            bg=COLORES["fondo"], fg=COLORES["error"],
-            wraplength=_esc.px(830), justify="left",
-        )
-        self._lbl_estado.pack(anchor="w", padx=20, pady=(6, 0))
-
-        # Barra de botones
-        frame_botones = tk.Frame(self, bg=COLORES["fondo"])
-        frame_botones.pack(fill="x", padx=20, pady=(8, 16))
-
-        frame_izq = tk.Frame(frame_botones, bg=COLORES["fondo"])
-        frame_izq.pack(side="left")
-
-        self._btn_eliminar = tk.Label(
-            frame_izq, text="Eliminar",
-            font=FUENTE_BTN, bg=self._C_ELIM_OFF,
-            fg="#FFFFFF", padx=16, pady=8, cursor="arrow",
-        )
-        self._btn_eliminar.pack(side="left", padx=(0, 8))
-
-        self._btn_multi = tk.Label(
-            frame_izq, text="Seleccionar múltiples",
-            font=FUENTE_BTN, bg=self._C_MULTI_OFF,
-            fg=COLORES["texto"], padx=16, pady=8, cursor="hand2",
-        )
-        self._btn_multi.pack(side="left")
-
-        btn_cerrar = tk.Label(
-            frame_botones, text="Cerrar",
-            font=FUENTE_BTN, bg=COLORES["acento"],
-            fg="#FFFFFF", padx=18, pady=8, cursor="hand2",
-        )
-        btn_cerrar.pack(side="right")
-
-        self._btn_eliminar.bind("<Enter>",    self._on_elim_enter)
-        self._btn_eliminar.bind("<Leave>",    self._on_elim_leave)
-        self._btn_eliminar.bind("<Button-1>", self._on_eliminar)
-
-        self._btn_multi.bind("<Enter>",    self._on_multi_enter)
-        self._btn_multi.bind("<Leave>",    self._on_multi_leave)
-        self._btn_multi.bind("<Button-1>", self._toggle_multi_select)
-
-        btn_cerrar.bind("<Button-1>", lambda _: self.destroy())
-        btn_cerrar.bind("<Enter>", lambda _: btn_cerrar.config(bg=COLORES["acento_hover"]))
-        btn_cerrar.bind("<Leave>", lambda _: btn_cerrar.config(bg=COLORES["acento"]))
+        # Teclado — return "break" para anular los bindings de clase del Treeview
+        self._tree.bind("<Up>",          self._on_key_up)
+        self._tree.bind("<Down>",        self._on_key_down)
+        self._tree.bind("<Shift-Up>",    self._on_key_shift_up)
+        self._tree.bind("<Shift-Down>",  self._on_key_shift_down)
+        self._tree.bind("<Return>",      self._on_key_return)
 
         # Click fuera de árbol y botones → deseleccionar
         self._safe_widgets = {self._tree, self._btn_eliminar, self._btn_multi, btn_cerrar}
@@ -344,21 +352,97 @@ class VentanaCotizaciones(tk.Toplevel):
             bg=self._C_ELIM_ON if self._elim_on else self._C_ELIM_OFF)
 
     def _on_eliminar(self, _):
-        if not self._elim_on:
-            return
+        if self._elim_on:
+            self._dialogo_eliminar()
+
+    def _dialogo_eliminar(self):
         sel = list(self._selected)
         if not sel:
             return
-        n = len(sel)
-        plural = "es" if n > 1 else ""
-        if not messagebox.askyesno(
-            "Confirmar eliminación",
-            f"¿Eliminar {n} cotización{plural}?\nEsta acción no se puede deshacer.",
-            parent=self,
-        ):
-            return
 
-        for iid in sel:
+        dlg = tk.Toplevel(self)
+        dlg.title("Confirmar eliminación")
+        dlg.configure(bg=COLORES["fondo"])
+        dlg.resizable(False, False)
+        dlg.transient(self)
+
+        ancho, alto = _esc.px(480), _esc.px(252)
+        ox = self.winfo_x() + (self.ANCHO - ancho) // 2
+        oy = self.winfo_y() + (self.ALTO  - alto)  // 2
+        dlg.geometry(f"{ancho}x{alto}+{ox}+{oy}")
+        dlg.grab_set()
+
+        # Mensaje principal
+        if len(sel) == 1:
+            try:
+                num = int(sel[0])
+                texto_titulo = f"¿Eliminar Cotización {num:04d}?"
+            except ValueError:
+                texto_titulo = "¿Eliminar la cotización seleccionada?"
+            texto_lista = ""
+        else:
+            nums = sorted(int(iid) for iid in sel if iid.isdigit())
+            texto_titulo = "Eliminar cotizaciones:"
+            texto_lista  = ", ".join(f"{n:04d}" for n in nums)
+
+        frame_msg = tk.Frame(dlg, bg=COLORES["fondo"], padx=24, pady=18)
+        frame_msg.pack(fill="both", expand=True)
+
+        tk.Label(frame_msg, text=texto_titulo,
+                 font=FUENTE_TITULO, bg=COLORES["fondo"], fg=COLORES["texto"],
+                 wraplength=_esc.px(408), justify="center").pack()
+
+        if texto_lista:
+            tk.Label(frame_msg, text=texto_lista,
+                     font=FUENTE_LABEL, bg=COLORES["fondo"], fg=COLORES["texto"],
+                     wraplength=_esc.px(408), justify="center").pack(pady=(4, 0))
+
+        tk.Label(frame_msg, text="Esta acción no se puede deshacer.",
+                 font=FUENTE_LABEL, bg=COLORES["fondo"],
+                 fg=COLORES["texto_suave"]).pack(pady=(10, 0))
+
+        # Botones
+        frame_btns = tk.Frame(dlg, bg=COLORES["fondo"])
+        frame_btns.pack(fill="x", padx=24, pady=(0, 18))
+
+        def _confirmar(_e=None):
+            dlg.grab_release()
+            dlg.destroy()
+            self._ejecutar_eliminacion()
+
+        def _cancelar(_e=None):
+            dlg.grab_release()
+            dlg.destroy()
+
+        btn_cancelar = tk.Label(
+            frame_btns, text="Cancelar",
+            font=FUENTE_BTN, bg=COLORES["borde"],
+            fg=COLORES["texto"], padx=19, pady=10, cursor="hand2",
+        )
+        btn_cancelar.pack(side="left")
+
+        btn_confirmar = tk.Label(
+            frame_btns, text="Eliminar",
+            font=FUENTE_BTN, bg=COLORES["error"],
+            fg="#FFFFFF", padx=19, pady=10, cursor="hand2",
+        )
+        btn_confirmar.pack(side="right")
+
+        btn_cancelar.bind("<Enter>",    lambda _: btn_cancelar.config(bg="#C0BCBA"))
+        btn_cancelar.bind("<Leave>",    lambda _: btn_cancelar.config(bg=COLORES["borde"]))
+        btn_confirmar.bind("<Enter>",   lambda _: btn_confirmar.config(bg=COLORES["error_hover"]))
+        btn_confirmar.bind("<Leave>",   lambda _: btn_confirmar.config(bg=COLORES["error"]))
+        btn_cancelar.bind("<Button-1>",  _cancelar)
+        btn_confirmar.bind("<Button-1>", _confirmar)
+
+        dlg.bind("<Return>", _confirmar)
+        dlg.bind("<Escape>", _cancelar)
+
+        dlg.focus_force()
+        dlg.wait_window()
+
+    def _ejecutar_eliminacion(self):
+        for iid in list(self._selected):
             try:
                 num = int(iid)
             except ValueError:
@@ -374,13 +458,11 @@ class VentanaCotizaciones(tk.Toplevel):
                     p.unlink()
                     break
             self._tree.delete(iid)
-            self._entradas = [(n, e, f, p) for n, e, f, p in self._entradas
-                              if str(n) != iid]
+            self._entradas = [e for e in self._entradas if str(e[0]) != iid]
             self._iid_tags.pop(iid, None)
 
         self._selected.clear()
 
-        # Reaplicar colores alternados tras la eliminación
         for i, iid in enumerate(self._tree.get_children()):
             tag = "par" if i % 2 == 0 else "impar"
             self._iid_tags[iid] = tag
@@ -433,21 +515,72 @@ class VentanaCotizaciones(tk.Toplevel):
                                 tags=(self._iid_tags.get(self._hover_iid, "par"),))
             self._hover_iid = None
 
-    # ── Doble clic ─────────────────────────────────────────────────────────────
+    # ── Teclado ────────────────────────────────────────────────────────────────
 
-    def _on_doble_clic(self, _):
-        sel = self._tree.selection()
-        if not sel or not self._entradas:
-            return
+    def _on_key_up(self, _):
+        children = self._tree.get_children()
+        if not children:
+            return "break"
+        focus = self._tree.focus()
+        idx = list(children).index(focus) if focus in children else 1
+        new_iid = children[max(0, idx - 1)]
+        self._tree.selection_set([new_iid])
+        self._tree.focus(new_iid)
+        self._tree.see(new_iid)
+        return "break"
+
+    def _on_key_down(self, _):
+        children = self._tree.get_children()
+        if not children:
+            return "break"
+        focus = self._tree.focus()
+        idx = list(children).index(focus) if focus in children else -1
+        new_iid = children[min(len(children) - 1, idx + 1)]
+        self._tree.selection_set([new_iid])
+        self._tree.focus(new_iid)
+        self._tree.see(new_iid)
+        return "break"
+
+    def _on_key_shift_up(self, _):
+        children = self._tree.get_children()
+        if not children:
+            return "break"
+        focus = self._tree.focus()
+        idx = list(children).index(focus) if focus in children else 1
+        new_iid = children[max(0, idx - 1)]
+        self._tree.selection_add(new_iid)
+        self._tree.focus(new_iid)
+        self._tree.see(new_iid)
+        return "break"
+
+    def _on_key_shift_down(self, _):
+        children = self._tree.get_children()
+        if not children:
+            return "break"
+        focus = self._tree.focus()
+        idx = list(children).index(focus) if focus in children else -1
+        new_iid = children[min(len(children) - 1, idx + 1)]
+        self._tree.selection_add(new_iid)
+        self._tree.focus(new_iid)
+        self._tree.see(new_iid)
+        return "break"
+
+    def _on_key_return(self, _):
+        focus = self._tree.focus()
+        if focus and focus in self._iid_tags:
+            self._abrir_excel_para(focus)
+        return "break"
+
+    # ── Abrir Excel ────────────────────────────────────────────────────────────
+
+    def _abrir_excel_para(self, iid: str):
         try:
-            num = int(sel[0])
+            num = int(iid)
         except ValueError:
             return
-
         ruta_excel = carpeta_excel() / f"Cotización {num:04d}.xlsx"
         if not ruta_excel.exists():
             ruta_excel = carpeta_excel() / f"Cotización {num}.xlsx"
-
         if ruta_excel.exists():
             self._lbl_estado.config(text="")
             _abrir_archivo(str(ruta_excel))
@@ -457,6 +590,11 @@ class VentanaCotizaciones(tk.Toplevel):
                      f"Buscado en: {carpeta_excel()}",
                 fg=COLORES["error"],
             )
+
+    def _on_doble_clic(self, _):
+        iid = self._tree.focus()
+        if iid and iid in self._iid_tags:
+            self._abrir_excel_para(iid)
 
     # ── Utilidades ─────────────────────────────────────────────────────────────
 

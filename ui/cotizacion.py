@@ -109,18 +109,18 @@ class _PantallaMedidas(PantallaMedidasBase):
         fila_sel.pack(anchor="w")
 
         grp_prod = tk.Frame(fila_sel, bg=COLORES["fondo"])
-        grp_prod.pack(side="left")
+        grp_prod.pack(anchor="w")
         tk.Label(grp_prod, text="Producto", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         EntradaAutocompletado(
             grp_prod,
             variable=self._var_producto,
             opciones=PRODUCTOS,
-            width=28,
+            width=60,
         ).pack(anchor="w")
 
         grp_tex = tk.Frame(fila_sel, bg=COLORES["fondo"])
-        grp_tex.pack(side="left", padx=(16, 0))
+        grp_tex.pack(anchor="w", pady=(10, 0))
         tk.Label(grp_tex, text="Textil", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         EntradaAutocompletado(
