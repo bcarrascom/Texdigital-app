@@ -47,13 +47,15 @@ class PantallaMedidasBase(tk.Frame):
             ancho_ini = str(datos_previos["ancho"])
             cant_ini  = str(datos_previos["cantidad"])
             tema_ini  = datos_previos.get("tema", "")
+            obs_ini   = datos_previos.get("obs", "")
         else:
-            alto_ini = ancho_ini = cant_ini = tema_ini = ""
+            alto_ini = ancho_ini = cant_ini = tema_ini = obs_ini = ""
 
         self._var_alto  = tk.StringVar(value=alto_ini)
         self._var_ancho = tk.StringVar(value=ancho_ini)
         self._var_cant  = tk.StringVar(value=cant_ini)
         self._var_tema  = tk.StringVar(value=tema_ini)
+        self._var_obs   = tk.StringVar(value=obs_ini)
 
     def _enter_sig(self):
         if self._btn_habilitado:
@@ -62,7 +64,7 @@ class PantallaMedidasBase(tk.Frame):
     # ── UI ────────────────────────────────────────────────────────────────────
     def _construir_ui(self):
         # ── Barra de navegación ───────────────────────────────────────────────
-        nav = tk.Frame(self, bg=COLORES["fondo"], pady=12)
+        nav = tk.Frame(self, bg=COLORES["fondo"], pady=8)
         nav.pack(fill="x", padx=40)
         tk.Label(nav, text="Producto", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(side="left", padx=(0, 10))
@@ -78,16 +80,16 @@ class PantallaMedidasBase(tk.Frame):
         tk.Frame(self, bg=COLORES["borde"], height=1).pack(fill="x", padx=30)
 
         # ── Sección superior: específica de cada flujo ────────────────────────
-        sup = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=18)
+        sup = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=10)
         sup.pack(fill="x")
         self._construir_seccion_superior(sup)
 
         # ── Sección inferior: medidas + canvas ────────────────────────────────
-        inf = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=18)
+        inf = tk.Frame(self, bg=COLORES["fondo"], padx=40, pady=10)
         inf.pack(fill="both", expand=True)
 
         tk.Label(inf, text="Medidas", font=FUENTE_TITULO,
-                 bg=COLORES["fondo"], fg=COLORES["texto"]).pack(anchor="w", pady=(0, 12))
+                 bg=COLORES["fondo"], fg=COLORES["texto"]).pack(anchor="w", pady=(0, 8))
 
         col_izq = tk.Frame(inf, bg=COLORES["fondo"])
         col_izq.pack(side="left", anchor="n")
@@ -99,7 +101,7 @@ class PantallaMedidasBase(tk.Frame):
         self._crear_input(fila_inp, "Cantidad",  self._var_cant).pack(side="left")
 
         fila_tema = tk.Frame(col_izq, bg=COLORES["fondo"])
-        fila_tema.pack(anchor="w", pady=(14, 0))
+        fila_tema.pack(anchor="w", pady=(8, 0))
         tk.Label(fila_tema, text="Tema", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         tk.Entry(fila_tema, textvariable=self._var_tema,
@@ -109,9 +111,20 @@ class PantallaMedidasBase(tk.Frame):
                  highlightbackground=COLORES["borde"],
                  highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=6, ipadx=6)
 
+        fila_obs = tk.Frame(col_izq, bg=COLORES["fondo"])
+        fila_obs.pack(anchor="w", pady=(8, 0))
+        tk.Label(fila_obs, text="Obs", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+        tk.Entry(fila_obs, textvariable=self._var_obs,
+                 font=FUENTE_MEDIDA, width=28,
+                 relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
+                 insertbackground=COLORES["texto"], highlightthickness=1,
+                 highlightbackground=COLORES["borde"],
+                 highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=6, ipadx=6)
+
         self._lbl_rotacion = tk.Label(col_izq, text="", font=FUENTE_AVISO,
                                       bg=COLORES["fondo"], fg=COLORES["texto_suave"])
-        self._lbl_rotacion.pack(anchor="w", pady=(10, 0))
+        self._lbl_rotacion.pack(anchor="w", pady=(6, 0))
 
         self._lbl_error = tk.Label(col_izq, text="", font=FUENTE_AVISO,
                                    bg=COLORES["fondo"], fg=COLORES["error"],

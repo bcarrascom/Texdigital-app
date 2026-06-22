@@ -72,7 +72,7 @@ class CotizadorBacklight(tk.Tk):
         TAM_CANTIDAD = (_esc.px(800), _esc.px(560))
         TAM_MEDIDAS  = (_esc.px(960), _esc.px(960))
 
-    def __init__(self):
+    def __init__(self, edicion: dict | None = None):
         super().__init__()
         self.title("Cotizador Backlight")
         self.configure(bg=COLORES["fondo"])
@@ -91,13 +91,24 @@ class CotizadorBacklight(tk.Tk):
         self._datos: list[dict] = []
         self._tela_defecto   = TELAS[0][0]
         self._nombre_trabajo = ""
+        # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
+        # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
+        self._edicion         = edicion
 
         _construir_cabecera(self, self._volver)
 
         self._area = tk.Frame(self, bg=COLORES["fondo"])
         self._area.pack(fill="both", expand=True)
 
-        self._mostrar_pantalla_cantidad()
+        if edicion:
+            self._datos            = edicion["productos"]
+            self._nombre_trabajo   = edicion["json"].get("Nombre", "")
+            self._total_productos  = len(self._datos)
+            if self._datos:
+                self._tela_defecto = self._datos[0]["tela"]
+            self._abrir_resumen()
+        else:
+            self._mostrar_pantalla_cantidad()
 
     # ── Navegación entre pantallas ─────────────────────────────────────────────
     def _limpiar(self):
@@ -159,7 +170,7 @@ class CotizadorBacklight(tk.Tk):
     def _abrir_resumen(self):
         from ui.ventana_resumen import VentanaResumen
 
-        COLS = ["#", "Textil", "Tema", "Cantidad", "Ancho (m)", "Alto (m)", "ML imp."]
+        COLS = ["#", "Textil", "Tema", "Cantidad", "Ancho (m)", "Alto (m)", "M² imp."]
 
         filas      = []
         total_cant = 0
@@ -208,6 +219,9 @@ class CotizadorBacklight(tk.Tk):
         self._mostrar_medidas(desde_resumen=True)
 
     def _on_confirmar_resumen(self):
+        if self._edicion:
+            self._guardar_edicion_y_volver()
+            return
         # Abre el formulario de cliente
         from ui.formulario_cliente import FormularioCliente
         FormularioCliente(
@@ -217,6 +231,25 @@ class CotizadorBacklight(tk.Tk):
             on_cerrar=None,
         )
 
+    # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
+
+    def _guardar_edicion_y_volver(self):
+        from ui.formulario_cliente import _mapear_producto
+        from core.repositorio_cotizaciones import guardar_cotizacion
+
+        json_actualizado = dict(self._edicion["json"])
+        json_actualizado["productos"] = [_mapear_producto(d) for d in self._datos]
+        guardar_cotizacion(json_actualizado)
+
+        self._volver_a_revisar()
+
+    def _volver_a_revisar(self):
+        from ui.interfaz import VentanaPrincipal
+        self.destroy()
+        root = VentanaPrincipal()
+        root.after(0, root._abrir_revisar_cotizaciones)
+        root.mainloop()
+
     def _on_cerrar_resumen(self):
         # El usuario cerró el resumen sin confirmar → volver a medidas
         self.deiconify()
@@ -225,6 +258,9 @@ class CotizadorBacklight(tk.Tk):
         self._mostrar_medidas(desde_resumen=True)
 
     def _volver(self, _=None):
+        if self._edicion:
+            self._volver_a_revisar()
+            return
         from ui.interfaz import VentanaPrincipal
         self.destroy()
         VentanaPrincipal().mainloop()
@@ -393,5 +429,6 @@ class PantallaMedidas(PantallaMedidasBase):
             "ancho":     float(self._var_ancho.get().replace(",", ".")),
             "cantidad":  int(self._var_cant.get()),
             "tema":      self._var_tema.get().strip() if hasattr(self, "_var_tema") else "",
+            "obs":       self._var_obs.get().strip() if hasattr(self, "_var_obs") else "",
             "rotado":    self._rotado,
         })

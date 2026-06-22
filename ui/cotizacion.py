@@ -103,7 +103,7 @@ class _PantallaMedidas(PantallaMedidasBase):
                  fg=COLORES["texto_suave"]).pack(anchor="w")
         tk.Label(sup, text="Selección de Producto",
                  font=FUENTE_TITULO, bg=COLORES["fondo"],
-                 fg=COLORES["texto"]).pack(anchor="w", pady=(4, 10))
+                 fg=COLORES["texto"]).pack(anchor="w", pady=(2, 6))
 
         fila_sel = tk.Frame(sup, bg=COLORES["fondo"])
         fila_sel.pack(anchor="w")
@@ -120,7 +120,7 @@ class _PantallaMedidas(PantallaMedidasBase):
         ).pack(anchor="w")
 
         grp_tex = tk.Frame(fila_sel, bg=COLORES["fondo"])
-        grp_tex.pack(anchor="w", pady=(10, 0))
+        grp_tex.pack(anchor="w", pady=(6, 0))
         tk.Label(grp_tex, text="Textil", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         EntradaAutocompletado(
@@ -228,6 +228,7 @@ class _PantallaMedidas(PantallaMedidasBase):
             "ancho":    float(self._var_ancho.get().replace(",", ".")),
             "cantidad": int(self._var_cant.get()),
             "tema":     self._var_tema.get().strip(),
+            "obs":      self._var_obs.get().strip(),
         })
 
 
@@ -240,7 +241,7 @@ class CotizacionNueva(tk.Tk):
     TAM_INICIO  = (800, 560)
     TAM_MEDIDAS = (960, 960)
 
-    def __init__(self):
+    def __init__(self, edicion: dict | None = None):
         super().__init__()
         if sys.platform == "darwin":
             self.TAM_INICIO  = (_esc.px(800), _esc.px(730))
@@ -264,14 +265,23 @@ class CotizacionNueva(tk.Tk):
         self._desde_resumen    = False
         self._datos: list[dict] = []
         self._nombre_trabajo   = ""
+        # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
+        # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
+        self._edicion           = edicion
 
         _construir_cabecera(self, self._volver)
 
         self._area = tk.Frame(self, bg=COLORES["fondo"])
         self._area.pack(fill="both", expand=True)
 
-        PantallaInicio(self._area, subtitulo="Cotizacion nueva",
-                       on_confirmar=self._on_inicio_confirmado)
+        if edicion:
+            self._datos            = edicion["productos"]
+            self._nombre_trabajo   = edicion["json"].get("Nombre", "")
+            self._total_productos  = len(self._datos)
+            self._abrir_resumen()
+        else:
+            PantallaInicio(self._area, subtitulo="Cotizacion nueva",
+                           on_confirmar=self._on_inicio_confirmado)
 
     # ── Navegación ────────────────────────────────────────────────────────────
     def _limpiar(self):
@@ -373,6 +383,9 @@ class CotizacionNueva(tk.Tk):
         self._mostrar_medidas(desde_resumen=True)
 
     def _on_confirmar_resumen(self):
+        if self._edicion:
+            self._guardar_edicion_y_volver()
+            return
         from ui.formulario_cliente import FormularioCliente
         FormularioCliente(
             self,
@@ -389,7 +402,29 @@ class CotizacionNueva(tk.Tk):
         self.focus_force()
         self._mostrar_medidas(desde_resumen=True)
 
+    # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
+
+    def _guardar_edicion_y_volver(self):
+        from ui.formulario_cliente import _mapear_producto
+        from core.repositorio_cotizaciones import guardar_cotizacion
+
+        json_actualizado = dict(self._edicion["json"])
+        json_actualizado["productos"] = [_mapear_producto(d) for d in self._datos]
+        guardar_cotizacion(json_actualizado)
+
+        self._volver_a_revisar()
+
+    def _volver_a_revisar(self):
+        from ui.interfaz import VentanaPrincipal
+        self.destroy()
+        root = VentanaPrincipal()
+        root.after(0, root._abrir_revisar_cotizaciones)
+        root.mainloop()
+
     def _volver(self, _=None):
+        if self._edicion:
+            self._volver_a_revisar()
+            return
         from ui.interfaz import VentanaPrincipal
         self.destroy()
         VentanaPrincipal().mainloop()

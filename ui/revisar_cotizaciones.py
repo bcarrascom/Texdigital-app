@@ -1,16 +1,13 @@
 """
 ui/revisar_cotizaciones.py
-Ventana que lista las cotizaciones guardadas en JSON y permite abrir
-el Excel correspondiente con doble clic.
+Ventana que lista las cotizaciones guardadas en JSON. Doble clic edita la
+cotización; "Aprobar" la promueve a Orden de Producción (OP).
 """
 
 import json
-import os
-import subprocess
 import sys
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter import messagebox
 
 from core import escala as _esc
 from core.repositorio_cotizaciones import carpeta_json, carpeta_excel
@@ -45,15 +42,6 @@ else:
     FUENTE_BTN    = ("Segoe UI", 10, "bold")
 
 
-def _abrir_archivo(path: str):
-    if sys.platform == "win32":
-        os.startfile(path)
-    elif sys.platform == "darwin":
-        subprocess.run(["open", path], check=False)
-    else:
-        subprocess.run(["xdg-open", path], check=False)
-
-
 class VentanaCotizaciones(tk.Toplevel):
 
     ANCHO = _esc.px(880)
@@ -71,6 +59,12 @@ class VentanaCotizaciones(tk.Toplevel):
     _C_MULTI_ON     = COLORES["acento"]
     _C_MULTI_ON_HV  = COLORES["acento_hover"]
 
+    # Colores del botón Aprobar (habilitado solo con exactamente 1 seleccionada)
+    _C_APROB_OFF    = "#9E9E9E"
+    _C_APROB_OFF_HV = "#BDBDBD"
+    _C_APROB_ON     = COLORES["ok"]
+    _C_APROB_ON_HV  = "#2ECC71"
+
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Revisar Cotizaciones")
@@ -87,6 +81,7 @@ class VentanaCotizaciones(tk.Toplevel):
         self._multi_select = False
         self._drag_anchor  = None
         self._elim_on      = False
+        self._aprob_on     = False
 
         self._cargar_cotizaciones()
         self._aplicar_estilo()
@@ -150,7 +145,7 @@ class VentanaCotizaciones(tk.Toplevel):
 
         # Instrucción
         tk.Label(self,
-                 text="Doble clic sobre una fila para abrir el Excel correspondiente.",
+                 text="Doble clic sobre una fila para editarla.",
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w", padx=20, pady=(12, 6))
 
@@ -160,29 +155,35 @@ class VentanaCotizaciones(tk.Toplevel):
         frame_botones = tk.Frame(self, bg=COLORES["fondo"])
         frame_botones.pack(side="bottom", fill="x", padx=20, pady=(8, 16))
 
-        frame_izq = tk.Frame(frame_botones, bg=COLORES["fondo"])
-        frame_izq.pack(side="left")
-
         self._btn_eliminar = tk.Label(
-            frame_izq, text="Eliminar",
+            frame_botones, text="Eliminar",
             font=FUENTE_BTN, bg=self._C_ELIM_OFF,
             fg="#FFFFFF", padx=16, pady=8, cursor="arrow",
         )
-        self._btn_eliminar.pack(side="left", padx=(0, 8))
+        self._btn_eliminar.pack(side="left")
+
+        self._btn_aprobar = tk.Label(
+            frame_botones, text="Aprobar",
+            font=FUENTE_BTN, bg=self._C_APROB_OFF,
+            fg="#FFFFFF", padx=16, pady=8, cursor="arrow",
+        )
+        self._btn_aprobar.pack(side="right")
+
+        # Frame intermedio: ocupa el espacio restante entre Eliminar y Aprobar,
+        # con "Seleccionar múltiples" centrado dentro de él.
+        frame_centro = tk.Frame(frame_botones, bg=COLORES["fondo"])
+        frame_centro.pack(side="left", fill="both", expand=True)
 
         self._btn_multi = tk.Label(
-            frame_izq, text="Seleccionar múltiples",
+            frame_centro, text="Seleccionar múltiples",
             font=FUENTE_BTN, bg=self._C_MULTI_OFF,
             fg=COLORES["texto"], padx=16, pady=8, cursor="hand2",
         )
-        self._btn_multi.pack(side="left")
+        self._btn_multi.place(relx=0.5, rely=0.5, anchor="center")
 
-        btn_cerrar = tk.Label(
-            frame_botones, text="Cerrar",
-            font=FUENTE_BTN, bg=COLORES["acento"],
-            fg="#FFFFFF", padx=18, pady=8, cursor="hand2",
-        )
-        btn_cerrar.pack(side="right")
+        self._btn_aprobar.bind("<Enter>",    self._on_aprob_enter)
+        self._btn_aprobar.bind("<Leave>",    self._on_aprob_leave)
+        self._btn_aprobar.bind("<Button-1>", self._on_click_aprobar)
 
         self._btn_eliminar.bind("<Enter>",    self._on_elim_enter)
         self._btn_eliminar.bind("<Leave>",    self._on_elim_leave)
@@ -191,10 +192,6 @@ class VentanaCotizaciones(tk.Toplevel):
         self._btn_multi.bind("<Enter>",    self._on_multi_enter)
         self._btn_multi.bind("<Leave>",    self._on_multi_leave)
         self._btn_multi.bind("<Button-1>", self._toggle_multi_select)
-
-        btn_cerrar.bind("<Button-1>", lambda _: self.destroy())
-        btn_cerrar.bind("<Enter>", lambda _: btn_cerrar.config(bg=COLORES["acento_hover"]))
-        btn_cerrar.bind("<Leave>", lambda _: btn_cerrar.config(bg=COLORES["acento"]))
 
         # Mensaje de estado (también bottom, encima del barra de botones)
         self._lbl_estado = tk.Label(
@@ -260,7 +257,8 @@ class VentanaCotizaciones(tk.Toplevel):
         self._tree.bind("<Return>",      self._on_key_return)
 
         # Click fuera de árbol y botones → deseleccionar
-        self._safe_widgets = {self._tree, self._btn_eliminar, self._btn_multi, btn_cerrar}
+        self._safe_widgets = {self._tree, self._btn_aprobar, self._btn_eliminar,
+                              self._btn_multi}
         self.bind("<ButtonPress-1>", self._on_window_click, add="+")
 
     # ── Selección ──────────────────────────────────────────────────────────────
@@ -321,6 +319,7 @@ class VentanaCotizaciones(tk.Toplevel):
 
         self._selected = new_sel
         self._actualizar_btn_eliminar()
+        self._actualizar_btn_aprobar()
 
     def _on_window_click(self, event):
         """Deselecciona al hacer click fuera del árbol y los botones."""
@@ -330,6 +329,160 @@ class VentanaCotizaciones(tk.Toplevel):
                 return
             w = getattr(w, "master", None)
         self._tree.selection_set([])
+
+    # ── Botón Aprobar ──────────────────────────────────────────────────────────
+
+    def _actualizar_btn_aprobar(self):
+        habilitado = len(self._selected) == 1
+        if habilitado == self._aprob_on:
+            return
+        self._aprob_on = habilitado
+        if habilitado:
+            self._btn_aprobar.config(bg=self._C_APROB_ON, fg="#FFFFFF", cursor="hand2")
+        else:
+            self._btn_aprobar.config(bg=self._C_APROB_OFF, fg="#FFFFFF", cursor="arrow")
+
+    def _on_aprob_enter(self, _):
+        self._btn_aprobar.config(
+            bg=self._C_APROB_ON_HV if self._aprob_on else self._C_APROB_OFF_HV)
+
+    def _on_aprob_leave(self, _):
+        self._btn_aprobar.config(
+            bg=self._C_APROB_ON if self._aprob_on else self._C_APROB_OFF)
+
+    def _on_click_aprobar(self, _):
+        if self._aprob_on:
+            self._dialogo_aprobar_directo()
+
+    def _dialogo_aprobar_directo(self):
+        sel = list(self._selected)
+        if len(sel) != 1:
+            return
+        iid = sel[0]
+
+        archivo = next((e[3] for e in self._entradas if str(e[0]) == iid), None)
+        if archivo is None:
+            return
+        try:
+            datos = json.loads(archivo.read_text(encoding="utf-8"))
+        except Exception:
+            self._lbl_estado.config(
+                text="⚠ No se pudo leer el archivo de la cotización.",
+                fg=COLORES["error"])
+            return
+
+        from datetime import datetime
+        from ui.dialogo_aprobar import _fecha_valida, promover_a_op
+
+        dlg = tk.Toplevel(self)
+        dlg.title("Aprobar cotización")
+        dlg.configure(bg=COLORES["fondo"])
+        dlg.resizable(False, False)
+        dlg.transient(self)
+
+        ancho, alto = _esc.px(630), _esc.px(480)
+        ox = self.winfo_x() + (self.ANCHO - ancho) // 2
+        oy = self.winfo_y() + (self.ALTO  - alto)  // 2
+        dlg.geometry(f"{ancho}x{alto}+{ox}+{oy}")
+        dlg.grab_set()
+
+        # Botones empacados ANTES (side="bottom") para que expand=True del
+        # mensaje no los tape — mismo bug que en el listado de cotizaciones.
+        frame_btns = tk.Frame(dlg, bg=COLORES["fondo"])
+        frame_btns.pack(side="bottom", fill="x", padx=36, pady=(0, 27))
+
+        frame_msg = tk.Frame(dlg, bg=COLORES["fondo"], padx=36, pady=30)
+        frame_msg.pack(fill="both", expand=True)
+
+        tk.Label(frame_msg, text="Aprobar una cotización la volverá una OP",
+                 font=FUENTE_TITULO, bg=COLORES["fondo"], fg=COLORES["texto"],
+                 wraplength=_esc.px(540), justify="center").pack(pady=(0, 18))
+
+        hoy = datetime.now().strftime("%d/%m/%Y")
+        var_ingreso = tk.StringVar(value=hoy)
+        var_entrega = tk.StringVar(value="")
+
+        def _crear_campo_fecha(label, var):
+            tk.Label(frame_msg, text=label, font=FUENTE_LABEL,
+                     bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+            tk.Entry(frame_msg, textvariable=var, font=FUENTE_LABEL, width=21,
+                     relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
+                     insertbackground=COLORES["texto"], highlightthickness=1,
+                     highlightbackground=COLORES["borde"],
+                     highlightcolor=COLORES["acento"]).pack(
+                         anchor="w", ipady=9, ipadx=9, pady=(0, 12))
+
+        _crear_campo_fecha("Fecha de ingreso", var_ingreso)
+        _crear_campo_fecha("Fecha de entrega", var_entrega)
+
+        lbl_error = tk.Label(frame_msg, text="", font=FUENTE_LABEL,
+                              bg=COLORES["fondo"], fg=COLORES["error"],
+                              wraplength=_esc.px(540), justify="left")
+        lbl_error.pack(anchor="w")
+
+        def _cancelar(_e=None):
+            dlg.grab_release()
+            dlg.destroy()
+
+        def _editar(_e=None):
+            dlg.grab_release()
+            dlg.destroy()
+            self._editar_cotizacion(iid)
+
+        def _aprobar(_e=None):
+            ingreso = var_ingreso.get().strip()
+            entrega = var_entrega.get().strip()
+            if not _fecha_valida(ingreso) or not _fecha_valida(entrega):
+                lbl_error.config(text="⚠ Ambas fechas deben tener formato dd/mm/aaaa.")
+                return
+
+            promover_a_op(datos, ingreso, entrega)
+            dlg.grab_release()
+            dlg.destroy()
+            self._quitar_de_lista(iid)
+
+        btn_cancelar = tk.Label(
+            frame_btns, text="Cancelar", font=FUENTE_BTN,
+            bg=COLORES["borde"], fg=COLORES["texto"],
+            padx=21, pady=12, cursor="hand2",
+        )
+        btn_cancelar.pack(side="left")
+
+        btn_editar = tk.Label(
+            frame_btns, text="Editar", font=FUENTE_BTN,
+            bg=COLORES["acento"], fg="#FFFFFF",
+            padx=21, pady=12, cursor="hand2",
+        )
+        btn_editar.pack(side="left", padx=(12, 0))
+
+        btn_aprobar = tk.Label(
+            frame_btns, text="Aprobar", font=FUENTE_BTN,
+            bg=COLORES["ok"], fg="#FFFFFF",
+            padx=21, pady=12, cursor="hand2",
+        )
+        btn_aprobar.pack(side="right")
+
+        btn_cancelar.bind("<Button-1>", _cancelar)
+        btn_editar.bind("<Button-1>",   _editar)
+        btn_aprobar.bind("<Button-1>",  _aprobar)
+        btn_cancelar.bind("<Enter>", lambda _: btn_cancelar.config(bg="#C0BCBA"))
+        btn_cancelar.bind("<Leave>", lambda _: btn_cancelar.config(bg=COLORES["borde"]))
+        btn_editar.bind("<Enter>", lambda _: btn_editar.config(bg=COLORES["acento_hover"]))
+        btn_editar.bind("<Leave>", lambda _: btn_editar.config(bg=COLORES["acento"]))
+        btn_aprobar.bind("<Enter>", lambda _: btn_aprobar.config(bg=self._C_APROB_ON_HV))
+        btn_aprobar.bind("<Leave>", lambda _: btn_aprobar.config(bg=COLORES["ok"]))
+
+        dlg.bind("<Escape>", _cancelar)
+        dlg.focus_force()
+        dlg.wait_window()
+
+    def _quitar_de_lista(self, iid):
+        self._tree.delete(iid)
+        self._entradas = [e for e in self._entradas if str(e[0]) != iid]
+        self._iid_tags.pop(iid, None)
+        self._selected.discard(iid)
+        self._actualizar_btn_eliminar()
+        self._actualizar_btn_aprobar()
 
     # ── Botón Eliminar ─────────────────────────────────────────────────────────
 
@@ -568,33 +721,42 @@ class VentanaCotizaciones(tk.Toplevel):
     def _on_key_return(self, _):
         focus = self._tree.focus()
         if focus and focus in self._iid_tags:
-            self._abrir_excel_para(focus)
+            self._editar_cotizacion(focus)
         return "break"
 
-    # ── Abrir Excel ────────────────────────────────────────────────────────────
+    # ── Editar cotización ──────────────────────────────────────────────────────
 
-    def _abrir_excel_para(self, iid: str):
-        try:
-            num = int(iid)
-        except ValueError:
+    def _editar_cotizacion(self, iid: str):
+        archivo = next((e[3] for e in self._entradas if str(e[0]) == iid), None)
+        if archivo is None:
             return
-        ruta_excel = carpeta_excel() / f"Cotización {num:04d}.xlsx"
-        if not ruta_excel.exists():
-            ruta_excel = carpeta_excel() / f"Cotización {num}.xlsx"
-        if ruta_excel.exists():
-            self._lbl_estado.config(text="")
-            _abrir_archivo(str(ruta_excel))
-        else:
+        try:
+            datos = json.loads(archivo.read_text(encoding="utf-8"))
+        except Exception:
             self._lbl_estado.config(
-                text=f"⚠ No se encontró el Excel para la cotización N° {num:04d}.\n"
-                     f"Buscado en: {carpeta_excel()}",
-                fg=COLORES["error"],
-            )
+                text="⚠ No se pudo leer el archivo de la cotización.",
+                fg=COLORES["error"])
+            return
+
+        from ui.formulario_cliente import producto_desde_json
+        productos = [producto_desde_json(p) for p in datos.get("productos", [])]
+        edicion = {"json": datos, "productos": productos}
+        es_backlight = bool(productos) and "caja" in productos[0]
+
+        # Destruye la ventana principal (Tk root) junto con este Toplevel,
+        # y la reemplaza por el cotizador correspondiente en modo edición.
+        self.master.destroy()
+        if es_backlight:
+            from ui.cotizador_backlight import CotizadorBacklight
+            CotizadorBacklight(edicion=edicion).mainloop()
+        else:
+            from ui.cotizacion import CotizacionNueva
+            CotizacionNueva(edicion=edicion).mainloop()
 
     def _on_doble_clic(self, _):
         iid = self._tree.focus()
         if iid and iid in self._iid_tags:
-            self._abrir_excel_para(iid)
+            self._editar_cotizacion(iid)
 
     # ── Utilidades ─────────────────────────────────────────────────────────────
 

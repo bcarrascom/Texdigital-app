@@ -102,10 +102,8 @@ def exportar_cotizacion_backlight(
         _fuente_val = _fuente_raw
     _set(ws, "I7", _fuente_val)
     _set(ws, "C19",  datos_cliente.get("descripcion",   ""))
-    _set(ws, "C20",  datos_cliente.get("observaciones", ""))
     _set(ws, "C112", datos_cliente.get("nombre_trabajo",""))
     _set(ws, "C113", datos_cliente.get("descripcion",   ""))
-    _set(ws, "C114", datos_cliente.get("observaciones", ""))
 
     # ── Productos (filas 10..17) ───────────────────────────────────────────────
     for offset, d in enumerate(datos_productos):
@@ -254,10 +252,8 @@ def exportar_cotizacion_nueva(
         _fuente_val = _fuente_raw
     _set(ws, "I7",  _fuente_val)
     _set(ws, "C19",  datos_cliente.get("descripcion",   ""))
-    _set(ws, "C20",  datos_cliente.get("observaciones", ""))
     _set(ws, "C112", datos_cliente.get("nombre_trabajo",""))
     _set(ws, "C113", datos_cliente.get("descripcion",   ""))
-    _set(ws, "C114", datos_cliente.get("observaciones", ""))
 
     # Productos (filas 10..17)
     for offset, d in enumerate(datos_productos):
