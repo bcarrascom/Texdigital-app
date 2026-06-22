@@ -32,14 +32,18 @@ from ui.estilos import (
 )
 from ui.pantalla_inicio import PantallaInicio
 from ui.pantalla_medidas_base import PantallaMedidasBase
+from core.repositorio import TEXTILES_ANCHOS
 
-TELAS = [
-    ("Popelina 155",  1.53),
-    ("Popelina 310",  3.08),
-    ("Pearl 155",     1.53),
-    ("Pearl 310",     3.08),
-    ("Pearl 160 HP",  1.60),
+# Anchos máximos leídos desde recursos/textiles.txt (única fuente de verdad).
+# Editar este orden solo si se quiere cambiar cómo aparecen en el dropdown.
+_NOMBRES_TELAS_BACKLIGHT = [
+    "Popelina 155",
+    "Popelina 310",
+    "Pearl 155",
+    "Pearl 310",
+    "Pearl 160 HP",
 ]
+TELAS = [(nombre, TEXTILES_ANCHOS[nombre]) for nombre in _NOMBRES_TELAS_BACKLIGHT]
 
 # Editar esta lista para agregar/quitar opciones de cajas y perfiles
 LISTA_CAJAS = [
