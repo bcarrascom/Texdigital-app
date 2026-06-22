@@ -10,7 +10,7 @@ Bolso de transporte con ruedas 1 estructura panel araña
 Bolso de transporte con ruedas 2 estructuras panel araña
 Cosmetiquero 20x30 cms 1 cara
 Cosmetiquero 20x30 cms tiro y retiro
-Cubre alarma
+Cubre Alarma
 Estaca 
 Estuche 18x23 cms  1 cara
 Estuche 18x23 cms  tiro y retiro
@@ -27,7 +27,7 @@ Funda Cojín 50x50 cms 1 cara, cierre abajo
 Funda Cojín 50x50 cms tiro y retiro, cierre abajo
 Lienzo con uniones con calce con  basta 
 Lienzo con uniones con calce con  ojetillos perimetrales
-Lienzo con uniones con calce,  bolsillos, fleje plástico arriba y abajo con hilos para colgar transparente
+Lienzo con uniones con calce, bolsillos, fleje plástico arriba y abajo con hilos para colgar transparente
 Lienzo con uniones con calce, basta o bolsillo SIN estructuras
 Lienzo con uniones con calce, bolsillos, madera exterior ambas caras arriba y abajo con cáncamos y cable para colgar
 Lienzo con uniones con calce, bolsillos, tubo metálico arriba y pletina metálica abajo con cable y candados
@@ -80,18 +80,18 @@ Textil panel araña 5 cuerpos (228 cms alto x 375 cms de ancho) sin estructura
 Textil panel araña 6 cuerpos (228 cms alto x 450 cms de ancho) sin estructura
 Totebag 30x40 1 cara sin fuelle
 Totebag 30x40 tiro y retiro sin fuelle
-Vela 70x200 con  asta de fibra de vidrio y base metálica suelo
-Vela 70x200 con  asta de fibra de vidrio y base plástica suelo
-Vela 70x200 con  asta de fibra de vidrio y estaca
+Vela 70x200 con asta de fibra de vidrio y base metálica suelo
+Vela 70x200 con asta de fibra de vidrio y base plástica suelo
+Vela 70x200 con asta de fibra de vidrio y estaca
 Vela 70x200 sin estructura
 Vela 70x200 solo con  asta de fibra de vidrio
-Vela 75x220 con  asta de fibra de vidrio y base metálica suelo
-Vela 75x220 con  asta de fibra de vidrio y base plástica suelo
-Vela 75x220 con  asta de fibra de vidrio y estaca
+Vela 75x220 con asta de fibra de vidrio y base metálica suelo
+Vela 75x220 con asta de fibra de vidrio y base plástica suelo
+Vela 75x220 con asta de fibra de vidrio y estaca
 Vela 75x220 sin estructura
-Vela 75x220 solo con  asta de fibra de vidrio
-Vela 90x300 con  asta de fibra de vidrio y base metálica suelo
-Vela 90x300 con  asta de fibra de vidrio y base plástica suelo
-Vela 90x300 con  asta de fibra de vidrio y estaca
+Vela 75x220 solo con asta de fibra de vidrio
+Vela 90x300 con asta de fibra de vidrio y base metálica suelo
+Vela 90x300 con asta de fibra de vidrio y base plástica suelo
+Vela 90x300 con asta de fibra de vidrio y estaca
 Vela 90x300 sin estructura
 Vela 90x300 solo con  asta de fibra de vidrio

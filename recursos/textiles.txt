@@ -37,3 +37,8 @@ Stretch | 1.58
 Sun out | 1.58
 Taslan | 1.48
 Velo liso | 1.38
+Popelina 155 | 1.53
+Popelina 310 | 3.08
+Pearl 155 | 1.53
+Pearl 310 | 3.08
+Pearl 160 HP | 1.60
