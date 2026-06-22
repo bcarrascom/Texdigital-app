@@ -48,14 +48,34 @@ def carpeta_excel() -> Path:
     return p
 
 
+def carpeta_historial() -> Path:
+    p = _ruta_base() / "Historial"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def siguiente_numero() -> int:
-    """Devuelve max(números existentes) + 1, o 1000 si la carpeta está vacía."""
+    """Devuelve max(números existentes) + 1, o 1000 si no hay ninguno.
+
+    Revisa cotizaciones Y OPs (activas e historial), porque una OP puede
+    tener un número más alto que las cotizaciones activas (su cotización de
+    origen ya pasó a Historial), y reusar ese número causaría un choque.
+    """
+    from core import repositorio_ops
+
+    carpetas = [
+        carpeta_json(),
+        carpeta_historial(),
+        repositorio_ops.carpeta_json(),
+        repositorio_ops.carpeta_historial(),
+    ]
     numeros = []
-    for archivo in carpeta_json().glob("*.json"):
-        try:
-            numeros.append(int(archivo.stem))
-        except ValueError:
-            pass
+    for carpeta in carpetas:
+        for archivo in carpeta.glob("*.json"):
+            try:
+                numeros.append(int(archivo.stem))
+            except ValueError:
+                pass
     return max(numeros) + 1 if numeros else 1000
 
 
@@ -68,3 +88,19 @@ def guardar_cotizacion(datos: dict) -> Path:
         encoding="utf-8",
     )
     return destino
+
+
+def mover_a_historial(numero: int) -> None:
+    """Mueve el JSON de la cotización aprobada de JSON/ a Historial/."""
+    origen = carpeta_json() / f"{numero}.json"
+    if origen.exists():
+        origen.replace(carpeta_historial() / origen.name)
+
+
+def eliminar_excel(numero: int) -> None:
+    """Elimina el Excel de la cotización aprobada (ya no se necesita)."""
+    for nombre in (f"Cotización {numero:04d}.xlsx", f"Cotización {numero}.xlsx"):
+        p = carpeta_excel() / nombre
+        if p.exists():
+            p.unlink()
+            break

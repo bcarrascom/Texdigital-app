@@ -28,6 +28,7 @@ from core.repositorio import (
     guardar_cliente,
     cargar_contactos,
     guardar_contacto,
+    TEXTILES_ANCHOS,
 )
 from core.repositorio_cotizaciones import (
     siguiente_numero,
@@ -219,7 +220,7 @@ class EntradaAutocompletado(tk.Frame):
 
 
 def _mapear_producto(d: dict) -> dict:
-    """Convierte un dict interno de producto al esquema JSON de cotización."""
+    """Convierte un dict interno de producto al esquema JSON de cotización/OP."""
     if "tela" in d:
         return {
             "Tela":     d.get("tela", ""),
@@ -228,14 +229,42 @@ def _mapear_producto(d: dict) -> dict:
             "Alto":     float(d.get("alto", 0.0)),
             "Cantidad": int(d.get("cantidad", 0)),
             "Tema":     d.get("tema", ""),
+            "Obs":      d.get("obs", ""),
         }
     return {
-        "Producto": d.get("producto", ""),
-        "Textil":   d.get("textil", ""),
+        "producto": d.get("producto", ""),
+        "Tela":     d.get("textil", ""),
         "Ancho":    float(d.get("ancho", 0.0)),
         "Alto":     float(d.get("alto", 0.0)),
         "Cantidad": int(d.get("cantidad", 0)),
         "Tema":     d.get("tema", ""),
+        "Obs":      d.get("obs", ""),
+    }
+
+
+def producto_desde_json(d: dict) -> dict:
+    """Inversa de `_mapear_producto`: convierte un producto en esquema JSON
+    de vuelta al esquema interno que usan las pantallas de edición."""
+    if "Caja" in d:
+        return {
+            "tela":      d.get("Tela", ""),
+            "caja":      d.get("Caja", ""),
+            "ancho_max": TEXTILES_ANCHOS.get(d.get("Tela", ""), 0.0),
+            "ancho":     d.get("Ancho", 0.0),
+            "alto":      d.get("Alto", 0.0),
+            "cantidad":  d.get("Cantidad", 0),
+            "tema":      d.get("Tema", ""),
+            "obs":       d.get("Obs", ""),
+            "rotado":    False,
+        }
+    return {
+        "producto": d.get("producto", ""),
+        "textil":   d.get("Tela", ""),
+        "ancho":    d.get("Ancho", 0.0),
+        "alto":     d.get("Alto", 0.0),
+        "cantidad": d.get("Cantidad", 0),
+        "tema":     d.get("Tema", ""),
+        "obs":      d.get("Obs", ""),
     }
 
 
@@ -251,7 +280,7 @@ class FormularioCliente(tk.Toplevel):
     """
 
     ANCHO = _esc.px(1200)
-    ALTO  = _esc.px(1330)
+    ALTO  = _esc.px(1265)
 
     def __init__(self, parent, datos_productos: list[dict],
                  nombre_trabajo: str, on_cerrar=None,
@@ -517,18 +546,13 @@ class FormularioCliente(tk.Toplevel):
 
         tk.Frame(cuerpo, bg=COLORES["borde"], height=1).pack(fill="x", pady=(8, 14))
 
-        # ── Grupo 4: Descripción / Observaciones ──────────────────────────────
-        self._var_descripcion   = tk.StringVar()
-        self._var_observaciones = tk.StringVar()
+        # ── Grupo 4: Descripción ──────────────────────────────────────────────
+        self._var_descripcion = tk.StringVar()
 
-        for label, var in [
-            ("Descripción (C19)",     self._var_descripcion),
-            ("Observaciones (C20)",   self._var_observaciones),
-        ]:
-            tk.Label(cuerpo, text=label, font=FUENTE_LABEL,
-                     bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-            self._crear_entry(cuerpo, var, width=60).pack(
-                anchor="w", ipady=7, ipadx=6, pady=(0, 10))
+        tk.Label(cuerpo, text="Descripción (C19)", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+        self._crear_entry(cuerpo, self._var_descripcion, width=60).pack(
+            anchor="w", ipady=7, ipadx=6, pady=(0, 10))
 
         # ── Label de estado ───────────────────────────────────────────────────
         self._lbl_estado = tk.Label(cuerpo, text="", font=FUENTE_LABEL,
@@ -760,7 +784,6 @@ class FormularioCliente(tk.Toplevel):
             "fecha":          self._var_fecha.get().strip(),
             "cotizacion":     self._var_cotizacion.get().strip(),
             "descripcion":    self._var_descripcion.get().strip(),
-            "observaciones":  self._var_observaciones.get().strip(),
         }
         if self._incluir_terminaciones:
             datos_cliente["terminaciones_caja"] = self._var_terminaciones.get()
@@ -792,6 +815,7 @@ class FormularioCliente(tk.Toplevel):
 
             json_dict = {
                 "Cotizacion":       int(datos_cliente["cotizacion"]),
+                "Nombre":           datos_cliente["nombre_trabajo"],
                 "Fecha":            datos_cliente["fecha"],
                 "Empresa":          datos_cliente["empresa"],
                 "RUT":              datos_cliente["rut"],
@@ -801,7 +825,6 @@ class FormularioCliente(tk.Toplevel):
                 "Fuente":           fuente_val,
                 "Condicion de pago": datos_cliente["condicion"],
                 "Descripcion":      datos_cliente["descripcion"],
-                "Observaciones":    datos_cliente["observaciones"],
                 "productos":        [_mapear_producto(d) for d in self._datos_productos],
             }
             ruta_json = guardar_cotizacion(json_dict)
