@@ -208,12 +208,19 @@ class VentanaPrincipal(tk.Tk):
             comando=self._abrir_cotizacion,
         ).pack(fill="both", expand=True)
 
-        # ── Columna 2: placeholder ──
-        ColumnaPlaceholder(
-            grid,
-            titulo="Próximamente",
-            subtitulo="Esta sección\nestá por definir.",
-        ).grid(row=0, column=2, sticky="nsew", padx=(0, 0))
+        # ── Columna 2: Revisar OPs ──
+        col2 = tk.Frame(grid, bg=COLORES["fondo"])
+        col2.grid(row=0, column=2, sticky="nsew", padx=(0, 0))
+
+        BotonPrincipal(
+            col2,
+            icono="🏭",
+            titulo="Revisar\nOPs",
+            descripcion="Lista las órdenes\nde producción activas.",
+            color_base=COLORES["acento"],
+            color_hover=COLORES["acento_hover"],
+            comando=self._abrir_revisar_ops,
+        ).pack(fill="both", expand=True)
 
         # ── Columna 3: placeholder ──
         ColumnaPlaceholder(
@@ -259,6 +266,10 @@ class VentanaPrincipal(tk.Tk):
     def _abrir_revisar_cotizaciones(self):
         from ui.revisar_cotizaciones import VentanaCotizaciones
         VentanaCotizaciones(self)
+
+    def _abrir_revisar_ops(self):
+        from ui.revisar_ops import VentanaOPs
+        VentanaOPs(self)
 
     def _centrar_ventana(self, ancho, alto):
         self.update_idletasks()
