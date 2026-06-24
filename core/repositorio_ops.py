@@ -40,3 +40,24 @@ def guardar_op(datos: dict) -> Path:
         encoding="utf-8",
     )
     return destino
+
+
+def mover_a_historial(numero: int) -> None:
+    """Mueve el JSON de la OP completada de JSON/ a Historial/."""
+    origen = carpeta_json() / f"{numero}.json"
+    if origen.exists():
+        origen.replace(carpeta_historial() / origen.name)
+
+
+def actualizar_listos(numero: int, indices: list[int]) -> None:
+    """Guarda en el JSON de la OP qué productos (por índice) están marcados
+    como listos en el panel de TV, para que sobreviva a un reinicio."""
+    ruta = carpeta_json() / f"{numero}.json"
+    if not ruta.exists():
+        return
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    datos["ProductosListos"] = indices
+    ruta.write_text(
+        json.dumps(datos, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )

@@ -855,7 +855,8 @@ class FormularioCliente(tk.Toplevel):
         if self._on_cerrar:
             self._on_cerrar()
         self.destroy()
-        sys.exit(0)
+        from ui.panel_produccion import salir_app
+        salir_app()
 
     def _centrar(self, ancho, alto):
         self.update_idletasks()
