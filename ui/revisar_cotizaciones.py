@@ -398,22 +398,146 @@ class VentanaCotizaciones(tk.Toplevel):
                  font=FUENTE_TITULO, bg=COLORES["fondo"], fg=COLORES["texto"],
                  wraplength=_esc.px(540), justify="center").pack(pady=(0, 18))
 
-        hoy = datetime.now().strftime("%d/%m/%Y")
-        var_ingreso = tk.StringVar(value=hoy)
-        var_entrega = tk.StringVar(value="")
+        hoy = datetime.now()
 
-        def _crear_campo_fecha(label, var):
-            tk.Label(frame_msg, text=label, font=FUENTE_LABEL,
-                     bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-            tk.Entry(frame_msg, textvariable=var, font=FUENTE_LABEL, width=21,
-                     relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
-                     insertbackground=COLORES["texto"], highlightthickness=1,
-                     highlightbackground=COLORES["borde"],
-                     highlightcolor=COLORES["acento"]).pack(
-                         anchor="w", ipady=9, ipadx=9, pady=(0, 12))
+        def _crear_cajas_fecha(parent, dia_ini, mes_ini, anio_ini, on_cambio=None):
+            """
+            Fila de 3 cajas (día / mes / año) que avanzan solas: al
+            completar 2 dígitos válidos en día o mes, salta a la siguiente
+            caja. Si se deja un solo dígito y se sale de la caja, se
+            rellena con un cero (3 -> 03). En el año, si se sale con 2
+            dígitos, se expanden a 20XX (26 -> 2026).
+            `on_cambio` (opcional) se llama en cada cambio de valor.
+            Devuelve (valor, primer_entry): valor() arma "dd/mm/aaaa".
+            """
+            fila = tk.Frame(parent, bg=COLORES["fondo"])
+            fila.pack(anchor="w")
 
-        _crear_campo_fecha("Fecha de ingreso", var_ingreso)
-        _crear_campo_fecha("Fecha de entrega", var_entrega)
+            var_dia  = tk.StringVar(value=dia_ini)
+            var_mes  = tk.StringVar(value=mes_ini)
+            var_anio = tk.StringVar(value=anio_ini)
+
+            def _caja(var, ancho):
+                e = tk.Entry(fila, textvariable=var, font=FUENTE_LABEL,
+                             width=ancho, justify="center", relief="flat", bd=0,
+                             bg="#FFFFFF", fg=COLORES["texto"],
+                             insertbackground=COLORES["texto"],
+                             highlightthickness=1, highlightbackground=COLORES["borde"],
+                             highlightcolor=COLORES["acento"])
+                e.pack(side="left", ipady=9, ipadx=6)
+                return e
+
+            e_dia = _caja(var_dia, 3)
+            tk.Label(fila, text="/", font=FUENTE_LABEL, bg=COLORES["fondo"],
+                     fg=COLORES["texto_suave"]).pack(side="left", padx=3)
+            e_mes = _caja(var_mes, 3)
+            tk.Label(fila, text="/", font=FUENTE_LABEL, bg=COLORES["fondo"],
+                     fg=COLORES["texto_suave"]).pack(side="left", padx=3)
+            e_anio = _caja(var_anio, 5)
+
+            def _seleccionar_todo(entry):
+                entry.after_idle(lambda: (entry.selection_range(0, "end"), entry.icursor("end")))
+
+            def _validar(texto, tope):
+                if texto and not texto.isdigit():
+                    return False
+                if len(texto) > 2:
+                    return False
+                if len(texto) == 2 and not (1 <= int(texto) <= tope):
+                    return False
+                return True
+
+            vc_dia  = dlg.register(lambda t: _validar(t, 31))
+            vc_mes  = dlg.register(lambda t: _validar(t, 12))
+            vc_anio = dlg.register(lambda t: t == "" or (t.isdigit() and len(t) <= 4))
+
+            e_dia.config(validate="key",  validatecommand=(vc_dia, "%P"))
+            e_mes.config(validate="key",  validatecommand=(vc_mes, "%P"))
+            e_anio.config(validate="key", validatecommand=(vc_anio, "%P"))
+
+            def _notificar_cambio(_e=None):
+                if on_cambio:
+                    on_cambio()
+
+            def _avanzar_si_completo(var, siguiente, _e=None):
+                if len(var.get()) == 2:
+                    siguiente.focus_set()
+
+            def _normalizar(_e=None):
+                if len(var_dia.get())  == 1: var_dia.set(var_dia.get().zfill(2))
+                if len(var_mes.get())  == 1: var_mes.set(var_mes.get().zfill(2))
+                if len(var_anio.get()) == 2: var_anio.set("20" + var_anio.get())
+                _notificar_cambio()
+
+            e_dia.bind("<KeyRelease>", lambda e: (_avanzar_si_completo(var_dia, e_mes), _notificar_cambio()))
+            e_mes.bind("<KeyRelease>", lambda e: (_avanzar_si_completo(var_mes, e_anio), _notificar_cambio()))
+            e_anio.bind("<KeyRelease>", _notificar_cambio)
+            e_dia.bind("<FocusOut>",  _normalizar)
+            e_mes.bind("<FocusOut>",  _normalizar)
+            e_anio.bind("<FocusOut>", _normalizar)
+            for e in (e_dia, e_mes, e_anio):
+                e.bind("<FocusIn>", lambda _e, w=e: _seleccionar_todo(w))
+
+            def _valor():
+                dia, mes, anio = var_dia.get().strip(), var_mes.get().strip(), var_anio.get().strip()
+                if len(dia) == 1: dia = dia.zfill(2)
+                if len(mes) == 1: mes = mes.zfill(2)
+                if len(anio) == 2: anio = "20" + anio
+                return f"{dia}/{mes}/{anio}"
+
+            return _valor, e_dia
+
+        # ── Fecha de ingreso: viene horneada con la fecha de hoy; "Cambiar"
+        # revela las mismas 3 cajas que la fecha de entrega. Así el Tab no
+        # empieza ahí en el caso común (no se cambia casi nunca).
+        tk.Label(frame_msg, text="Fecha de ingreso", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+
+        contenedor_ingreso = tk.Frame(frame_msg, bg=COLORES["fondo"])
+        contenedor_ingreso.pack(anchor="w", fill="x", pady=(0, 12))
+
+        fecha_ingreso_horneada = hoy.strftime("%d/%m/%Y")
+        estado_ingreso = {"valor": lambda: fecha_ingreso_horneada}
+
+        vista_horneada = tk.Frame(contenedor_ingreso, bg=COLORES["fondo"])
+        vista_horneada.pack(anchor="w")
+
+        tk.Label(vista_horneada, text=fecha_ingreso_horneada, font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto"]).pack(side="left", ipady=9)
+
+        btn_cambiar_ingreso = tk.Label(
+            vista_horneada, text="Cambiar", font=FUENTE_LABEL,
+            bg=COLORES["borde"], fg=COLORES["texto"],
+            padx=10, pady=4, cursor="hand2",
+        )
+        btn_cambiar_ingreso.pack(side="left", padx=(12, 0))
+        btn_cambiar_ingreso.bind("<Enter>", lambda _: btn_cambiar_ingreso.config(bg="#C0BCBA"))
+        btn_cambiar_ingreso.bind("<Leave>", lambda _: btn_cambiar_ingreso.config(bg=COLORES["borde"]))
+
+        def _activar_edicion_ingreso(_e=None):
+            vista_horneada.pack_forget()
+            valor_fn, primer_entry = _crear_cajas_fecha(
+                contenedor_ingreso, hoy.strftime("%d"), hoy.strftime("%m"), hoy.strftime("%Y"))
+            estado_ingreso["valor"] = valor_fn
+            primer_entry.focus_set()
+
+        btn_cambiar_ingreso.bind("<Button-1>", _activar_edicion_ingreso)
+
+        def valor_ingreso():
+            return estado_ingreso["valor"]()
+
+        # ── Fecha de entrega: siempre editable, primera parada del Tab.
+        # El botón "Aprobar" se define más abajo; esta indirección permite
+        # avisarle cambios sin tener que reordenar la construcción del diálogo.
+        _cb_cambio_entrega = {"fn": lambda: None}
+
+        tk.Label(frame_msg, text="Fecha de entrega", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+        contenedor_entrega = tk.Frame(frame_msg, bg=COLORES["fondo"])
+        contenedor_entrega.pack(anchor="w", fill="x", pady=(0, 12))
+        valor_entrega, primer_campo = _crear_cajas_fecha(
+            contenedor_entrega, "", "", hoy.strftime("%Y"),
+            on_cambio=lambda: _cb_cambio_entrega["fn"]())
 
         lbl_error = tk.Label(frame_msg, text="", font=FUENTE_LABEL,
                               bg=COLORES["fondo"], fg=COLORES["error"],
@@ -430,8 +554,8 @@ class VentanaCotizaciones(tk.Toplevel):
             self._editar_cotizacion(iid)
 
         def _aprobar(_e=None):
-            ingreso = var_ingreso.get().strip()
-            entrega = var_entrega.get().strip()
+            ingreso = valor_ingreso()
+            entrega = valor_entrega()
             if not _fecha_valida(ingreso) or not _fecha_valida(entrega):
                 lbl_error.config(text="⚠ Ambas fechas deben tener formato dd/mm/aaaa.")
                 return
@@ -440,6 +564,11 @@ class VentanaCotizaciones(tk.Toplevel):
             dlg.grab_release()
             dlg.destroy()
             self._quitar_de_lista(iid)
+
+        def _on_return(_e=None):
+            # Enter confirma solo si ambas fechas ya están completas y válidas.
+            if _fecha_valida(valor_ingreso()) and _fecha_valida(valor_entrega()):
+                _aprobar()
 
         btn_cancelar = tk.Label(
             frame_btns, text="Cancelar", font=FUENTE_BTN,
@@ -457,23 +586,44 @@ class VentanaCotizaciones(tk.Toplevel):
 
         btn_aprobar = tk.Label(
             frame_btns, text="Aprobar", font=FUENTE_BTN,
-            bg=COLORES["ok"], fg="#FFFFFF",
-            padx=21, pady=12, cursor="hand2",
+            bg=self._C_APROB_OFF, fg="#FFFFFF",
+            padx=21, pady=12, cursor="arrow",
         )
         btn_aprobar.pack(side="right")
 
+        estado_aprobar = {"habilitado": False}
+
+        def _actualizar_btn_aprobar():
+            habilitado = _fecha_valida(valor_entrega())
+            estado_aprobar["habilitado"] = habilitado
+            if habilitado:
+                btn_aprobar.config(bg=self._C_APROB_ON, cursor="hand2")
+            else:
+                btn_aprobar.config(bg=self._C_APROB_OFF, cursor="arrow")
+
+        def _click_aprobar(_e=None):
+            if estado_aprobar["habilitado"]:
+                _aprobar()
+
+        _cb_cambio_entrega["fn"] = _actualizar_btn_aprobar
+        _actualizar_btn_aprobar()
+
         btn_cancelar.bind("<Button-1>", _cancelar)
         btn_editar.bind("<Button-1>",   _editar)
-        btn_aprobar.bind("<Button-1>",  _aprobar)
+        btn_aprobar.bind("<Button-1>",  _click_aprobar)
         btn_cancelar.bind("<Enter>", lambda _: btn_cancelar.config(bg="#C0BCBA"))
         btn_cancelar.bind("<Leave>", lambda _: btn_cancelar.config(bg=COLORES["borde"]))
         btn_editar.bind("<Enter>", lambda _: btn_editar.config(bg=COLORES["acento_hover"]))
         btn_editar.bind("<Leave>", lambda _: btn_editar.config(bg=COLORES["acento"]))
-        btn_aprobar.bind("<Enter>", lambda _: btn_aprobar.config(bg=self._C_APROB_ON_HV))
-        btn_aprobar.bind("<Leave>", lambda _: btn_aprobar.config(bg=COLORES["ok"]))
+        btn_aprobar.bind("<Enter>", lambda _: btn_aprobar.config(
+            bg=self._C_APROB_ON_HV if estado_aprobar["habilitado"] else self._C_APROB_OFF))
+        btn_aprobar.bind("<Leave>", lambda _: btn_aprobar.config(
+            bg=self._C_APROB_ON if estado_aprobar["habilitado"] else self._C_APROB_OFF))
 
         dlg.bind("<Escape>", _cancelar)
+        dlg.bind("<Return>", _on_return)
         dlg.focus_force()
+        primer_campo.focus_set()
         dlg.wait_window()
 
     def _quitar_de_lista(self, iid):

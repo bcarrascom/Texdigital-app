@@ -254,7 +254,8 @@ class CotizacionNueva(tk.Tk):
         self.resizable(False, False)
         _centrar(self, *self.TAM_INICIO)
 
-        self.protocol("WM_DELETE_WINDOW", lambda: sys.exit(0))
+        from ui.panel_produccion import salir_app
+        self.protocol("WM_DELETE_WINDOW", lambda: salir_app())
         self.lift()
         self.focus_force()
         self.attributes("-topmost", True)

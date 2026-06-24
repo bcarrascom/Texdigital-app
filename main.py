@@ -83,11 +83,19 @@ def _cerrar_terminal_mac():
         pass
 
 
-def main():
+def _iniciar_app_escritorio():
     _recordar_y_ocultar_terminal()
-    atexit.register(_cerrar_terminal_mac)
     app = VentanaPrincipal()
     app.mainloop()
+
+
+def main():
+    atexit.register(_cerrar_terminal_mac)
+    # El panel de producción (pywebview) necesita el hilo principal del
+    # proceso; la app de escritorio Tkinter corre en el hilo secundario
+    # que iniciar_panel() arranca por nosotros. Ver ui/panel_produccion.py.
+    from ui.panel_produccion import iniciar_panel
+    iniciar_panel(_iniciar_app_escritorio)
 
 
 if __name__ == "__main__":

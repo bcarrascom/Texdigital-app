@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEXDIGITAL · Panel de Producción</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F1217; --bg-2:#161B23; --card:#1A2029; --line:#2A323F;
+    --txt:#EDF1F7; --txt-dim:#8B97A8;
+    --naranja:#E8852A;     /* pendiente */
+    --azul:#3B86CF;        /* listo */
+    --verde:#5FBE7B;       /* completar */
+    --ambar:#E8902A;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:radial-gradient(1200px 700px at 80% -10%, #1B2330 0%, var(--bg) 55%);
+    color:var(--txt); font-family:'Inter',system-ui,sans-serif; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Barlow Condensed','Inter',sans-serif; font-variant-numeric:tabular-nums; }
+
+  #progreso{ position:fixed; top:0; left:0; height:6px; width:0%;
+    background:linear-gradient(90deg,var(--azul),#5FA8E8); z-index:50; transition:width .35s ease; }
+  #progreso.full{ background:linear-gradient(90deg,var(--verde),#7FD89A); }
+
+  .stage{ height:100vh; display:flex; flex-direction:column; padding:2.4vh 2.4vw 1.6vh; }
+  #contenido{ flex:1; min-height:0; display:flex; flex-direction:column; }
+
+  header{ display:grid; grid-template-columns:auto 1fr auto; gap:2vw;
+    align-items:center; padding-bottom:1.6vh; border-bottom:2px solid var(--line); }
+  .op-tag{ display:flex; align-items:baseline; gap:.7vw; }
+  .op-tag .lbl{ font-size:2.2vh; letter-spacing:.18em; color:var(--txt-dim);
+    text-transform:uppercase; font-weight:600; }
+  .op-tag .n{ font-size:8.2vh; line-height:.9; font-weight:700; color:var(--azul); }
+  .titulo-wrap{ min-width:0; }
+  .titulo{ font-size:4.4vh; font-weight:700; line-height:1.02;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cliente{ font-size:2.9vh; color:var(--txt-dim); font-weight:500; margin-top:.3vh;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cliente b{ color:var(--txt); font-weight:600; }
+  .fechas{ display:flex; gap:1.4vw; }
+  .fecha{ text-align:center; padding:.4vh 1.3vw; border-radius:12px; background:var(--bg-2);
+    border:1px solid var(--line); min-width:11vw; }
+  .fecha .k{ font-size:1.9vh; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--txt-dim); font-weight:600; }
+  .fecha .v{ font-size:3.6vh; font-weight:700; margin-top:.2vh; }
+  .fecha.entrega{ background:#2A211440; border-color:#5A4420; }
+  .fecha.entrega .k{ color:var(--ambar); }
+  .fecha.entrega .v{ color:#F6B45A; }
+
+  .meta{ display:grid; grid-template-columns:1fr auto; gap:2vw; align-items:center; padding:1.4vh 0; }
+  .meta-prod{ min-width:0; }
+  .meta-prod .k{ font-size:1.9vh; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--txt-dim); font-weight:600; }
+  .meta-prod .producto{ font-size:3.4vh; font-weight:600; line-height:1.05; }
+  .meta-prod .desc{ font-size:2.4vh; color:var(--txt-dim); margin-top:.2vh;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .totales{ display:flex; gap:1.2vw; }
+  .pill{ text-align:center; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:.9vh 1.6vw; }
+  .pill .v{ font-size:4.6vh; font-weight:700; line-height:.95; }
+  .pill .k{ font-size:1.7vh; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--txt-dim); font-weight:600; margin-top:.3vh; }
+  .pill.azul .v{ color:var(--azul); }
+  .pill.ambar .v{ color:var(--ambar); }
+
+  .lista-wrap{ flex:1; min-height:0; margin-top:.6vh; }
+  .lista{ height:100%; overflow-y:auto; padding-right:.5vw; }
+  .lista::-webkit-scrollbar{ width:10px; }
+  .lista::-webkit-scrollbar-thumb{ background:var(--line); border-radius:6px; }
+  .grid{ display:grid; gap:1.3vh 1.3vw;
+    grid-template-columns:repeat(auto-fill, minmax(min(100%, 29vw), 1fr)); }
+
+  .card{ background:linear-gradient(160deg,var(--card),#141A22);
+    border:1px solid var(--line); border-left:7px solid var(--naranja);
+    border-radius:16px; padding:1.5vh 1.4vw; display:flex; flex-direction:column; gap:1vh;
+    cursor:pointer; transition:border-color .2s, opacity .2s, background .2s; position:relative; }
+  .card:hover{ background:linear-gradient(160deg,#1F2630,#161D26); }
+  .card.listo{ border-left-color:var(--azul);
+    background:linear-gradient(160deg,#151A21,#10141A); }
+  .card.listo .tipo,
+  .card.listo .qty .v,
+  .card.listo .medidas .dim,
+  .card.listo .metros .v{ color:#5E6B7A; }   /* textos en gris claro al marcar listo */
+  .card.listo .check{ opacity:1; transform:scale(1); }
+  .check{ position:absolute; top:1.3vh; right:1.2vw; width:3.4vh; height:3.4vh; border-radius:50%;
+    background:var(--azul); color:#fff; display:flex; align-items:center; justify-content:center;
+    font-size:2.2vh; font-weight:700; opacity:0; transform:scale(.5); transition:.2s; }
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:1vw; }
+  .card .tipo{ font-size:2.9vh; font-weight:700; line-height:1.05; word-break:break-word; }
+  .card .tela-line{ font-size:2vh; color:var(--txt-dim); margin-top:.4vh; word-break:break-word; }
+  .ident{ min-width:0; }
+  .qty{ text-align:center; background:var(--bg); border:1px solid var(--line);
+    border-radius:12px; padding:.5vh 1vw; flex:none; }
+  .qty .v{ font-size:5vh; font-weight:700; line-height:.9; }
+  .qty .k{ font-size:1.02vh; letter-spacing:.02em; text-transform:uppercase;
+    color:var(--txt-dim); white-space:nowrap; }
+  .medidas{ display:flex; align-items:flex-end; gap:.8vw; }
+  .medidas .dim{ font-size:5.4vh; font-weight:700; line-height:.9; }
+  .medidas .x{ font-size:3.4vh; color:var(--txt-dim); font-weight:500; padding-bottom:.4vh; }
+  .medidas .u{ font-size:2vh; color:var(--txt-dim); padding-bottom:.7vh; }
+  .obs{ font-size:2vh; color:#F6B45A; background:#2A211430; border:1px solid #5A442060;
+    border-radius:8px; padding:.5vh .9vw; }
+  .obs b{ color:var(--ambar); }
+  .card-bottom{ display:flex; justify-content:space-between; align-items:flex-end;
+    border-top:1px solid var(--line); padding-top:.9vh; margin-top:auto; }
+  .tema{ font-size:2vh; color:var(--txt-dim); max-width:62%; word-break:break-word; }
+  .tema b{ color:var(--txt); font-weight:600; }
+  .metros{ text-align:right; }
+  .metros .v{ font-size:3.2vh; font-weight:700; }
+  .metros.ml .v{ color:var(--azul); }
+  .metros.m2 .v{ color:var(--ambar); }
+  .metros .k{ font-size:1.5vh; letter-spacing:.06em; text-transform:uppercase; color:var(--txt-dim); }
+
+  footer{ display:flex; justify-content:space-between; align-items:center;
+    padding-top:1.2vh; color:var(--txt-dim); font-size:2vh; gap:1.5vw; }
+  .marca{ font-family:'Barlow Condensed'; font-weight:700; letter-spacing:.16em;
+    font-size:2.6vh; color:var(--txt); white-space:nowrap; }
+  .marca span{ color:var(--azul); }
+  .dots{ display:flex; gap:.7vw; align-items:center; flex:1; justify-content:flex-start; flex-wrap:wrap; }
+  .dot{ display:flex; align-items:center; gap:.4vw; padding:.4vh .9vw; border-radius:20px;
+    background:var(--bg-2); border:1px solid var(--line); cursor:pointer; font-size:1.8vh;
+    color:var(--txt-dim); font-weight:600; }
+  .dot.on{ border-color:var(--azul); color:var(--txt); }
+  .dot .mini{ width:1vh; height:1vh; border-radius:50%; background:var(--naranja); }
+  .dot.done .mini{ background:var(--verde); }
+  .right{ display:flex; align-items:center; gap:1.2vw; flex:none; }
+  .btn-conf{ font-family:'Inter'; font-size:2.1vh; font-weight:700; cursor:pointer;
+    border:none; border-radius:12px; padding:1vh 1.8vw; color:#fff; background:var(--azul);
+    transition:.2s; }
+  .btn-recargar{ font-family:'Inter'; font-size:2.1vh; font-weight:600; cursor:pointer;
+    border:1px solid var(--line); border-radius:12px; padding:1vh 1.6vw; color:var(--txt);
+    background:var(--bg-2); transition:.2s; }
+  .btn-recargar:hover{ border-color:var(--azul); color:#fff; }
+  .btn-conf:hover{ filter:brightness(1.1); }
+  .btn-conf.completar{ background:var(--verde); color:#0B1A10; }
+  .reloj{ font-variant-numeric:tabular-nums; font-size:2.4vh; font-weight:600; color:var(--txt); }
+
+  .overlay{ position:fixed; inset:0; background:#0009; backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:100; }
+  .overlay.on{ display:flex; }
+  .modal{ background:var(--bg-2); border:1px solid var(--line); border-radius:20px;
+    padding:4vh 3vw; text-align:center; max-width:40vw; }
+  .modal h2{ font-size:3.4vh; margin-bottom:1vh; }
+  .modal p{ font-size:2.3vh; color:var(--txt-dim); margin-bottom:3vh; }
+  .modal-btns{ display:flex; gap:1.2vw; justify-content:center; }
+  .modal-btns button{ font-family:'Inter'; font-size:2.1vh; font-weight:700; cursor:pointer;
+    border:none; border-radius:12px; padding:1.2vh 2.4vw; }
+  .btn-cancel{ background:var(--card); color:var(--txt); border:1px solid var(--line)!important; }
+  .btn-ok{ background:var(--verde); color:#0B1A10; }
+
+  .vacio{ flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:1.5vh; }
+  .vacio .big{ font-size:6vh; font-weight:700; }
+  .vacio .sub{ font-size:2.6vh; color:var(--txt-dim); }
+</style>
+</head>
+<body>
+<div id="progreso"></div>
+<div class="stage" id="stage">
+  <div id="contenido">
+  <header>
+    <div class="op-tag"><span class="lbl">OP</span><span class="n num" id="op-n">—</span></div>
+    <div class="titulo-wrap">
+      <div class="titulo" id="op-titulo">—</div>
+      <div class="cliente" id="op-cliente">—</div>
+    </div>
+    <div class="fechas">
+      <div class="fecha"><div class="k">Ingreso</div><div class="v num" id="op-ingreso">—</div></div>
+      <div class="fecha entrega"><div class="k">Entrega</div><div class="v num" id="op-entrega">—</div></div>
+    </div>
+  </header>
+  <div class="meta">
+    <div class="meta-prod">
+      <div class="k">Descripción</div>
+      <div class="desc" id="op-desc">—</div>
+    </div>
+    <div class="totales">
+      <div class="pill azul"><div class="v num" id="t-prod">0</div><div class="k">Productos</div></div>
+      <div class="pill ambar"><div class="v num" id="t-metros">0</div><div class="k" id="t-metros-k">m²</div></div>
+    </div>
+  </div>
+  <div class="lista-wrap"><div class="lista"><div class="grid" id="grid"></div></div></div>
+  <footer>
+    <div class="dots" id="dots"></div>
+    <div class="right">
+      <button class="btn-recargar" id="btn-recargar">↻ Recargar</button>
+      <button class="btn-conf" id="btn-conf">Confirmar todos</button>
+      <div class="reloj num" id="reloj">--:--</div>
+    </div>
+  </footer>
+  </div>
+  <div class="vacio" id="vacio" style="display:none">
+    <div class="big">✓ Sin OP activas</div>
+    <div class="sub">No hay órdenes en la carpeta. Pulsa Recargar para volver a revisar.</div>
+    <button class="btn-recargar" id="btn-recargar-vacio">↻ Recargar</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modal-titulo">¿Completar OP?</h2>
+    <p id="modal-texto">La OP se quitará del panel y su archivo pasará al historial.</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btn-cancel">Cancelar</button>
+      <button class="btn-ok" id="btn-ok">Completar OP</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Anchos de rollo por tela: se cargan desde Python (recursos/textiles.txt)
+      vía pywebview.api.obtener_anchos_tela(). El regex es solo un respaldo
+      para telas que no estén en el catálogo. ── */
+let ANCHO_TELA = {};
+async function cargarAnchosTela(){
+  try{ ANCHO_TELA = await window.pywebview.api.obtener_anchos_tela(); }
+  catch(e){ console.error("No se pudo cargar el mapeo de anchos de tela:", e); ANCHO_TELA = {}; }
+}
+function anchoTelaDe(tela){
+  if(ANCHO_TELA[tela]) return ANCHO_TELA[tela];
+  const m = (tela||"").match(/(\d{2,3})/);
+  return m ? parseInt(m[1])/100 : 1.50;
+}
+const esBacklight = p => Object.prototype.hasOwnProperty.call(p,"Caja");
+function tipoProducto(p){
+  if(esBacklight(p)){
+    const caja = (p.Caja||"").trim().toLowerCase();
+    return (caja==="" || caja==="sin caja") ? "Backlight" : "Backlight + Caja";
+  }
+  return p.producto || "Producto";
+}
+function detalleTextil(p){
+  if(esBacklight(p)){
+    const caja = (p.Caja||"").trim();
+    const conCaja = caja && caja.toLowerCase()!=="sin caja";
+    return conCaja ? `${p.Tela} · ${caja}` : p.Tela;
+  }
+  return p.Tela;
+}
+const m2 = p => p.Ancho * p.Alto * p.Cantidad;
+function unidXAncho(at, ancho){
+  if(typeof ancho!=="number" || isNaN(ancho)) return "";
+  if(Math.floor(at/ancho) < 1) return at/ancho;
+  return Math.round(at/ancho);
+}
+function ml(p){
+  const u = unidXAncho(anchoTelaDe(p.Tela), p.Ancho);
+  if(u==="" || u===0) return 0;
+  return p.Alto * (p.Cantidad / u);
+}
+const med = n => n.toFixed(3).replace(".", ",");        // medidas: SIEMPRE 3 decimales
+const fmt = n => (Math.round(n*100)/100).toLocaleString("es-CL");
+
+/* ── Persistencia (prototipo). En Claude.ai usa window.storage; si se abre el HTML
+      suelto, degrada a memoria. En producción (Fase 4) el estado va al JSON de la OP. ── */
+const mem = {};
+const store = {
+  async get(k){
+    try{ if(window.storage){ const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } }catch(e){}
+    return (k in mem) ? mem[k] : null;
+  },
+  async set(k,v){
+    try{ if(window.storage){ await window.storage.set(k, JSON.stringify(v)); return; } }catch(e){}
+    mem[k]=v;
+  }
+};
+
+let idx = 0;
+let OPS = [];           // OPs cargadas en el panel (se llena desde la carpeta)
+const listos = {};      // { cotizacion: Set(indices listos) }
+let completadas = new Set();
+
+/* Pide a Python la lista real de OPs activas en Dropbox/SGTD/OPs/JSON/. */
+async function obtenerOPsDeCarpeta(){
+  try{ return await window.pywebview.api.obtener_ops(); }
+  catch(e){ console.error("No se pudieron obtener las OPs:", e); return []; }
+}
+
+async function cargarEstado(){
+  const comp = await store.get("ops_completadas");
+  if(comp) completadas = new Set(comp);
+}
+
+/* Recargar: agrega OPs nuevas de la carpeta SIN borrar el progreso de las activas.
+   No re-agrega OPs ya completadas. El progreso de productos listos viene del
+   propio JSON de la OP (campo ProductosListos), así sobrevive a un reinicio
+   de la app o de la PC. */
+async function recargar(){
+  const frescas = await obtenerOPsDeCarpeta();
+  const conocidas = new Set(OPS.map(o => o.Cotizacion));
+  for(const op of frescas){
+    if(!conocidas.has(op.Cotizacion) && !completadas.has(op.Cotizacion)){
+      OPS.push(op);
+      listos[op.Cotizacion] = new Set(op.ProductosListos || []);
+    }
+  }
+  render();
+}
+async function guardarListos(op){
+  try{
+    await window.pywebview.api.guardar_listos(op.Cotizacion, [...listos[op.Cotizacion]]);
+  }catch(e){
+    console.error("No se pudo guardar el progreso de la OP", op.Cotizacion, e);
+  }
+}
+async function guardarCompletadas(){
+  await store.set("ops_completadas", [...completadas]);
+}
+
+function activas(){ return OPS.filter(o => !completadas.has(o.Cotizacion)); }
+
+function render(){
+  const ops = activas();
+  if(ops.length === 0){
+    document.getElementById("contenido").style.display = "none";
+    document.getElementById("vacio").style.display = "flex";
+    document.getElementById("progreso").style.width = "100%";
+    return;
+  }
+  document.getElementById("vacio").style.display = "none";
+  document.getElementById("contenido").style.display = "flex";
+  if(idx >= ops.length) idx = 0;
+  const op = ops[idx];
+  const set = listos[op.Cotizacion];
+  const opBL = op.productos.every(esBacklight);
+
+  document.getElementById("op-n").textContent = op.Cotizacion;
+  document.getElementById("op-titulo").textContent = op.Nombre || op.Empresa;
+  document.getElementById("op-cliente").innerHTML = `<b>${op.Empresa}</b> · ${op.Contacto||""}`;
+  document.getElementById("op-ingreso").textContent = op.Fecha_ingreso || "—";
+  document.getElementById("op-entrega").textContent = op.Fecha_entrega || "—";
+  document.getElementById("op-desc").textContent = op.Descripcion || "";
+
+  const totalProd = op.productos.reduce((s,p)=>s+p.Cantidad,0);
+  const totalMetros = op.productos.reduce((s,p)=>s+(opBL?m2(p):ml(p)),0);
+  document.getElementById("t-prod").textContent = totalProd;
+  document.getElementById("t-metros").textContent = fmt(totalMetros);
+  document.getElementById("t-metros-k").textContent = opBL ? "m² total" : "ML total";
+
+  document.getElementById("grid").innerHTML = op.productos.map((p,i)=>{
+    const bl = esBacklight(p);
+    const metros = bl ? m2(p) : ml(p);
+    const isListo = set.has(i);
+    const obsHTML = (p.Obs && p.Obs.trim())
+      ? `<div class="obs"><b>Obs:</b> ${p.Obs}</div>` : "";
+    return `
+      <div class="card ${isListo?'listo':''}" data-i="${i}">
+        <div class="check">✓</div>
+        <div class="card-top">
+          <div class="ident">
+            <div class="tipo">${tipoProducto(p)}</div>
+            <div class="tela-line">${detalleTextil(p)}</div>
+          </div>
+          <div class="qty"><div class="v num">${p.Cantidad}</div><div class="k">cantidad</div></div>
+        </div>
+        <div class="medidas num">
+          <span class="dim">${med(p.Ancho)}</span><span class="x">×</span>
+          <span class="dim">${med(p.Alto)}</span><span class="u">m</span>
+        </div>
+        ${obsHTML}
+        <div class="card-bottom">
+          <div class="tema"><b>Tema:</b> ${p.Tema||"—"}</div>
+          <div class="metros ${bl?'m2':'ml'}"><div class="v num">${fmt(metros)}</div>
+          <div class="k">${bl?'m²':'ML'}</div></div>
+        </div>
+      </div>`;
+  }).join("");
+
+  document.querySelectorAll(".card").forEach(c=>{
+    c.addEventListener("click", ()=>toggle(op, parseInt(c.dataset.i)));
+  });
+
+  renderProgreso(op);
+  renderDots(ops);
+  renderBoton(op);
+}
+
+function renderProgreso(op){
+  const set = listos[op.Cotizacion];
+  const pct = op.productos.length ? (set.size/op.productos.length)*100 : 0;
+  const bar = document.getElementById("progreso");
+  bar.style.width = pct + "%";
+  bar.classList.toggle("full", pct >= 100);
+}
+
+function renderDots(ops){
+  document.getElementById("dots").innerHTML = ops.map((o,k)=>{
+    const set = listos[o.Cotizacion];
+    const done = set.size === o.productos.length && o.productos.length>0;
+    return `<div class="dot ${k===idx?'on':''} ${done?'done':''}" data-k="${k}">
+      <span class="mini"></span>OP ${o.Cotizacion}</div>`;
+  }).join("");
+  document.querySelectorAll(".dot").forEach(d=>{
+    d.addEventListener("click", ()=>{ idx=parseInt(d.dataset.k); render(); });
+  });
+}
+
+function renderBoton(op){
+  const set = listos[op.Cotizacion];
+  const todos = set.size === op.productos.length && op.productos.length>0;
+  const btn = document.getElementById("btn-conf");
+  if(todos){ btn.textContent = "Completar OP"; btn.classList.add("completar"); }
+  else { btn.textContent = "Confirmar todos"; btn.classList.remove("completar"); }
+}
+
+async function toggle(op, i){
+  const set = listos[op.Cotizacion];
+  if(set.has(i)) set.delete(i); else set.add(i);
+  await guardarListos(op);
+  render();
+}
+
+async function onBoton(){
+  const op = activas()[idx];
+  const set = listos[op.Cotizacion];
+  const todos = set.size === op.productos.length && op.productos.length>0;
+  if(todos){
+    document.getElementById("modal-titulo").textContent = `¿Completar OP ${op.Cotizacion}?`;
+    document.getElementById("overlay").classList.add("on");
+  } else {
+    op.productos.forEach((_,i)=>set.add(i));
+    await guardarListos(op);
+    render();
+  }
+}
+
+async function confirmarCompletar(){
+  const op = activas()[idx];
+  try{
+    await window.pywebview.api.completar_op(op.Cotizacion);
+  }catch(e){
+    console.error("No se pudo mover la OP al historial:", e);
+    return;
+  }
+  completadas.add(op.Cotizacion);
+  await guardarCompletadas();
+  document.getElementById("overlay").classList.remove("on");
+  render();
+}
+
+document.getElementById("btn-conf").addEventListener("click", onBoton);
+document.getElementById("btn-recargar").addEventListener("click", recargar);
+document.getElementById("btn-recargar-vacio").addEventListener("click", recargar);
+document.getElementById("btn-ok").addEventListener("click", confirmarCompletar);
+document.getElementById("btn-cancel").addEventListener("click",
+  ()=>document.getElementById("overlay").classList.remove("on"));
+document.addEventListener("keydown", e=>{
+  const ops = activas();
+  if(e.key==="ArrowRight"){ idx=(idx+1)%ops.length; render(); }
+  else if(e.key==="ArrowLeft"){ idx=(idx-1+ops.length)%ops.length; render(); }
+  else if(e.key==="Escape"){
+    const ov = document.getElementById("overlay");
+    if(ov.classList.contains("on")){ ov.classList.remove("on"); }
+    else if(window.pywebview && window.pywebview.api){ window.pywebview.api.cerrar(); }
+  }
+  else if(e.key==="Enter" && document.getElementById("overlay").classList.contains("on")){ confirmarCompletar(); }
+});
+
+setInterval(()=>{
+  const d=new Date();
+  document.getElementById("reloj").textContent =
+    d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
+},1000);
+
+async function iniciar(){
+  await cargarAnchosTela();
+  await cargarEstado();
+  await recargar();
+}
+if(window.pywebview){ iniciar(); }
+else { window.addEventListener("pywebviewready", iniciar); }
+</script>
+</body>
+</html>

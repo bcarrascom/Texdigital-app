@@ -31,11 +31,13 @@ if sys.platform == "darwin":
     FUENTE_LABEL  = ("Helvetica Neue", 11)
     FUENTE_LISTA  = ("Helvetica Neue", 12)
     FUENTE_HEAD   = ("Helvetica Neue", 11, "bold")
+    FUENTE_BTN    = ("Helvetica Neue", 11, "bold")
 else:
     FUENTE_TITULO = ("Georgia", 13, "bold")
     FUENTE_LABEL  = ("Segoe UI", 10)
     FUENTE_LISTA  = ("Segoe UI", 11)
     FUENTE_HEAD   = ("Segoe UI", 10, "bold")
+    FUENTE_BTN    = ("Segoe UI", 10, "bold")
 
 
 def _clave_fecha_entrega(texto: str):
@@ -124,6 +126,20 @@ class VentanaOPs(tk.Toplevel):
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w", padx=20, pady=(12, 6))
 
+        # Footer empacado ANTES del árbol para que expand=True no lo tape.
+        frame_botones = tk.Frame(self, bg=COLORES["fondo"])
+        frame_botones.pack(side="bottom", fill="x", padx=20, pady=(8, 16))
+
+        btn_panel = tk.Label(
+            frame_botones, text="Abrir panel TV →",
+            font=FUENTE_BTN, bg=COLORES["acento"],
+            fg="#FFFFFF", padx=18, pady=8, cursor="hand2",
+        )
+        btn_panel.pack(side="right")
+        btn_panel.bind("<Button-1>", lambda _: self._abrir_panel_tv())
+        btn_panel.bind("<Enter>", lambda _: btn_panel.config(bg=COLORES["acento_hover"]))
+        btn_panel.bind("<Leave>", lambda _: btn_panel.config(bg=COLORES["acento"]))
+
         frame_tree = tk.Frame(self, bg=COLORES["fondo"])
         frame_tree.pack(fill="both", expand=True, padx=20, pady=(0, 16))
 
@@ -188,6 +204,15 @@ class VentanaOPs(tk.Toplevel):
             self._tree.item(self._hover_iid,
                             tags=(self._iid_tags.get(self._hover_iid, "par"),))
             self._hover_iid = None
+
+    # ── Panel TV ───────────────────────────────────────────────────────────────
+
+    def _abrir_panel_tv(self):
+        # La ventana del panel ya existe (oculta) desde que arrancó la
+        # app; solo la mostramos. El usuario la mueve/maximiza como
+        # cualquier otra ventana.
+        from ui.panel_produccion import mostrar_panel
+        mostrar_panel()
 
     # ── Utilidades ─────────────────────────────────────────────────────────────
 
