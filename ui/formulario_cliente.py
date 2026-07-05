@@ -665,7 +665,7 @@ class FormularioCliente(tk.Toplevel):
     # ── Guardar datos del cliente ──────────────────────────────────────────────
 
     def _guardar_datos(self):
-        """Guarda empresa/rut/razón social en clientes.txt. Solo funciona una vez."""
+        """Guarda empresa/rut/razón social en clientes.json. Solo funciona una vez."""
         if self._datos_guardados:
             return
         empresa = self._var_empresa.get().strip()
@@ -704,7 +704,7 @@ class FormularioCliente(tk.Toplevel):
     # ── Guardar datos del contacto ────────────────────────────────────────────
 
     def _guardar_contacto_datos(self):
-        """Guarda contacto/email/fuente/condicion en contactos.txt. Solo funciona una vez."""
+        """Guarda contacto/email/fuente/condicion en contactos.json. Solo funciona una vez."""
         if self._contacto_guardado:
             return
         contacto = self._var_contacto.get().strip()

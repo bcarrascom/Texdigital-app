@@ -269,8 +269,8 @@ class VentanaPrincipal(tk.Tk):
         VentanaCotizaciones(self)
 
     def _abrir_revisar_ops(self):
-        from ui.revisar_ops import VentanaOPs
-        VentanaOPs(self)
+        from ui.panel_produccion import mostrar_panel
+        mostrar_panel()
 
     def _centrar_ventana(self, ancho, alto):
         self.update_idletasks()

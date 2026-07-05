@@ -34,7 +34,7 @@ from ui.pantalla_inicio import PantallaInicio
 from ui.pantalla_medidas_base import PantallaMedidasBase
 from core.repositorio import TEXTILES_ANCHOS
 
-# Anchos máximos leídos desde recursos/textiles.txt (única fuente de verdad).
+# Anchos máximos leídos desde recursos/textiles.json (única fuente de verdad).
 # Editar este orden solo si se quiere cambiar cómo aparecen en el dropdown.
 _NOMBRES_TELAS_BACKLIGHT = [
     "Popelina 155",

@@ -32,8 +32,12 @@
   .stage{ height:100vh; display:flex; flex-direction:column; padding:2.4vh 2.4vw 1.6vh; }
   #contenido{ flex:1; min-height:0; display:flex; flex-direction:column; }
 
-  header{ display:grid; grid-template-columns:auto 1fr auto; gap:2vw;
+  header{ display:grid; grid-template-columns:auto auto 1fr auto; gap:2vw;
     align-items:center; padding-bottom:1.6vh; border-bottom:2px solid var(--line); }
+  .btn-volver{ font-family:'Inter'; font-size:2.1vh; font-weight:600; cursor:pointer;
+    border:1px solid var(--line); border-radius:12px; padding:1vh 1.4vw; color:var(--txt);
+    background:var(--bg-2); transition:.2s; }
+  .btn-volver:hover{ border-color:var(--azul); color:#fff; }
   .op-tag{ display:flex; align-items:baseline; gap:.7vw; }
   .op-tag .lbl{ font-size:2.2vh; letter-spacing:.18em; color:var(--txt-dim);
     text-transform:uppercase; font-weight:600; }
@@ -166,6 +170,7 @@
 <div class="stage" id="stage">
   <div id="contenido">
   <header>
+    <button class="btn-volver" id="btn-volver">← Listado</button>
     <div class="op-tag"><span class="lbl">OP</span><span class="n num" id="op-n">—</span></div>
     <div class="titulo-wrap">
       <div class="titulo" id="op-titulo">—</div>
@@ -200,6 +205,7 @@
     <div class="big">✓ Sin OP activas</div>
     <div class="sub">No hay órdenes en la carpeta. Pulsa Recargar para volver a revisar.</div>
     <button class="btn-recargar" id="btn-recargar-vacio">↻ Recargar</button>
+    <button class="btn-recargar" id="btn-volver-vacio">← Listado</button>
   </div>
 </div>
 
@@ -445,12 +451,18 @@ async function confirmarCompletar(){
   render();
 }
 
+function volverAlListado(){
+  window.location.href = "panel_lista.html";
+}
+
 document.getElementById("btn-conf").addEventListener("click", onBoton);
 document.getElementById("btn-recargar").addEventListener("click", recargar);
 document.getElementById("btn-recargar-vacio").addEventListener("click", recargar);
 document.getElementById("btn-ok").addEventListener("click", confirmarCompletar);
 document.getElementById("btn-cancel").addEventListener("click",
   ()=>document.getElementById("overlay").classList.remove("on"));
+document.getElementById("btn-volver").addEventListener("click", volverAlListado);
+document.getElementById("btn-volver-vacio").addEventListener("click", volverAlListado);
 document.addEventListener("keydown", e=>{
   const ops = activas();
   if(e.key==="ArrowRight"){ idx=(idx+1)%ops.length; render(); }
@@ -458,7 +470,7 @@ document.addEventListener("keydown", e=>{
   else if(e.key==="Escape"){
     const ov = document.getElementById("overlay");
     if(ov.classList.contains("on")){ ov.classList.remove("on"); }
-    else if(window.pywebview && window.pywebview.api){ window.pywebview.api.cerrar(); }
+    else { volverAlListado(); }
   }
   else if(e.key==="Enter" && document.getElementById("overlay").classList.contains("on")){ confirmarCompletar(); }
 });
@@ -469,10 +481,30 @@ setInterval(()=>{
     d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
 },1000);
 
+/* Si se llegó desde el listado con doble clic, abre directo en esa OP.
+   Si esa OP no está activa (p. ej. ya fue completada), la busca igual en
+   las otras carpetas y la muestra en modo de solo lectura (no aparece en
+   Recargar ni se puede volver a marcar/completar desde otra OP, pero las
+   acciones igual son inofensivas: no hay archivo en JSON/ que mover). */
 async function iniciar(){
   await cargarAnchosTela();
   await cargarEstado();
   await recargar();
+  try{
+    const objetivo = await window.pywebview.api.obtener_op_objetivo();
+    if(objetivo != null){
+      let i = activas().findIndex(o => o.Cotizacion === objetivo);
+      if(i < 0){
+        const op = await window.pywebview.api.obtener_op_por_numero(objetivo);
+        if(op){
+          OPS.push(op);
+          listos[op.Cotizacion] = new Set(op.ProductosListos || []);
+          i = activas().findIndex(o => o.Cotizacion === objetivo);
+        }
+      }
+      if(i >= 0){ idx = i; render(); }
+    }
+  }catch(e){ console.error("No se pudo abrir la OP solicitada:", e); }
 }
 if(window.pywebview){ iniciar(); }
 else { window.addEventListener("pywebviewready", iniciar); }
