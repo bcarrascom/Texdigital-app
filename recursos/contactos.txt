@@ -1,4 +1,0 @@
-# Archivo de contactos
-# Contacto|email|fuente|condicion
-Contacto Ejemplo|contacto.ejemplo@gmail.com|10|condicion_ejemplo
-

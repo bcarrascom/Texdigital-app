@@ -1,38 +1,101 @@
 """
 core/repositorio.py
-Acceso a los datos persistentes de la app: catálogos (productos, textiles)
-y datos editables por el usuario (clientes, contactos).
+Acceso a los datos de configuración compartida: catálogos (productos,
+textiles) y datos editables por el usuario (clientes, contactos). Todo
+vive en JSON dentro de Dropbox/SGTD/Conf (ver core.rutas.CONF), para que
+sea el mismo dato en todas las instalaciones.
 """
 
+import json
 import shutil
 
-from core.rutas import DATOS as _DATOS_DIR, RECURSOS as _RECURSOS_DIR
+from core.rutas import CONF as _CONF_DIR, DATOS as _DATOS_DIR, RECURSOS as _RECURSOS_DIR
 
-SEP = "|"
+SEP = "|"  # separador del viejo formato clientes.txt/contactos.txt (solo para migrar)
 
-CLIENTES_PATH  = _DATOS_DIR / "clientes.txt"
-CONTACTOS_PATH = _DATOS_DIR / "contactos.txt"
+CLIENTES_PATH  = _CONF_DIR / "clientes.json"
+CONTACTOS_PATH = _CONF_DIR / "contactos.json"
+
+
+def _parsear_pipe(texto: str, campos: list[str]) -> list[dict]:
+    """Parsea el viejo formato 'campo1|campo2|...' de clientes.txt/contactos.txt
+    (instalaciones previas a la migración a JSON). Ignora las 2 primeras
+    líneas (cabecera) y cualquier campo de más al final de una línea."""
+    filas = []
+    for i, linea in enumerate(texto.splitlines()):
+        if i < 2:
+            continue
+        linea = linea.strip()
+        if not linea:
+            continue
+        partes = linea.split(SEP)
+        if len(partes) >= len(campos):
+            filas.append({campo: partes[j].strip() for j, campo in enumerate(campos)})
+    return filas
+
+
+def _migrar_a_conf(nombre: str, campos: list[str] | None = None) -> None:
+    """
+    Asegura que <nombre>.json exista en la carpeta de configuración
+    compartida (Dropbox/SGTD/Conf, o localmente si no hay Dropbox). Si ya
+    está ahí no hace nada (puede haberlo dejado otra instalación). Si no,
+    busca datos existentes y los copia, en este orden:
+    1. <nombre>.json ya migrado localmente en esta máquina (instalaciones
+       de la semana pasada, antes de que esto viviera en Dropbox).
+    2. <nombre>.txt viejo (formato previo a JSON) — solo para clientes y
+       contactos, que son los únicos que llegaron a existir en ese formato.
+    3. recursos/<nombre>.json (dato de fábrica), para una instalación
+       nueva que nunca tuvo nada de esto.
+    """
+    destino = _CONF_DIR / f"{nombre}.json"
+    if destino.exists():
+        return
+
+    local_json = _DATOS_DIR / f"{nombre}.json"
+    if local_json.exists():
+        shutil.copy2(local_json, destino)
+        return
+
+    if campos is not None:
+        local_txt = _DATOS_DIR / f"{nombre}.txt"
+        if local_txt.exists():
+            filas = _parsear_pipe(local_txt.read_text(encoding="utf-8"), campos)
+            destino.write_text(json.dumps(filas, ensure_ascii=False, indent=2), encoding="utf-8")
+            return
+
+    seed = _RECURSOS_DIR / f"{nombre}.json"
+    if seed.exists():
+        shutil.copy2(seed, destino)
 
 
 def _migrar_datos_antiguos():
-    """
-    Si los archivos de datos existen en la carpeta de recursos (ubicación antigua)
-    y NO existen todavía en la carpeta de datos del usuario (ubicación nueva),
-    los copia automáticamente. Esto permite la transición tras actualizar.
-    """
-    for nombre in ("clientes.txt", "contactos.txt"):
-        origen  = _RECURSOS_DIR / nombre
-        destino = _DATOS_DIR    / nombre
-        if origen.exists() and not destino.exists():
-            shutil.copy2(origen, destino)
+    _migrar_a_conf("clientes", ["empresa", "rut", "razon_social"])
+    _migrar_a_conf("contactos", ["contacto", "email", "fuente", "condicion"])
+    _migrar_a_conf("productos")
+    _migrar_a_conf("textiles")
+    _migrar_a_conf("perfiles")
+    _migrar_a_conf("luces")
+    _migrar_a_conf("fuentes_poder")
 
 
 _migrar_datos_antiguos()
 
 
+def _leer_json(ruta) -> list:
+    if not ruta.exists():
+        return []
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _escribir_json(ruta, datos: list) -> None:
+    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# Gestión de clientes.txt
-# Formato por línea:  Empresa|Rut|Razon Social
+# Gestión de clientes.json — lista de {empresa, rut, razon_social}
 # ══════════════════════════════════════════════════════════════════════════════
 
 def formatear_rut(rut_raw: str) -> str:
@@ -54,125 +117,100 @@ def formatear_rut(rut_raw: str) -> str:
 
 
 def cargar_clientes() -> list[dict]:
-    """Lee clientes.txt y devuelve lista de dicts {empresa, rut, razon_social}."""
-    clientes = []
-    if not CLIENTES_PATH.exists():
-        return clientes
-    with open(CLIENTES_PATH, encoding="utf-8") as f:
-        for i, linea in enumerate(f):
-            if i < 2:  # Ignore first 2 lines
-                continue
-            linea = linea.strip()
-            if not linea:
-                continue
-            partes = linea.split(SEP)
-            if len(partes) >= 3:
-                clientes.append({
-                    "empresa":      partes[0].strip(),
-                    "rut":          partes[1].strip(),
-                    "razon_social": partes[2].strip(),
-                })
-    return clientes
+    """Lee clientes.json y devuelve lista de dicts {empresa, rut, razon_social}."""
+    return _leer_json(CLIENTES_PATH)
 
 
 def guardar_cliente(empresa: str, rut: str, razon_social: str):
-    """Agrega un cliente nuevo a clientes.txt si no existe ya."""
+    """Agrega un cliente nuevo a clientes.json si no existe ya."""
     clientes = cargar_clientes()
-    # Verificar que no exista ya (por nombre de empresa)
     for c in clientes:
         if c["empresa"].lower() == empresa.lower():
             return  # ya existe, no duplicar
-    with open(CLIENTES_PATH, "a", encoding="utf-8") as f:
-        f.write(f"{empresa}{SEP}{rut}{SEP}{razon_social}\n")
+    clientes.append({"empresa": empresa, "rut": rut, "razon_social": razon_social})
+    _escribir_json(CLIENTES_PATH, clientes)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Gestión de contactos.txt
-# Formato por línea:  Contacto|Email|Fuente|Condicion
+# Gestión de contactos.json — lista de {contacto, email, fuente, condicion}
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_contactos() -> list[dict]:
-    """Lee contactos.txt y devuelve lista de dicts {contacto, email, fuente, condicion}."""
-    contactos = []
-    if not CONTACTOS_PATH.exists():
-        return contactos
-    with open(CONTACTOS_PATH, encoding="utf-8") as f:
-        for i, linea in enumerate(f):
-            if i < 2:  # Ignorar las 2 primeras líneas de cabecera
-                continue
-            linea = linea.strip()
-            if not linea:
-                continue
-            partes = linea.split(SEP)
-            if len(partes) >= 4:
-                contactos.append({
-                    "contacto":  partes[0].strip(),
-                    "email":     partes[1].strip(),
-                    "fuente":    partes[2].strip(),
-                    "condicion": partes[3].strip(),
-                })
-    return contactos
+    """Lee contactos.json y devuelve lista de dicts {contacto, email, fuente, condicion}."""
+    return _leer_json(CONTACTOS_PATH)
 
 
 def guardar_contacto(contacto: str, email: str, fuente: str, condicion: str):
-    """Agrega un contacto nuevo a contactos.txt si no existe ya."""
+    """Agrega un contacto nuevo a contactos.json si no existe ya."""
     contactos = cargar_contactos()
     for c in contactos:
         if c["contacto"].lower() == contacto.lower():
             return  # ya existe, no duplicar
-    if not CONTACTOS_PATH.exists():
-        with open(CONTACTOS_PATH, "w", encoding="utf-8") as f:
-            f.write("# Archivo de contactos\n")
-            f.write("# contacto|email|fuente|condicion\n")
-    with open(CONTACTOS_PATH, "a", encoding="utf-8") as f:
-        f.write(f"{contacto}{SEP}{email}{SEP}{fuente}{SEP}{condicion}\n")
+    contactos.append({"contacto": contacto, "email": email, "fuente": fuente, "condicion": condicion})
+    _escribir_json(CONTACTOS_PATH, contactos)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Catálogos de solo lectura: productos.txt y textiles.txt
+# Catálogos: productos.json y textiles.json
+# Antes vivían empaquetados en recursos/ (de solo lectura, requerían un
+# release nuevo para cambiar un producto o una tela). Ahora viven en
+# Dropbox/SGTD/Conf junto con clientes/contactos: editar el JSON ahí se
+# refleja en todas las instalaciones sin recompilar nada.
 # ══════════════════════════════════════════════════════════════════════════════
-
-def _cargar_lista(nombre: str) -> list[str]:
-    ruta = _RECURSOS_DIR / nombre
-    if not ruta.exists():
-        return []
-    with open(ruta, encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
-
 
 def cargar_productos() -> list[str]:
-    return _cargar_lista("productos.txt")
+    """Lee productos.json: lista de nombres de producto."""
+    return _leer_json(_CONF_DIR / "productos.json")
 
 
 def cargar_textiles() -> tuple[list[str], dict[str, float]]:
     """
-    Lee textiles.txt con formato  'Nombre | ancho_max'.
-    Devuelve (lista_nombres, dict_anchos).
-    Si una línea no tiene '|', se agrega el nombre sin restricción de ancho.
+    Lee textiles.json: lista de {nombre, ancho}.
+    Devuelve (lista_nombres, dict_anchos). Si un textil no trae "ancho",
+    se agrega el nombre sin restricción de ancho.
     """
-    ruta = _RECURSOS_DIR / "textiles.txt"
     nombres: list[str] = []
     anchos:  dict[str, float] = {}
-    if not ruta.exists():
-        return nombres, anchos
-    with open(ruta, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            if "|" in line:
-                partes = line.split("|", 1)
-                nombre = partes[0].strip()
-                try:
-                    ancho = float(partes[1].strip())
-                    anchos[nombre] = ancho
-                except ValueError:
-                    pass
-                nombres.append(nombre)
-            else:
-                nombres.append(line)
+    for item in _leer_json(_CONF_DIR / "textiles.json"):
+        nombre = str(item.get("nombre", "")).strip()
+        if not nombre:
+            continue
+        nombres.append(nombre)
+        if item.get("ancho") is not None:
+            try:
+                anchos[nombre] = float(item["ancho"])
+            except (TypeError, ValueError):
+                pass
     return nombres, anchos
 
 
 PRODUCTOS                  = cargar_productos()
 TEXTILES, TEXTILES_ANCHOS  = cargar_textiles()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Catálogos de cajas de backlight: perfiles.json, luces.json, fuentes_poder.json
+# Usados por core/calculo_cajas.py y por el formulario de caja del cotizador
+# backlight. Mismo criterio que productos/textiles: viven en Dropbox/SGTD/Conf,
+# editables sin recompilar la app.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_perfiles() -> list[str]:
+    """Lee perfiles.json: lista de nombres de perfil de caja."""
+    return _leer_json(_CONF_DIR / "perfiles.json")
+
+
+def cargar_luces() -> list[dict]:
+    """Lee luces.json: lista de {corto, largo, medida, watts}."""
+    return _leer_json(_CONF_DIR / "luces.json")
+
+
+def cargar_fuentes_poder() -> list[dict]:
+    """Lee fuentes_poder.json: lista de {watts, nombre}, ordenada por watts."""
+    datos = _leer_json(_CONF_DIR / "fuentes_poder.json")
+    return sorted(datos, key=lambda d: d.get("watts", 0))
+
+
+PERFILES       = cargar_perfiles()
+LUCES          = cargar_luces()
+FUENTES_PODER  = cargar_fuentes_poder()

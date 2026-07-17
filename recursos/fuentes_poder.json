@@ -1,0 +1,11 @@
+[
+  {"watts": 35, "nombre": "FP 35 watts- 24v MEAN WELL"},
+  {"watts": 50, "nombre": "FP 50 watts- 24v MEAN WELL"},
+  {"watts": 75, "nombre": "FP 75 watts- 24v MEAN WELL"},
+  {"watts": 100, "nombre": "FP 100 watts- 24v MEAN WELL"},
+  {"watts": 150, "nombre": "FP 150 watts- 24v MEAN WELL"},
+  {"watts": 200, "nombre": "FP 200 watts- 24v MEAN WELL"},
+  {"watts": 350, "nombre": "FP 350 watts - 24v MEAN WELL"},
+  {"watts": 450, "nombre": "FP 450 watts-24v- MEAN WELL"},
+  {"watts": 600, "nombre": "FP 600 watts-24v- MEAN WELL"}
+]

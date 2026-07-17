@@ -2,14 +2,20 @@
 core/repositorio_ops.py
 Persistencia de Órdenes de Producción (OP) como JSON en la carpeta Dropbox
 compartida. Una OP nace de una cotización aprobada; ya no se generan Excel/PDF
-para las OPs, solo JSON (lo lee el panel de TV de producción).
+para las OPs, solo JSON (lo leen los paneles de TV de producción).
+
+Ciclo de vida de una OP activa:
+  JSON/ (activa) -> Completadas/ (recién completada) -> Historial/ (>14 días)
+  JSON/ (activa) <-> Pendiente/ (esperando fecha de entrega definitiva)
 """
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from core.repositorio_cotizaciones import _detectar_dropbox
-from core.rutas import DATOS
+from core.rutas import DATOS, _detectar_dropbox
+
+DIAS_ENVEJECIMIENTO = 14
 
 
 def _ruta_base() -> Path:
@@ -31,6 +37,18 @@ def carpeta_historial() -> Path:
     return p
 
 
+def carpeta_completadas() -> Path:
+    p = _ruta_base() / "Completadas"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def carpeta_pendiente() -> Path:
+    p = _ruta_base() / "Pendiente"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def guardar_op(datos: dict) -> Path:
     """Guarda datos como JSON de OP. Sobreescribe si ya existe el número."""
     numero = datos["Cotizacion"]
@@ -42,11 +60,63 @@ def guardar_op(datos: dict) -> Path:
     return destino
 
 
-def mover_a_historial(numero: int) -> None:
-    """Mueve el JSON de la OP completada de JSON/ a Historial/."""
-    origen = carpeta_json() / f"{numero}.json"
+def _mover(origen_carpeta: Path, destino_carpeta: Path, numero: int) -> None:
+    origen = origen_carpeta / f"{numero}.json"
     if origen.exists():
-        origen.replace(carpeta_historial() / origen.name)
+        origen.replace(destino_carpeta / origen.name)
+
+
+def mover_a_completadas(numero: int) -> None:
+    """Mueve el JSON de la OP completada de JSON/ a Completadas/."""
+    _mover(carpeta_json(), carpeta_completadas(), numero)
+
+
+def mover_a_pendiente(numero: int) -> None:
+    """Mueve el JSON de la OP de JSON/ a Pendiente/ (a la espera de que el
+    cliente confirme una fecha de entrega definitiva)."""
+    _mover(carpeta_json(), carpeta_pendiente(), numero)
+
+
+def reactivar_desde_pendiente(numero: int, fecha_entrega: str) -> None:
+    """Mueve el JSON de Pendiente/ a JSON/ con la nueva Fecha_entrega."""
+    origen = carpeta_pendiente() / f"{numero}.json"
+    if not origen.exists():
+        return
+    datos = json.loads(origen.read_text(encoding="utf-8"))
+    datos["Fecha_entrega"] = fecha_entrega
+    (carpeta_json() / origen.name).write_text(
+        json.dumps(datos, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    origen.unlink()
+
+
+def actualizar_fecha_entrega(numero: int, fecha_entrega: str) -> None:
+    """Actualiza la Fecha_entrega de una OP activa, sin moverla de carpeta."""
+    ruta = carpeta_json() / f"{numero}.json"
+    if not ruta.exists():
+        return
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    datos["Fecha_entrega"] = fecha_entrega
+    ruta.write_text(
+        json.dumps(datos, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def envejecer_completadas(dias: int = DIAS_ENVEJECIMIENTO) -> None:
+    """Mueve a Historial/ las OPs de Completadas/ cuya Fecha_entrega tenga
+    más de `dias` días de antigüedad. Mantiene liviano el set que lee el
+    calendario del panel de listado."""
+    limite = datetime.now() - timedelta(days=dias)
+    for archivo in carpeta_completadas().glob("*.json"):
+        try:
+            datos = json.loads(archivo.read_text(encoding="utf-8"))
+            fecha = datetime.strptime(datos["Fecha_entrega"], "%d/%m/%Y")
+        except Exception:
+            continue
+        if fecha < limite:
+            archivo.replace(carpeta_historial() / archivo.name)
 
 
 def actualizar_listos(numero: int, indices: list[int]) -> None:
