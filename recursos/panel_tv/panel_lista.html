@@ -117,6 +117,10 @@
   .fila .nop{ font-size:3.2vh; font-weight:700; color:var(--azul); }
   .fila .nombre{ font-size:2.6vh; font-weight:600; overflow-wrap:anywhere; line-height:1.1; }
   .fila .cliente{ font-size:2.3vh; color:var(--txt-dim); overflow-wrap:anywhere; line-height:1.1; }
+  .badges-caja{ display:flex; flex-wrap:wrap; gap:.4vh .5vw; margin-top:.5vh; }
+  .badge-caja{ font-size:1.4vh; font-weight:600; letter-spacing:.03em; text-transform:uppercase;
+    color:#7CB8EE; background:#1B2A3A; border:1px solid #2A4A6A; border-radius:8px;
+    padding:.3vh .7vw; white-space:nowrap; }
   .fila-fecha{ display:flex; align-items:center; gap:.7vw; }
   .fila-fecha .fecha{ font-size:2.4vh; font-weight:600; }
   .punto-fila{ width:1.7vh; height:1.7vh; border-radius:50%; background:var(--p-blanco); flex:none; }
@@ -419,9 +423,29 @@ function aplicarFlip(prev){
       requestAnimationFrame(()=>{ f.style.transition=""; f.style.transform=""; }); }
   });
 }
+/* Perfiles de caja distintos entre los productos de una OP (el "Caja" de
+   un producto puede ser el string viejo con solo el perfil, o el objeto
+   nuevo {perfil, traseras, luces_1, luces_2, fp, obs} — acá solo interesa
+   el perfil, que se elige en la misma pantalla de medidas). */
+function perfilesDeOP(op){
+  const set = new Set();
+  for(const p of (op.productos||[])){
+    if(!Object.prototype.hasOwnProperty.call(p,"Caja")) continue;
+    const caja = p.Caja;
+    let perfil = null;
+    if(caja && typeof caja === "object") perfil = caja.perfil || null;
+    else if(typeof caja === "string" && caja.trim() && caja.trim().toLowerCase()!=="sin caja") perfil = caja.trim();
+    if(perfil) set.add(perfil);
+  }
+  return [...set];
+}
 function filaHTML(op,est,checkClass,checkChar){
+  const perfiles = perfilesDeOP(op);
+  const badgesHTML = perfiles.length
+    ? `<div class="badges-caja">${perfiles.map(pf=>`<span class="badge-caja">${pf}</span>`).join("")}</div>`
+    : "";
   return `<div class="nop num">${op.Cotizacion}</div>
-      <div class="nombre">${op.Nombre}</div>
+      <div class="nombre">${op.Nombre}${badgesHTML}</div>
       <div class="cliente">${op.Empresa}</div>
       <div class="fila-fecha"><span class="fecha num">${op.Fecha_entrega}</span><span class="punto-fila ${est}"></span></div>
       <div class="${checkClass}">${checkChar}</div>`;

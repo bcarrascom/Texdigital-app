@@ -73,6 +73,9 @@ def _migrar_datos_antiguos():
     _migrar_a_conf("contactos", ["contacto", "email", "fuente", "condicion"])
     _migrar_a_conf("productos")
     _migrar_a_conf("textiles")
+    _migrar_a_conf("perfiles")
+    _migrar_a_conf("luces")
+    _migrar_a_conf("fuentes_poder")
 
 
 _migrar_datos_antiguos()
@@ -183,3 +186,31 @@ def cargar_textiles() -> tuple[list[str], dict[str, float]]:
 
 PRODUCTOS                  = cargar_productos()
 TEXTILES, TEXTILES_ANCHOS  = cargar_textiles()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Catálogos de cajas de backlight: perfiles.json, luces.json, fuentes_poder.json
+# Usados por core/calculo_cajas.py y por el formulario de caja del cotizador
+# backlight. Mismo criterio que productos/textiles: viven en Dropbox/SGTD/Conf,
+# editables sin recompilar la app.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_perfiles() -> list[str]:
+    """Lee perfiles.json: lista de nombres de perfil de caja."""
+    return _leer_json(_CONF_DIR / "perfiles.json")
+
+
+def cargar_luces() -> list[dict]:
+    """Lee luces.json: lista de {corto, largo, medida, watts}."""
+    return _leer_json(_CONF_DIR / "luces.json")
+
+
+def cargar_fuentes_poder() -> list[dict]:
+    """Lee fuentes_poder.json: lista de {watts, nombre}, ordenada por watts."""
+    datos = _leer_json(_CONF_DIR / "fuentes_poder.json")
+    return sorted(datos, key=lambda d: d.get("watts", 0))
+
+
+PERFILES       = cargar_perfiles()
+LUCES          = cargar_luces()
+FUENTES_PODER  = cargar_fuentes_poder()

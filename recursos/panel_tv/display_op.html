@@ -79,13 +79,23 @@
   .lista::-webkit-scrollbar{ width:10px; }
   .lista::-webkit-scrollbar-thumb{ background:var(--line); border-radius:6px; }
   .grid{ display:grid; gap:1.3vh 1.3vw;
-    grid-template-columns:repeat(auto-fill, minmax(min(100%, 29vw), 1fr)); }
+    grid-template-columns:repeat(auto-fill, minmax(min(100%, 29vw), 1fr));
+    grid-auto-rows: minmax(23vh, auto); }
 
   .card{ background:linear-gradient(160deg,var(--card),#141A22);
     border:1px solid var(--line); border-left:7px solid var(--naranja);
     border-radius:16px; padding:1.5vh 1.4vw; display:flex; flex-direction:column; gap:1vh;
     cursor:pointer; transition:border-color .2s, opacity .2s, background .2s; position:relative; }
   .card:hover{ background:linear-gradient(160deg,#1F2630,#161D26); }
+  .card.con-caja{ grid-row: span 2; }
+  .caja-detalle{ display:flex; flex-direction:column; gap:.6vh; background:var(--bg);
+    border:1px solid var(--line); border-radius:10px; padding:1vh 1vw; }
+  .caja-item{ display:flex; align-items:baseline; gap:.7vw; }
+  .caja-item .k{ font-size:1.5vh; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--txt-dim); font-weight:600; flex:0 0 9vw; }
+  .caja-item .v{ font-size:1.9vh; color:var(--txt); flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .caja-item .n{ font-size:1.9vh; font-weight:700; color:var(--azul); flex:none; }
   .card.listo{ border-left-color:var(--azul);
     background:linear-gradient(160deg,#151A21,#10141A); }
   .card.listo .tipo,
@@ -235,18 +245,49 @@ function anchoTelaDe(tela){
   return m ? parseInt(m[1])/100 : 1.50;
 }
 const esBacklight = p => Object.prototype.hasOwnProperty.call(p,"Caja");
-function tipoProducto(p){
-  if(esBacklight(p)){
-    const caja = (p.Caja||"").trim().toLowerCase();
-    return (caja==="" || caja==="sin caja") ? "Backlight" : "Backlight + Caja";
+
+/* El campo "Caja" de un producto puede venir en dos formas: el string
+   viejo con solo el perfil ("PERFIL 100 MM SIMPLE" o "Sin caja"), o el
+   objeto nuevo que arma _valor_caja_guardado() en cotizador_backlight.py:
+   {perfil, watts, traseras, luces_1, luces_2, fp, obs} — traseras/luces/fp
+   traen cada uno {tipo, cantidad_x_caja, cantidad_total}. cajaInfo()
+   normaliza ambos casos; devuelve null si el producto no tiene caja. */
+function cajaInfo(p){
+  if(!esBacklight(p)) return null;
+  const caja = p.Caja;
+  if(caja && typeof caja === "object"){
+    if(!caja.perfil) return null;
+    const items = [];
+    // Traseras/FP ya vienen redondeados hacia arriba desde calcular_caja()
+    // (unidades enteras: una plancha, una fuente de poder). Acá solo se
+    // oculta cualquier fila en 0 — sin luces, sin traseras (mallas nunca
+    // llevan), sin FP (watts 0) — igual que ya se ocultaba "sin luces".
+    const agregarLuz = (k, obj) => {
+      if(!obj || !obj.tipo || !obj.tipo.trim()) return;
+      if(!obj.cantidad_total) return;  // 0 -> no se muestra
+      items.push({ k, v: obj.tipo, n: obj.cantidad_total });
+    };
+    agregarLuz("Traseras", caja.traseras);
+    agregarLuz("Luces 1", caja.luces_1);
+    agregarLuz("Luces 2", caja.luces_2);
+    if(caja.fp && caja.fp.tipo && caja.fp.cantidad_total){
+      items.push({ k: "FP", v: caja.fp.tipo, n: caja.fp.cantidad_total });
+    }
+    return { perfil: caja.perfil, obs: caja.obs, items };
   }
+  const texto = (caja||"").trim();
+  if(!texto || texto.toLowerCase()==="sin caja") return null;
+  return { perfil: texto, obs: null, items: [] };
+}
+
+function tipoProducto(p){
+  if(esBacklight(p)) return cajaInfo(p) ? "Backlight + Caja" : "Backlight";
   return p.producto || "Producto";
 }
 function detalleTextil(p){
   if(esBacklight(p)){
-    const caja = (p.Caja||"").trim();
-    const conCaja = caja && caja.toLowerCase()!=="sin caja";
-    return conCaja ? `${p.Tela} · ${caja}` : p.Tela;
+    const info = cajaInfo(p);
+    return info ? `${p.Tela} · ${info.perfil}` : p.Tela;
   }
   return p.Tela;
 }
@@ -356,8 +397,24 @@ function render(){
     const isListo = set.has(i);
     const obsHTML = (p.Obs && p.Obs.trim())
       ? `<div class="obs"><b>Obs:</b> ${p.Obs}</div>` : "";
+    // Detalle de caja: solo ocupa el espacio extra (2 filas de la grilla)
+    // si hay algo más que mostrar además del perfil (que ya aparece en la
+    // tela-line) — traseras, luces, FP u obs de la caja.
+    const info = cajaInfo(p);
+    const tieneDetalleCaja = !!(info && (info.items.length || (info.obs && info.obs.trim())));
+    const cajaHTML = tieneDetalleCaja ? `
+        <div class="caja-detalle">
+          ${info.items.map(it=>`
+          <div class="caja-item">
+            <div class="k">${it.k}</div>
+            <div class="v">${it.v}</div>
+            ${it.n!=null ? `<div class="n num">×${fmt(it.n)}</div>` : ""}
+          </div>`).join("")}
+          ${info.obs && info.obs.trim() ? `
+          <div class="caja-item"><div class="k">Obs. caja</div><div class="v">${info.obs}</div></div>` : ""}
+        </div>` : "";
     return `
-      <div class="card ${isListo?'listo':''}" data-i="${i}">
+      <div class="card ${isListo?'listo':''} ${tieneDetalleCaja?'con-caja':''}" data-i="${i}">
         <div class="check">✓</div>
         <div class="card-top">
           <div class="ident">
@@ -370,6 +427,7 @@ function render(){
           <span class="dim">${med(p.Ancho)}</span><span class="x">×</span>
           <span class="dim">${med(p.Alto)}</span><span class="u">m</span>
         </div>
+        ${cajaHTML}
         ${obsHTML}
         <div class="card-bottom">
           <div class="tema"><b>Tema:</b> ${p.Tema||"—"}</div>

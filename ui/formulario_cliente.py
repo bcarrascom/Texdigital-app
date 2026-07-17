@@ -36,6 +36,13 @@ from core.repositorio_cotizaciones import (
     carpeta_excel,
 )
 
+# Desactivado temporalmente: exportar_cotizacion_backlight/nueva no saben
+# escribir el campo "Caja" cuando es un dict con el detalle de la caja
+# (openpyxl solo acepta str/int/float/bool/None en una celda) — antes
+# "Caja" era siempre un string. Reactivar cuando el generador de Excel
+# soporte el nuevo esquema (ver excel/generador_documentos.py).
+EXPORTAR_EXCEL = False
+
 COLORES = {
     "fondo":        "#E1E1E1",
     "acento":       "#1A3A5C",
@@ -789,22 +796,24 @@ class FormularioCliente(tk.Toplevel):
             datos_cliente["terminaciones_caja"] = self._var_terminaciones.get()
 
         try:
-            # ── Excel ─────────────────────────────────────────────────────────
-            carpeta_xls = carpeta_excel()
-            if self._incluir_terminaciones:
-                from excel.generador_documentos import exportar_cotizacion_backlight
-                ruta_xls = exportar_cotizacion_backlight(
-                    datos_cliente=datos_cliente,
-                    datos_productos=self._datos_productos,
-                    destino_dir=carpeta_xls,
-                )
-            else:
-                from excel.generador_documentos import exportar_cotizacion_nueva
-                ruta_xls = exportar_cotizacion_nueva(
-                    datos_cliente=datos_cliente,
-                    datos_productos=self._datos_productos,
-                    destino_dir=carpeta_xls,
-                )
+            # ── Excel (desactivado temporalmente, ver EXPORTAR_EXCEL) ──────────
+            ruta_xls = None
+            if EXPORTAR_EXCEL:
+                carpeta_xls = carpeta_excel()
+                if self._incluir_terminaciones:
+                    from excel.generador_documentos import exportar_cotizacion_backlight
+                    ruta_xls = exportar_cotizacion_backlight(
+                        datos_cliente=datos_cliente,
+                        datos_productos=self._datos_productos,
+                        destino_dir=carpeta_xls,
+                    )
+                else:
+                    from excel.generador_documentos import exportar_cotizacion_nueva
+                    ruta_xls = exportar_cotizacion_nueva(
+                        datos_cliente=datos_cliente,
+                        datos_productos=self._datos_productos,
+                        destino_dir=carpeta_xls,
+                    )
 
             # ── JSON ──────────────────────────────────────────────────────────
             fuente_raw = datos_cliente.get("fuente", "")
@@ -829,10 +838,11 @@ class FormularioCliente(tk.Toplevel):
             }
             ruta_json = guardar_cotizacion(json_dict)
 
-            self._lbl_export_estado.config(
-                text=f"✓ Guardado correctamente:\n{ruta_xls}\n{ruta_json}",
-                fg=COLORES["ok"],
-            )
+            lineas = ["✓ Guardado correctamente:"]
+            if ruta_xls:
+                lineas.append(str(ruta_xls))
+            lineas.append(str(ruta_json))
+            self._lbl_export_estado.config(text="\n".join(lineas), fg=COLORES["ok"])
             self._modo_nueva_cot()
 
         except Exception as e:
