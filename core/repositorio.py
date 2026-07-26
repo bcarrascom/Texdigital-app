@@ -76,6 +76,8 @@ def _migrar_datos_antiguos():
     _migrar_a_conf("perfiles")
     _migrar_a_conf("luces")
     _migrar_a_conf("fuentes_poder")
+    _migrar_a_conf("estructuras")
+    _migrar_a_conf("terminaciones")
 
 
 _migrar_datos_antiguos()
@@ -214,3 +216,23 @@ def cargar_fuentes_poder() -> list[dict]:
 PERFILES       = cargar_perfiles()
 LUCES          = cargar_luces()
 FUENTES_PODER  = cargar_fuentes_poder()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Catálogos de estructuras.json y terminaciones.json — solo para productos
+# NO backlight (esos productos pueden tener estructura y/o terminación;
+# los backlight usan su propia Caja, ver calculo_cajas.py).
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_estructuras() -> list[str]:
+    """Lee estructuras.json: lista de estructuras disponibles."""
+    return _leer_json(_CONF_DIR / "estructuras.json")
+
+
+def cargar_terminaciones() -> list[str]:
+    """Lee terminaciones.json: lista de terminaciones disponibles."""
+    return _leer_json(_CONF_DIR / "terminaciones.json")
+
+
+ESTRUCTURAS    = cargar_estructuras()
+TERMINACIONES  = cargar_terminaciones()
