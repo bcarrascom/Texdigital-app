@@ -12,6 +12,10 @@ permissions:
 jobs:
   build:
     strategy:
+      # fail-fast: false — si un SO falla de verdad, que los otros dos
+      # terminen igual y se puedan publicar (antes: uno fallaba y
+      # cancelaba a los demás, dejando el release incompleto).
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -75,7 +79,32 @@ jobs:
           cd dist
           tar -czvf "../SistemaGestion-linux.tar.gz" "Sistema de Gestion"
 
+      # Antes, cada job del matrix publicaba directo al Release en este
+      # mismo paso — los 3 corriendo en paralelo chocaban entre sí contra
+      # la API de GitHub (un solo Release, 3 escrituras concurrentes) y
+      # alguno terminaba fallando con "Too many retries". Ahora cada job
+      # solo deja su archivo como artefacto de build...
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: SistemaGestion-${{ matrix.artifact_name }}
+          path: SistemaGestion-${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          if-no-files-found: error
+
+  # ...y un único job, que corre una sola vez después de que terminan los
+  # 3 builds, junta los artefactos y hace UNA sola publicación al Release
+  # — sin carrera posible.
+  publicar:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar todos los artefactos
+        uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+          merge-multiple: true
+
       - name: Publicar en Release
         uses: softprops/action-gh-release@v2
         with:
-          files: SistemaGestion-${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          files: artefactos/*
