@@ -116,7 +116,15 @@ class EntradaAutocompletado(tk.Frame):
         self._entry.pack(ipady=7, ipadx=6, fill="x")
 
         variable.trace_add("write", self._on_cambio)
-        self._entry.bind("<FocusOut>", self._cerrar_dropdown)
+        # Ojo: NO cerrar el dropdown directo en FocusOut. Al hacer click en
+        # una sugerencia, el Entry pierde el foco (dispara FocusOut) ANTES
+        # de que el click llegue al Label de la sugerencia — si cerráramos
+        # el dropdown ahí mismo, el Label ya no existiría cuando el click
+        # se procesa y la selección nunca ocurre (aunque el hover sí se ve).
+        # Con este pequeño retraso, el click alcanza a ejecutar
+        # _seleccionar() primero; si no hubo click, el cierre igual ocurre
+        # una fracción de segundo después.
+        self._entry.bind("<FocusOut>", lambda _: self.after(150, self._cerrar_dropdown))
         self._entry.bind("<Escape>",   lambda _: self._cerrar_dropdown())
         self._entry.bind("<Down>",     self._navegar_abajo)
         self._entry.bind("<Up>",       self._navegar_arriba)
@@ -239,13 +247,16 @@ def _mapear_producto(d: dict) -> dict:
             "Obs":      d.get("obs", ""),
         }
     return {
-        "producto": d.get("producto", ""),
-        "Tela":     d.get("textil", ""),
-        "Ancho":    float(d.get("ancho", 0.0)),
-        "Alto":     float(d.get("alto", 0.0)),
-        "Cantidad": int(d.get("cantidad", 0)),
-        "Tema":     d.get("tema", ""),
-        "Obs":      d.get("obs", ""),
+        "producto":     d.get("producto", ""),
+        "Tela":         d.get("textil", ""),
+        "Estructura":   d.get("estructura", "Sin estructura"),
+        "Terminacion":  d.get("terminacion", "Sin terminaciones"),
+        "Impresion":    d.get("impresion", "Cara única"),
+        "Ancho":        float(d.get("ancho", 0.0)),
+        "Alto":         float(d.get("alto", 0.0)),
+        "Cantidad":     int(d.get("cantidad", 0)),
+        "Tema":         d.get("tema", ""),
+        "Obs":          d.get("obs", ""),
     }
 
 
@@ -265,13 +276,16 @@ def producto_desde_json(d: dict) -> dict:
             "rotado":    False,
         }
     return {
-        "producto": d.get("producto", ""),
-        "textil":   d.get("Tela", ""),
-        "ancho":    d.get("Ancho", 0.0),
-        "alto":     d.get("Alto", 0.0),
-        "cantidad": d.get("Cantidad", 0),
-        "tema":     d.get("Tema", ""),
-        "obs":      d.get("Obs", ""),
+        "producto":    d.get("producto", ""),
+        "textil":      d.get("Tela", ""),
+        "estructura":  d.get("Estructura", "Sin estructura"),
+        "terminacion": d.get("Terminacion", "Sin terminaciones"),
+        "impresion":   d.get("Impresion", "Cara única"),
+        "ancho":       d.get("Ancho", 0.0),
+        "alto":        d.get("Alto", 0.0),
+        "cantidad":    d.get("Cantidad", 0),
+        "tema":        d.get("Tema", ""),
+        "obs":         d.get("Obs", ""),
     }
 
 

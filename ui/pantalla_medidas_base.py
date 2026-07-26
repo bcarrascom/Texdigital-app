@@ -141,10 +141,14 @@ class PantallaMedidasBase(tk.Frame):
         self._btn_omitir.bind("<Leave>", lambda _: self._btn_omitir.config(bg=COLORES["secundario"]))
         # No se empaqueta hasta que haya error
 
-        # Canvas a la derecha
+        # Canvas a la derecha — anclado arriba (como col_izq), no centrado
+        # verticalmente en "inf": con "inf" alto (pantallas con muchos
+        # campos arriba), centrarlo lo empujaba hacia abajo y quedaba
+        # tapado por el botón de Confirmar/Siguiente, que está anclado al
+        # borde inferior de la ventana entera.
         self._canvas = tk.Canvas(inf, width=CANVAS_W, height=CANVAS_H,
                                  bg=COLORES["fondo"], highlightthickness=0)
-        self._canvas.place(relx=1.0, rely=0.5, anchor="e")
+        self._canvas.pack(side="right", anchor="n", padx=(0, 10))
 
         # Botón siguiente
         es_ultimo = (self._indice == self._total - 1)

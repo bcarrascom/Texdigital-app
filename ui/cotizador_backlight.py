@@ -30,6 +30,7 @@ from ui.estilos import (
     FUENTE_TABLA,
     MAX_LADO,
     MARGEN,
+    MARGEN_SUP,
     _construir_cabecera,
     _centrar,
 )
@@ -671,7 +672,7 @@ class PantallaMedidas(PantallaMedidasBase):
 
         rh, rw = (MAX_LADO, MAX_LADO * (aw/ad)) if ad >= aw else (MAX_LADO * (ad/aw), MAX_LADO)
 
-        x1, y1 = MARGEN, MARGEN
+        x1, y1 = MARGEN, MARGEN_SUP
         x2, y2 = x1 + rw, y1 + rh
 
         self._canvas.create_rectangle(x1, y1, x2, y2,

@@ -291,6 +291,28 @@ function detalleTextil(p){
   }
   return p.Tela;
 }
+
+/* Estructura/Terminación/Impresión: solo aplican a productos NO backlight
+   (esos usan su propia Caja). Se ocultan los valores por defecto ("Sin
+   estructura", "Sin terminaciones", "Cara única"), igual que ya se oculta
+   "sin luces"/Traseras en 0 para los productos con caja. */
+function detalleExtra(p){
+  if(esBacklight(p)) return [];
+  const items = [];
+  const estructura = (p.Estructura || "").trim();
+  if(estructura && estructura.toLowerCase() !== "sin estructura"){
+    items.push({ k: "Estructura", v: estructura });
+  }
+  const terminacion = (p.Terminacion || "").trim();
+  if(terminacion && terminacion.toLowerCase() !== "sin terminaciones"){
+    items.push({ k: "Terminación", v: terminacion });
+  }
+  const impresion = (p.Impresion || "").trim();
+  if(impresion && impresion !== "Cara única"){
+    items.push({ k: "Impresión", v: impresion });
+  }
+  return items;
+}
 const m2 = p => p.Ancho * p.Alto * p.Cantidad;
 function unidXAncho(at, ancho){
   if(typeof ancho!=="number" || isNaN(ancho)) return "";
@@ -300,7 +322,9 @@ function unidXAncho(at, ancho){
 function ml(p){
   const u = unidXAncho(anchoTelaDe(p.Tela), p.Ancho);
   if(u==="" || u===0) return 0;
-  return p.Alto * (p.Cantidad / u);
+  const base = p.Alto * (p.Cantidad / u);
+  // Tiro y retiro imprime las dos caras: mismo cálculo, el doble de tela.
+  return p.Impresion === "Tiro y retiro" ? base * 2 : base;
 }
 const med = n => n.toFixed(3).replace(".", ",");        // medidas: SIEMPRE 3 decimales
 const fmt = n => (Math.round(n*100)/100).toLocaleString("es-CL");
@@ -413,6 +437,17 @@ function render(){
           ${info.obs && info.obs.trim() ? `
           <div class="caja-item"><div class="k">Obs. caja</div><div class="v">${info.obs}</div></div>` : ""}
         </div>` : "";
+    // Estructura/Terminación/Impresión (solo no-backlight); igual que la
+    // caja, solo se muestra si hay algo distinto del default.
+    const extra = detalleExtra(p);
+    const extraHTML = extra.length ? `
+        <div class="caja-detalle">
+          ${extra.map(it=>`
+          <div class="caja-item">
+            <div class="k">${it.k}</div>
+            <div class="v">${it.v}</div>
+          </div>`).join("")}
+        </div>` : "";
     return `
       <div class="card ${isListo?'listo':''} ${tieneDetalleCaja?'con-caja':''}" data-i="${i}">
         <div class="check">✓</div>
@@ -428,6 +463,7 @@ function render(){
           <span class="dim">${med(p.Alto)}</span><span class="u">m</span>
         </div>
         ${cajaHTML}
+        ${extraHTML}
         ${obsHTML}
         <div class="card-bottom">
           <div class="tema"><b>Tema:</b> ${p.Tema||"—"}</div>

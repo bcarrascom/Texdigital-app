@@ -62,9 +62,17 @@ else:
     FUENTE_NAV       = ("Segoe UI", _esc.pt(9), "bold")
 
 MAX_LADO = _esc.px(220)
-MARGEN   = _esc.px(48)
+MARGEN   = _esc.px(48)   # margen izquierdo del rectángulo (deja lugar a la etiqueta rotada)
+# Margen superior: deliberadamente chico para que el dibujo quede alineado
+# con la fila de Ancho/Alto/Cantidad de al lado (no centrado más abajo),
+# pero tiene que alcanzar para la etiqueta de ancho que se dibuja PEGADA
+# arriba del rectángulo (ver _dibujar_rect: create_text en y1-6, anchor
+# "s" — o sea el texto crece hacia arriba desde ahí). Con FUENTE_MEDIDA
+# (linespace ~13px sin escalar) hace falta como mínimo 6 + 13 = 19px; si
+# no, el texto se corta contra el borde superior del canvas.
+MARGEN_SUP = _esc.px(58)
 CANVAS_W = MAX_LADO + MARGEN + _esc.px(30)
-CANVAS_H = MAX_LADO + MARGEN + _esc.px(30)
+CANVAS_H = MAX_LADO + MARGEN_SUP + _esc.px(14)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
