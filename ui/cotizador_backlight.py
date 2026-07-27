@@ -121,7 +121,10 @@ class CotizadorBacklight(tk.Tk):
         super().__init__()
         self.title("Cotizador Backlight")
         self.configure(bg=COLORES["fondo"])
-        self.resizable(False, False)
+        # En macOS las fuentes nativas a veces desbordan el alto fijo
+        # calculado; se deja redimensionar a mano para asegurar que todo
+        # quepa. En Windows/Linux el tamaño fijo ya está afinado.
+        self.resizable(sys.platform == "darwin", sys.platform == "darwin")
         _centrar(self, *self.TAM_CANTIDAD)
 
         from ui.panel_produccion import salir_app
