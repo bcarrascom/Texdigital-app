@@ -80,6 +80,9 @@ git push origin v1.0.0
      "Ejecutar de todas formas".
    - **macOS**: hacer **clic derecho** sobre `Sistema de Gestion.app` → "Abrir"
      (la primera vez; doble clic puede ser bloqueado por Gatekeeper al no estar
-     la app firmada/notarizada) y confirmar.
+     la app firmada/notarizada) y confirmar. El build de macOS es Intel (corre
+     nativo en Mac con procesador Intel); en un Mac con chip Apple (M1/M2/M3...)
+     puede aparecer un cartel pidiendo instalar **Rosetta** la primera vez —
+     es normal, hay que aceptarlo y la app abre igual.
    - **Linux**: ejecutar `./Sistema de Gestion/Sistema de Gestion` desde una
      terminal, o marcarlo como ejecutable y abrirlo desde el explorador de archivos.

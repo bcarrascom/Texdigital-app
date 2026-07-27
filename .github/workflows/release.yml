@@ -21,7 +21,19 @@ jobs:
           - os: windows-latest
             artifact_name: windows
             archive_ext: zip
-          - os: macos-latest
+          # "macos-latest" corre en Apple Silicon (ARM64) desde hace un
+          # tiempo — un build hecho ahí NO abre en un Mac Intel (a
+          # diferencia de Rosetta, que sí traduce Intel→ARM, no existe
+          # traducción ARM→Intel). Usamos un runner Intel a propósito: el
+          # .app que sale de acá corre nativo en Intel y, vía Rosetta 2
+          # (que macOS instala solo con un click la primera vez), también
+          # en Apple Silicon — un solo archivo sirve para cualquier Mac.
+          # Gratis en repos públicos (no es un runner "-large"/de pago).
+          # OJO: GitHub va rotando qué versión de macOS queda disponible
+          # como Intel con el tiempo — si "macos-26-intel" deja de existir,
+          # revisar https://github.com/actions/runner-images por el label
+          # Intel vigente y actualizar acá.
+          - os: macos-26-intel
             artifact_name: macos
             archive_ext: zip
           - os: ubuntu-latest
@@ -68,7 +80,7 @@ jobs:
         run: Compress-Archive -Path "dist/Sistema de Gestion" -DestinationPath "SistemaGestion-windows.zip"
 
       - name: Crear archivo (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-26-intel'
         run: |
           cd dist
           zip -r -y "../SistemaGestion-macos.zip" "Sistema de Gestion.app"
