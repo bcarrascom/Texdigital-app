@@ -21,6 +21,7 @@ Releases.
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -35,6 +36,23 @@ REPO_GITHUB = "bcarrascom/Texdigital-app"
 API_ULTIMO_RELEASE = f"https://api.github.com/repos/{REPO_GITHUB}/releases/latest"
 TIMEOUT_CONSULTA = 6
 TIMEOUT_DESCARGA = 120
+
+
+def _contexto_ssl() -> ssl.SSLContext | None:
+    """Contexto SSL con el bundle de certificados de certifi, si está
+    disponible. El build empaquetado con PyInstaller en macOS no siempre
+    encuentra el bundle de certificados que usaría una instalación normal
+    de Python (falta el paso "Install Certificates.command"), lo que hace
+    fallar en silencio toda request HTTPS con
+    "certificate verify failed: unable to get local issuer certificate" —
+    buscar_actualizacion() lo traga como cualquier otro error de red y la
+    app sigue abriendo la versión vieja sin avisar nada. Devuelve None
+    (contexto por defecto de Python) si certifi no está disponible."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return None
 
 
 def _version_tupla(texto: str) -> tuple:
@@ -71,7 +89,7 @@ def buscar_actualizacion() -> dict | None:
         req = urllib.request.Request(
             API_ULTIMO_RELEASE, headers={"Accept": "application/vnd.github+json"}
         )
-        with urllib.request.urlopen(req, timeout=TIMEOUT_CONSULTA) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_CONSULTA, context=_contexto_ssl()) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception:
         return None
@@ -89,7 +107,7 @@ def buscar_actualizacion() -> dict | None:
 
 def _descargar(url: str, destino: Path) -> None:
     req = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT_DESCARGA) as resp, open(destino, "wb") as f:
+    with urllib.request.urlopen(req, timeout=TIMEOUT_DESCARGA, context=_contexto_ssl()) as resp, open(destino, "wb") as f:
         shutil.copyfileobj(resp, f)
 
 

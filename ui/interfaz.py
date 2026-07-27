@@ -167,6 +167,10 @@ class VentanaPrincipal(tk.Tk):
         tk.Label(contenido_cab, text="Sistema de Gestión",
                  font=FUENTE_CABECERA, bg=COLORES["acento"], fg="#FFFFFF").pack(side="left")
 
+        from core.version import VERSION
+        tk.Label(contenido_cab, text=f"v{VERSION}",
+                 font=FUENTE_FECHA, bg=COLORES["acento"], fg="#8AAFC8").pack(side="right")
+
         # ── Fecha ──
         tk.Label(self, text=fecha_actual, font=FUENTE_FECHA,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(pady=(20, 10))

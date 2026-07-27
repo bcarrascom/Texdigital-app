@@ -223,14 +223,16 @@ class CotizadorBacklight(tk.Tk):
 
         filas      = []
         total_cant = 0
-        total_ml   = 0.0
+        total_m2   = 0.0
 
         for i, d in enumerate(self._datos):
-            uxa   = d["ancho_max"] / d["ancho"]
-            ratio = d["cantidad"]  / uxa
-            ml    = d["alto"] * d["cantidad"] * ratio
+            # Backlight se imprime en el área exacta pedida, sin encajar
+            # varias unidades a lo ancho del rollo (eso es solo para
+            # productos no-backlight, ver _calc_ml en ui/cotizacion.py) —
+            # el área es simplemente Alto × Ancho × Cantidad.
+            m2 = d["alto"] * d["ancho"] * d["cantidad"]
             total_cant += d["cantidad"]
-            total_ml   += ml
+            total_m2   += m2
             filas.append([
                 str(i + 1),
                 d["tela"],
@@ -238,11 +240,11 @@ class CotizadorBacklight(tk.Tk):
                 str(d["cantidad"]),
                 str(d["ancho"]),
                 str(d["alto"]),
-                f"{ml:.4f}",
+                f"{m2:.4f}",
             ])
 
-        total_ml = round(total_ml, 4)
-        totales  = ["", "TOTAL", "", str(total_cant), "", "", f"{total_ml:.4f}"]
+        total_m2 = round(total_m2, 4)
+        totales  = ["", "TOTAL", "", str(total_cant), "", "", f"{total_m2:.4f}"]
 
         self.withdraw()
         VentanaResumen(
