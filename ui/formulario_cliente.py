@@ -430,11 +430,14 @@ class FormularioCliente(tk.Toplevel):
         # Espacio vacío para alinear con el label de arriba
         tk.Label(col_btn_guardar, text="", font=FUENTE_LABEL,
                  bg=COLORES["fondo"]).pack(anchor="w")
+        # macOS (Aqua) ignora el bg custom de tk.Button y lo dibuja con su
+        # fondo nativo claro — texto blanco quedaría invisible ahí.
+        _fg_btn = COLORES["texto"] if sys.platform == "darwin" else "#FFFFFF"
         self._btn_guardar = tk.Button(
             col_btn_guardar, text="Guardar Datos",
             font=FUENTE_BTN,
-            bg=COLORES["btn_enabled"], fg="#FFFFFF",
-            activebackground=COLORES["btn_en_hover"], activeforeground="#FFFFFF",
+            bg=COLORES["btn_enabled"], fg=_fg_btn,
+            activebackground=COLORES["btn_en_hover"], activeforeground=_fg_btn,
             relief="flat", cursor="hand2",
             padx=12, pady=7,
             command=self._guardar_datos,
@@ -499,8 +502,8 @@ class FormularioCliente(tk.Toplevel):
         self._btn_guardar_contacto = tk.Button(
             col_btn_contacto, text="Guardar Contacto",
             font=FUENTE_BTN,
-            bg=COLORES["btn_enabled"], fg="#FFFFFF",
-            activebackground=COLORES["btn_en_hover"], activeforeground="#FFFFFF",
+            bg=COLORES["btn_enabled"], fg=_fg_btn,
+            activebackground=COLORES["btn_en_hover"], activeforeground=_fg_btn,
             relief="flat", cursor="hand2",
             padx=12, pady=7,
             command=self._guardar_contacto_datos,

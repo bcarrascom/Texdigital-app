@@ -46,13 +46,32 @@ def _detectar_dropbox() -> Path | None:
     else:
         info = Path.home() / ".dropbox" / "info.json"
 
-    if not info.exists():
-        return None
-    try:
-        data = json.loads(info.read_text(encoding="utf-8"))
-        return Path(data["personal"]["path"])
-    except Exception:
-        return None
+    if info.exists():
+        try:
+            data = json.loads(info.read_text(encoding="utf-8"))
+            # info.json solo trae la clave de las cuentas vinculadas en esta
+            # máquina: "personal", "business", o ambas si hay dos cuentas
+            # enlazadas. Antes se asumía siempre "personal" y una cuenta de
+            # equipo (Dropbox Business, típico en una empresa) quedaba sin
+            # detectar, cayendo en silencio a la carpeta local.
+            for cuenta in ("personal", "business"):
+                if cuenta in data:
+                    return Path(data[cuenta]["path"])
+        except Exception:
+            pass
+
+    if sys.platform == "darwin":
+        # Fallback si no hay info.json (o no se pudo leer): las versiones
+        # recientes de Dropbox Desktop montan la carpeta sincronizada bajo
+        # ~/Library/CloudStorage/ vía el File Provider de macOS en vez de
+        # (o además de) ~/Dropbox directo.
+        cloud = Path.home() / "Library" / "CloudStorage"
+        if cloud.is_dir():
+            candidatas = sorted(p for p in cloud.glob("Dropbox*") if p.is_dir())
+            if candidatas:
+                return candidatas[0]
+
+    return None
 
 
 def _base_conf() -> Path:

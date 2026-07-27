@@ -332,7 +332,10 @@ class CotizacionNueva(tk.Tk):
             self.TAM_MEDIDAS = (_esc.px(960), _esc.px(1160))
         self.title("Ingresar Cotización")
         self.configure(bg=COLORES["fondo"])
-        self.resizable(False, False)
+        # En macOS las fuentes nativas a veces desbordan el alto fijo
+        # calculado; se deja redimensionar a mano para asegurar que todo
+        # quepa. En Windows/Linux el tamaño fijo ya está afinado.
+        self.resizable(sys.platform == "darwin", sys.platform == "darwin")
         _centrar(self, *self.TAM_INICIO)
 
         from ui.panel_produccion import salir_app
