@@ -269,8 +269,13 @@ class VentanaPrincipal(tk.Tk):
         VentanaCotizaciones(self)
 
     def _abrir_revisar_ops(self):
-        from ui.panel_produccion import mostrar_panel
-        mostrar_panel()
+        import sys
+        if sys.platform == "darwin":
+            from ui.panel_produccion import mostrar_panel_mac
+            mostrar_panel_mac()
+        else:
+            from ui.panel_produccion import mostrar_panel
+            mostrar_panel()
 
     def _centrar_ventana(self, ancho, alto):
         self.update_idletasks()

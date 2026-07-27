@@ -129,15 +129,33 @@ def _revisar_actualizacion() -> bool:
 
 
 def main():
+    if "--panel-produccion" in sys.argv:
+        # Proceso hijo lanzado por mostrar_panel_mac() — SOLO en macOS.
+        # Este proceso completo es el panel de producción, nada de
+        # Tkinter acá (ver el docstring de ui/panel_produccion.py sobre
+        # por qué macOS necesita esto en un proceso aparte).
+        from ui.panel_produccion import ejecutar_panel_standalone
+        ejecutar_panel_standalone()
+        return
+
     if _revisar_actualizacion():
         return  # la nueva versión se relanza sola; este proceso termina acá
 
     atexit.register(_cerrar_terminal_mac)
-    # El panel de producción (pywebview) necesita el hilo principal del
-    # proceso; la app de escritorio Tkinter corre en el hilo secundario
-    # que iniciar_panel() arranca por nosotros. Ver ui/panel_produccion.py.
-    from ui.panel_produccion import iniciar_panel
-    iniciar_panel(_iniciar_app_escritorio)
+
+    if sys.platform == "darwin":
+        # macOS: Tkinter (Cocoa) y pywebview exigen CADA UNO el hilo
+        # principal real del proceso - no se puede repartir como en
+        # Windows/Linux. Acá la app de escritorio corre directo en este
+        # hilo; el panel de producción se abre como proceso aparte (ver
+        # ui/panel_produccion.py) cuando se aprieta "Revisar OPs".
+        _iniciar_app_escritorio()
+    else:
+        # Windows/Linux: pywebview necesita el hilo principal del proceso;
+        # la app de escritorio Tkinter corre en el hilo secundario que
+        # iniciar_panel() arranca por nosotros. Ver ui/panel_produccion.py.
+        from ui.panel_produccion import iniciar_panel
+        iniciar_panel(_iniciar_app_escritorio)
 
 
 if __name__ == "__main__":

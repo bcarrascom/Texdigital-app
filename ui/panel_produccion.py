@@ -18,7 +18,7 @@ aprobar OPs, etc.). El botón "Recargar" de cada vista vuelve a leer las
 carpetas de OPs, por lo que recoge los cambios hechos desde la pantalla
 principal mientras tanto.
 
-── Arquitectura de hilos (importante) ──────────────────────────────────────
+── Arquitectura de hilos/procesos (importante) ─────────────────────────────
 En Windows, pywebview exige que su ventana "maestra" (la primera que se
 crea en el proceso) se cree y arranque desde el hilo principal — registra
 un manejador de SIGINT ahí, lo que sólo es legal en ese hilo — y bloquea
@@ -26,18 +26,42 @@ ese hilo hasta que esa ventana se destruye. Por eso la app se invierte
 respecto a un programa Tkinter normal: el hilo principal lo ocupa
 pywebview (ver iniciar_panel) y el resto del programa (toda la app
 Tkinter) corre en un hilo secundario, que pywebview arranca por nosotros
-vía el parámetro `func` de webview.start().
+vía el parámetro `func` de webview.start(). Esto funciona en Windows (y
+en Linux) porque ahí Tkinter no exige que sus ventanas se creen en el
+hilo principal real del proceso.
 
-La ventana del panel se crea oculta al iniciar la app y solo se muestra
-cuando el usuario aprieta "Revisar OPs" (siempre arrancando en el
-listado). Cerrarla (la X de la ventana, o Escape en el listado) no la
-destruye, solo la oculta — así sigue existiendo la misma ventana maestra
-y el hilo principal no se libera hasta que se cierra la app por completo
-(ver salir_app).
+En **macOS** esa misma arquitectura crashea: Cocoa/AppKit exige que TODA
+ventana (también las de Tkinter, que son NSWindow por debajo) se cree en
+el hilo principal real — y pywebview exige lo mismo para sí mismo. Como
+las dos cosas no pueden compartir el único hilo principal que hay, en
+macOS el panel corre como un **proceso aparte** en vez de un hilo aparte:
+- La app de escritorio (VentanaPrincipal) corre en el hilo principal de
+  su propio proceso, normal, sin pywebview de por medio.
+- Al apretar "Revisar OPs", se lanza el mismo ejecutable de nuevo pero
+  con el flag `--panel-produccion` (ver main.py), que hace que ese nuevo
+  proceso corra ÚNICAMENTE ejecutar_panel_standalone() — ahí pywebview
+  tiene su propio hilo principal real, sin Tkinter compitiendo por él.
+  Se comunican solo a través de los JSON de Dropbox (igual que ya hacía
+  el panel con el resto de la app), no hace falta nada más.
+- mostrar_panel()/ocultar_panel()/iniciar_panel() son la versión
+  Windows/Linux (un solo proceso); mostrar_panel_mac()/
+  ejecutar_panel_standalone() son la versión macOS (dos procesos). Cuál
+  se usa lo decide main.py según sys.platform.
+
+La ventana del panel (en el modo de un solo proceso) se crea oculta al
+iniciar la app y solo se muestra cuando el usuario aprieta "Revisar OPs"
+(siempre arrancando en el listado). Cerrarla (la X de la ventana, o
+Escape en el listado) no la destruye, solo la oculta — así sigue
+existiendo la misma ventana maestra y el hilo principal no se libera
+hasta que se cierra la app por completo (ver salir_app). En el modo de
+proceso aparte (macOS), en cambio, cerrar esa ventana sí termina el
+proceso del panel — la próxima vez que se apriete "Revisar OPs" se lanza
+uno nuevo, arrancando en el listado igual que siempre.
 """
 
 import json
 import os
+import sys
 
 import webview
 
@@ -63,6 +87,8 @@ _ventana = None
 _visible = False
 _en_detalle = False
 _op_objetivo = {"numero": None}
+_modo_standalone_mac = False   # True solo en el proceso aparte del panel (macOS)
+_proceso_panel_mac = None      # Popen del proceso del panel, si está corriendo (macOS)
 
 
 def _leer_carpeta(carpeta):
@@ -154,7 +180,13 @@ class _ApiPanelProduccion:
         return numero
 
     def cerrar(self):
-        ocultar_panel()
+        # En modo proceso aparte (macOS) este proceso ES el panel — no
+        # tiene sentido "ocultarlo", hay que cerrarlo de verdad y listo
+        # (la próxima vez que se apriete "Revisar OPs" se lanza uno nuevo).
+        if _modo_standalone_mac:
+            _ventana.destroy()
+        else:
+            ocultar_panel()
 
 
 def _on_closing():
@@ -220,11 +252,64 @@ def panel_esta_abierto() -> bool:
     return _visible
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Modo macOS: panel como proceso aparte (ver docstring del módulo)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def ejecutar_panel_standalone():
+    """
+    Punto de entrada del proceso hijo en macOS (lanzado por main.py con el
+    flag --panel-produccion). Este proceso ES el panel, nada más — corre
+    en su propio hilo principal real, sin Tkinter compitiendo por él.
+    Bloquea hasta que se cierra la ventana (o el proceso padre lo mata al
+    salir, ver salir_app), y ahí termina el proceso solo.
+    """
+    global _ventana, _modo_standalone_mac
+    _modo_standalone_mac = True
+    _ventana = webview.create_window(
+        "Panel de Producción",
+        url=str(RUTA_LISTA),
+        js_api=_ApiPanelProduccion(),
+        width=1280,
+        height=800,
+    )
+    webview.start()
+
+
+def _comando_relanzar_panel() -> list[str]:
+    """Comando para lanzar este mismo programa en modo panel-standalone.
+    Empaquetado (PyInstaller): sys.executable ES el ejecutable ya armado,
+    re-invocarlo con el flag alcanza. Corriendo desde código fuente: hay
+    que decirle al intérprete qué script correr."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--panel-produccion"]
+    from pathlib import Path
+    main_py = Path(__file__).resolve().parent.parent / "main.py"
+    return [sys.executable, str(main_py), "--panel-produccion"]
+
+
+def mostrar_panel_mac():
+    """"Revisar OPs" en macOS: lanza el panel como proceso aparte si no
+    hay uno corriendo ya. Si el usuario lo cerró, el siguiente click lanza
+    uno nuevo — arranca siempre en el listado, igual que en Windows/Linux."""
+    global _proceso_panel_mac
+    if _proceso_panel_mac is not None and _proceso_panel_mac.poll() is None:
+        return  # ya hay un panel abierto en su propio proceso
+    import subprocess
+    _proceso_panel_mac = subprocess.Popen(_comando_relanzar_panel())
+
+
 def salir_app():
     """
     Termina la app por completo. Reemplaza a sys.exit(0) en los cierres de
-    ventana: ahora el hilo principal lo ocupa pywebview, así que un
-    sys.exit normal desde el hilo de Tkinter solo terminaría ese hilo y
-    dejaría el proceso colgado.
+    ventana: en Windows/Linux el hilo principal lo ocupa pywebview, así
+    que un sys.exit normal desde el hilo de Tkinter solo terminaría ese
+    hilo y dejaría el proceso colgado. También mata el proceso del panel
+    en macOS si quedó abierto, para no dejarlo huérfano.
     """
+    if _proceso_panel_mac is not None and _proceso_panel_mac.poll() is None:
+        try:
+            _proceso_panel_mac.terminate()
+        except Exception:
+            pass
     os._exit(0)
