@@ -1,3 +1,4 @@
+certifi
 openpyxl
 Pillow
 pywebview
