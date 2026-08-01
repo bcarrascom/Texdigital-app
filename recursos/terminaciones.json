@@ -1,20 +1,50 @@
 [
-  "Sin terminaciones",
-  "Basta perimetral",
-  "Basta perimetral fina",
-  "Basta o bolsillo",
-  "Bolsillos y basta lateral",
-  "Ojetillos perimetrales",
-  "Ojetillos perimetrales reforzados cada 30 cms",
-  "Ojetillos perimetrales reforzados cada 50 cms",
-  "Ojetillos reforzados 4 esquinas",
-  "Velcro perimetral",
-  "Con bolsillo",
-  "Sesgo perimetral",
-  "Con basta",
-  "Con forro",
-  "Reverso con cruce",
-  "Cierre lateral",
-  "Cierre abajo",
-  "Elástico lateral y basta simple abajo"
+    {
+        "nombre": "Basta",
+        "valor": 1140
+    },
+    {
+        "nombre": "Calce",
+        "valor": 2000
+    },
+    {
+        "nombre": "Bolsillos",
+        "valor": 1200
+    },
+    {
+        "nombre": "Cubre alarmas",
+        "valor": 3500
+    },
+    {
+        "nombre": "Estuches",
+        "valor": 1600
+    },
+    {
+        "nombre": "Fundas",
+        "valor": 1800
+    },
+    {
+        "nombre": "Panel araña",
+        "valor": 1850
+    },
+    {
+        "nombre": "Sesgo perimetral",
+        "valor": 1900
+    },
+    {
+        "nombre": "Forro embolsado",
+        "valor": 1900
+    },
+    {
+        "nombre": "Totebag",
+        "valor": 2000
+    },
+    {
+        "nombre": "Vela",
+        "valor": 1100
+    },
+    {
+        "nombre": "Ojetillos",
+        "valor": 1500
+    }
 ]

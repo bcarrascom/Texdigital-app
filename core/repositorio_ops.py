@@ -49,6 +49,27 @@ def carpeta_pendiente() -> Path:
     return p
 
 
+def carpeta_html() -> Path:
+    p = _ruta_base() / "HTML"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def cargar_op(numero: int) -> dict | None:
+    """Busca el JSON de una OP por número en las 4 carpetas (activa,
+    completada, pendiente, historial) y lo devuelve, o None si no existe
+    en ninguna. Mismo orden de búsqueda que
+    ui.panel_produccion._ApiPanelProduccion.obtener_op_por_numero."""
+    for carpeta in (carpeta_json(), carpeta_completadas(), carpeta_pendiente(), carpeta_historial()):
+        ruta = carpeta / f"{numero}.json"
+        if ruta.exists():
+            try:
+                return json.loads(ruta.read_text(encoding="utf-8"))
+            except Exception:
+                return None
+    return None
+
+
 def guardar_op(datos: dict) -> Path:
     """Guarda datos como JSON de OP. Sobreescribe si ya existe el número."""
     numero = datos["Cotizacion"]

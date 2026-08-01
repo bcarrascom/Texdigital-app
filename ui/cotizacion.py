@@ -24,6 +24,7 @@ from ui.estilos import (
     FUENTE_TITULO,
     FUENTE_LABEL,
     FUENTE_MEDIDA,
+    FUENTE_TOTAL,
     MAX_LADO,
     MARGEN,
     MARGEN_SUP,
@@ -40,38 +41,149 @@ from ui.formulario_cliente import EntradaAutocompletado
 
 # Listas de sugerencias
 from core import escala as _esc
-from core.repositorio import PRODUCTOS, TEXTILES, TEXTILES_ANCHOS, ESTRUCTURAS, TERMINACIONES
+from core.repositorio import (
+    PRODUCTOS, TEXTILES, TEXTILES_ANCHOS,
+    ESTRUCTURAS_LEGADO, TERMINACIONES_LEGADO,
+)
+# ESTRUCTURAS/TERMINACIONES (modelo "Neo", ML) no se importan acá — desde
+# que se adoptó "Demo" (ESTRUCTURAS_LEGADO/TERMINACIONES_LEGADO, por
+# unidad) como modelo principal, esta pantalla ya no las usa. El código de
+# Neo sigue intacto en core/precios.py (modelo="aditivo") por si se
+# necesita reactivar más adelante.
+from core.precios import (
+    calcular_ml, costo_producto, parsear_valor_manual,
+    formatear_clp as _formatear_clp,
+)
 
-SIN_ESTRUCTURA    = "Sin estructura"
-SIN_TERMINACIONES = "Sin terminaciones"
-CARA_UNICA        = "Cara única"
-TIRO_Y_RETIRO     = "Tiro y retiro"
+CARA_UNICA    = "Cara única"
+TIRO_Y_RETIRO = "Tiro y retiro"
 
 # Anchos de columna del resumen
-# Orden: #, Producto, Textil, Tema, Cantidad, Ancho (m), Alto (m), Ratio, ML imp.
-RESUMEN_COL_W = [35, 140, 120, 120, 75, 75, 75, 90]
+# Orden: #, Producto, Textil, Tema, Cantidad, Ancho (m), Alto (m), ML imp., Valor unit., Total
+RESUMEN_COL_W = [35, 130, 110, 110, 70, 70, 70, 80, 95, 100]
 
 
 def _calc_ml(d: dict) -> tuple[float | None, float | None]:
-    """
-    Calcula Ratio y ML impresos para un producto.
-    Fórmula:
-        UxA   = int(ancho_tela / ancho_producto)  ← floor, mínimo 1
-        ratio = cantidad / UxA
-        ml    = round(ratio * alto, 2)
-        si Tiro y retiro: ml *= 2 (se imprimen las dos caras, mismo cálculo
-        que Cara única pero el doble de tela)
-    Devuelve (None, None) si el textil no tiene ancho máximo registrado.
-    """
-    ancho_tela = TEXTILES_ANCHOS.get(d.get("textil", ""))
-    if ancho_tela is None:
-        return None, None
-    uxa   = max(1, int(ancho_tela / d["ancho"]))
-    ratio = d["cantidad"] / uxa
-    ml    = round(ratio * d["alto"], 2)
-    if d.get("impresion") == TIRO_Y_RETIRO:
-        ml *= 2
-    return ratio, ml
+    """Envoltorio fino sobre core.precios.calcular_ml para no tener que
+    pasar TEXTILES_ANCHOS en cada call site de este archivo."""
+    return calcular_ml(d, TEXTILES_ANCHOS.get(d.get("textil", "")))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Lista aditiva (Estructuras / Terminaciones): un producto puede tener 0 o
+# más ítems de cada catálogo — no una selección única como antes. Combo +
+# "Agregar" arriba, filas con "✕ Eliminar" abajo.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class _ListaAditiva(tk.Frame):
+
+    def __init__(self, parent, titulo, opciones, on_cambio,
+                 valores_iniciales=None, width=32):
+        super().__init__(parent, bg=COLORES["fondo"])
+        self._opciones  = opciones
+        self._on_cambio = on_cambio
+        self.items: list[str] = list(valores_iniciales or [])
+        self._precios: dict[str, float] = {}
+
+        tk.Label(self, text=titulo, font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+
+        fila = tk.Frame(self, bg=COLORES["fondo"])
+        fila.pack(anchor="w")
+        self._var_staging = tk.StringVar()
+        self._ac = EntradaAutocompletado(
+            fila, variable=self._var_staging, opciones=opciones, width=width,
+        )
+        self._ac.pack(side="left")
+        # <Return> en dos pasos: si el texto no calza exacto con un ítem
+        # del catálogo todavía, el primer Enter autocompleta al primer
+        # resultado parcial (sin agregar); recién con el texto ya calzando
+        # exacto (típicamente el segundo Enter), se agrega y se vacía el
+        # campo. Reemplaza el <Return> por defecto de EntradaAutocompletado
+        # (que depende de tener una sugerencia resaltada con las flechas).
+        self._ac.bind_entry("<Return>", self._on_return)
+        btn_agregar = tk.Label(
+            fila, text="+ Agregar", font=FUENTE_LABEL,
+            bg=COLORES["borde"], fg=COLORES["texto"],
+            padx=10, pady=7, cursor="hand2",
+        )
+        btn_agregar.pack(side="left", padx=(6, 0))
+        btn_agregar.bind("<Button-1>", lambda _: self._agregar())
+
+        self._frame_lista = tk.Frame(self, bg=COLORES["fondo"])
+        self._frame_lista.pack(anchor="w", pady=(4, 0))
+        self._render()
+
+    def _agregar(self):
+        texto = self._var_staging.get().strip()
+        self._var_staging.set("")
+        if not texto:
+            return
+        # Ajuste manual: el usuario escribió un monto ("10000", "10.000",
+        # "$10.000") en vez de un nombre del catálogo — se agrega directo,
+        # normalizado a formato $ chileno, sin pasar por el catálogo (ver
+        # core.precios.parsear_valor_manual/costo_producto).
+        valor_manual = parsear_valor_manual(texto)
+        if valor_manual is not None:
+            nombre = _formatear_clp(valor_manual)
+        elif texto in self._opciones:
+            nombre = texto
+        else:
+            return
+        if nombre in self.items:
+            return
+        self.items.append(nombre)
+        self._render()
+        self._on_cambio()
+
+    def _on_return(self, _event=None):
+        texto = self._var_staging.get().strip()
+        if not texto:
+            return "break"
+        if parsear_valor_manual(texto) is not None:
+            self._agregar()
+            return "break"
+        for opcion in self._opciones:
+            if opcion.lower() == texto.lower():
+                self._var_staging.set(opcion)
+                self._agregar()
+                return "break"
+        coincidencias = [o for o in self._opciones if texto.lower() in o.lower()]
+        if coincidencias:
+            self._var_staging.set(coincidencias[0])
+        return "break"
+
+    def _eliminar(self, nombre):
+        if nombre in self.items:
+            self.items.remove(nombre)
+            self._render()
+            self._on_cambio()
+
+    def actualizar_precios(self, precios: dict[str, float]):
+        """Actualiza el $ que se muestra junto a cada ítem agregado (llamado
+        desde _PantallaMedidas cada vez que cambian medidas/textil/impresión
+        o esta misma lista). `precios` vacío = todavía no hay medidas
+        completas, no se muestra nada."""
+        self._precios = precios
+        self._render()
+
+    def _render(self):
+        for w in self._frame_lista.winfo_children():
+            w.destroy()
+        for nombre in self.items:
+            fila_item = tk.Frame(self._frame_lista, bg=COLORES["fondo"])
+            fila_item.pack(anchor="w", pady=1)
+            tk.Label(fila_item, text=f"· {nombre}", font=FUENTE_LABEL,
+                     bg=COLORES["fondo"], fg=COLORES["texto"]).pack(side="left")
+            btn_x = tk.Label(fila_item, text="✕", font=FUENTE_LABEL,
+                             bg=COLORES["fondo"], fg=COLORES["error"],
+                             cursor="hand2", padx=6)
+            btn_x.pack(side="left")
+            btn_x.bind("<Button-1>", lambda _, n=nombre: self._eliminar(n))
+            if nombre in self._precios:
+                tk.Label(fila_item, text=_formatear_clp(self._precios[nombre]),
+                         font=FUENTE_LABEL, bg=COLORES["fondo"],
+                         fg=COLORES["texto_suave"]).pack(side="left", padx=(8, 0))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -86,23 +198,32 @@ class _PantallaMedidas(PantallaMedidasBase):
                           datos_previos, datos_todos, on_siguiente, on_nav)
 
         if datos_previos:
-            producto_ini    = datos_previos.get("producto", "")
-            textil_ini      = datos_previos.get("textil", "")
-            estructura_ini  = datos_previos.get("estructura", SIN_ESTRUCTURA)
-            terminacion_ini = datos_previos.get("terminacion", SIN_TERMINACIONES)
-            impresion_ini   = datos_previos.get("impresion", CARA_UNICA)
+            producto_ini      = datos_previos.get("producto", "")
+            textil_ini        = datos_previos.get("textil", "")
+            estructuras_ini   = list(datos_previos.get("estructuras", []))
+            terminaciones_ini = list(datos_previos.get("terminaciones", []))
+            impresion_ini     = datos_previos.get("impresion", CARA_UNICA)
         else:
-            producto_ini    = textil_ini = ""
-            estructura_ini  = SIN_ESTRUCTURA
-            terminacion_ini = SIN_TERMINACIONES
-            impresion_ini   = CARA_UNICA
+            producto_ini      = textil_ini = ""
+            estructuras_ini   = []
+            terminaciones_ini = []
+            impresion_ini     = CARA_UNICA
 
-        self._var_producto    = tk.StringVar(value=producto_ini)
-        self._var_textil      = tk.StringVar(value=textil_ini)
-        self._var_estructura  = tk.StringVar(value=estructura_ini)
-        self._var_terminacion = tk.StringVar(value=terminacion_ini)
-        self._var_impresion   = tk.StringVar(value=impresion_ini)
+        self._var_producto  = tk.StringVar(value=producto_ini)
+        self._var_textil    = tk.StringVar(value=textil_ini)
+        self._var_impresion = tk.StringVar(value=impresion_ini)
+        self._estructuras_ini   = estructuras_ini
+        self._terminaciones_ini = terminaciones_ini
 
+        # Modelo "Demo" (legado, comparación) — ver core.precios.costo_producto
+        # modelo="legado". Puramente informativo: nunca se guarda en el
+        # producto (_siguiente() no lo incluye), solo muestra un segundo
+        # total en vivo al lado del de Neo (modelo aditivo actual) para
+        # poder comparar los dos modelos con las mismas medidas. Las listas
+        # en sí (self._widget_estructuras_demo/_terminaciones_demo) se crean
+        # en _construir_seccion_demo, con el mismo _ListaAditiva que Neo —
+        # su propio on_cambio ya llama a _actualizar_total_vivo, no hace
+        # falta un trace acá.
         self._construir_ui()
 
         self._var_producto.trace_add("write", self._actualizar)
@@ -111,9 +232,11 @@ class _PantallaMedidas(PantallaMedidasBase):
         self._var_ancho.trace_add("write",    self._actualizar)
         self._var_cant.trace_add("write",     self._actualizar)
         self._var_impresion.trace_add("write", self._actualizar_switch_impresion)
+        self._var_impresion.trace_add("write", self._actualizar_total_vivo)
 
         self._actualizar()
         self._actualizar_switch_impresion()
+        self._actualizar_total_vivo()
         ventana_raiz.bind("<Return>", lambda _: self._enter_sig())
 
     # ── Sección superior: selección de producto y textil ──────────────────────
@@ -156,33 +279,38 @@ class _PantallaMedidas(PantallaMedidasBase):
             width=28,
         ).pack(anchor="w")
 
-        grp_est = tk.Frame(fila_sel, bg=COLORES["fondo"])
-        grp_est.pack(anchor="w", pady=(6, 0))
-        tk.Label(grp_est, text="Estructura", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        EntradaAutocompletado(
-            grp_est,
-            variable=self._var_estructura,
-            opciones=ESTRUCTURAS,
-            width=40,
-        ).pack(anchor="w")
+        self._widget_estructuras = _ListaAditiva(
+            fila_sel, "Estructuras", ESTRUCTURAS_LEGADO, self._actualizar_total_vivo,
+            valores_iniciales=self._estructuras_ini, width=40,
+        )
+        self._widget_estructuras.pack(anchor="w", pady=(6, 0))
 
-        grp_term = tk.Frame(fila_sel, bg=COLORES["fondo"])
-        grp_term.pack(anchor="w", pady=(6, 0))
-        tk.Label(grp_term, text="Terminación", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        EntradaAutocompletado(
-            grp_term,
-            variable=self._var_terminacion,
-            opciones=TERMINACIONES,
-            width=40,
-        ).pack(anchor="w")
+        self._widget_terminaciones = _ListaAditiva(
+            fila_sel, "Terminaciones", TERMINACIONES_LEGADO, self._actualizar_total_vivo,
+            valores_iniciales=self._terminaciones_ini, width=40,
+        )
+        self._widget_terminaciones.pack(anchor="w", pady=(6, 0))
 
         grp_impr = tk.Frame(fila_sel, bg=COLORES["fondo"])
         grp_impr.pack(anchor="w", pady=(6, 0))
         tk.Label(grp_impr, text="Impresión", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         self._construir_switch_impresion(grp_impr).pack(anchor="w")
+
+        self._lbl_costo_impresion = tk.Label(
+            fila_sel, text="", font=FUENTE_LABEL,
+            bg=COLORES["fondo"], fg=COLORES["texto_suave"])
+        self._lbl_costo_impresion.pack(anchor="w", pady=(8, 0))
+
+        self._lbl_costo_extras = tk.Label(
+            fila_sel, text="", font=FUENTE_LABEL,
+            bg=COLORES["fondo"], fg=COLORES["texto_suave"])
+        self._lbl_costo_extras.pack(anchor="w")
+
+        self._lbl_total_producto = tk.Label(
+            fila_sel, text="", font=FUENTE_TOTAL,
+            bg=COLORES["fondo"], fg=COLORES["texto"])
+        self._lbl_total_producto.pack(anchor="w", pady=(2, 0))
 
         self._crear_lbl_ancho_tela(sup)
 
@@ -223,7 +351,46 @@ class _PantallaMedidas(PantallaMedidasBase):
             self._lbl_ancho_tela.config(text="")
         self._actualizar()
 
+    def _actualizar_total_vivo(self, *_):
+        """Recalcula el precio del producto en vivo — se llama al cambiar
+        medidas/cantidad/textil/impresión y al agregar/eliminar una
+        estructura o terminación (via _ListaAditiva.on_cambio). El precio
+        de cada estructura/terminación agregada (a la derecha de su nombre
+        en la lista) también depende de esto — solo se muestra una vez que
+        hay medidas completas, ya que antes no hay ML con qué calcularlo."""
+        alto  = self._parse_float(self._var_alto) or 0.0
+        ancho = self._parse_float(self._var_ancho) or 0.0
+        cant  = self._parse_int(self._var_cant) or 0
+        if not (alto and ancho and cant):
+            self._lbl_costo_impresion.config(text="")
+            self._lbl_costo_extras.config(text="")
+            self._lbl_total_producto.config(text="")
+            self._widget_estructuras.actualizar_precios({})
+            self._widget_terminaciones.actualizar_precios({})
+            return
+        d = {
+            "textil":        self._var_textil.get().strip(),
+            "estructuras":   self._widget_estructuras.items,
+            "terminaciones": self._widget_terminaciones.items,
+            "impresion":     self._var_impresion.get(),
+            "alto":          alto,
+            "ancho":         ancho,
+            "cantidad":      cant,
+        }
+        resultado = costo_producto(d)  # modelo="legado" (Demo) por defecto
+        costo_extras = resultado["costo_estructuras"] + resultado["costo_terminaciones"]
+        self._lbl_costo_impresion.config(
+            text=f"Impresión: {_formatear_clp(resultado['costo_impresion'])}")
+        self._lbl_costo_extras.config(
+            text=f"Estructuras + Terminaciones: {_formatear_clp(costo_extras)}")
+        self._lbl_total_producto.config(
+            text=f"Total producto: {_formatear_clp(resultado['total'])}"
+                 f"   ·   Valor unitario: {_formatear_clp(resultado['valor_unitario'])}")
+        self._widget_estructuras.actualizar_precios(resultado["detalle_estructuras"])
+        self._widget_terminaciones.actualizar_precios(resultado["detalle_terminaciones"])
+
     def _actualizar(self, *_):
+        self._actualizar_total_vivo()
         alto    = self._parse_float(self._var_alto)
         ancho   = self._parse_float(self._var_ancho)
         cant    = self._parse_int(self._var_cant)
@@ -298,16 +465,16 @@ class _PantallaMedidas(PantallaMedidasBase):
 
     def _siguiente(self):
         self._on_siguiente({
-            "producto":    self._var_producto.get().strip(),
-            "textil":      self._var_textil.get().strip(),
-            "estructura":  self._var_estructura.get().strip() or SIN_ESTRUCTURA,
-            "terminacion": self._var_terminacion.get().strip() or SIN_TERMINACIONES,
-            "impresion":   self._var_impresion.get(),
-            "alto":        float(self._var_alto.get().replace(",", ".")),
-            "ancho":       float(self._var_ancho.get().replace(",", ".")),
-            "cantidad":    int(self._var_cant.get()),
-            "tema":        self._var_tema.get().strip(),
-            "obs":         self._var_obs.get().strip(),
+            "producto":      self._var_producto.get().strip(),
+            "textil":        self._var_textil.get().strip(),
+            "estructuras":   list(self._widget_estructuras.items),
+            "terminaciones": list(self._widget_terminaciones.items),
+            "impresion":     self._var_impresion.get(),
+            "alto":          float(self._var_alto.get().replace(",", ".")),
+            "ancho":         float(self._var_ancho.get().replace(",", ".")),
+            "cantidad":      int(self._var_cant.get()),
+            "tema":          self._var_tema.get().strip(),
+            "obs":           self._var_obs.get().strip(),
         })
 
 
@@ -320,22 +487,23 @@ class CotizacionNueva(tk.Tk):
     # TAM_MEDIDAS crecida para dar espacio a Estructura/Terminación/Impresión
     # (antes 960/1250 de alto).
     TAM_INICIO  = (800, 560)
-    TAM_MEDIDAS = (960, 1160)
+    TAM_MEDIDAS = (960, 1480)
 
     def __init__(self, edicion: dict | None = None):
         super().__init__()
         if sys.platform == "darwin":
             self.TAM_INICIO  = (_esc.px(800), _esc.px(730))
-            self.TAM_MEDIDAS = (_esc.px(1100), _esc.px(1450))
+            self.TAM_MEDIDAS = (_esc.px(1100), _esc.px(1480))
         else:
             self.TAM_INICIO  = (_esc.px(800), _esc.px(560))
-            self.TAM_MEDIDAS = (_esc.px(960), _esc.px(1160))
+            self.TAM_MEDIDAS = (_esc.px(960), _esc.px(1480))
         self.title("Ingresar Cotización")
         self.configure(bg=COLORES["fondo"])
-        # En macOS las fuentes nativas a veces desbordan el alto fijo
-        # calculado; se deja redimensionar a mano para asegurar que todo
-        # quepa. En Windows/Linux el tamaño fijo ya está afinado.
-        self.resizable(sys.platform == "darwin", sys.platform == "darwin")
+        # Libremente redimensionable en las tres plataformas: con el
+        # modelo aditivo de Estructuras/Terminaciones el contenido de la
+        # pantalla de medidas puede crecer bastante, y el usuario necesita
+        # poder agrandar la ventana a mano para verlo todo sin recortes.
+        self.resizable(True, True)
         _centrar(self, *self.TAM_INICIO)
 
         from ui.panel_produccion import salir_app
@@ -418,11 +586,13 @@ class CotizacionNueva(tk.Tk):
     def _abrir_resumen(self):
         from ui.ventana_resumen import VentanaResumen
 
-        COLS = ["#", "Producto", "Textil", "Tema", "Cantidad", "Ancho (m)", "Alto (m)", "ML imp."]
+        COLS = ["#", "Producto", "Textil", "Tema", "Cantidad", "Ancho (m)", "Alto (m)",
+                "ML imp.", "Valor unit.", "Total"]
 
         filas = []
         total_cant    = 0
         total_ml      = 0.0
+        total_neto    = 0.0
         alguno_con_ml = False
 
         for i, d in enumerate(self._datos):
@@ -431,6 +601,8 @@ class CotizacionNueva(tk.Tk):
             if ml is not None:
                 total_ml      += ml
                 alguno_con_ml  = True
+            costo = costo_producto(d)
+            total_neto += costo["total"]
             filas.append([
                 str(i + 1),
                 d.get("producto", ""),
@@ -440,10 +612,13 @@ class CotizacionNueva(tk.Tk):
                 str(d["ancho"]),
                 str(d["alto"]),
                 f"{ml:.2f}" if ml is not None else "—",
+                _formatear_clp(costo["valor_unitario"]),
+                _formatear_clp(costo["total"]),
             ])
 
         total_ml_str = f"{round(total_ml, 2):.2f}" if alguno_con_ml else "—"
-        totales = ["", "TOTAL", "", "", str(total_cant), "", "", total_ml_str]
+        totales = ["", "TOTAL", "", "", str(total_cant), "", "", total_ml_str,
+                   "", _formatear_clp(total_neto)]
 
         self.withdraw()
         VentanaResumen(
@@ -490,11 +665,10 @@ class CotizacionNueva(tk.Tk):
     # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
 
     def _guardar_edicion_y_volver(self):
-        from ui.formulario_cliente import _mapear_producto
-        from core.repositorio_cotizaciones import guardar_cotizacion
+        from core.repositorio_cotizaciones import guardar_cotizacion, mapear_producto
 
         json_actualizado = dict(self._edicion["json"])
-        json_actualizado["productos"] = [_mapear_producto(d) for d in self._datos]
+        json_actualizado["productos"] = [mapear_producto(d) for d in self._datos]
         guardar_cotizacion(json_actualizado)
 
         self._volver_a_revisar()

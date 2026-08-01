@@ -285,11 +285,10 @@ class CotizadorBacklight(tk.Tk):
     # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
 
     def _guardar_edicion_y_volver(self):
-        from ui.formulario_cliente import _mapear_producto
-        from core.repositorio_cotizaciones import guardar_cotizacion
+        from core.repositorio_cotizaciones import guardar_cotizacion, mapear_producto
 
         json_actualizado = dict(self._edicion["json"])
-        json_actualizado["productos"] = [_mapear_producto(d) for d in self._datos]
+        json_actualizado["productos"] = [mapear_producto(d) for d in self._datos]
         guardar_cotizacion(json_actualizado)
 
         self._volver_a_revisar()

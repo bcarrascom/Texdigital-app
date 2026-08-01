@@ -1,21 +1,90 @@
 [
-  "Sin estructura",
-  "Asta fibra de vidrio vela 2 mts",
-  "Asta fibra de vidrio vela 3 mts",
-  "Base auto",
-  "Base suelo metal más accesorio para rellenar",
-  "Base suelo plástico para rellenar",
-  "Estaca",
-  "Fleje plástico arriba y abajo con hilos para colgar transparente",
-  "Madera exterior ambas caras arriba y abajo con cáncamos y cable para colgar",
-  "Tubo metálico arriba y pletina metálica abajo con cable y candados",
-  "Estructura panel araña 1 cuerpo",
-  "Estructura panel araña 2 cuerpos",
-  "Estructura panel araña 3 cuerpos",
-  "Estructura panel araña 4 cuerpos",
-  "Estructura panel araña 5 cuerpos",
-  "Estructura panel araña 6 cuerpos",
-  "Soporte muro textil tubo aluminio 2,3x2,3 mts",
-  "Bolso de transporte con ruedas 1 estructura panel araña",
-  "Bolso de transporte con ruedas 2 estructuras panel araña"
+  {
+    "nombre": "Asta fibra de vidrio vela 2 mts",
+    "valorUNIT": 17000
+  },
+  {
+    "nombre": "Asta fibra de vidrio vela 3 mts",
+    "valorUNIT": 19000
+  },
+  {
+    "nombre": "Base auto",
+    "valorUNIT": 11000
+  },
+  {
+    "nombre": "Base suelo metal más accesorio para rellenar",
+    "valorUNIT": 18000
+  },
+  {
+    "nombre": "Base suelo plástico para rellenar",
+    "valorUNIT": 16000
+  },
+  {
+    "nombre": "Estaca",
+    "valorUNIT": 10000
+  },
+  {
+    "nombre": "Estructura panel araña 1 cuerpo",
+    "valorUNIT": 85000
+  },
+  {
+    "nombre": "Estructura panel araña 2 cuerpos",
+    "valorUNIT": 120000
+  },
+  {
+    "nombre": "Estructura panel araña 3 cuerpos",
+    "valorUNIT": 140000
+  },
+  {
+    "nombre": "Estructura panel araña 4 cuerpos",
+    "valorUNIT": 170000
+  },
+  {
+    "nombre": "Estructura panel araña 5 cuerpos",
+    "valorUNIT": 205000
+  },
+  {
+    "nombre": "Estructura panel araña 6 cuerpos",
+    "valorUNIT": 245000
+  },
+  {
+    "nombre": "Soporte muro textil tubo aluminio 2,3x2,3 mts",
+    "valorUNIT": 96000
+  },
+  {
+    "nombre": "Bolso de transporte con ruedas 1 estructura panel araña",
+    "valorUNIT": 40000
+  },
+  {
+    "nombre": "Bolso de transporte con ruedas 2 estructuras panel araña",
+    "valorUNIT": 70000
+  },
+  {
+    "nombre": "Fleje plastico",
+    "valorML": 1000
+  },
+  {
+    "nombre": "Pletina de fierro",
+    "valorML": 1600
+  },
+  {
+    "nombre": "Pletina de aluminio",
+    "valorML": 1800
+  },
+  {
+    "nombre": "Tubo aluminio",
+    "valorML": 2000
+  },
+  {
+    "nombre": "Candados y cable",
+    "valorML": 1000
+  },
+  {
+    "nombre": "Madera y cancamos",
+    "valorML": 2300
+  },
+  {
+    "nombre": "Tubo Fiero",
+    "valorML": 1700
+  }
 ]

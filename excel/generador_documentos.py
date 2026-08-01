@@ -95,12 +95,12 @@ def exportar_cotizacion_backlight(
     _set(ws, "C7",  datos_cliente.get("email",        ""))
     _set(ws, "I5",  datos_cliente.get("razon_social", ""))
     _set(ws, "I6",  datos_cliente.get("rut",          ""))
-    _fuente_raw = datos_cliente.get("fuente", "")
+    _descuento_raw = datos_cliente.get("descuento", "")
     try:
-        _fuente_val = float(_fuente_raw) / 100 if _fuente_raw != "" else ""
+        _descuento_val = float(_descuento_raw) / 100 if _descuento_raw != "" else ""
     except (ValueError, TypeError):
-        _fuente_val = _fuente_raw
-    _set(ws, "I7", _fuente_val)
+        _descuento_val = _descuento_raw
+    _set(ws, "I7", _descuento_val)
     _set(ws, "C19",  datos_cliente.get("descripcion",   ""))
     _set(ws, "C112", datos_cliente.get("nombre_trabajo",""))
     _set(ws, "C113", datos_cliente.get("descripcion",   ""))
@@ -245,12 +245,12 @@ def exportar_cotizacion_nueva(
     _set(ws, "C7",  datos_cliente.get("email",        ""))
     _set(ws, "I5",  datos_cliente.get("razon_social", ""))
     _set(ws, "I6",  datos_cliente.get("rut",          ""))
-    _fuente_raw = datos_cliente.get("fuente", "")
+    _descuento_raw = datos_cliente.get("descuento", "")
     try:
-        _fuente_val = float(_fuente_raw) / 100 if _fuente_raw != "" else ""
+        _descuento_val = float(_descuento_raw) / 100 if _descuento_raw != "" else ""
     except (ValueError, TypeError):
-        _fuente_val = _fuente_raw
-    _set(ws, "I7",  _fuente_val)
+        _descuento_val = _descuento_raw
+    _set(ws, "I7",  _descuento_val)
     _set(ws, "C19",  datos_cliente.get("descripcion",   ""))
     _set(ws, "C112", datos_cliente.get("nombre_trabajo",""))
     _set(ws, "C113", datos_cliente.get("descripcion",   ""))
