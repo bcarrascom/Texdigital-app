@@ -5,12 +5,26 @@ cotización; "Aprobar" la promueve a Orden de Producción (OP).
 """
 
 import json
+import subprocess
 import sys
 import tkinter as tk
 import tkinter.ttk as ttk
 
 from core import escala as _esc
-from core.repositorio_cotizaciones import carpeta_json, carpeta_excel
+from core.repositorio_cotizaciones import carpeta_json, carpeta_excel, carpeta_cotizaciones
+
+
+def _abrir_carpeta(ruta):
+    """Abre `ruta` en el explorador de archivos del SO — Explorador
+    (Windows), Finder (macOS) o el gestor de archivos por defecto (Linux)."""
+    ruta = str(ruta)
+    if sys.platform == "win32":
+        import os
+        os.startfile(ruta)
+    elif sys.platform == "darwin":
+        subprocess.run(["open", ruta])
+    else:
+        subprocess.run(["xdg-open", ruta])
 
 COLORES = {
     "fondo":        "#F5F3EE",
@@ -59,11 +73,18 @@ class VentanaCotizaciones(tk.Toplevel):
     _C_MULTI_ON     = COLORES["acento"]
     _C_MULTI_ON_HV  = COLORES["acento_hover"]
 
-    # Colores del botón Aprobar (habilitado solo con exactamente 1 seleccionada)
+    # Colores del botón Aprobar (habilitado con 1 o más seleccionadas — con
+    # varias, el diálogo de fecha se repite una vez por cada una)
     _C_APROB_OFF    = "#9E9E9E"
     _C_APROB_OFF_HV = "#BDBDBD"
     _C_APROB_ON     = COLORES["ok"]
     _C_APROB_ON_HV  = "#2ECC71"
+
+    # Colores del botón Ver/Imprimir (mismo criterio: 1 o más seleccionadas)
+    _C_VER_OFF    = "#9E9E9E"
+    _C_VER_OFF_HV = "#BDBDBD"
+    _C_VER_ON     = COLORES["acento"]
+    _C_VER_ON_HV  = COLORES["acento_hover"]
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -82,6 +103,7 @@ class VentanaCotizaciones(tk.Toplevel):
         self._drag_anchor  = None
         self._elim_on      = False
         self._aprob_on     = False
+        self._ver_on       = False
 
         self._cargar_cotizaciones()
         self._aplicar_estilo()
@@ -141,7 +163,17 @@ class VentanaCotizaciones(tk.Toplevel):
         cab.pack(fill="x")
         tk.Label(cab, text="Cotizaciones guardadas",
                  font=FUENTE_TITULO, bg=COLORES["acento"],
-                 fg="#FFFFFF").pack(anchor="w")
+                 fg="#FFFFFF").pack(side="left", anchor="w")
+
+        btn_carpeta = tk.Label(
+            cab, text="📁", font=FUENTE_TITULO,
+            bg=COLORES["acento_hover"], fg="#FFFFFF",
+            width=2, height=1, cursor="hand2",
+        )
+        btn_carpeta.pack(side="right")
+        btn_carpeta.bind("<Button-1>", lambda _: _abrir_carpeta(carpeta_cotizaciones()))
+        btn_carpeta.bind("<Enter>", lambda _: btn_carpeta.config(bg=COLORES["acento"]))
+        btn_carpeta.bind("<Leave>", lambda _: btn_carpeta.config(bg=COLORES["acento_hover"]))
 
         # Instrucción
         tk.Label(self,
@@ -169,6 +201,13 @@ class VentanaCotizaciones(tk.Toplevel):
         )
         self._btn_aprobar.pack(side="right")
 
+        self._btn_ver = tk.Label(
+            frame_botones, text="Ver/Imprimir",
+            font=FUENTE_BTN, bg=self._C_VER_OFF,
+            fg="#FFFFFF", padx=16, pady=8, cursor="arrow",
+        )
+        self._btn_ver.pack(side="right", padx=(0, 8))
+
         # Frame intermedio: ocupa el espacio restante entre Eliminar y Aprobar,
         # con "Seleccionar múltiples" centrado dentro de él.
         frame_centro = tk.Frame(frame_botones, bg=COLORES["fondo"])
@@ -184,6 +223,10 @@ class VentanaCotizaciones(tk.Toplevel):
         self._btn_aprobar.bind("<Enter>",    self._on_aprob_enter)
         self._btn_aprobar.bind("<Leave>",    self._on_aprob_leave)
         self._btn_aprobar.bind("<Button-1>", self._on_click_aprobar)
+
+        self._btn_ver.bind("<Enter>",    self._on_ver_enter)
+        self._btn_ver.bind("<Leave>",    self._on_ver_leave)
+        self._btn_ver.bind("<Button-1>", self._on_click_ver)
 
         self._btn_eliminar.bind("<Enter>",    self._on_elim_enter)
         self._btn_eliminar.bind("<Leave>",    self._on_elim_leave)
@@ -258,7 +301,7 @@ class VentanaCotizaciones(tk.Toplevel):
 
         # Click fuera de árbol y botones → deseleccionar
         self._safe_widgets = {self._tree, self._btn_aprobar, self._btn_eliminar,
-                              self._btn_multi}
+                              self._btn_multi, self._btn_ver}
         self.bind("<ButtonPress-1>", self._on_window_click, add="+")
 
     # ── Selección ──────────────────────────────────────────────────────────────
@@ -320,6 +363,7 @@ class VentanaCotizaciones(tk.Toplevel):
         self._selected = new_sel
         self._actualizar_btn_eliminar()
         self._actualizar_btn_aprobar()
+        self._actualizar_btn_ver()
 
     def _on_window_click(self, event):
         """Deselecciona al hacer click fuera del árbol y los botones."""
@@ -333,7 +377,7 @@ class VentanaCotizaciones(tk.Toplevel):
     # ── Botón Aprobar ──────────────────────────────────────────────────────────
 
     def _actualizar_btn_aprobar(self):
-        habilitado = len(self._selected) == 1
+        habilitado = len(self._selected) >= 1
         if habilitado == self._aprob_on:
             return
         self._aprob_on = habilitado
@@ -354,12 +398,66 @@ class VentanaCotizaciones(tk.Toplevel):
         if self._aprob_on:
             self._dialogo_aprobar_directo()
 
-    def _dialogo_aprobar_directo(self):
-        sel = list(self._selected)
-        if len(sel) != 1:
-            return
-        iid = sel[0]
+    # ── Botón Ver/Imprimir ────────────────────────────────────────────────────
 
+    def _actualizar_btn_ver(self):
+        habilitado = len(self._selected) >= 1
+        if habilitado == self._ver_on:
+            return
+        self._ver_on = habilitado
+        if habilitado:
+            self._btn_ver.config(bg=self._C_VER_ON, fg="#FFFFFF", cursor="hand2")
+        else:
+            self._btn_ver.config(bg=self._C_VER_OFF, fg="#FFFFFF", cursor="arrow")
+
+    def _on_ver_enter(self, _):
+        self._btn_ver.config(bg=self._C_VER_ON_HV if self._ver_on else self._C_VER_OFF_HV)
+
+    def _on_ver_leave(self, _):
+        self._btn_ver.config(bg=self._C_VER_ON if self._ver_on else self._C_VER_OFF)
+
+    def _on_click_ver(self, _):
+        if not self._ver_on:
+            return
+        numeros = sorted(int(iid) for iid in self._selected if iid.isdigit())
+        if not numeros:
+            return
+
+        import webbrowser
+        from core.repositorio_cotizaciones import cargar_cotizacion
+        from core.presentar_cotizacion import generar_html
+
+        for numero in numeros:
+            datos = cargar_cotizacion(numero)
+            if datos is None:
+                self._lbl_estado.config(
+                    text=f"⚠ No se pudo leer el archivo de la cotización {numero:04d}.",
+                    fg=COLORES["error"])
+                continue
+            try:
+                ruta_html = generar_html(datos)
+                webbrowser.open(ruta_html.as_uri())
+            except Exception as e:
+                self._lbl_estado.config(
+                    text=f"⚠ No se pudo generar la cotización {numero:04d} en HTML: {e}",
+                    fg=COLORES["error"])
+
+    def _dialogo_aprobar_directo(self):
+        """Si hay más de una seleccionada, el diálogo de fecha de entrega se
+        abre una vez por cada una, en orden de N° de OP — cada diálogo
+        espera a que el anterior se cierre (Aprobar/Cancelar/Editar) antes
+        de abrir el siguiente."""
+        numeros = sorted(int(iid) for iid in self._selected if iid.isdigit())
+        for indice, numero in enumerate(numeros):
+            # "Editar" en el diálogo destruye esta ventana entera (abre el
+            # cotizador en su lugar) — si eso pasó, cortar el resto del loop.
+            if not self.winfo_exists():
+                return
+            iid = str(numero)
+            if iid in self._iid_tags:  # pudo haberse quitado de la lista (aprobada/editada)
+                self._mostrar_dialogo_aprobar(iid, indice=indice, total=len(numeros))
+
+    def _mostrar_dialogo_aprobar(self, iid: str, indice: int = 0, total: int = 1):
         archivo = next((e[3] for e in self._entradas if str(e[0]) == iid), None)
         if archivo is None:
             return
@@ -374,13 +472,15 @@ class VentanaCotizaciones(tk.Toplevel):
         from datetime import datetime
         from ui.dialogo_aprobar import _fecha_valida, promover_a_op
 
+        empresa = datos.get("Empresa", "—")
+
         dlg = tk.Toplevel(self)
-        dlg.title("Aprobar cotización")
+        dlg.title(f"Aprobar Cotización {int(iid):04d}")
         dlg.configure(bg=COLORES["fondo"])
         dlg.resizable(False, False)
         dlg.transient(self)
 
-        ancho, alto = _esc.px(630), _esc.px(480)
+        ancho, alto = _esc.px(800), _esc.px(570)
         ox = self.winfo_x() + (self.ANCHO - ancho) // 2
         oy = self.winfo_y() + (self.ALTO  - alto)  // 2
         dlg.geometry(f"{ancho}x{alto}+{ox}+{oy}")
@@ -394,8 +494,20 @@ class VentanaCotizaciones(tk.Toplevel):
         frame_msg = tk.Frame(dlg, bg=COLORES["fondo"], padx=36, pady=30)
         frame_msg.pack(fill="both", expand=True)
 
+        # Identifica sin ambigüedad cuál cotización es esta — antes, al
+        # aprobar varias seguidas, los diálogos eran indistinguibles entre
+        # sí (mismo tamaño, misma posición en pantalla) y no había forma de
+        # saber a cuál se le estaba poniendo la fecha.
+        if total > 1:
+            tk.Label(frame_msg, text=f"Aprobando {indice + 1} de {total}",
+                     font=FUENTE_LABEL, bg=COLORES["fondo"],
+                     fg=COLORES["texto_suave"]).pack(pady=(0, 2))
+        tk.Label(frame_msg, text=f"Cotización N° {int(iid):04d} · {empresa}",
+                 font=FUENTE_TITULO, bg=COLORES["fondo"], fg=COLORES["acento"],
+                 wraplength=_esc.px(540), justify="center").pack(pady=(0, 10))
+
         tk.Label(frame_msg, text="Aprobar una cotización la volverá una OP",
-                 font=FUENTE_TITULO, bg=COLORES["fondo"], fg=COLORES["texto"],
+                 font=FUENTE_LABEL, bg=COLORES["fondo"], fg=COLORES["texto"],
                  wraplength=_esc.px(540), justify="center").pack(pady=(0, 18))
 
         hoy = datetime.now()
@@ -489,9 +601,19 @@ class VentanaCotizaciones(tk.Toplevel):
 
         # ── Fecha de ingreso: viene horneada con la fecha de hoy; "Cambiar"
         # revela las mismas 3 cajas que la fecha de entrega. Así el Tab no
-        # empieza ahí en el caso común (no se cambia casi nunca).
-        tk.Label(frame_msg, text="Fecha de ingreso", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
+        # empieza ahí en el caso común (no se cambia casi nunca). Al lado se
+        # muestra la fecha en la que se CREÓ la cotización (dato informativo,
+        # no editable acá) — por si el ingreso a producción debe calzar con
+        # esa fecha en vez de con hoy.
+        fila_lbl_ingreso = tk.Frame(frame_msg, bg=COLORES["fondo"])
+        fila_lbl_ingreso.pack(anchor="w", fill="x")
+        tk.Label(fila_lbl_ingreso, text="Fecha de ingreso", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(side="left")
+        fecha_creacion = datos.get("Fecha", "").strip()
+        if fecha_creacion:
+            tk.Label(fila_lbl_ingreso, text=f"  ·  Cotización creada el {fecha_creacion}",
+                     font=FUENTE_LABEL, bg=COLORES["fondo"],
+                     fg=COLORES["texto_suave"]).pack(side="left")
 
         contenedor_ingreso = tk.Frame(frame_msg, bg=COLORES["fondo"])
         contenedor_ingreso.pack(anchor="w", fill="x", pady=(0, 12))
@@ -888,7 +1010,7 @@ class VentanaCotizaciones(tk.Toplevel):
                 fg=COLORES["error"])
             return
 
-        from ui.formulario_cliente import producto_desde_json
+        from core.repositorio_cotizaciones import producto_desde_json
         productos = [producto_desde_json(p) for p in datos.get("productos", [])]
         edicion = {"json": datos, "productos": productos}
         es_backlight = bool(productos) and "caja" in productos[0]

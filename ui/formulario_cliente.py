@@ -6,6 +6,7 @@ Se abre después del resumen del cotizador backlight.
 
 import sys
 import tkinter as tk
+import webbrowser
 from tkinter import messagebox
 from datetime import datetime
 from pathlib import Path
@@ -28,13 +29,14 @@ from core.repositorio import (
     guardar_cliente,
     cargar_contactos,
     guardar_contacto,
-    TEXTILES_ANCHOS,
 )
 from core.repositorio_cotizaciones import (
     siguiente_numero,
     guardar_cotizacion,
     carpeta_excel,
+    mapear_producto,
 )
+from core.precios import costo_cotizacion
 
 # Desactivado temporalmente: exportar_cotizacion_backlight/nueva no saben
 # escribir el campo "Caja" cuando es un dict con el detalle de la caja
@@ -233,60 +235,14 @@ class EntradaAutocompletado(tk.Frame):
     def set_opciones(self, opciones: list[str]):
         self._opciones = opciones
 
-
-def _mapear_producto(d: dict) -> dict:
-    """Convierte un dict interno de producto al esquema JSON de cotización/OP."""
-    if "tela" in d:
-        return {
-            "Tela":     d.get("tela", ""),
-            "Caja":     d.get("caja", ""),
-            "Ancho":    float(d.get("ancho", 0.0)),
-            "Alto":     float(d.get("alto", 0.0)),
-            "Cantidad": int(d.get("cantidad", 0)),
-            "Tema":     d.get("tema", ""),
-            "Obs":      d.get("obs", ""),
-        }
-    return {
-        "producto":     d.get("producto", ""),
-        "Tela":         d.get("textil", ""),
-        "Estructura":   d.get("estructura", "Sin estructura"),
-        "Terminacion":  d.get("terminacion", "Sin terminaciones"),
-        "Impresion":    d.get("impresion", "Cara única"),
-        "Ancho":        float(d.get("ancho", 0.0)),
-        "Alto":         float(d.get("alto", 0.0)),
-        "Cantidad":     int(d.get("cantidad", 0)),
-        "Tema":         d.get("tema", ""),
-        "Obs":          d.get("obs", ""),
-    }
-
-
-def producto_desde_json(d: dict) -> dict:
-    """Inversa de `_mapear_producto`: convierte un producto en esquema JSON
-    de vuelta al esquema interno que usan las pantallas de edición."""
-    if "Caja" in d:
-        return {
-            "tela":      d.get("Tela", ""),
-            "caja":      d.get("Caja", ""),
-            "ancho_max": TEXTILES_ANCHOS.get(d.get("Tela", ""), 0.0),
-            "ancho":     d.get("Ancho", 0.0),
-            "alto":      d.get("Alto", 0.0),
-            "cantidad":  d.get("Cantidad", 0),
-            "tema":      d.get("Tema", ""),
-            "obs":       d.get("Obs", ""),
-            "rotado":    False,
-        }
-    return {
-        "producto":    d.get("producto", ""),
-        "textil":      d.get("Tela", ""),
-        "estructura":  d.get("Estructura", "Sin estructura"),
-        "terminacion": d.get("Terminacion", "Sin terminaciones"),
-        "impresion":   d.get("Impresion", "Cara única"),
-        "ancho":       d.get("Ancho", 0.0),
-        "alto":        d.get("Alto", 0.0),
-        "cantidad":    d.get("Cantidad", 0),
-        "tema":        d.get("Tema", ""),
-        "obs":         d.get("Obs", ""),
-    }
+    def bind_entry(self, secuencia, func):
+        """Bindea directo sobre el Entry interno (no sobre el Frame
+        contenedor) — necesario para eventos de teclado como <Return>, que
+        le llegan al widget con foco, no al Frame. Reemplaza cualquier
+        binding previo de esta clase para la misma secuencia (ver
+        _ListaAditiva, que reemplaza el <Return> por defecto para
+        implementar autocompletar-y-agregar en dos pasos)."""
+        self._entry.bind(secuencia, func)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -447,10 +403,10 @@ class FormularioCliente(tk.Toplevel):
 
         tk.Frame(cuerpo, bg=COLORES["borde"], height=1).pack(fill="x", pady=(8, 14))
 
-        # ── Grupo 2: Contacto / Email / Fuente / Condición ───────────────────
+        # ── Grupo 2: Contacto / Email / Descuento / Condición ─────────────────
         self._var_contacto  = tk.StringVar()
         self._var_email     = tk.StringVar()
-        self._var_fuente    = tk.StringVar()
+        self._var_descuento = tk.StringVar(value="0")
         self._var_condicion = tk.StringVar()
 
         fila2 = tk.Frame(cuerpo, bg=COLORES["fondo"])
@@ -475,14 +431,14 @@ class FormularioCliente(tk.Toplevel):
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
         self._crear_entry(col_email, self._var_email, width=26).pack(anchor="w", ipady=7, ipadx=6)
 
-        col_fuente = tk.Frame(fila2, bg=COLORES["fondo"])
-        col_fuente.pack(side="left")
-        tk.Label(col_fuente, text="Fuente", font=FUENTE_LABEL,
+        col_descuento = tk.Frame(fila2, bg=COLORES["fondo"])
+        col_descuento.pack(side="left")
+        tk.Label(col_descuento, text="Descuento", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        _frame_fuente = tk.Frame(col_fuente, bg=COLORES["fondo"])
-        _frame_fuente.pack(anchor="w")
-        self._crear_entry(_frame_fuente, self._var_fuente, width=10).pack(side="left", ipady=7, ipadx=6)
-        tk.Label(_frame_fuente, text="%", font=FUENTE_LABEL,
+        _frame_descuento = tk.Frame(col_descuento, bg=COLORES["fondo"])
+        _frame_descuento.pack(anchor="w")
+        self._crear_entry(_frame_descuento, self._var_descuento, width=10).pack(side="left", ipady=7, ipadx=6)
+        tk.Label(_frame_descuento, text="%", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto"]).pack(side="left", padx=(2, 0))
 
         # Fila: Condición de pago + botón Guardar Contacto
@@ -609,30 +565,57 @@ class FormularioCliente(tk.Toplevel):
             )
             self._lbl_export_estado.pack(side="left", expand=True)
 
-            self._btn_exportar = tk.Label(
-                _fila_btn, text="Guardar y Exportar →",
+            self._btn_guardar_abrir = tk.Label(
+                _fila_btn, text="Guardar y abrir",
                 font=FUENTE_BTN, bg=COLORES["btn_enabled"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
-            self._btn_exportar.pack(side="right")
-            self._btn_exportar.bind("<Button-1>", lambda _: self._exportar())
-            self._btn_exportar.bind("<Enter>",
-                lambda _: self._btn_exportar.config(bg=COLORES["btn_en_hover"]))
-            self._btn_exportar.bind("<Leave>",
-                lambda _: self._btn_exportar.config(bg=COLORES["btn_enabled"]))
+            self._btn_guardar_abrir.pack(side="right")
+            self._btn_guardar_abrir.bind("<Button-1>", lambda _: self._exportar(abrir_html=True))
+            self._btn_guardar_abrir.bind("<Enter>",
+                lambda _: self._btn_guardar_abrir.config(bg=COLORES["btn_en_hover"]))
+            self._btn_guardar_abrir.bind("<Leave>",
+                lambda _: self._btn_guardar_abrir.config(bg=COLORES["btn_enabled"]))
+
+            self._btn_guardar_solo = tk.Label(
+                _fila_btn, text="Guardar",
+                font=FUENTE_BTN, bg=COLORES["btn_enabled"],
+                fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
+            )
+            self._btn_guardar_solo.pack(side="right", padx=(0, 8))
+            self._btn_guardar_solo.bind("<Button-1>", lambda _: self._exportar(abrir_html=False))
+            self._btn_guardar_solo.bind("<Enter>",
+                lambda _: self._btn_guardar_solo.config(bg=COLORES["btn_en_hover"]))
+            self._btn_guardar_solo.bind("<Leave>",
+                lambda _: self._btn_guardar_solo.config(bg=COLORES["btn_enabled"]))
         else:
             # En Windows los botones flotan sobre la ventana usando place
-            self._btn_exportar = tk.Label(
-                self, text="Guardar y Exportar →",
+            _frame_guardar = tk.Frame(self, bg=COLORES["fondo"])
+            _frame_guardar.place(relx=1.0, rely=1.0, anchor="se", x=-30, y=-20)
+
+            self._btn_guardar_abrir = tk.Label(
+                _frame_guardar, text="Guardar y abrir",
                 font=FUENTE_BTN, bg=COLORES["btn_enabled"],
                 fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
             )
-            self._btn_exportar.place(relx=1.0, rely=1.0, anchor="se", x=-30, y=-20)
-            self._btn_exportar.bind("<Button-1>", lambda _: self._exportar())
-            self._btn_exportar.bind("<Enter>",
-                lambda _: self._btn_exportar.config(bg=COLORES["btn_en_hover"]))
-            self._btn_exportar.bind("<Leave>",
-                lambda _: self._btn_exportar.config(bg=COLORES["btn_enabled"]))
+            self._btn_guardar_abrir.pack(side="right")
+            self._btn_guardar_abrir.bind("<Button-1>", lambda _: self._exportar(abrir_html=True))
+            self._btn_guardar_abrir.bind("<Enter>",
+                lambda _: self._btn_guardar_abrir.config(bg=COLORES["btn_en_hover"]))
+            self._btn_guardar_abrir.bind("<Leave>",
+                lambda _: self._btn_guardar_abrir.config(bg=COLORES["btn_enabled"]))
+
+            self._btn_guardar_solo = tk.Label(
+                _frame_guardar, text="Guardar",
+                font=FUENTE_BTN, bg=COLORES["btn_enabled"],
+                fg="#FFFFFF", padx=20, pady=10, cursor="hand2",
+            )
+            self._btn_guardar_solo.pack(side="right", padx=(0, 8))
+            self._btn_guardar_solo.bind("<Button-1>", lambda _: self._exportar(abrir_html=False))
+            self._btn_guardar_solo.bind("<Enter>",
+                lambda _: self._btn_guardar_solo.config(bg=COLORES["btn_en_hover"]))
+            self._btn_guardar_solo.bind("<Leave>",
+                lambda _: self._btn_guardar_solo.config(bg=COLORES["btn_enabled"]))
 
             self._btn_nueva = tk.Label(
                 self, text="← Cancelar",
@@ -717,18 +700,21 @@ class FormularioCliente(tk.Toplevel):
     # ── Autocompletado de contacto ────────────────────────────────────────────
 
     def _autocompletar_contacto(self, nombre_contacto: str):
-        """Busca el contacto y rellena Email, Fuente y Condición."""
+        """Busca el contacto y rellena Email, Descuento y Condición."""
         for c in self._contactos:
             if c["contacto"].lower() == nombre_contacto.lower():
                 self._var_email.set(c["email"])
-                self._var_fuente.set(c["fuente"])
+                # "descuento" se llamaba "fuente" antes de este cambio —
+                # contactos guardados con la versión vieja todavía tienen
+                # esa clave, no la nueva.
+                self._var_descuento.set(c.get("descuento", c.get("fuente", "")))
                 self._var_condicion.set(c["condicion"])
                 return
 
     # ── Guardar datos del contacto ────────────────────────────────────────────
 
     def _guardar_contacto_datos(self):
-        """Guarda contacto/email/fuente/condicion en contactos.json. Solo funciona una vez."""
+        """Guarda contacto/email/descuento/condicion en contactos.json. Solo funciona una vez."""
         if self._contacto_guardado:
             return
         contacto = self._var_contacto.get().strip()
@@ -739,9 +725,9 @@ class FormularioCliente(tk.Toplevel):
             )
             return
         email     = self._var_email.get().strip()
-        fuente    = self._var_fuente.get().strip()
+        descuento = self._var_descuento.get().strip()
         condicion = self._var_condicion.get().strip()
-        guardar_contacto(contacto, email, fuente, condicion)
+        guardar_contacto(contacto, email, descuento, condicion)
         self._contactos         = cargar_contactos()
         self._nombres_contactos = [c["contacto"] for c in self._contactos]
         self._ac_contacto.set_opciones(self._nombres_contactos)
@@ -776,21 +762,9 @@ class FormularioCliente(tk.Toplevel):
             return False, "El N° de Cotización debe tener exactamente 4 dígitos."
         return True, ""
 
-    # ── Estado del botón Cancelar / Nueva Cotización ─────────────────────────
-
-    def _modo_cancelar(self):
-        self._btn_nueva.config(text="← Cancelar", bg=COLORES["error"])
-        self._btn_nueva.bind("<Enter>", lambda _: self._btn_nueva.config(bg="#A93226"))
-        self._btn_nueva.bind("<Leave>", lambda _: self._btn_nueva.config(bg=COLORES["error"]))
-
-    def _modo_nueva_cot(self):
-        self._btn_nueva.config(text="← Nueva Cotización", bg=COLORES["secundario"])
-        self._btn_nueva.bind("<Enter>", lambda _: self._btn_nueva.config(bg="#C8881A"))
-        self._btn_nueva.bind("<Leave>", lambda _: self._btn_nueva.config(bg=COLORES["secundario"]))
-
     # ── Exportar + Guardar ────────────────────────────────────────────────────
 
-    def _exportar(self):
+    def _exportar(self, abrir_html: bool):
         ok, msg = self._campos_ok()
         if not ok:
             self._lbl_export_estado.config(text=f"⚠ {msg}", fg=COLORES["error"])
@@ -803,7 +777,7 @@ class FormularioCliente(tk.Toplevel):
             "razon_social":   self._var_razon_social.get().strip(),
             "contacto":       self._var_contacto.get().strip(),
             "email":          self._var_email.get().strip(),
-            "fuente":         self._var_fuente.get().strip(),
+            "descuento":      self._var_descuento.get().strip(),
             "condicion":      self._var_condicion.get().strip(),
             "fecha":          self._var_fecha.get().strip(),
             "cotizacion":     self._var_cotizacion.get().strip(),
@@ -833,11 +807,13 @@ class FormularioCliente(tk.Toplevel):
                     )
 
             # ── JSON ──────────────────────────────────────────────────────────
-            fuente_raw = datos_cliente.get("fuente", "")
+            descuento_raw = datos_cliente.get("descuento", "")
             try:
-                fuente_val = float(fuente_raw)
+                descuento_val = float(descuento_raw)
             except (ValueError, TypeError):
-                fuente_val = 0.0
+                descuento_val = 0.0
+
+            totales = costo_cotizacion(self._datos_productos, descuento_val)
 
             json_dict = {
                 "Cotizacion":       int(datos_cliente["cotizacion"]),
@@ -848,19 +824,30 @@ class FormularioCliente(tk.Toplevel):
                 "Razon Social":     datos_cliente["razon_social"],
                 "Contacto":         datos_cliente["contacto"],
                 "Email":            datos_cliente["email"],
-                "Fuente":           fuente_val,
+                "Descuento":        descuento_val,
                 "Condicion de pago": datos_cliente["condicion"],
                 "Descripcion":      datos_cliente["descripcion"],
-                "productos":        [_mapear_producto(d) for d in self._datos_productos],
+                "productos":        [mapear_producto(d) for d in self._datos_productos],
+                "Neto":             totales["neto"],
+                "NetoTotal":        totales["neto_total"],
+                "IVA":              totales["iva"],
+                "Total":            totales["total"],
             }
-            ruta_json = guardar_cotizacion(json_dict)
+            guardar_cotizacion(json_dict)
 
-            lineas = ["✓ Guardado correctamente:"]
-            if ruta_xls:
-                lineas.append(str(ruta_xls))
-            lineas.append(str(ruta_json))
-            self._lbl_export_estado.config(text="\n".join(lineas), fg=COLORES["ok"])
-            self._modo_nueva_cot()
+            if abrir_html:
+                try:
+                    from core.presentar_cotizacion import generar_html
+                    ruta_html = generar_html(json_dict)
+                    webbrowser.open(ruta_html.as_uri())
+                except Exception as e:
+                    messagebox.showwarning(
+                        "Cotización guardada",
+                        f"La cotización se guardó, pero no se pudo abrir en el "
+                        f"navegador:\n{e}",
+                    )
+
+            self._nueva_cotizacion()
 
         except Exception as e:
             self._lbl_export_estado.config(

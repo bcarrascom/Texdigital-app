@@ -1,27 +1,33 @@
 [
   {
     "nombre": "Bistretch",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11000
   },
   {
     "nombre": "Blackout",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12000
   },
   {
     "nombre": "Canvas tarpaulin",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11000
   },
   {
     "nombre": "Crea sábana algodón",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11000
   },
   {
     "nombre": "Crea sábana poliester",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 10000
   },
   {
     "nombre": "Cuerina",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 12000
   },
   {
     "nombre": "Denim crudo 6 onzas",
@@ -29,150 +35,187 @@
   },
   {
     "nombre": "Felpa gruesa",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 12000
   },
   {
     "nombre": "Franela",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12000
   },
   {
     "nombre": "Gabardina antiflu",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12000
   },
   {
     "nombre": "Gasa",
-    "ancho": 1.46
+    "ancho": 1.46,
+    "valor": 12000
   },
   {
     "nombre": "Gasa rustica",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 12800
   },
   {
     "nombre": "Hole",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 8000
   },
   {
     "nombre": "Jersey",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 10500
   },
   {
     "nombre": "Lanilla",
-    "ancho": 1.4
+    "ancho": 1.4,
+    "valor": 11000
   },
   {
     "nombre": "Lino 100%",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 15000
   },
   {
     "nombre": "Lino arena",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 12000
   },
   {
     "nombre": "Lona algodón blanca",
-    "ancho": 1.44
+    "ancho": 1.44,
+    "valor": 13000
   },
   {
     "nombre": "Lona cruda algodón",
-    "ancho": 1.44
+    "ancho": 1.44,
+    "valor": 12500
   },
   {
     "nombre": "Lona impermeable",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12000
   },
   {
     "nombre": "Lona rústica",
-    "ancho": 1.44
+    "ancho": 1.44,
+    "valor": 12600
   },
   {
     "nombre": "Loneta cruda algodón",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12500
   },
   {
     "nombre": "Lycra",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12300
   },
   {
     "nombre": "Mesh mate con traspaso",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 16320
   },
   {
     "nombre": "Mesh",
-    "ancho": 2.8
+    "ancho": 2.8,
+    "valor": 30000
   },
   {
     "nombre": "Mirror",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 9600
   },
   {
     "nombre": "Papel mural liso",
-    "ancho": 1.1
+    "ancho": 1.1,
+    "valor": 12000
   },
   {
     "nombre": "Papel mural textura",
-    "ancho": 1.1
+    "ancho": 1.1,
+    "valor": 12000
   },
   {
     "nombre": "Polar",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 11100
   },
   {
     "nombre": "Popelina anti agua",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11300
   },
   {
     "nombre": "Popelina glossy 280",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 10800
   },
   {
     "nombre": "Popelina panel",
-    "ancho": 2.28
+    "ancho": 2.28,
+    "valor": 27400
   },
   {
     "nombre": "Satin delgado",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11000
   },
   {
     "nombre": "Satin grueso",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 10000
   },
   {
     "nombre": "Seda sintética",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 12500
   },
   {
     "nombre": "Stretch",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 12000
   },
   {
     "nombre": "Sun out",
-    "ancho": 1.58
+    "ancho": 1.58,
+    "valor": 11000
   },
   {
     "nombre": "Taslan",
-    "ancho": 1.48
+    "ancho": 1.48,
+    "valor": 11500
   },
   {
     "nombre": "Velo liso",
-    "ancho": 1.38
+    "ancho": 1.38,
+    "valor": 10000
   },
   {
     "nombre": "Popelina 155",
-    "ancho": 1.53
+    "ancho": 1.53,
+    "valor": 27000
   },
   {
     "nombre": "Popelina 310",
-    "ancho": 3.08
+    "ancho": 3.08,
+    "valor": 31000
   },
   {
     "nombre": "Pearl 155",
-    "ancho": 1.53
+    "ancho": 1.53,
+    "valor": 23000
   },
   {
     "nombre": "Pearl 310",
-    "ancho": 3.08
+    "ancho": 3.08,
+    "valor": 31000
   },
   {
     "nombre": "Pearl 160 HP",
-    "ancho": 1.6
+    "ancho": 1.6,
+    "valor": 23000
   }
 ]

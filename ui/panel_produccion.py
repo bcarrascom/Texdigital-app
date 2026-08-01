@@ -62,6 +62,7 @@ uno nuevo, arrancando en el listado igual que siempre.
 import json
 import os
 import sys
+import webbrowser
 
 import webview
 
@@ -69,7 +70,7 @@ from core.repositorio_ops import (
     carpeta_json,
     carpeta_completadas,
     carpeta_pendiente,
-    carpeta_historial,
+    cargar_op,
     mover_a_completadas,
     mover_a_pendiente,
     reactivar_desde_pendiente,
@@ -120,16 +121,24 @@ class _ApiPanelProduccion:
     def obtener_op_por_numero(self, numero):
         """Busca una OP por número en cualquier carpeta (para abrir el
         detalle de una OP completada desde el listado)."""
-        numero = int(numero)
-        for carpeta in (carpeta_json(), carpeta_completadas(),
-                         carpeta_pendiente(), carpeta_historial()):
-            ruta = carpeta / f"{numero}.json"
-            if ruta.exists():
-                try:
-                    return json.loads(ruta.read_text(encoding="utf-8"))
-                except Exception:
-                    return None
-        return None
+        return cargar_op(int(numero))
+
+    def generar_html_op(self, numero):
+        """Genera el HTML imprimible de la OP (sin precios, para los
+        trabajadores de planta — ver core/presentar_op.py) y lo abre en el
+        navegador. Devuelve True si pudo, False si la OP no existe o algo
+        falló (el JS solo necesita saber si mostrar un error)."""
+        datos = cargar_op(int(numero))
+        if datos is None:
+            return False
+        try:
+            from core.presentar_op import generar_html
+            ruta_html = generar_html(datos)
+            webbrowser.open(ruta_html.as_uri())
+            return True
+        except Exception as e:
+            print("No se pudo generar el HTML de la OP:", e)
+            return False
 
     def obtener_anchos_tela(self):
         """Mapeo tela → ancho máximo de rollo (recursos/textiles.json)."""

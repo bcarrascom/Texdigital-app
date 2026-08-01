@@ -8,11 +8,17 @@ quepan en la pantalla actual, en cualquier SO y resolución.
 
 import tkinter as _tk
 
-# Dimensiones de las ventanas más grandes que NO tienen scroll:
-#   · VentanaResumen (cotizacion) → 1850 px de ancho  ← la más ancha
-#   · PantallaMedidas             →  960 px de alto
+# Dimensiones de las ventanas más grandes que NO tienen scroll — deben
+# coincidir con el TAM_MEDIDAS/ancho_ventana más grande de la app (ver
+# ui/cotizacion.py y ui/ventana_resumen.py). Si se agranda alguna de esas
+# ventanas, ACTUALIZAR ACÁ TAMBIÉN: si no, el factor de escala se calcula
+# para un diseño más chico del que realmente hay que hacer entrar en
+# pantalla, y en una pantalla más chica que la de referencia la ventana
+# puede terminar sin entrar completa.
+#   · VentanaResumen (cotizacion)      → 1850 px de ancho  ← la más ancha
+#   · PantallaMedidas (cotizacion.py)  → 1480 px de alto   ← la más alta
 _MAX_W = 1850
-_MAX_H = 960
+_MAX_H = 1480
 
 
 def _calcular() -> float:

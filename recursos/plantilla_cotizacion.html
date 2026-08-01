@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotización N° {{numero}} · TEXDIGITAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- PRODUCCIÓN: reemplazar Archivo Black por la fuente licenciada:
+     @font-face { font-family:'Nuber Next Black Wide'; src:url('nubernext-blackwide.woff2'); }
+     y dejarla primera en la pila de .marca / .marca-sub -->
+<style>
+  :root{
+    --azul:#2563A8; --tinta:#1A2230; --gris:#5B6470; --linea:#D8DEE6;
+    --fondo-suave:#F4F6F9;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Inter',system-ui,sans-serif; color:var(--tinta); background:#E9ECF1; }
+  .hoja{ max-width:216mm; min-height:279mm; margin:24px auto; background:#fff;
+    padding:18mm 16mm; box-shadow:0 2px 18px #0002; display:flex; flex-direction:column; }
+
+  header{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:3px solid var(--azul); padding-bottom:6mm; }
+  .marca{ font-family:'Nuber Next Black Wide','Archivo Black',sans-serif; font-weight:700;
+    font-size:30px; letter-spacing:.02em; color:#000; }
+  .marca-sub{ font-family:'Nuber Next Black Wide','Archivo Black',sans-serif; font-weight:700;
+    font-size:12px; color:var(--azul); margin-top:2px; letter-spacing:.06em; }
+  .cot-box{ text-align:right; }
+  .cot-box .titulo{ font-size:13px; letter-spacing:.14em; color:var(--gris); font-weight:600; }
+  .cot-box .numero{ font-family:'Barlow Condensed'; font-size:34px; font-weight:700; color:var(--azul); line-height:1; }
+  .cot-box .fecha{ font-size:12.5px; color:var(--gris); margin-top:3px; }
+
+  .datos{ display:flex; gap:8mm; margin:7mm 0 6mm; }
+  .dato{ flex:1; background:var(--fondo-suave); border-radius:8px; padding:4mm 5mm; }
+  .dato .k{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--gris); font-weight:600; }
+  .dato .v{ font-size:14px; font-weight:600; margin-top:1.5mm; }
+  .dato .v2{ font-size:12.5px; color:var(--gris); margin-top:.6mm; }
+
+  .descripcion{ font-size:13px; color:var(--tinta); margin-bottom:6mm; }
+  .descripcion b{ color:var(--gris); font-weight:600; text-transform:uppercase; font-size:10.5px; letter-spacing:.12em; display:block; margin-bottom:1.2mm; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  thead th{ background:var(--tinta); color:#fff; text-align:left; padding:3mm 3.5mm;
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; }
+  thead th.num, td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tbody td{ padding:3mm 3.5mm; border-bottom:1px solid var(--linea); vertical-align:top; }
+  tbody tr:nth-child(even){ background:#FAFBFD; }
+  /* table-layout:fixed + anchos fijos en el <thead>: así un nombre de
+     estructura/terminación largo se envuelve en varias líneas dentro de
+     su propia columna (crece la fila, no rompe nada — tbody td ya tiene
+     vertical-align:top) en vez de estirar la columna Producto y angostar
+     Medidas/Cant./Valor unitario/Total. */
+  .tabla-productos{ table-layout:fixed; }
+  .prod-nombre{ font-weight:600; }
+  .prod-detalle{ font-size:11px; color:var(--gris); margin-top:1mm; }
+  .prod-extras{ font-size:10.5px; color:var(--gris); margin-top:1.6mm; line-height:1.5; }
+  .prod-extras b{ color:var(--tinta); font-weight:600; }
+  .prod-nombre, .prod-detalle, .prod-extras{
+    overflow-wrap:break-word; word-wrap:break-word; word-break:break-word;
+  }
+
+  .totales{ margin-top:5mm; display:flex; justify-content:flex-end; }
+  .totales table{ width:64mm; font-size:13px; }
+  .totales td{ padding:2.2mm 3.5mm; border:none; }
+  .totales tr td:last-child{ text-align:right; font-variant-numeric:tabular-nums; }
+  .totales .fila-total td{ background:var(--azul); color:#fff; font-weight:700; font-size:15px;
+    border-radius:0; }
+  .totales .sub td{ color:var(--gris); }
+
+  footer{ margin-top:auto; padding-top:6mm; border-top:1px solid var(--linea);
+    display:flex; justify-content:space-between; font-size:11px; color:var(--gris); }
+  footer .cond b{ display:block; color:var(--tinta); font-size:11px; margin-bottom:1mm; }
+
+  .btn-imprimir{ position:fixed; right:22px; bottom:22px; background:var(--azul); color:#fff;
+    border:none; border-radius:10px; padding:12px 20px; font-family:'Inter'; font-size:14px;
+    font-weight:600; cursor:pointer; box-shadow:0 4px 14px #0004; }
+  .btn-imprimir:hover{ filter:brightness(1.08); }
+
+  @media print{
+    body{ background:#fff; }
+    .hoja{ margin:0; box-shadow:none; max-width:none; min-height:auto; padding:12mm 14mm; }
+    .btn-imprimir{ display:none; }
+  }
+  @page{ size:letter; margin:0; }
+</style>
+</head>
+<body>
+<div class="hoja">
+  <header>
+    <div>
+      <div class="marca">TEXDIGITAL</div>
+      <div class="marca-sub">ESTAMPADO TEXTIL</div>
+    </div>
+    <div class="cot-box">
+      <div class="titulo">COTIZACIÓN</div>
+      <div class="numero">N° {{numero}}</div>
+      <div class="fecha">{{fecha}}</div>
+    </div>
+  </header>
+
+  <div class="datos">
+    <div class="dato">
+      <div class="k">Cliente</div>
+      <div class="v">{{empresa}}</div>
+      <div class="v2">{{contacto_email}}</div>
+    </div>
+    <div class="dato">
+      <div class="k">Condición de pago</div>
+      <div class="v" style="font-weight:500; font-size:16px; line-height:1.35">{{condicion_pago}}</div>
+    </div>
+  </div>
+
+  {{descripcion_bloque}}
+
+  <table class="tabla-productos">
+    <thead>
+      <tr>
+        <th style="width:44%">Producto</th>
+        <th style="width:16%">Medidas</th>
+        <th class="num" style="width:10%">Cant.</th>
+        <th class="num" style="width:15%">Valor unitario</th>
+        <th class="num" style="width:15%">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+{{filas_productos}}
+    </tbody>
+  </table>
+
+  <div class="totales">
+    <table>
+{{fila_neto}}
+{{fila_descuento}}
+      <tr class="sub" style="font-weight:600"><td>Neto total</td><td>{{neto_total}}</td></tr>
+      <tr class="sub"><td>IVA (19%)</td><td>{{iva}}</td></tr>
+      <tr class="fila-total"><td>TOTAL</td><td>{{total}}</td></tr>
+    </table>
+  </div>
+
+  <footer style="justify-content:center; text-align:center">
+    <div>
+      Si esta cotización es aprobada, devuélvala firmada por E-Mail o adjunte su
+      Orden de Compra a: <b style="color:var(--tinta)">admin@texdigital.cl</b>
+    </div>
+  </footer>
+</div>
+
+<button class="btn-imprimir" onclick="window.print()">🖨 Guardar como PDF</button>
+</body>
+</html>

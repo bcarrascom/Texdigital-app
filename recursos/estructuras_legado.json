@@ -1,0 +1,20 @@
+[
+  {"nombre": "Asta fibra de vidrio vela 2 mts", "valor": 17000},
+  {"nombre": "Asta fibra de vidrio vela 3 mts", "valor": 19000},
+  {"nombre": "Base auto", "valor": 11000},
+  {"nombre": "Base suelo metal más accesorio para rellenar", "valor": 18000},
+  {"nombre": "Base suelo plástico para rellenar", "valor": 16000},
+  {"nombre": "Estaca", "valor": 10000},
+  {"nombre": "Estructura panel araña 1 cuerpo", "valor": 85000},
+  {"nombre": "Estructura panel araña 2 cuerpos", "valor": 120000},
+  {"nombre": "Estructura panel araña 3 cuerpos", "valor": 140000},
+  {"nombre": "Estructura panel araña 4 cuerpos", "valor": 170000},
+  {"nombre": "Estructura panel araña 5 cuerpos", "valor": 205000},
+  {"nombre": "Estructura panel araña 6 cuerpos", "valor": 245000},
+  {"nombre": "Soporte muro textil tubo aluminio 2,3x2,3 mts", "valor": 96000},
+  {"nombre": "Bolso de transporte con ruedas 1 estructura panel araña", "valor": 40000},
+  {"nombre": "Bolso de transporte con ruedas 2 estructuras panel araña", "valor": 70000},
+  {"nombre": "Fleje plastico", "valor": 7500},
+  {"nombre": "Madera y cancamos", "valor": 15000},
+  {"nombre": "Tubo + Pletina + Candados", "valor": 12000}
+]
