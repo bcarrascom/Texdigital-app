@@ -78,6 +78,7 @@ def _migrar_datos_antiguos():
     _migrar_a_conf("fuentes_poder")
     _migrar_a_conf("estructuras")
     _migrar_a_conf("terminaciones")
+    _migrar_a_conf("precios_cajas")
 
 
 _migrar_datos_antiguos()
@@ -134,21 +135,23 @@ def guardar_cliente(empresa: str, rut: str, razon_social: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Gestión de contactos.json — lista de {contacto, email, fuente, condicion}
+# Gestión de contactos.json — lista de {contacto, email, descuento, condicion}
+# "descuento" se llamaba "fuente" antes de la cotización con precios — es un
+# renombramiento puro, no un campo nuevo (ver ui/formulario_cliente.py).
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_contactos() -> list[dict]:
-    """Lee contactos.json y devuelve lista de dicts {contacto, email, fuente, condicion}."""
+    """Lee contactos.json y devuelve lista de dicts {contacto, email, descuento, condicion}."""
     return _leer_json(CONTACTOS_PATH)
 
 
-def guardar_contacto(contacto: str, email: str, fuente: str, condicion: str):
+def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
     """Agrega un contacto nuevo a contactos.json si no existe ya."""
     contactos = cargar_contactos()
     for c in contactos:
         if c["contacto"].lower() == contacto.lower():
             return  # ya existe, no duplicar
-    contactos.append({"contacto": contacto, "email": email, "fuente": fuente, "condicion": condicion})
+    contactos.append({"contacto": contacto, "email": email, "descuento": descuento, "condicion": condicion})
     _escribir_json(CONTACTOS_PATH, contactos)
 
 
@@ -165,14 +168,18 @@ def cargar_productos() -> list[str]:
     return _leer_json(_CONF_DIR / "productos.json")
 
 
-def cargar_textiles() -> tuple[list[str], dict[str, float]]:
+def cargar_textiles() -> tuple[list[str], dict[str, float], dict[str, float]]:
     """
-    Lee textiles.json: lista de {nombre, ancho}.
-    Devuelve (lista_nombres, dict_anchos). Si un textil no trae "ancho",
-    se agrega el nombre sin restricción de ancho.
+    Lee textiles.json: lista de {nombre, ancho, valor}.
+    Devuelve (lista_nombres, dict_anchos, dict_valores). Si un textil no
+    trae "ancho" o "valor", se omite del dict correspondiente (no se
+    inventa un 0 que rompa validaciones o abarate un cálculo sin querer).
+    "valor" es el precio por metro impreso: por ML en productos normales,
+    por M² en Backlight (el único que mide su tela en área — ver core/precios.py).
     """
     nombres: list[str] = []
     anchos:  dict[str, float] = {}
+    valores: dict[str, float] = {}
     for item in _leer_json(_CONF_DIR / "textiles.json"):
         nombre = str(item.get("nombre", "")).strip()
         if not nombre:
@@ -183,11 +190,16 @@ def cargar_textiles() -> tuple[list[str], dict[str, float]]:
                 anchos[nombre] = float(item["ancho"])
             except (TypeError, ValueError):
                 pass
-    return nombres, anchos
+        if item.get("valor") is not None:
+            try:
+                valores[nombre] = float(item["valor"])
+            except (TypeError, ValueError):
+                pass
+    return nombres, anchos, valores
 
 
-PRODUCTOS                  = cargar_productos()
-TEXTILES, TEXTILES_ANCHOS  = cargar_textiles()
+PRODUCTOS                                = cargar_productos()
+TEXTILES, TEXTILES_ANCHOS, TEXTILES_VALORES = cargar_textiles()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -213,9 +225,35 @@ def cargar_fuentes_poder() -> list[dict]:
     return sorted(datos, key=lambda d: d.get("watts", 0))
 
 
+def cargar_precios_cajas() -> dict:
+    """
+    Lee precios_cajas.json: precios CLP para el cálculo de valor de una
+    caja de backlight (ver core/valor_cajas.py). Estructura:
+    {"luces": {corto: precio_unidad}, "traseras": {tipo: precio_plancha},
+     "armado": {tramo: tarifa_por_ml}, "fp": {watts: precio_unidad},
+     "perfiles": {nombre: tarifa_por_ml}, "pintura_por_ml": precio}.
+    Los watts de "fp" vienen como texto en el JSON (las claves de un objeto
+    JSON siempre son string) — se convierten a int acá para poder buscar
+    directo por el "watts_unidad" que devuelve calculo_cajas.seleccionar_fp.
+    """
+    datos = _leer_json(_CONF_DIR / "precios_cajas.json")
+    if not isinstance(datos, dict):
+        datos = {}
+    resultado = {
+        "luces":     datos.get("luces", {}),
+        "traseras":  datos.get("traseras", {}),
+        "armado":    datos.get("armado", {}),
+        "fp":        {int(k): v for k, v in datos.get("fp", {}).items()},
+        "perfiles":  datos.get("perfiles", {}),
+        "pintura_por_ml": datos.get("pintura_por_ml", 0.0),
+    }
+    return resultado
+
+
 PERFILES       = cargar_perfiles()
 LUCES          = cargar_luces()
 FUENTES_PODER  = cargar_fuentes_poder()
+PRECIOS_CAJAS  = cargar_precios_cajas()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -224,15 +262,102 @@ FUENTES_PODER  = cargar_fuentes_poder()
 # los backlight usan su propia Caja, ver calculo_cajas.py).
 # ══════════════════════════════════════════════════════════════════════════════
 
-def cargar_estructuras() -> list[str]:
-    """Lee estructuras.json: lista de estructuras disponibles."""
-    return _leer_json(_CONF_DIR / "estructuras.json")
+def cargar_estructuras() -> tuple[list[str], dict[str, dict]]:
+    """
+    Lee estructuras.json: lista de {nombre, valorML} o {nombre, valorUNIT}.
+    Devuelve (lista_nombres, dict_valores) — dict_valores mapea nombre a
+    {"valorML": x} o {"valorUNIT": x} según cuál traiga esa entrada (ver
+    core/precios.py para cómo se usa cada uno). Tolera también el formato
+    viejo (lista de strings, sin precio) por si esta máquina no alcanzó a
+    sincronizar el catálogo nuevo — esas entradas quedan sin precio (se
+    tratan como $0) en vez de romper la carga de toda la app.
+    """
+    nombres: list[str] = []
+    valores: dict[str, dict] = {}
+    for item in _leer_json(_CONF_DIR / "estructuras.json"):
+        if isinstance(item, str):
+            nombre = item.strip()
+            if nombre:
+                nombres.append(nombre)
+            continue
+        nombre = str(item.get("nombre", "")).strip()
+        if not nombre:
+            continue
+        nombres.append(nombre)
+        if "valorML" in item:
+            valores[nombre] = {"valorML": float(item["valorML"])}
+        elif "valorUNIT" in item:
+            valores[nombre] = {"valorUNIT": float(item["valorUNIT"])}
+    return nombres, valores
 
 
-def cargar_terminaciones() -> list[str]:
-    """Lee terminaciones.json: lista de terminaciones disponibles."""
-    return _leer_json(_CONF_DIR / "terminaciones.json")
+def cargar_terminaciones() -> tuple[list[str], dict[str, float]]:
+    """
+    Lee terminaciones.json: lista de {nombre, valor} (precio por ML impreso).
+    Devuelve (lista_nombres, dict_valores). Tolera el formato viejo (lista
+    de strings, sin precio) — ver cargar_estructuras."""
+    nombres: list[str] = []
+    valores: dict[str, float] = {}
+    for item in _leer_json(_CONF_DIR / "terminaciones.json"):
+        if isinstance(item, str):
+            nombre = item.strip()
+            if nombre:
+                nombres.append(nombre)
+            continue
+        nombre = str(item.get("nombre", "")).strip()
+        if not nombre:
+            continue
+        nombres.append(nombre)
+        if item.get("valor") is not None:
+            try:
+                valores[nombre] = float(item["valor"])
+            except (TypeError, ValueError):
+                pass
+    return nombres, valores
 
 
-ESTRUCTURAS    = cargar_estructuras()
-TERMINACIONES  = cargar_terminaciones()
+ESTRUCTURAS, ESTRUCTURAS_VALORES      = cargar_estructuras()
+TERMINACIONES, TERMINACIONES_VALORES  = cargar_terminaciones()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Catálogos LEGADO (demo/comparación, ver core.precios.costo_producto
+# modelo="legado") — transcripción directa de la lista de precios vieja
+# (un solo Excel con 100+ combinaciones producto+estructura+terminación, cada
+# una con su propio precio). A diferencia de ESTRUCTURAS/TERMINACIONES (que
+# son piezas reusables que se suman aditivamente), acá cada entrada es el
+# nombre compuesto completo tal como aparecía en el Excel viejo, con su valor
+# fijo por unidad. Viven en recursos/ (no en Dropbox/SGTD/Conf): son solo
+# para comparar contra el modelo aditivo nuevo, no es catálogo en uso real.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _cargar_legado(nombre_archivo: str) -> tuple[list[str], dict[str, float]]:
+    """Lee un catálogo legado (mismo formato {nombre, valor} que
+    terminaciones.json) desde recursos/, no desde Dropbox/SGTD/Conf."""
+    nombres: list[str] = []
+    valores: dict[str, float] = {}
+    for item in _leer_json(_RECURSOS_DIR / nombre_archivo):
+        nombre = str(item.get("nombre", "")).strip()
+        if not nombre:
+            continue
+        nombres.append(nombre)
+        if item.get("valor") is not None:
+            try:
+                valores[nombre] = float(item["valor"])
+            except (TypeError, ValueError):
+                pass
+    return nombres, valores
+
+
+def cargar_estructuras_legado() -> tuple[list[str], dict[str, float]]:
+    """recursos/estructuras_legado.json — ver _cargar_legado."""
+    return _cargar_legado("estructuras_legado.json")
+
+
+def cargar_terminaciones_legado() -> tuple[list[str], dict[str, float]]:
+    """recursos/terminaciones_legado.json — ver _cargar_legado."""
+    return _cargar_legado("terminaciones_legado.json")
+
+
+ESTRUCTURAS_LEGADO, ESTRUCTURAS_LEGADO_VALORES      = cargar_estructuras_legado()
+TERMINACIONES_LEGADO, TERMINACIONES_LEGADO_VALORES  = cargar_terminaciones_legado()
