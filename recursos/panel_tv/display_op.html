@@ -90,11 +90,11 @@
   .card.con-caja{ grid-row: span 2; }
   .caja-detalle{ display:flex; flex-direction:column; gap:.6vh; background:var(--bg);
     border:1px solid var(--line); border-radius:10px; padding:1vh 1vw; }
-  .caja-item{ display:flex; align-items:baseline; gap:.7vw; }
+  .caja-item{ display:flex; align-items:flex-start; gap:.7vw; }
   .caja-item .k{ font-size:1.5vh; letter-spacing:.06em; text-transform:uppercase;
-    color:var(--txt-dim); font-weight:600; flex:0 0 9vw; }
+    color:var(--txt-dim); font-weight:600; flex:0 0 9vw; padding-top:.15vh; }
   .caja-item .v{ font-size:1.9vh; color:var(--txt); flex:1; min-width:0;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    overflow-wrap:break-word; word-break:break-word; }
   .caja-item .n{ font-size:1.9vh; font-weight:700; color:var(--azul); flex:none; }
   .card.listo{ border-left-color:var(--azul);
     background:linear-gradient(160deg,#151A21,#10141A); }
@@ -205,6 +205,7 @@
   <footer>
     <div class="dots" id="dots"></div>
     <div class="right">
+      <button class="btn-recargar" id="btn-imprimir">🖨 Imprimir</button>
       <button class="btn-recargar" id="btn-recargar">↻ Recargar</button>
       <button class="btn-conf" id="btn-conf">Confirmar todos</button>
       <div class="reloj num" id="reloj">--:--</div>
@@ -292,20 +293,40 @@ function detalleTextil(p){
   return p.Tela;
 }
 
-/* Estructura/Terminación/Impresión: solo aplican a productos NO backlight
-   (esos usan su propia Caja). Se ocultan los valores por defecto ("Sin
-   estructura", "Sin terminaciones", "Cara única"), igual que ya se oculta
-   "sin luces"/Traseras en 0 para los productos con caja. */
+/* Ajuste manual de precio (ver core.precios.parsear_valor_manual): un
+   ítem de Estructuras/Terminaciones puede ser en realidad un monto en
+   pesos escrito directo ("10000", "10.000", "$10.000") en vez del nombre
+   de un ítem del catálogo — no es un material real, así que no se
+   muestra acá (el panel de producción es solo para lo que hay que
+   fabricar). */
+function esValorManual(texto){
+  let t = (texto || "").trim();
+  if(t.startsWith("$")) t = t.slice(1).trim();
+  const limpio = t.replace(/[.,]/g, "");
+  return limpio.length > 0 && /^\d+$/.test(limpio);
+}
+
+/* Estructuras/Terminaciones/Impresión: solo aplican a productos NO backlight
+   (esos usan su propia Caja). Estructuras/Terminaciones son listas (modelo
+   aditivo) — se ocultan si están vacías. Se acepta también el esquema
+   viejo de un solo valor (Estructura/Terminacion, string) para OPs creadas
+   antes de este cambio, ocultando el placeholder ("Sin estructura", "Sin
+   terminaciones"), igual que ya se oculta "sin luces"/Traseras en 0 para
+   los productos con caja. */
 function detalleExtra(p){
   if(esBacklight(p)) return [];
   const items = [];
-  const estructura = (p.Estructura || "").trim();
-  if(estructura && estructura.toLowerCase() !== "sin estructura"){
-    items.push({ k: "Estructura", v: estructura });
+  const estructuras = (Array.isArray(p.Estructuras) ? p.Estructuras
+    : ((p.Estructura || "").trim().toLowerCase() !== "sin estructura" && p.Estructura ? [p.Estructura] : []))
+    .filter(n => !esValorManual(n));
+  if(estructuras.length){
+    items.push({ k: "Estructuras", v: estructuras.join(" · ") });
   }
-  const terminacion = (p.Terminacion || "").trim();
-  if(terminacion && terminacion.toLowerCase() !== "sin terminaciones"){
-    items.push({ k: "Terminación", v: terminacion });
+  const terminaciones = (Array.isArray(p.Terminaciones) ? p.Terminaciones
+    : ((p.Terminacion || "").trim().toLowerCase() !== "sin terminaciones" && p.Terminacion ? [p.Terminacion] : []))
+    .filter(n => !esValorManual(n));
+  if(terminaciones.length){
+    items.push({ k: "Terminaciones", v: terminaciones.join(" · ") });
   }
   const impresion = (p.Impresion || "").trim();
   if(impresion && impresion !== "Cara única"){
@@ -549,7 +570,24 @@ function volverAlListado(){
   window.location.href = "panel_lista.html";
 }
 
+async function imprimirOp(){
+  const op = activas()[idx];
+  if(!op) return;
+  const btn = document.getElementById("btn-imprimir");
+  const textoOriginal = btn.textContent;
+  btn.textContent = "Generando…";
+  try{
+    const ok = await window.pywebview.api.generar_html_op(op.Cotizacion);
+    if(!ok) console.error("No se pudo generar el HTML de la OP", op.Cotizacion);
+  }catch(e){
+    console.error("No se pudo generar el HTML de la OP:", e);
+  }finally{
+    btn.textContent = textoOriginal;
+  }
+}
+
 document.getElementById("btn-conf").addEventListener("click", onBoton);
+document.getElementById("btn-imprimir").addEventListener("click", imprimirOp);
 document.getElementById("btn-recargar").addEventListener("click", recargar);
 document.getElementById("btn-recargar-vacio").addEventListener("click", recargar);
 document.getElementById("btn-ok").addEventListener("click", confirmarCompletar);

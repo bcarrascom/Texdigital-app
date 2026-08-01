@@ -62,7 +62,10 @@
     background:var(--bg); border:1px solid var(--line); font-size:2.1vh; color:var(--txt-dim);
     font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; }
   .op-pill:hover{ border-color:var(--azul); color:var(--txt); }
-  .op-pill .mini{ width:1.3vh; height:1.3vh; border-radius:50%; background:var(--naranja); flex:none; }
+  .op-pill .mini{ width:1.3vh; height:1.3vh; border-radius:50%; background:var(--p-blanco); flex:none; }
+  .op-pill .mini.amarillo{ background:var(--p-amarillo); } .op-pill .mini.naranja{ background:var(--p-naranja); }
+  .op-pill .mini.rojo{ background:var(--p-rojo); } .op-pill .mini.verde{ background:var(--p-verde); }
+  .op-pill .mini.verde-osc{ background:var(--p-verde-osc); }
 
   .carga{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; }
   .gauge{ width:62%; max-width:16vh; }
@@ -223,6 +226,7 @@
   <footer>
     <button class="btn btn-sec btn-pendiente off" id="btn-pendiente" title="Marcar como pendiente">📁</button>
     <button class="btn btn-sec off" id="btn-cambiar">Cambiar entrega</button>
+    <button class="btn btn-sec off" id="btn-imprimir">🖨 Imprimir</button>
     <button class="btn btn-sec" id="btn-recargar">↻ Recargar</button>
     <button class="btn btn-completar" id="btn-completar">Completar OP</button>
     <div class="reloj num" id="reloj">--:--</div>
@@ -309,7 +313,7 @@ function renderPendientes(){
   g.innerHTML="";
   for(const op of PENDIENTES){
     const pill=document.createElement("div"); pill.className="op-pill";
-    pill.innerHTML=`<span class="mini"></span>OP ${op.Cotizacion}`;
+    pill.innerHTML=`<span class="mini ${estadoPunto(op)}"></span>OP ${op.Cotizacion}`;
     pill.addEventListener("dblclick",()=>abrirDialogoFecha([op.Cotizacion],"reactivar",op.Fecha_entrega));
     g.appendChild(pill);
   }
@@ -491,6 +495,9 @@ function actualizarBotones(){
   comp.classList.toggle("activo",hay); comp.textContent=seleccion.size>1?"Completar OPs":"Completar OP";
   document.getElementById("btn-pendiente").classList.toggle("off",!hay);
   document.getElementById("btn-cambiar").classList.toggle("off",!hay);
+  const btnImp=document.getElementById("btn-imprimir");
+  btnImp.classList.toggle("off",!hay);
+  btnImp.textContent = "🖨 " + (seleccion.size>1?"Imprimir OPs":"Imprimir");
 }
 async function abrirDetalle(num){
   try{ await window.pywebview.api.ir_a_detalle(num); }
@@ -522,6 +529,22 @@ document.getElementById("btn-pendiente").addEventListener("click",async ()=>{ if
     catch(e){ console.error("No se pudo marcar pendiente la OP", num, e); }
   }
   seleccion.clear(); await cargarDatos(); render(true);
+});
+
+// Imprimir (una o varias — cada OP seleccionada abre su propio HTML)
+document.getElementById("btn-imprimir").addEventListener("click", async ()=>{
+  if(!seleccion.size) return;
+  const btn=document.getElementById("btn-imprimir");
+  const textoOriginal=btn.textContent;
+  btn.textContent="Generando…";
+  try{
+    for(const num of seleccion){
+      try{ await window.pywebview.api.generar_html_op(num); }
+      catch(e){ console.error("No se pudo generar el HTML de la OP", num, e); }
+    }
+  } finally {
+    btn.textContent=textoOriginal;
+  }
 });
 
 // Cambiar entrega / reactivar (dialogo compartido)
