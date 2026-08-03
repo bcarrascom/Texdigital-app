@@ -633,7 +633,23 @@ class CotizacionNueva(tk.Tk):
             on_editar=self._on_editar_desde_resumen,
             on_confirmar=self._on_confirmar_resumen,
             on_cerrar=self._on_cerrar_resumen,
+            on_agregar=self._on_agregar_desde_resumen,
+            on_eliminar=self._on_eliminar_desde_resumen,
         )
+
+    def _on_agregar_desde_resumen(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self._datos.append(None)
+        self._total_productos = len(self._datos)
+        self._iteracion_actual = self._total_productos - 1
+        self._mostrar_medidas(desde_resumen=True)
+
+    def _on_eliminar_desde_resumen(self, indice: int):
+        del self._datos[indice]
+        self._total_productos = len(self._datos)
+        self._abrir_resumen()
 
     def _on_editar_desde_resumen(self, indice: int):
         self.deiconify()
