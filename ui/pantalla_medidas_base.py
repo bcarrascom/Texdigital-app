@@ -16,7 +16,6 @@ from ui.estilos import (
     COLORES,
     FUENTE_LABEL,
     FUENTE_MEDIDA,
-    FUENTE_BTN,
     FUENTE_AVISO,
     FUENTE_NAV,
     FUENTE_TITULO,
@@ -29,7 +28,8 @@ from ui.estilos import (
 class PantallaMedidasBase(tk.Frame):
 
     def __init__(self, parent, ventana_raiz, indice, total,
-                 datos_previos, datos_todos, on_siguiente, on_nav):
+                 datos_previos, datos_todos, on_siguiente, on_nav,
+                 con_despacho=False, despacho_completo=False):
         super().__init__(parent, bg=COLORES["fondo"])
         self.pack(fill="both", expand=True)
 
@@ -40,7 +40,19 @@ class PantallaMedidasBase(tk.Frame):
         self._on_siguiente   = on_siguiente
         self._on_nav         = on_nav
         self._btn_habilitado = False
-        self._omitir_activo  = False
+        # "Forzar": checkbox junto al botón Confirmar/Siguiente para
+        # permitir medidas que exceden el ancho de la tela (ver _set_btn y
+        # el _actualizar de cada cotizador). Reemplaza al viejo botón
+        # "Omitir restricción ⚠" que solo aparecía condicionalmente.
+        self._var_forzar = tk.BooleanVar(value=False)
+        # Despacho (opcional, ver ui/pantalla_despacho.py): se representa
+        # como un cuadrado más en la barra de navegación, con índice
+        # `total` (uno más allá del último producto real) — así
+        # on_nav(total) es un valor centinela inequívoco para "ir al
+        # despacho" sin necesitar un callback aparte.
+        self._con_despacho      = con_despacho
+        self._despacho_completo = despacho_completo
+        self._nav_cuadro_despacho = None
 
         if datos_previos:
             alto_ini  = str(datos_previos["alto"])
@@ -75,6 +87,14 @@ class PantallaMedidasBase(tk.Frame):
             c.pack(side="left", padx=3)
             c.bind("<Button-1>", lambda _, idx=i: self._on_nav(idx))
             self._nav_cuadros.append(c)
+
+        if self._con_despacho:
+            cd = tk.Label(nav, text="D", font=FUENTE_NAV,
+                          width=3, pady=4, relief="flat", cursor="hand2")
+            cd.pack(side="left", padx=(10, 3))
+            cd.bind("<Button-1>", lambda _: self._on_nav(self._total))
+            self._nav_cuadro_despacho = cd
+
         self._actualizar_nav()
 
         tk.Frame(self, bg=COLORES["borde"], height=1).pack(fill="x", padx=30)
@@ -131,16 +151,6 @@ class PantallaMedidasBase(tk.Frame):
                                    wraplength=500, justify="left")
         self._lbl_error.pack(anchor="w", pady=(4, 0))
 
-        self._btn_omitir = tk.Label(
-            col_izq, text="Omitir restricción ⚠",
-            font=FUENTE_BTN, bg=COLORES["secundario"],
-            fg="#FFFFFF", padx=16, pady=8, cursor="hand2",
-        )
-        self._btn_omitir.bind("<Button-1>", lambda _: self._omitir_restriccion())
-        self._btn_omitir.bind("<Enter>", lambda _: self._btn_omitir.config(bg="#C8881A"))
-        self._btn_omitir.bind("<Leave>", lambda _: self._btn_omitir.config(bg=COLORES["secundario"]))
-        # No se empaqueta hasta que haya error
-
         # Canvas a la derecha — anclado arriba (como col_izq), no centrado
         # verticalmente en "inf": con "inf" alto (pantallas con muchos
         # campos arriba), centrarlo lo empujaba hacia abajo y quedaba
@@ -150,13 +160,68 @@ class PantallaMedidasBase(tk.Frame):
                                  bg=COLORES["fondo"], highlightthickness=0)
         self._canvas.pack(side="right", anchor="n", padx=(0, 10))
 
-        # Botón siguiente
+        # Botón siguiente — sobre self (este Frame), no sobre ventana_raiz:
+        # este Frame ya ocupa toda la ventana (fill="both", expand=True,
+        # sin nada más compitiendo por espacio), así que el resultado visual
+        # es idéntico, pero al destruirse este Frame (_limpiar() en el
+        # cotizador, al cambiar de pantalla) el botón se destruye con él.
+        # Puesto directo en ventana_raiz, quedaba huérfano en cada cambio de
+        # pantalla — invisible mientras la siguiente pantalla lo tapaba en
+        # el mismo píxel, pero visible si el tamaño de ventana cambiaba (ej.
+        # al pasar a la pantalla de Despacho, más chica). El checkbox
+        # "Forzar" y el botón van juntos en un mismo contenedor (en vez de
+        # cada uno con su propio .place()) para que "a la izquierda del
+        # botón" se mantenga sin importar el ancho del texto del botón
+        # ("Confirmar ✓" vs "Siguiente →").
+        barra_inferior = tk.Frame(self, bg=COLORES["fondo"])
+        barra_inferior.place(relx=1.0, rely=1.0, anchor="se", x=-30, y=-20)
+
+        self._construir_checkbox_forzar(barra_inferior)
+
         es_ultimo = (self._indice == self._total - 1)
         self._btn_sig = _btn_label(
-            self._ventana_raiz,
+            barra_inferior,
             "Confirmar ✓" if es_ultimo else "Siguiente →"
         )
-        self._btn_sig.place(relx=1.0, rely=1.0, anchor="se", x=-30, y=-20)
+        self._btn_sig.pack(side="left", padx=(16, 0))
+
+    def _construir_checkbox_forzar(self, parent):
+        """Checkbox custom "Forzar" — permite confirmar un producto con
+        medidas que exceden el ancho de la tela (ver _set_btn y el
+        _actualizar de cada cotizador). Mismo patrón visual que el
+        checkbox de despacho en ui/pantalla_inicio.py."""
+        fila = tk.Frame(parent, bg=COLORES["fondo"])
+        fila.pack(side="left")
+
+        caja = tk.Frame(fila, width=24, height=24, bg="#FFFFFF",
+                         highlightthickness=2, highlightbackground=COLORES["borde"],
+                         cursor="hand2")
+        caja.pack_propagate(False)
+        caja.pack(side="left")
+        marca = tk.Label(caja, text="✓", font=(FUENTE_LABEL[0], 13, "bold"),
+                          bg="#FFFFFF", fg="#FFFFFF", cursor="hand2")
+        marca.place(relx=0.5, rely=0.5, anchor="center")
+
+        texto = tk.Label(fila, text="Forzar", font=FUENTE_LABEL,
+                          bg=COLORES["fondo"], fg=COLORES["texto"], cursor="hand2")
+        texto.pack(side="left", padx=(6, 0))
+
+        def _refrescar(*_):
+            if self._var_forzar.get():
+                caja.config(bg=COLORES["secundario"], highlightbackground=COLORES["secundario"])
+                marca.config(bg=COLORES["secundario"], fg="#FFFFFF")
+            else:
+                caja.config(bg="#FFFFFF", highlightbackground=COLORES["borde"])
+                marca.config(bg="#FFFFFF", fg="#FFFFFF")
+
+        def _toggle(_e=None):
+            self._var_forzar.set(not self._var_forzar.get())
+
+        for w in (caja, marca, texto):
+            w.bind("<Button-1>", _toggle)
+
+        self._var_forzar.trace_add("write", _refrescar)
+        _refrescar()
 
     def _crear_lbl_ancho_tela(self, sup):
         """Label de aviso del ancho máximo de impresión, común a ambos flujos."""
@@ -184,6 +249,9 @@ class PantallaMedidasBase(tk.Frame):
                 c.config(bg=COLORES["nav_completo"], fg="#FFFFFF")
             else:
                 c.config(bg=COLORES["nav_inactivo"], fg="#FFFFFF")
+        if self._nav_cuadro_despacho:
+            color = COLORES["nav_completo"] if self._despacho_completo else COLORES["nav_inactivo"]
+            self._nav_cuadro_despacho.config(bg=color, fg="#FFFFFF")
 
     # ── Validación ─────────────────────────────────────────────────────────────
     def _validar_numero(self, valor):
@@ -208,10 +276,6 @@ class PantallaMedidasBase(tk.Frame):
         except ValueError:
             return None
 
-    def _omitir_restriccion(self):
-        self._omitir_activo = True
-        self._actualizar()
-
     def _dibujar_vacio(self):
         self._canvas.delete("all")
         self._canvas.create_text(CANVAS_W // 2, CANVAS_H // 2,
@@ -220,9 +284,18 @@ class PantallaMedidasBase(tk.Frame):
                                  justify="center")
 
     # ── Botón ─────────────────────────────────────────────────────────────────
-    def _set_btn(self, habilitado: bool):
+    def _set_btn(self, habilitado: bool, forzado: bool = False):
+        """`forzado`=True (medidas excedentes + checkbox "Forzar" marcado)
+        pinta el botón amarillo en vez del azul normal, para que quede
+        claro que se está confirmando algo fuera de lo normal."""
         self._btn_habilitado = habilitado
-        if habilitado:
+        if habilitado and forzado:
+            color_base, color_hover = COLORES["secundario"], "#C8881A"
+            self._btn_sig.config(bg=color_base, cursor="hand2")
+            self._btn_sig.bind("<Button-1>", lambda _: self._siguiente())
+            self._btn_sig.bind("<Enter>", lambda _: self._btn_sig.config(bg=color_hover))
+            self._btn_sig.bind("<Leave>", lambda _: self._btn_sig.config(bg=color_base))
+        elif habilitado:
             self._btn_sig.config(bg=COLORES["btn_enabled"], cursor="hand2")
             self._btn_sig.bind("<Button-1>", lambda _: self._siguiente())
             self._btn_sig.bind("<Enter>",

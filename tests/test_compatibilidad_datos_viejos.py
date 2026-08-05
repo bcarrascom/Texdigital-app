@@ -192,6 +192,29 @@ class TestCompatibilidadCotizacionesViejas(unittest.TestCase):
         finally:
             ruta.unlink(missing_ok=True)
 
+    def test_generar_html_sin_despacho_no_muestra_fila_despacho(self):
+        """Cotizaciones sin la clave "Despacho" (todas las de antes de esta
+        función) no deben mostrar ninguna fila de despacho — compatibilidad
+        con todo lo guardado hasta ahora."""
+        ruta = generar_html(dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899003))
+        try:
+            html = ruta.read_text(encoding="utf-8")
+            self.assertNotIn("Despacho", html)
+        finally:
+            ruta.unlink(missing_ok=True)
+
+    def test_generar_html_con_despacho_aparece_como_fila_y_suma_al_total(self):
+        """El despacho (ver ui/pantalla_despacho.py) no es un producto — se
+        muestra como una fila sin medidas, con su monto, sumado al total."""
+        datos = dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899004, Despacho=15000)
+        ruta = generar_html(datos)
+        try:
+            html = ruta.read_text(encoding="utf-8")
+            self.assertIn("Despacho", html)
+            self.assertIn("$15.000", html)
+        finally:
+            ruta.unlink(missing_ok=True)
+
 
 class TestCompatibilidadCatalogosViejos(unittest.TestCase):
     """estructuras.json/terminaciones.json pasaron de lista de strings a
