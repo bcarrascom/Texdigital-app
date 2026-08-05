@@ -274,12 +274,18 @@ def costo_producto(
     return resultado
 
 
-def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0, **kwargs) -> dict:
+def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
+                      despacho: float = 0.0, **kwargs) -> dict:
     """
     Suma el costo de todos los productos y aplica descuento + IVA.
+    `despacho` (opcional) es un monto fijo que se suma directo al neto —
+    no es un producto (no tiene medidas, no se guarda en la lista
+    `productos`), es un cargo aparte que hoy se cobra a mano porque
+    todavía no se generan guías de despacho. Queda sujeto al mismo
+    descuento % e IVA que el resto — es un ítem más de la cotización.
     Devuelve {neto, descuento, neto_total, iva, total}. kwargs se pasan tal
     cual a costo_producto (catálogos fijos para tests, ver ahí)."""
-    neto = sum(costo_producto(p, **kwargs)["total"] for p in productos)
+    neto = sum(costo_producto(p, **kwargs)["total"] for p in productos) + (despacho or 0.0)
     descuento = neto * descuento_pct / 100
     neto_total = neto - descuento
     iva = neto_total * IVA_PORCENTAJE / 100

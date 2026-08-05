@@ -69,7 +69,10 @@ class TestPrecios(unittest.TestCase):
         # Si ni una unidad entra a lo ancho del rollo (truncado < 1), el
         # Excel NO redondea a 1 — deja el valor fraccionario tal cual
         # (ratio queda > cantidad, reflejando que hace falta más de un
-        # "paso" de rollo por cada unidad).
+        # "paso" de rollo por cada unidad). Es el mismo caso que habilita
+        # el checkbox "Forzar" (ver ui/pantalla_medidas_base.py): un Ancho
+        # mayor al ancho de tela ya cae acá solo, sin necesitar ningún
+        # ajuste especial en calcular_ml para ese caso.
         d = _producto(alto=1.0, ancho=1.5, cantidad=1)
         ratio, ml = calcular_ml(d, 1.0)  # 1.0/1.5 = 0.667, truncado = 0
         self.assertAlmostEqual(ratio, 1.5)   # cantidad(1) / 0.667
@@ -211,6 +214,33 @@ class TestPrecios(unittest.TestCase):
         self.assertAlmostEqual(totales["neto_total"], neto_total_esperado)
         self.assertAlmostEqual(totales["iva"], iva_esperado)
         self.assertAlmostEqual(totales["total"], total_esperado)
+
+    def test_7_costo_cotizacion_con_despacho(self):
+        # El despacho no es un producto (sin medidas, no va en la lista
+        # `productos`) — se suma directo al neto antes de descuento/IVA,
+        # como un ítem más de la cotización. Aún no se generan guías de
+        # despacho, así que este monto se cobra a mano.
+        no_backlight = _producto(alto=10, ancho=1, cantidad=1,
+                                  terminaciones=["Basta"])  # total 1.140
+        totales = costo_cotizacion([no_backlight], descuento_pct=0,
+                                    despacho=15000, **CATALOGOS)
+
+        neto_esperado = 1140 + 15000
+        self.assertAlmostEqual(totales["neto"], neto_esperado)
+        self.assertAlmostEqual(totales["neto_total"], neto_esperado)
+        self.assertAlmostEqual(totales["iva"], neto_esperado * 0.19)
+        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+
+    def test_8_costo_cotizacion_sin_despacho_es_compatible_con_cotizaciones_viejas(self):
+        # Sin pasar `despacho` (o pasando None/0), el comportamiento debe
+        # ser idéntico a antes de que existiera este parámetro.
+        no_backlight = _producto(alto=10, ancho=1, cantidad=1,
+                                  terminaciones=["Basta"])
+        totales_sin_kwarg = costo_cotizacion([no_backlight], descuento_pct=0, **CATALOGOS)
+        totales_con_cero  = costo_cotizacion([no_backlight], descuento_pct=0,
+                                              despacho=0.0, **CATALOGOS)
+        self.assertEqual(totales_sin_kwarg["neto"], totales_con_cero["neto"])
+        self.assertEqual(totales_sin_kwarg["neto"], 1140)
 
 
 if __name__ == "__main__":

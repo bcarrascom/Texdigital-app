@@ -62,6 +62,12 @@ class VentanaResumen(tk.Toplevel):
                     muestra un ✕ que pide confirmación antes de llamar a
                     esto (también tras destruir esta ventana). No se puede
                     eliminar si solo queda 1 producto.
+    fila_despacho   list[str] opcional (mismo largo que columnas) — una fila
+                    extra de solo lectura entre los datos y el total (ej.
+                    "Despacho" + su monto). No es clickeable ni tiene ✕ —
+                    para editarla hay que entrar por cualquier producto y
+                    usar el cuadrado "D" de la barra de navegación (ver
+                    ui/pantalla_medidas_base.py).
     """
 
     _ALTO_BASE     = _esc.px(600)
@@ -80,7 +86,8 @@ class VentanaResumen(tk.Toplevel):
                  on_confirmar,
                  on_cerrar,
                  on_agregar=None,
-                 on_eliminar=None):
+                 on_eliminar=None,
+                 fila_despacho=None):
         super().__init__()
         self.title(titulo)
         self.configure(bg=COLORES["fondo"])
@@ -97,11 +104,12 @@ class VentanaResumen(tk.Toplevel):
         self._on_cerrar      = on_cerrar
         self._on_agregar     = on_agregar
         self._on_eliminar    = on_eliminar
+        self._fila_despacho  = fila_despacho
 
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
         _construir_cabecera(self, lambda _: self._cerrar())
 
-        filas_extra = max(0, len(filas) - 2)
+        filas_extra = max(0, len(filas) - 2) + (1 if fila_despacho else 0)
         alto = self._ALTO_BASE + filas_extra * self._ALTO_POR_FILA
         _centrar(self, ancho_ventana, alto)
 
@@ -190,13 +198,27 @@ class VentanaResumen(tk.Toplevel):
                                  font=(FUENTE_TABLA[0], FUENTE_TABLA[1], "bold"),
                                  bg=COLORES["error"], fg="#FFFFFF", cursor="hand2",
                                  anchor="center", width=2, pady=6)
-                btn_x.grid(row=row, column=col_elim, padx=6, pady=6)
+                # Sin pady acá en el grid — el pady=6 ya está en el Label;
+                # duplicarlo hacía esta fila más alta que el resto (el
+                # "espaciado irregular" entre filas con ✕ y sin él).
+                btn_x.grid(row=row, column=col_elim, padx=6)
                 btn_x.bind("<Enter>", lambda _, w=btn_x: w.config(bg="#E74C3C"))
                 btn_x.bind("<Leave>", lambda _, w=btn_x: w.config(bg=COLORES["error"]))
                 btn_x.bind("<Button-1>", lambda _, idx=i: self._confirmar_eliminar(idx))
 
-        # Fila de totales — fila N+1
-        tot_row = len(self._filas) + 1
+        # Fila de despacho (opcional) — entre los datos y el total, de solo
+        # lectura: no tiene hover, no es clickeable, no tiene ✕.
+        siguiente_fila = len(self._filas) + 1
+        if self._fila_despacho:
+            for col, val in enumerate(self._fila_despacho):
+                tk.Label(tabla, text=val, font=FUENTE_TABLA_CAB,
+                         bg=COLORES["tabla_fila2"], fg=COLORES["texto"],
+                         anchor="w", padx=8, pady=6
+                         ).grid(row=siguiente_fila, column=col, sticky="ew")
+            siguiente_fila += 1
+
+        # Fila de totales
+        tot_row = siguiente_fila
         for col, val in enumerate(self._totales):
             tk.Label(tabla, text=val, font=FUENTE_TOTAL,
                      bg=COLORES["tabla_total"], fg=COLORES["acento"],

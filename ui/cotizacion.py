@@ -193,9 +193,11 @@ class _ListaAditiva(tk.Frame):
 class _PantallaMedidas(PantallaMedidasBase):
 
     def __init__(self, parent, ventana_raiz, indice, total,
-                 datos_previos, datos_todos, on_siguiente, on_nav):
+                 datos_previos, datos_todos, on_siguiente, on_nav,
+                 con_despacho=False, despacho_completo=False):
         super().__init__(parent, ventana_raiz, indice, total,
-                          datos_previos, datos_todos, on_siguiente, on_nav)
+                          datos_previos, datos_todos, on_siguiente, on_nav,
+                          con_despacho=con_despacho, despacho_completo=despacho_completo)
 
         if datos_previos:
             producto_ini      = datos_previos.get("producto", "")
@@ -233,6 +235,7 @@ class _PantallaMedidas(PantallaMedidasBase):
         self._var_cant.trace_add("write",     self._actualizar)
         self._var_impresion.trace_add("write", self._actualizar_switch_impresion)
         self._var_impresion.trace_add("write", self._actualizar_total_vivo)
+        self._var_forzar.trace_add("write", self._actualizar)
 
         self._actualizar()
         self._actualizar_switch_impresion()
@@ -400,7 +403,6 @@ class _PantallaMedidas(PantallaMedidasBase):
         if not (alto and ancho and alto > 0 and ancho > 0):
             self._lbl_rotacion.config(text="")
             self._lbl_error.config(text="")
-            self._btn_omitir.pack_forget()
             self._dibujar_vacio()
             self._set_btn(False)
             return
@@ -415,13 +417,7 @@ class _PantallaMedidas(PantallaMedidasBase):
             self._lbl_error.config(
                 text=f"⚠ El lado corto ({lado_corto:.2f} m) excede el ancho "
                      f"máximo del textil ({ancho_max:.2f} m).")
-            if not self._omitir_activo:
-                self._btn_omitir.pack(anchor="w", pady=(8, 0))
-            else:
-                self._btn_omitir.pack_forget()
         else:
-            self._omitir_activo = False
-            self._btn_omitir.pack_forget()
             self._lbl_error.config(text="")
             if ancho_max is not None and alto != ancho:
                 rotado = lado_corto == ancho
@@ -431,9 +427,14 @@ class _PantallaMedidas(PantallaMedidasBase):
             else:
                 self._lbl_rotacion.config(text="")
 
-        if error and self._omitir_activo:
+        # "Forzar" (checkbox junto al botón, ver pantalla_medidas_base.py):
+        # con medidas excedentes, calcular_ml() ya deja el ratio de UxA sin
+        # redondear cuando ancho_tela/Ancho < 1 (ver core/precios.py) — no
+        # hace falta ningún ajuste acá, ese caso ya calza solo.
+        forzado = self._var_forzar.get()
+        if error and forzado:
             self._dibujar_rect(alto, ancho, "#F0C040")
-            self._set_btn(prod_ok and tex_ok and cant is not None)
+            self._set_btn(prod_ok and tex_ok and cant is not None, forzado=True)
         elif error:
             self._dibujar_rect(alto, ancho, COLORES["error"])
             self._set_btn(False)
@@ -518,6 +519,11 @@ class CotizacionNueva(tk.Tk):
         self._desde_resumen    = False
         self._datos: list[dict] = []
         self._nombre_trabajo   = ""
+        # Despacho (opcional, ver ui/pantalla_despacho.py): todavía no se
+        # generan guías de despacho, pero igual se cobra — no es un
+        # producto, es un monto aparte que se suma al total.
+        self._con_despacho     = False
+        self._despacho_valor: float | None = None
         # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
         # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
         self._edicion           = edicion
@@ -531,6 +537,10 @@ class CotizacionNueva(tk.Tk):
             self._datos            = edicion["productos"]
             self._nombre_trabajo   = edicion["json"].get("Nombre", "")
             self._total_productos  = len(self._datos)
+            despacho_json = edicion["json"].get("Despacho")
+            if despacho_json is not None:
+                self._con_despacho   = True
+                self._despacho_valor = float(despacho_json)
             self._abrir_resumen()
         else:
             PantallaInicio(self._area, subtitulo="Cotizacion nueva",
@@ -542,11 +552,12 @@ class CotizacionNueva(tk.Tk):
             w.destroy()
         self.unbind("<Return>")
 
-    def _on_inicio_confirmado(self, cantidad: int, nombre: str):
+    def _on_inicio_confirmado(self, cantidad: int, nombre: str, con_despacho: bool):
         self._total_productos  = cantidad
         self._nombre_trabajo   = nombre
         self._datos            = [None] * cantidad
         self._iteracion_actual = 0
+        self._con_despacho     = con_despacho
         self._mostrar_medidas()
 
     def _mostrar_medidas(self, desde_resumen=False):
@@ -562,7 +573,27 @@ class CotizacionNueva(tk.Tk):
             datos_todos=self._datos,
             on_siguiente=self._on_medidas_confirmadas,
             on_nav=self._on_nav,
+            con_despacho=self._con_despacho,
+            despacho_completo=self._despacho_valor is not None,
         )
+
+    def _mostrar_despacho(self, volver_a_resumen: bool):
+        self._despacho_volver_resumen = volver_a_resumen
+        self._limpiar()
+        _centrar(self, *self.TAM_INICIO)
+        from ui.pantalla_despacho import PantallaDespacho
+        PantallaDespacho(
+            self._area, subtitulo="Cotizacion nueva",
+            valor_inicial=self._despacho_valor,
+            on_confirmar=self._on_despacho_confirmado,
+        )
+
+    def _on_despacho_confirmado(self, valor: float):
+        self._despacho_valor = valor
+        if self._despacho_volver_resumen:
+            self._abrir_resumen()
+        else:
+            self._mostrar_medidas(desde_resumen=self._desde_resumen)
 
     def _on_medidas_confirmadas(self, datos: dict):
         self._datos[self._iteracion_actual] = datos
@@ -575,10 +606,16 @@ class CotizacionNueva(tk.Tk):
         if sig < self._total_productos:
             self._iteracion_actual = sig
             self._mostrar_medidas()
+        elif self._con_despacho and self._despacho_valor is None:
+            self._mostrar_despacho(volver_a_resumen=True)
         else:
             self._abrir_resumen()
 
     def _on_nav(self, indice: int):
+        if indice == self._total_productos:
+            if self._con_despacho:
+                self._mostrar_despacho(volver_a_resumen=self._desde_resumen)
+            return
         if self._datos[indice] is not None or indice == self._iteracion_actual:
             self._iteracion_actual = indice
             self._mostrar_medidas(desde_resumen=self._desde_resumen)
@@ -616,6 +653,12 @@ class CotizacionNueva(tk.Tk):
                 _formatear_clp(costo["total"]),
             ])
 
+        fila_despacho = None
+        if self._con_despacho and self._despacho_valor is not None:
+            total_neto += self._despacho_valor
+            fila_despacho = (["Despacho"] + [""] * (len(COLS) - 2)
+                              + [_formatear_clp(self._despacho_valor)])
+
         total_ml_str = f"{round(total_ml, 2):.2f}" if alguno_con_ml else "—"
         totales = ["", "TOTAL", "", "", str(total_cant), "", "", total_ml_str,
                    "", _formatear_clp(total_neto)]
@@ -635,6 +678,7 @@ class CotizacionNueva(tk.Tk):
             on_cerrar=self._on_cerrar_resumen,
             on_agregar=self._on_agregar_desde_resumen,
             on_eliminar=self._on_eliminar_desde_resumen,
+            fila_despacho=fila_despacho,
         )
 
     def _on_agregar_desde_resumen(self):
@@ -670,6 +714,7 @@ class CotizacionNueva(tk.Tk):
             on_cerrar=None,
             subtitulo="Cotizacion nueva",
             incluir_terminaciones=False,
+            despacho=self._despacho_valor if self._con_despacho else None,
         )
 
     def _on_cerrar_resumen(self):
@@ -681,10 +726,30 @@ class CotizacionNueva(tk.Tk):
     # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
 
     def _guardar_edicion_y_volver(self):
-        from core.repositorio_cotizaciones import guardar_cotizacion, mapear_producto
+        from core.precios import costo_cotizacion
+        from core.repositorio_cotizaciones import (
+            guardar_cotizacion, mapear_producto, producto_desde_json,
+        )
 
         json_actualizado = dict(self._edicion["json"])
         json_actualizado["productos"] = [mapear_producto(d) for d in self._datos]
+        if self._con_despacho and self._despacho_valor is not None:
+            json_actualizado["Despacho"] = self._despacho_valor
+        else:
+            json_actualizado.pop("Despacho", None)
+
+        # Recalcular los totales guardados — si el despacho cambió (o
+        # cualquier producto), el JSON debe quedar consistente, no con los
+        # montos de la última vez que se exportó desde FormularioCliente.
+        productos_internos = [producto_desde_json(p) for p in json_actualizado["productos"]]
+        descuento_pct = json_actualizado.get("Descuento", 0.0) or 0.0
+        totales = costo_cotizacion(productos_internos, descuento_pct,
+                                    despacho=self._despacho_valor or 0.0)
+        json_actualizado["Neto"]      = totales["neto"]
+        json_actualizado["NetoTotal"] = totales["neto_total"]
+        json_actualizado["IVA"]       = totales["iva"]
+        json_actualizado["Total"]     = totales["total"]
+
         guardar_cotizacion(json_actualizado)
 
         self._volver_a_revisar()

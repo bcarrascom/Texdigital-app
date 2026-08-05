@@ -26,6 +26,7 @@ class PantallaInicio(tk.Frame):
         self._btn_habilitado = False
         self._var_nombre   = tk.StringVar()
         self._var_cantidad = tk.StringVar()
+        self._var_despacho = tk.BooleanVar(value=False)
         self._var_nombre.trace_add("write",   self._actualizar_btn)
         self._var_cantidad.trace_add("write", self._actualizar_btn)
         self._construir_ui()
@@ -57,12 +58,18 @@ class PantallaInicio(tk.Frame):
 
         tk.Frame(cuerpo, bg=COLORES["fondo"], height=14).pack()
 
-        # Campo: Cantidad de productos
-        tk.Label(cuerpo, text="Cantidad de productos",
+        # Cantidad de productos + Despacho van en la misma fila (el
+        # checkbox a la derecha, para no gastar una fila entera de alto).
+        fila_cantidad = tk.Frame(cuerpo, bg=COLORES["fondo"])
+        fila_cantidad.pack(anchor="w")
+
+        col_cantidad = tk.Frame(fila_cantidad, bg=COLORES["fondo"])
+        col_cantidad.pack(side="left")
+        tk.Label(col_cantidad, text="Cantidad de productos",
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w")
         vcmd = (self.register(self._validar), "%P")
-        tk.Entry(cuerpo, textvariable=self._var_cantidad,
+        tk.Entry(col_cantidad, textvariable=self._var_cantidad,
                  validate="key", validatecommand=vcmd,
                  font=FUENTE_MEDIDA, width=8,
                  relief="flat", bd=0, bg="#FFFFFF", fg=COLORES["texto"],
@@ -70,12 +77,60 @@ class PantallaInicio(tk.Frame):
                  highlightthickness=1, highlightbackground=COLORES["borde"],
                  highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=8, ipadx=8)
 
+        # Despacho: no se generan guías de despacho todavía, pero igual hay
+        # que poder cobrarlo — si se marca, después de cargar todos los
+        # productos se pide el valor del despacho antes del resumen.
+        # Checkbox custom (no tk.Checkbutton nativo — el indicador nativo
+        # queda minúsculo sin importar la fuente): un Frame de tamaño fijo
+        # en píxeles como "caja", con una ✓ que se muestra/oculta encima.
+        col_despacho = tk.Frame(fila_cantidad, bg=COLORES["fondo"])
+        col_despacho.pack(side="left", padx=(30, 0))
+        # Label vacía de la misma fuente que "Cantidad de productos", para
+        # que el checkbox quede alineado con el campo, no con su etiqueta.
+        tk.Label(col_despacho, text="", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"]).pack(anchor="w")
+        self._construir_checkbox_despacho(col_despacho)
+
         self._btn = _btn_label(cuerpo, "Comenzar →")
         self._btn.pack(anchor="e", pady=(20, 0))
 
         tk.Frame(self, bg=COLORES["fondo"]).pack(fill="both", expand=True)
 
         self.winfo_toplevel().bind("<Return>", lambda _: self._confirmar())
+
+    def _construir_checkbox_despacho(self, parent):
+        fila = tk.Frame(parent, bg=COLORES["fondo"])
+        fila.pack(anchor="w")
+
+        caja = tk.Frame(fila, width=28, height=28, bg="#FFFFFF",
+                         highlightthickness=2, highlightbackground=COLORES["borde"],
+                         cursor="hand2")
+        caja.pack_propagate(False)
+        caja.pack(side="left")
+        marca = tk.Label(caja, text="✓", font=(FUENTE_LABEL[0], 15, "bold"),
+                          bg="#FFFFFF", fg="#FFFFFF", cursor="hand2")
+        marca.place(relx=0.5, rely=0.5, anchor="center")
+
+        texto = tk.Label(fila, text="Tiene despacho", font=FUENTE_LABEL,
+                          bg=COLORES["fondo"], fg=COLORES["texto"], cursor="hand2")
+        texto.pack(side="left", padx=(10, 0))
+
+        def _refrescar(*_):
+            if self._var_despacho.get():
+                caja.config(bg=COLORES["acento"], highlightbackground=COLORES["acento"])
+                marca.config(bg=COLORES["acento"], fg="#FFFFFF")
+            else:
+                caja.config(bg="#FFFFFF", highlightbackground=COLORES["borde"])
+                marca.config(bg="#FFFFFF", fg="#FFFFFF")
+
+        def _toggle(_e=None):
+            self._var_despacho.set(not self._var_despacho.get())
+
+        for w in (caja, marca, texto):
+            w.bind("<Button-1>", _toggle)
+
+        self._var_despacho.trace_add("write", _refrescar)
+        _refrescar()
 
     def _validar(self, valor):
         return valor == "" or valor.isdigit()
@@ -105,6 +160,6 @@ class PantallaInicio(tk.Frame):
             nombre   = self._var_nombre.get().strip()
             if cantidad >= 1 and nombre:
                 self.winfo_toplevel().unbind("<Return>")
-                self._on_confirmar(cantidad, nombre)
+                self._on_confirmar(cantidad, nombre, self._var_despacho.get())
         except ValueError:
             pass

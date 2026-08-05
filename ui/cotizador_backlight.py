@@ -140,6 +140,11 @@ class CotizadorBacklight(tk.Tk):
         self._datos: list[dict] = []
         self._tela_defecto   = TELAS[0][0]
         self._nombre_trabajo = ""
+        # Despacho (opcional, ver ui/pantalla_despacho.py): todavía no se
+        # generan guías de despacho, pero igual se cobra — no es un
+        # producto, es un monto aparte que se suma al total.
+        self._con_despacho     = False
+        self._despacho_valor: float | None = None
         # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
         # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
         self._edicion         = edicion
@@ -155,6 +160,10 @@ class CotizadorBacklight(tk.Tk):
             self._total_productos  = len(self._datos)
             if self._datos:
                 self._tela_defecto = self._datos[0]["tela"]
+            despacho_json = edicion["json"].get("Despacho")
+            if despacho_json is not None:
+                self._con_despacho   = True
+                self._despacho_valor = float(despacho_json)
             self._abrir_resumen()
         else:
             self._mostrar_pantalla_cantidad()
@@ -172,11 +181,12 @@ class CotizadorBacklight(tk.Tk):
         PantallaInicio(self._area, subtitulo="Cotizador Backlight",
                        on_confirmar=self._on_cantidad_confirmada)
 
-    def _on_cantidad_confirmada(self, y: int, nombre: str):
+    def _on_cantidad_confirmada(self, y: int, nombre: str, con_despacho: bool):
         self._total_productos  = y
         self._nombre_trabajo   = nombre
         self._datos            = [None] * y
         self._iteracion_actual = 0
+        self._con_despacho     = con_despacho
         self._mostrar_medidas()
 
     def _mostrar_medidas(self, desde_resumen=False):
@@ -193,7 +203,27 @@ class CotizadorBacklight(tk.Tk):
             tela_defecto=self._tela_defecto,
             on_siguiente=self._on_medidas_confirmadas,
             on_nav=self._on_nav,
+            con_despacho=self._con_despacho,
+            despacho_completo=self._despacho_valor is not None,
         )
+
+    def _mostrar_despacho(self, volver_a_resumen: bool):
+        self._despacho_volver_resumen = volver_a_resumen
+        self._limpiar()
+        _centrar(self, *self.TAM_CANTIDAD)
+        from ui.pantalla_despacho import PantallaDespacho
+        PantallaDespacho(
+            self._area, subtitulo="Cotizador Backlight",
+            valor_inicial=self._despacho_valor,
+            on_confirmar=self._on_despacho_confirmado,
+        )
+
+    def _on_despacho_confirmado(self, valor: float):
+        self._despacho_valor = valor
+        if self._despacho_volver_resumen:
+            self._abrir_resumen()
+        else:
+            self._mostrar_medidas(desde_resumen=self._desde_resumen)
 
     def _on_medidas_confirmadas(self, datos: dict):
         self._datos[self._iteracion_actual] = datos
@@ -208,10 +238,16 @@ class CotizadorBacklight(tk.Tk):
         if sig < self._total_productos:
             self._iteracion_actual = sig
             self._mostrar_medidas()
+        elif self._con_despacho and self._despacho_valor is None:
+            self._mostrar_despacho(volver_a_resumen=True)
         else:
             self._abrir_resumen()
 
     def _on_nav(self, indice: int):
+        if indice == self._total_productos:
+            if self._con_despacho:
+                self._mostrar_despacho(volver_a_resumen=self._desde_resumen)
+            return
         if self._datos[indice] is not None or indice == self._iteracion_actual:
             self._iteracion_actual = indice
             self._mostrar_medidas(desde_resumen=self._desde_resumen)
@@ -246,6 +282,12 @@ class CotizadorBacklight(tk.Tk):
         total_m2 = round(total_m2, 4)
         totales  = ["", "TOTAL", "", str(total_cant), "", "", f"{total_m2:.4f}"]
 
+        fila_despacho = None
+        if self._con_despacho and self._despacho_valor is not None:
+            from core.precios import formatear_clp
+            fila_despacho = (["Despacho"] + [""] * (len(COLS) - 2)
+                              + [formatear_clp(self._despacho_valor)])
+
         self.withdraw()
         VentanaResumen(
             ancho_ventana=_esc.px(1600),
@@ -261,6 +303,7 @@ class CotizadorBacklight(tk.Tk):
             on_cerrar=self._on_cerrar_resumen,
             on_agregar=self._on_agregar_desde_resumen,
             on_eliminar=self._on_eliminar_desde_resumen,
+            fila_despacho=fila_despacho,
         )
 
     def _on_agregar_desde_resumen(self):
@@ -296,15 +339,33 @@ class CotizadorBacklight(tk.Tk):
             datos_productos=self._datos,
             nombre_trabajo=self._nombre_trabajo,
             on_cerrar=None,
+            despacho=self._despacho_valor if self._con_despacho else None,
         )
 
     # ── Modo edición (cotización ya guardada, viene de Revisar Cotizaciones) ──
 
     def _guardar_edicion_y_volver(self):
-        from core.repositorio_cotizaciones import guardar_cotizacion, mapear_producto
+        from core.precios import costo_cotizacion
+        from core.repositorio_cotizaciones import (
+            guardar_cotizacion, mapear_producto, producto_desde_json,
+        )
 
         json_actualizado = dict(self._edicion["json"])
         json_actualizado["productos"] = [mapear_producto(d) for d in self._datos]
+        if self._con_despacho and self._despacho_valor is not None:
+            json_actualizado["Despacho"] = self._despacho_valor
+        else:
+            json_actualizado.pop("Despacho", None)
+
+        productos_internos = [producto_desde_json(p) for p in json_actualizado["productos"]]
+        descuento_pct = json_actualizado.get("Descuento", 0.0) or 0.0
+        totales = costo_cotizacion(productos_internos, descuento_pct,
+                                    despacho=self._despacho_valor or 0.0)
+        json_actualizado["Neto"]      = totales["neto"]
+        json_actualizado["NetoTotal"] = totales["neto_total"]
+        json_actualizado["IVA"]       = totales["iva"]
+        json_actualizado["Total"]     = totales["total"]
+
         guardar_cotizacion(json_actualizado)
 
         self._volver_a_revisar()
@@ -340,9 +401,11 @@ class PantallaMedidas(PantallaMedidasBase):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, tela_defecto,
-                 on_siguiente, on_nav):
+                 on_siguiente, on_nav,
+                 con_despacho=False, despacho_completo=False):
         super().__init__(parent, ventana_raiz, indice, total,
-                          datos_previos, datos_todos, on_siguiente, on_nav)
+                          datos_previos, datos_todos, on_siguiente, on_nav,
+                          con_despacho=con_despacho, despacho_completo=despacho_completo)
 
         self._rotado = False
 
@@ -387,6 +450,7 @@ class PantallaMedidas(PantallaMedidasBase):
         self._var_alto.trace_add("write",  self._actualizar_caja)
         self._var_ancho.trace_add("write", self._actualizar_caja)
         self._var_cant.trace_add("write",  self._actualizar_caja)
+        self._var_forzar.trace_add("write", self._actualizar)
 
         self._actualizar()
         self._actualizar_caja()
@@ -645,7 +709,6 @@ class PantallaMedidas(PantallaMedidasBase):
         if not (alto and ancho and alto > 0 and ancho > 0):
             self._lbl_rotacion.config(text="")
             self._lbl_error.config(text="")
-            self._btn_omitir.pack_forget()
             self._dibujar_vacio()
             self._set_btn(False)
             return
@@ -663,20 +726,15 @@ class PantallaMedidas(PantallaMedidasBase):
             self._lbl_error.config(
                 text=f"⚠ El lado corto ({lado_corto:.2f} m) excede el ancho "
                      f"máximo de la tela ({tela[1]:.2f} m).")
-            if not self._omitir_activo:
-                self._btn_omitir.pack(anchor="w", pady=(8, 0))
-            else:
-                self._btn_omitir.pack_forget()
         else:
-            self._omitir_activo = False
-            self._btn_omitir.pack_forget()
             self._lbl_error.config(text="")
             self._lbl_rotacion.config(
                 text="↺ La impresión será rotada para ajustarse a la tela."
                 if (self._rotado and tela) else "")
 
-        if error and self._omitir_activo:
-            self._set_btn(tela is not None and cant is not None)
+        forzado = self._var_forzar.get()
+        if error and forzado:
+            self._set_btn(tela is not None and cant is not None, forzado=True)
             self._dibujar_rect(alto, ancho, "#F0C040")
         elif error:
             self._set_btn(False)
