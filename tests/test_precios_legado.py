@@ -123,6 +123,60 @@ class TestPreciosLegado(unittest.TestCase):
         self.assertEqual(costo_legado["costo_estructuras"], 5000)
         self.assertEqual(costo_aditivo["costo_estructuras"], 9000)
 
+    def test_piso_2ml_sube_impresion_de_producto_chico(self):
+        # Bandera 0,5x0,5 estilo el caso reportado por el usuario: ML real
+        # da bien por debajo de 2 (menos de un metro de tela) — se factura
+        # como si fueran 2 ML, no el ML real.
+        textiles_valores = {"TelaTest": 11000.0}
+        d = _producto(alto=0.5, ancho=0.5, cantidad=1)
+        costo = costo_producto(d, modelo="legado",
+                                textiles_valores=textiles_valores,
+                                textiles_anchos=TEXTILES_ANCHOS)
+        self.assertEqual(costo["costo_impresion"], 2 * 11000)
+
+    def test_piso_2ml_aplica_al_total_de_la_linea_no_por_unidad(self):
+        # Lectura correcta del piso: se aplica al ML YA calculado para toda
+        # la línea (que ya incluye Cantidad), no 2 ML por cada unidad. Dos
+        # unidades de un producto que en total dan menos de 2 ML se
+        # facturan como 2 ML en total, no como 2 × 2 = 4 ML.
+        textiles_valores = {"TelaTest": 1000.0}
+        d = _producto(alto=0.5, ancho=1.0, cantidad=2)  # ml real = 1.0
+        costo = costo_producto(d, modelo="legado",
+                                textiles_valores=textiles_valores,
+                                textiles_anchos=TEXTILES_ANCHOS)
+        self.assertEqual(costo["costo_impresion"], 2 * 1000)  # no 4 * 1000
+
+    def test_piso_2ml_no_afecta_ml_o_area_ni_ml_real(self):
+        # El piso solo sube lo que se COBRA — el ML real (usado para la
+        # orden de producción y las columnas informativas del resumen)
+        # sigue siendo el valor sin piso.
+        textiles_valores = {"TelaTest": 11000.0}
+        d = _producto(alto=0.5, ancho=0.5, cantidad=1)
+        costo = costo_producto(d, modelo="legado",
+                                textiles_valores=textiles_valores,
+                                textiles_anchos=TEXTILES_ANCHOS)
+        self.assertLess(costo["ml_o_area"], 2.0)
+
+    def test_piso_2ml_no_aplica_si_ya_supera_el_piso(self):
+        # Con ML por encima de 2, el piso no cambia nada.
+        textiles_valores = {"TelaTest": 1000.0}
+        d = _producto(alto=10, ancho=1, cantidad=1)  # ml real = 10
+        costo = costo_producto(d, modelo="legado",
+                                textiles_valores=textiles_valores,
+                                textiles_anchos=TEXTILES_ANCHOS)
+        self.assertEqual(costo["costo_impresion"], 10 * 1000)
+
+    def test_piso_2m2_backlight_sube_impresion_de_producto_chico(self):
+        # Mismo piso, pero en M² para Backlight (alto x ancho x cantidad).
+        from core.precios import costo_producto as _cp
+        d = {"tela": "Popelina Test", "caja": "Sin caja",
+             "alto": 0.5, "ancho": 0.5, "cantidad": 1}  # area real = 0.25
+        costo = _cp(d, modelo="legado",
+                    textiles_valores={"Popelina Test": 1000.0},
+                    textiles_anchos={"Popelina Test": 1.53})
+        self.assertEqual(costo["costo_impresion"], 2 * 1000)
+        self.assertLess(costo["ml_o_area"], 2.0)
+
     def test_catalogo_legado_completo_carga_desde_recursos(self):
         # Sin pasar catálogos fijos: debe usar core.repositorio.
         # ESTRUCTURAS_LEGADO_VALORES/TERMINACIONES_LEGADO_VALORES, cargados
