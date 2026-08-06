@@ -56,14 +56,23 @@ class TestPrecios(unittest.TestCase):
         _, ml = calcular_ml(d, TEXTILES_ANCHOS["TelaTest"])
         self.assertEqual(ml, 10)
 
-    def test_uxa_redondea_como_el_excel_no_trunca(self):
-        # Caso real reportado: Stretch (ancho tela 1.58), Ancho 0.45, Alto
-        # 1.5, Cantidad 5. 1.58/0.45=3.5111 -> Excel REDONDEA a 4, no trunca
-        # a 3 (ahí estaba el bug: truncar sobrestimaba el ML necesario).
+    def test_uxa_trunca_siempre_hacia_abajo(self):
+        # UxA son las unidades que caben físicamente a lo ancho del rollo de
+        # tela — no se puede cortar "una unidad y tanto". Stretch (ancho
+        # tela 1.58), Ancho 0.45, Alto 1.5, Cantidad 5: 1.58/0.45=3.5111,
+        # caben 3 unidades por pasada (no 4 — 3.9->3, 4.1->4, siempre hacia
+        # abajo).
         d = _producto(alto=1.5, ancho=0.45, cantidad=5)
         ratio, ml = calcular_ml(d, 1.58)
-        self.assertAlmostEqual(ratio, 1.25)
-        self.assertAlmostEqual(ml, 1.88, places=2)
+        self.assertAlmostEqual(ratio, 5 / 3)
+        self.assertAlmostEqual(ml, 2.5)
+
+    def test_uxa_trunca_un_entero_exacto_pese_al_error_de_punto_flotante(self):
+        # 1.2/0.4 matemáticamente es 3 exacto, pero en punto flotante da
+        # 2.9999999999999996 — sin tolerancia, truncar de más daría UxA=2.
+        d = _producto(alto=1, ancho=0.4, cantidad=3)
+        ratio, ml = calcular_ml(d, 1.2)
+        self.assertEqual(ratio, 1)  # UxA=3, cantidad=3 -> ratio=1, no 1.5
 
     def test_uxa_fraccionario_cuando_ancho_no_entra_ni_una_vez(self):
         # Si ni una unidad entra a lo ancho del rollo (truncado < 1), el
@@ -157,17 +166,14 @@ class TestPrecios(unittest.TestCase):
         # Terminación: valor fijo (1140) * cantidad efectiva (1*2=2), no ML
         self.assertEqual(costo["costo_terminaciones"], 2 * 1140)
 
-    def test_tiro_y_retiro_duplica_antes_de_redondear_no_despues(self):
-        # Caso real reportado: Stretch (ancho tela 1.58), Ancho 0.45, Alto
-        # 1.5, Cantidad 5, Tiro y retiro. ratio=1.25, base=1.25*1.5=1.875
-        # (exacto). El Excel duplica el valor EXACTO (1.875*2=3.75) y
-        # recién ahí redondea — no redondea 1.875->1.88 primero y después
-        # duplica (eso daría 3.76, $120 de más en la impresión: $45.120 en
-        # vez de los $45.000 reales del Excel).
+    def test_tiro_y_retiro_duplica_el_ml_completo(self):
+        # Stretch (ancho tela 1.58), Ancho 0.45, Alto 1.5, Cantidad 5, Tiro
+        # y retiro. UxA=3 (truncado), ratio=5/3, base=ratio*1.5=2.5
+        # (exacto) -> Tiro y retiro duplica ese valor ya calculado: 5.0.
         d = _producto(ancho=0.45, alto=1.5, cantidad=5, impresion="Tiro y retiro")
         ratio, ml = calcular_ml(d, 1.58)
-        self.assertAlmostEqual(ratio, 1.25)
-        self.assertEqual(ml, 3.75)  # NO 3.76
+        self.assertAlmostEqual(ratio, 5 / 3)
+        self.assertEqual(ml, 5.0)
 
     def test_cubre_alarma_reconciliacion_con_excel_real(self):
         # Cotización real (Excel adjunto): Cubre alarma, textil Stretch
