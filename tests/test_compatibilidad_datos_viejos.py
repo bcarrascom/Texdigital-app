@@ -204,7 +204,7 @@ class TestCompatibilidadCotizacionesViejas(unittest.TestCase):
             ruta.unlink(missing_ok=True)
 
     def test_generar_html_con_despacho_aparece_como_fila_y_suma_al_total(self):
-        """El despacho (ver ui/pantalla_despacho.py) no es un producto — se
+        """El despacho (ver ui/pantalla_extras.py) no es un producto — se
         muestra como una fila sin medidas, con su monto, sumado al total."""
         datos = dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899004, Despacho=15000)
         ruta = generar_html(datos)
@@ -212,6 +212,45 @@ class TestCompatibilidadCotizacionesViejas(unittest.TestCase):
             html = ruta.read_text(encoding="utf-8")
             self.assertIn("Despacho", html)
             self.assertIn("$15.000", html)
+        finally:
+            ruta.unlink(missing_ok=True)
+
+    def test_generar_html_sin_instalacion_no_muestra_fila_instalacion(self):
+        """Cotizaciones sin la clave "Instalacion" (todas las de antes de
+        esta función) no deben mostrar ninguna fila de instalación —
+        compatibilidad con todo lo guardado hasta ahora."""
+        ruta = generar_html(dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899005))
+        try:
+            html = ruta.read_text(encoding="utf-8")
+            self.assertNotIn("Instalación", html)
+        finally:
+            ruta.unlink(missing_ok=True)
+
+    def test_generar_html_con_instalacion_aparece_como_fila_y_suma_al_total(self):
+        """La instalación (ver ui/pantalla_extras.py), igual que el
+        despacho, no es un producto — se muestra como una fila sin
+        medidas, con su monto, sumado al total."""
+        datos = dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899006, Instalacion=20000)
+        ruta = generar_html(datos)
+        try:
+            html = ruta.read_text(encoding="utf-8")
+            self.assertIn("Instalación", html)
+            self.assertIn("$20.000", html)
+        finally:
+            ruta.unlink(missing_ok=True)
+
+    def test_generar_html_con_despacho_e_instalacion_muestra_ambas_filas(self):
+        """Con ambos campos activos, las dos filas aparecen y ambos montos
+        se suman al total — mismo patrón, en la misma cotización."""
+        datos = dict(OP_VIEJA_NO_BACKLIGHT, Cotizacion=899007,
+                      Despacho=15000, Instalacion=20000)
+        ruta = generar_html(datos)
+        try:
+            html = ruta.read_text(encoding="utf-8")
+            self.assertIn("Despacho", html)
+            self.assertIn("$15.000", html)
+            self.assertIn("Instalación", html)
+            self.assertIn("$20.000", html)
         finally:
             ruta.unlink(missing_ok=True)
 

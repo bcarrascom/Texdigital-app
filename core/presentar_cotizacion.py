@@ -86,15 +86,16 @@ def _fila_producto(p: dict) -> str:
       </tr>"""
 
 
-def _fila_despacho(valor: float) -> str:
-    """Fila del despacho en la tabla de productos — sin medidas ni
-    cantidad (no es un producto), solo el nombre y el monto, sumado al
-    total igual que cualquier otra fila. Se cobra a mano mientras el
-    sistema no genera guías de despacho."""
+def _fila_extra(nombre: str, valor: float) -> str:
+    """Fila de un cargo aparte (Despacho, Instalación) en la tabla de
+    productos — sin medidas ni cantidad (no es un producto), solo el
+    nombre y el monto, sumado al total igual que cualquier otra fila. Se
+    cobran a mano mientras el sistema no genera guías de despacho ni
+    detalla la instalación."""
     monto = formatear_clp(valor)
     return f"""      <tr>
         <td>
-          <div class="prod-nombre">Despacho</div>
+          <div class="prod-nombre">{nombre}</div>
         </td>
         <td></td>
         <td class="num"></td>
@@ -114,7 +115,9 @@ def generar_html(json_dict: dict) -> Path:
     productos_internos = [producto_desde_json(p) for p in productos]
     descuento_pct = json_dict.get("Descuento", 0.0) or 0.0
     despacho = json_dict.get("Despacho")
-    totales = costo_cotizacion(productos_internos, descuento_pct, despacho=despacho or 0.0)
+    instalacion = json_dict.get("Instalacion")
+    totales = costo_cotizacion(productos_internos, descuento_pct,
+                                despacho=despacho or 0.0, instalacion=instalacion or 0.0)
 
     contacto = json_dict.get("Contacto", "")
     email    = json_dict.get("Email", "")
@@ -147,7 +150,8 @@ def generar_html(json_dict: dict) -> Path:
         "{{descripcion_bloque}}": descripcion_bloque,
         "{{filas_productos}}": "\n".join(
             [_fila_producto(p) for p in productos]
-            + ([_fila_despacho(despacho)] if despacho else [])
+            + ([_fila_extra("Despacho", despacho)] if despacho else [])
+            + ([_fila_extra("Instalación", instalacion)] if instalacion else [])
         ),
         "{{fila_neto}}":       fila_neto,
         "{{fila_descuento}}":  fila_descuento,

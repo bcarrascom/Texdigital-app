@@ -26,7 +26,8 @@ class PantallaInicio(tk.Frame):
         self._btn_habilitado = False
         self._var_nombre   = tk.StringVar()
         self._var_cantidad = tk.StringVar()
-        self._var_despacho = tk.BooleanVar(value=False)
+        self._var_despacho    = tk.BooleanVar(value=False)
+        self._var_instalacion = tk.BooleanVar(value=False)
         self._var_nombre.trace_add("write",   self._actualizar_btn)
         self._var_cantidad.trace_add("write", self._actualizar_btn)
         self._construir_ui()
@@ -77,19 +78,27 @@ class PantallaInicio(tk.Frame):
                  highlightthickness=1, highlightbackground=COLORES["borde"],
                  highlightcolor=COLORES["acento"]).pack(anchor="w", ipady=8, ipadx=8)
 
-        # Despacho: no se generan guías de despacho todavía, pero igual hay
-        # que poder cobrarlo — si se marca, después de cargar todos los
-        # productos se pide el valor del despacho antes del resumen.
+        # Despacho / Instalación: todavía no se generan guías de despacho
+        # ni se detalla la instalación, pero igual hay que poder
+        # cobrarlas — si se marca alguna, después de cargar todos los
+        # productos se pide su valor (una sola ventana para ambas, ver
+        # ui/pantalla_extras.py) antes del resumen.
         # Checkbox custom (no tk.Checkbutton nativo — el indicador nativo
         # queda minúsculo sin importar la fuente): un Frame de tamaño fijo
         # en píxeles como "caja", con una ✓ que se muestra/oculta encima.
         col_despacho = tk.Frame(fila_cantidad, bg=COLORES["fondo"])
-        col_despacho.pack(side="left", padx=(30, 0))
+        col_despacho.pack(side="left", padx=(16, 0))
         # Label vacía de la misma fuente que "Cantidad de productos", para
         # que el checkbox quede alineado con el campo, no con su etiqueta.
         tk.Label(col_despacho, text="", font=FUENTE_LABEL,
                  bg=COLORES["fondo"]).pack(anchor="w")
-        self._construir_checkbox_despacho(col_despacho)
+        self._construir_checkbox(col_despacho, self._var_despacho, "Despacho")
+
+        col_instalacion = tk.Frame(fila_cantidad, bg=COLORES["fondo"])
+        col_instalacion.pack(side="left", padx=(12, 0))
+        tk.Label(col_instalacion, text="", font=FUENTE_LABEL,
+                 bg=COLORES["fondo"]).pack(anchor="w")
+        self._construir_checkbox(col_instalacion, self._var_instalacion, "Instalación")
 
         self._btn = _btn_label(cuerpo, "Comenzar →")
         self._btn.pack(anchor="e", pady=(20, 0))
@@ -98,7 +107,7 @@ class PantallaInicio(tk.Frame):
 
         self.winfo_toplevel().bind("<Return>", lambda _: self._confirmar())
 
-    def _construir_checkbox_despacho(self, parent):
+    def _construir_checkbox(self, parent, variable, texto_label):
         fila = tk.Frame(parent, bg=COLORES["fondo"])
         fila.pack(anchor="w")
 
@@ -111,12 +120,12 @@ class PantallaInicio(tk.Frame):
                           bg="#FFFFFF", fg="#FFFFFF", cursor="hand2")
         marca.place(relx=0.5, rely=0.5, anchor="center")
 
-        texto = tk.Label(fila, text="Tiene despacho", font=FUENTE_LABEL,
+        texto = tk.Label(fila, text=texto_label, font=FUENTE_LABEL,
                           bg=COLORES["fondo"], fg=COLORES["texto"], cursor="hand2")
         texto.pack(side="left", padx=(10, 0))
 
         def _refrescar(*_):
-            if self._var_despacho.get():
+            if variable.get():
                 caja.config(bg=COLORES["acento"], highlightbackground=COLORES["acento"])
                 marca.config(bg=COLORES["acento"], fg="#FFFFFF")
             else:
@@ -124,12 +133,12 @@ class PantallaInicio(tk.Frame):
                 marca.config(bg="#FFFFFF", fg="#FFFFFF")
 
         def _toggle(_e=None):
-            self._var_despacho.set(not self._var_despacho.get())
+            variable.set(not variable.get())
 
         for w in (caja, marca, texto):
             w.bind("<Button-1>", _toggle)
 
-        self._var_despacho.trace_add("write", _refrescar)
+        variable.trace_add("write", _refrescar)
         _refrescar()
 
     def _validar(self, valor):
@@ -160,6 +169,7 @@ class PantallaInicio(tk.Frame):
             nombre   = self._var_nombre.get().strip()
             if cantidad >= 1 and nombre:
                 self.winfo_toplevel().unbind("<Return>")
-                self._on_confirmar(cantidad, nombre, self._var_despacho.get())
+                self._on_confirmar(cantidad, nombre,
+                                    self._var_despacho.get(), self._var_instalacion.get())
         except ValueError:
             pass

@@ -194,10 +194,11 @@ class _PantallaMedidas(PantallaMedidasBase):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, on_siguiente, on_nav,
-                 con_despacho=False, despacho_completo=False):
+                 con_extras=False, extras_texto="", extras_completo=False):
         super().__init__(parent, ventana_raiz, indice, total,
                           datos_previos, datos_todos, on_siguiente, on_nav,
-                          con_despacho=con_despacho, despacho_completo=despacho_completo)
+                          con_extras=con_extras, extras_texto=extras_texto,
+                          extras_completo=extras_completo)
 
         if datos_previos:
             producto_ini      = datos_previos.get("producto", "")
@@ -519,11 +520,14 @@ class CotizacionNueva(tk.Tk):
         self._desde_resumen    = False
         self._datos: list[dict] = []
         self._nombre_trabajo   = ""
-        # Despacho (opcional, ver ui/pantalla_despacho.py): todavía no se
-        # generan guías de despacho, pero igual se cobra — no es un
-        # producto, es un monto aparte que se suma al total.
+        # Despacho / Instalación (opcionales, ver ui/pantalla_extras.py):
+        # todavía no se generan guías de despacho ni se detalla la
+        # instalación, pero igual se cobran — no son productos, son montos
+        # aparte que se suman al total.
         self._con_despacho     = False
         self._despacho_valor: float | None = None
+        self._con_instalacion  = False
+        self._instalacion_valor: float | None = None
         # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
         # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
         self._edicion           = edicion
@@ -541,6 +545,10 @@ class CotizacionNueva(tk.Tk):
             if despacho_json is not None:
                 self._con_despacho   = True
                 self._despacho_valor = float(despacho_json)
+            instalacion_json = edicion["json"].get("Instalacion")
+            if instalacion_json is not None:
+                self._con_instalacion  = True
+                self._instalacion_valor = float(instalacion_json)
             self._abrir_resumen()
         else:
             PantallaInicio(self._area, subtitulo="Cotizacion nueva",
@@ -552,13 +560,30 @@ class CotizacionNueva(tk.Tk):
             w.destroy()
         self.unbind("<Return>")
 
-    def _on_inicio_confirmado(self, cantidad: int, nombre: str, con_despacho: bool):
+    def _on_inicio_confirmado(self, cantidad: int, nombre: str,
+                               con_despacho: bool, con_instalacion: bool):
         self._total_productos  = cantidad
         self._nombre_trabajo   = nombre
         self._datos            = [None] * cantidad
         self._iteracion_actual = 0
         self._con_despacho     = con_despacho
+        self._con_instalacion  = con_instalacion
         self._mostrar_medidas()
+
+    def _extras_texto(self) -> str:
+        partes = []
+        if self._con_despacho:
+            partes.append("D")
+        if self._con_instalacion:
+            partes.append("I")
+        return "/".join(partes)
+
+    def _extras_completo(self) -> bool:
+        if self._con_despacho and self._despacho_valor is None:
+            return False
+        if self._con_instalacion and self._instalacion_valor is None:
+            return False
+        return True
 
     def _mostrar_medidas(self, desde_resumen=False):
         self._desde_resumen = desde_resumen
@@ -573,24 +598,31 @@ class CotizacionNueva(tk.Tk):
             datos_todos=self._datos,
             on_siguiente=self._on_medidas_confirmadas,
             on_nav=self._on_nav,
-            con_despacho=self._con_despacho,
-            despacho_completo=self._despacho_valor is not None,
+            con_extras=self._con_despacho or self._con_instalacion,
+            extras_texto=self._extras_texto(),
+            extras_completo=self._extras_completo(),
         )
 
-    def _mostrar_despacho(self, volver_a_resumen: bool):
-        self._despacho_volver_resumen = volver_a_resumen
+    def _mostrar_extras(self, volver_a_resumen: bool):
+        self._extras_volver_resumen = volver_a_resumen
         self._limpiar()
         _centrar(self, *self.TAM_INICIO)
-        from ui.pantalla_despacho import PantallaDespacho
-        PantallaDespacho(
+        from ui.pantalla_extras import PantallaExtras
+        PantallaExtras(
             self._area, subtitulo="Cotizacion nueva",
-            valor_inicial=self._despacho_valor,
-            on_confirmar=self._on_despacho_confirmado,
+            mostrar_despacho=self._con_despacho,
+            valor_despacho_inicial=self._despacho_valor,
+            mostrar_instalacion=self._con_instalacion,
+            valor_instalacion_inicial=self._instalacion_valor,
+            on_confirmar=self._on_extras_confirmado,
         )
 
-    def _on_despacho_confirmado(self, valor: float):
-        self._despacho_valor = valor
-        if self._despacho_volver_resumen:
+    def _on_extras_confirmado(self, valor_despacho, valor_instalacion):
+        if self._con_despacho:
+            self._despacho_valor = valor_despacho
+        if self._con_instalacion:
+            self._instalacion_valor = valor_instalacion
+        if self._extras_volver_resumen:
             self._abrir_resumen()
         else:
             self._mostrar_medidas(desde_resumen=self._desde_resumen)
@@ -606,15 +638,15 @@ class CotizacionNueva(tk.Tk):
         if sig < self._total_productos:
             self._iteracion_actual = sig
             self._mostrar_medidas()
-        elif self._con_despacho and self._despacho_valor is None:
-            self._mostrar_despacho(volver_a_resumen=True)
+        elif not self._extras_completo():
+            self._mostrar_extras(volver_a_resumen=True)
         else:
             self._abrir_resumen()
 
     def _on_nav(self, indice: int):
         if indice == self._total_productos:
-            if self._con_despacho:
-                self._mostrar_despacho(volver_a_resumen=self._desde_resumen)
+            if self._con_despacho or self._con_instalacion:
+                self._mostrar_extras(volver_a_resumen=self._desde_resumen)
             return
         if self._datos[indice] is not None or indice == self._iteracion_actual:
             self._iteracion_actual = indice
@@ -653,11 +685,15 @@ class CotizacionNueva(tk.Tk):
                 _formatear_clp(costo["total"]),
             ])
 
-        fila_despacho = None
+        filas_extra = []
         if self._con_despacho and self._despacho_valor is not None:
             total_neto += self._despacho_valor
-            fila_despacho = (["Despacho"] + [""] * (len(COLS) - 2)
-                              + [_formatear_clp(self._despacho_valor)])
+            filas_extra.append(["Despacho"] + [""] * (len(COLS) - 2)
+                                + [_formatear_clp(self._despacho_valor)])
+        if self._con_instalacion and self._instalacion_valor is not None:
+            total_neto += self._instalacion_valor
+            filas_extra.append(["Instalación"] + [""] * (len(COLS) - 2)
+                                + [_formatear_clp(self._instalacion_valor)])
 
         total_ml_str = f"{round(total_ml, 2):.2f}" if alguno_con_ml else "—"
         totales = ["", "TOTAL", "", "", str(total_cant), "", "", total_ml_str,
@@ -678,7 +714,7 @@ class CotizacionNueva(tk.Tk):
             on_cerrar=self._on_cerrar_resumen,
             on_agregar=self._on_agregar_desde_resumen,
             on_eliminar=self._on_eliminar_desde_resumen,
-            fila_despacho=fila_despacho,
+            filas_extra=filas_extra,
         )
 
     def _on_agregar_desde_resumen(self):
@@ -715,6 +751,7 @@ class CotizacionNueva(tk.Tk):
             subtitulo="Cotizacion nueva",
             incluir_terminaciones=False,
             despacho=self._despacho_valor if self._con_despacho else None,
+            instalacion=self._instalacion_valor if self._con_instalacion else None,
         )
 
     def _on_cerrar_resumen(self):
@@ -737,14 +774,20 @@ class CotizacionNueva(tk.Tk):
             json_actualizado["Despacho"] = self._despacho_valor
         else:
             json_actualizado.pop("Despacho", None)
+        if self._con_instalacion and self._instalacion_valor is not None:
+            json_actualizado["Instalacion"] = self._instalacion_valor
+        else:
+            json_actualizado.pop("Instalacion", None)
 
-        # Recalcular los totales guardados — si el despacho cambió (o
-        # cualquier producto), el JSON debe quedar consistente, no con los
-        # montos de la última vez que se exportó desde FormularioCliente.
+        # Recalcular los totales guardados — si el despacho/instalación
+        # cambió (o cualquier producto), el JSON debe quedar consistente,
+        # no con los montos de la última vez que se exportó desde
+        # FormularioCliente.
         productos_internos = [producto_desde_json(p) for p in json_actualizado["productos"]]
         descuento_pct = json_actualizado.get("Descuento", 0.0) or 0.0
         totales = costo_cotizacion(productos_internos, descuento_pct,
-                                    despacho=self._despacho_valor or 0.0)
+                                    despacho=self._despacho_valor or 0.0,
+                                    instalacion=self._instalacion_valor or 0.0)
         json_actualizado["Neto"]      = totales["neto"]
         json_actualizado["NetoTotal"] = totales["neto_total"]
         json_actualizado["IVA"]       = totales["iva"]
