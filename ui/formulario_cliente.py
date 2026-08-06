@@ -263,7 +263,8 @@ class FormularioCliente(tk.Toplevel):
                  nombre_trabajo: str, on_cerrar=None,
                  subtitulo="Cotizador Backlight",
                  incluir_terminaciones=True,
-                 despacho: float | None = None):
+                 despacho: float | None = None,
+                 instalacion: float | None = None):
         super().__init__(parent)
         self.title("Datos del cliente")
         self.configure(bg=COLORES["fondo"])
@@ -274,10 +275,12 @@ class FormularioCliente(tk.Toplevel):
         self._on_cerrar             = on_cerrar
         self._subtitulo             = subtitulo
         self._incluir_terminaciones = incluir_terminaciones
-        # Despacho (opcional, ver ui/pantalla_despacho.py): no es un
-        # producto, es un monto fijo aparte que se suma al total — todavía
-        # no se generan guías de despacho pero igual hay que cobrarlo.
+        # Despacho / Instalación (opcionales, ver ui/pantalla_extras.py): no
+        # son productos, son montos fijos aparte que se suman al total —
+        # todavía no se generan guías de despacho ni se detalla la
+        # instalación, pero igual hay que cobrarlos.
         self._despacho               = despacho
+        self._instalacion            = instalacion
         self._clientes          = cargar_clientes()
         self._nombres_empresas  = [c["empresa"] for c in self._clientes]
         self._contactos         = cargar_contactos()
@@ -819,7 +822,8 @@ class FormularioCliente(tk.Toplevel):
                 descuento_val = 0.0
 
             totales = costo_cotizacion(self._datos_productos, descuento_val,
-                                        despacho=self._despacho or 0.0)
+                                        despacho=self._despacho or 0.0,
+                                        instalacion=self._instalacion or 0.0)
 
             json_dict = {
                 "Cotizacion":       int(datos_cliente["cotizacion"]),
@@ -841,6 +845,8 @@ class FormularioCliente(tk.Toplevel):
             }
             if self._despacho is not None:
                 json_dict["Despacho"] = self._despacho
+            if self._instalacion is not None:
+                json_dict["Instalacion"] = self._instalacion
             guardar_cotizacion(json_dict)
 
             if abrir_html:

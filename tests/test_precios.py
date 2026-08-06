@@ -242,6 +242,42 @@ class TestPrecios(unittest.TestCase):
         self.assertEqual(totales_sin_kwarg["neto"], totales_con_cero["neto"])
         self.assertEqual(totales_sin_kwarg["neto"], 1140)
 
+    def test_9_costo_cotizacion_con_instalacion(self):
+        # La instalación, igual que el despacho, no es un producto — se
+        # suma directo al neto antes de descuento/IVA.
+        no_backlight = _producto(alto=10, ancho=1, cantidad=1,
+                                  terminaciones=["Basta"])  # total 1.140
+        totales = costo_cotizacion([no_backlight], descuento_pct=0,
+                                    instalacion=20000, **CATALOGOS)
+
+        neto_esperado = 1140 + 20000
+        self.assertAlmostEqual(totales["neto"], neto_esperado)
+        self.assertAlmostEqual(totales["neto_total"], neto_esperado)
+        self.assertAlmostEqual(totales["iva"], neto_esperado * 0.19)
+        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+
+    def test_10_costo_cotizacion_con_despacho_e_instalacion(self):
+        # Ambos son montos aparte, se suman los dos al mismo neto.
+        no_backlight = _producto(alto=10, ancho=1, cantidad=1,
+                                  terminaciones=["Basta"])  # total 1.140
+        totales = costo_cotizacion([no_backlight], descuento_pct=0,
+                                    despacho=15000, instalacion=20000, **CATALOGOS)
+
+        neto_esperado = 1140 + 15000 + 20000
+        self.assertAlmostEqual(totales["neto"], neto_esperado)
+        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+
+    def test_11_costo_cotizacion_sin_instalacion_es_compatible_con_cotizaciones_viejas(self):
+        # Sin pasar `instalacion` (o pasando None/0), el comportamiento debe
+        # ser idéntico a antes de que existiera este parámetro.
+        no_backlight = _producto(alto=10, ancho=1, cantidad=1,
+                                  terminaciones=["Basta"])
+        totales_sin_kwarg = costo_cotizacion([no_backlight], descuento_pct=0, **CATALOGOS)
+        totales_con_cero  = costo_cotizacion([no_backlight], descuento_pct=0,
+                                              instalacion=0.0, **CATALOGOS)
+        self.assertEqual(totales_sin_kwarg["neto"], totales_con_cero["neto"])
+        self.assertEqual(totales_sin_kwarg["neto"], 1140)
+
 
 if __name__ == "__main__":
     unittest.main()

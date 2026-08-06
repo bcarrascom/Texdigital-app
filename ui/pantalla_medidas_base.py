@@ -29,7 +29,7 @@ class PantallaMedidasBase(tk.Frame):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, on_siguiente, on_nav,
-                 con_despacho=False, despacho_completo=False):
+                 con_extras=False, extras_texto="", extras_completo=False):
         super().__init__(parent, bg=COLORES["fondo"])
         self.pack(fill="both", expand=True)
 
@@ -45,14 +45,18 @@ class PantallaMedidasBase(tk.Frame):
         # el _actualizar de cada cotizador). Reemplaza al viejo botón
         # "Omitir restricción ⚠" que solo aparecía condicionalmente.
         self._var_forzar = tk.BooleanVar(value=False)
-        # Despacho (opcional, ver ui/pantalla_despacho.py): se representa
-        # como un cuadrado más en la barra de navegación, con índice
-        # `total` (uno más allá del último producto real) — así
-        # on_nav(total) es un valor centinela inequívoco para "ir al
-        # despacho" sin necesitar un callback aparte.
-        self._con_despacho      = con_despacho
-        self._despacho_completo = despacho_completo
-        self._nav_cuadro_despacho = None
+        # Despacho/Instalación (opcionales, ver ui/pantalla_extras.py): se
+        # representan como UN cuadrado más en la barra de navegación (con
+        # índice `total`, uno más allá del último producto real — así
+        # on_nav(total) es un valor centinela inequívoco para "ir a
+        # despacho/instalación" sin necesitar un callback aparte), visible
+        # si al menos uno de los dos está activo. `extras_texto` es lo que
+        # muestra el cuadrado ("D", "I" o "D/I" según cuál esté activo —
+        # decidido por el cotizador, no acá).
+        self._con_extras      = con_extras
+        self._extras_texto    = extras_texto
+        self._extras_completo = extras_completo
+        self._nav_cuadro_extras = None
 
         if datos_previos:
             alto_ini  = str(datos_previos["alto"])
@@ -88,12 +92,12 @@ class PantallaMedidasBase(tk.Frame):
             c.bind("<Button-1>", lambda _, idx=i: self._on_nav(idx))
             self._nav_cuadros.append(c)
 
-        if self._con_despacho:
-            cd = tk.Label(nav, text="D", font=FUENTE_NAV,
+        if self._con_extras:
+            ce = tk.Label(nav, text=self._extras_texto, font=FUENTE_NAV,
                           width=3, pady=4, relief="flat", cursor="hand2")
-            cd.pack(side="left", padx=(10, 3))
-            cd.bind("<Button-1>", lambda _: self._on_nav(self._total))
-            self._nav_cuadro_despacho = cd
+            ce.pack(side="left", padx=(10, 3))
+            ce.bind("<Button-1>", lambda _: self._on_nav(self._total))
+            self._nav_cuadro_extras = ce
 
         self._actualizar_nav()
 
@@ -168,7 +172,7 @@ class PantallaMedidasBase(tk.Frame):
         # Puesto directo en ventana_raiz, quedaba huérfano en cada cambio de
         # pantalla — invisible mientras la siguiente pantalla lo tapaba en
         # el mismo píxel, pero visible si el tamaño de ventana cambiaba (ej.
-        # al pasar a la pantalla de Despacho, más chica). El checkbox
+        # al pasar a la pantalla de Despacho/Instalación, más chica). El checkbox
         # "Forzar" y el botón van juntos en un mismo contenedor (en vez de
         # cada uno con su propio .place()) para que "a la izquierda del
         # botón" se mantenga sin importar el ancho del texto del botón
@@ -249,9 +253,9 @@ class PantallaMedidasBase(tk.Frame):
                 c.config(bg=COLORES["nav_completo"], fg="#FFFFFF")
             else:
                 c.config(bg=COLORES["nav_inactivo"], fg="#FFFFFF")
-        if self._nav_cuadro_despacho:
-            color = COLORES["nav_completo"] if self._despacho_completo else COLORES["nav_inactivo"]
-            self._nav_cuadro_despacho.config(bg=color, fg="#FFFFFF")
+        if self._nav_cuadro_extras:
+            color = COLORES["nav_completo"] if self._extras_completo else COLORES["nav_inactivo"]
+            self._nav_cuadro_extras.config(bg=color, fg="#FFFFFF")
 
     # ── Validación ─────────────────────────────────────────────────────────────
     def _validar_numero(self, valor):

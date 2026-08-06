@@ -62,11 +62,12 @@ class VentanaResumen(tk.Toplevel):
                     muestra un ✕ que pide confirmación antes de llamar a
                     esto (también tras destruir esta ventana). No se puede
                     eliminar si solo queda 1 producto.
-    fila_despacho   list[str] opcional (mismo largo que columnas) — una fila
-                    extra de solo lectura entre los datos y el total (ej.
-                    "Despacho" + su monto). No es clickeable ni tiene ✕ —
-                    para editarla hay que entrar por cualquier producto y
-                    usar el cuadrado "D" de la barra de navegación (ver
+    filas_extra     list[list[str]] opcional (cada una del mismo largo que
+                    columnas) — filas extra de solo lectura entre los datos
+                    y el total (ej. "Despacho" y/o "Instalación" + su
+                    monto). No son clickeables ni tienen ✕ — para editarlas
+                    hay que entrar por cualquier producto y usar el
+                    cuadrado de la barra de navegación (ver
                     ui/pantalla_medidas_base.py).
     """
 
@@ -87,7 +88,7 @@ class VentanaResumen(tk.Toplevel):
                  on_cerrar,
                  on_agregar=None,
                  on_eliminar=None,
-                 fila_despacho=None):
+                 filas_extra=None):
         super().__init__()
         self.title(titulo)
         self.configure(bg=COLORES["fondo"])
@@ -104,13 +105,13 @@ class VentanaResumen(tk.Toplevel):
         self._on_cerrar      = on_cerrar
         self._on_agregar     = on_agregar
         self._on_eliminar    = on_eliminar
-        self._fila_despacho  = fila_despacho
+        self._filas_extra    = filas_extra or []
 
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
         _construir_cabecera(self, lambda _: self._cerrar())
 
-        filas_extra = max(0, len(filas) - 2) + (1 if fila_despacho else 0)
-        alto = self._ALTO_BASE + filas_extra * self._ALTO_POR_FILA
+        n_filas_extra = max(0, len(filas) - 2) + len(self._filas_extra)
+        alto = self._ALTO_BASE + n_filas_extra * self._ALTO_POR_FILA
         _centrar(self, ancho_ventana, alto)
 
         self.lift()
@@ -206,11 +207,12 @@ class VentanaResumen(tk.Toplevel):
                 btn_x.bind("<Leave>", lambda _, w=btn_x: w.config(bg=COLORES["error"]))
                 btn_x.bind("<Button-1>", lambda _, idx=i: self._confirmar_eliminar(idx))
 
-        # Fila de despacho (opcional) — entre los datos y el total, de solo
-        # lectura: no tiene hover, no es clickeable, no tiene ✕.
+        # Filas extra (Despacho / Instalación, opcionales) — entre los
+        # datos y el total, de solo lectura: no tienen hover, no son
+        # clickeables, no tienen ✕.
         siguiente_fila = len(self._filas) + 1
-        if self._fila_despacho:
-            for col, val in enumerate(self._fila_despacho):
+        for fila_extra in self._filas_extra:
+            for col, val in enumerate(fila_extra):
                 tk.Label(tabla, text=val, font=FUENTE_TABLA_CAB,
                          bg=COLORES["tabla_fila2"], fg=COLORES["texto"],
                          anchor="w", padx=8, pady=6
