@@ -31,6 +31,22 @@ producto):
     ML. No incluye el costo de los materiales de la caja (perfiles/luces/
     fuentes de poder) — esos catálogos no tienen precio todavía; queda para
     una entrega futura.
+
+Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
+  cada producto (una línea del cotizador, ya con su Cantidad aplicada — no
+  cada unidad por separado) se factura sobre un mínimo de 2 ML (no-backlight)
+  o 2 M² (Backlight). Si el ML/M² real de esa línea completa da menos de 2,
+  se factura como si fueran exactamente 2 — NO se aplica el piso a cada
+  unidad y después se multiplica por Cantidad (eso sobrestimaría e
+  producto con Cantidad > 1: 2 unidades de 0.5 ML cada una no son "2 × 2 ML
+  = 4 ML", son "1 ML real, que como está bajo el piso, se cobra como 2 ML").
+  Este piso SOLO afecta el costo de impresión (y, en el modelo "aditivo",
+  las estructuras valorML — ambas se calculan a partir del mismo ML) — el
+  ML real (sin piso) se sigue usando tal cual para todo lo que no es plata:
+  calcular_ml() en core/presentar_op.py (orden de producción — ahí importa
+  cuánta tela se corta de verdad, no cuánto se cobra) y las columnas
+  informativas "ML imp."/"M² imp." de la ventana de resumen (ui/cotizacion.py,
+  ui/cotizador_backlight.py) NO pasan por este piso.
 """
 
 import math
@@ -45,6 +61,18 @@ from core.repositorio import (
 )
 
 IVA_PORCENTAJE = 19
+
+# Ver docstring del módulo ("Piso mínimo de facturación") — mínimo de ML/M²
+# facturado por línea de producto (ya con Cantidad aplicada), no por unidad.
+ML_MINIMO_POR_PRODUCTO = 2.0
+M2_MINIMO_POR_PRODUCTO = 2.0
+
+
+def _con_piso(valor: float, piso: float) -> float:
+    """Sube `valor` a `piso` si queda por debajo — pero solo si `valor` ya
+    es positivo (0 = todavía no hay medidas completas o el textil no está
+    en el catálogo, no es un caso de "monto chico" que corresponda subir)."""
+    return piso if 0 < valor < piso else valor
 
 
 def formatear_clp(valor: float) -> str:
@@ -190,8 +218,9 @@ def costo_producto(
 
     if "tela" in d:
         area = d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad
+        area_facturable = _con_piso(area, M2_MINIMO_POR_PRODUCTO)
         valor_tela = textiles_valores.get(d.get("tela", ""), 0.0)
-        costo_impresion = area * valor_tela
+        costo_impresion = area_facturable * valor_tela
         resultado = {
             "ml_o_area":          area,
             "costo_impresion":    costo_impresion,
@@ -205,9 +234,10 @@ def costo_producto(
         ancho_tela = textiles_anchos.get(d.get("textil", ""))
         _, ml = calcular_ml(d, ancho_tela)
         ml = ml or 0.0
+        ml_facturable = _con_piso(ml, ML_MINIMO_POR_PRODUCTO)
 
         valor_tela = textiles_valores.get(d.get("textil", ""), 0.0)
-        costo_impresion = ml * valor_tela
+        costo_impresion = ml_facturable * valor_tela
 
         cant_efectiva = cantidad_efectiva(d)
 
@@ -252,7 +282,7 @@ def costo_producto(
                 if not valores:
                     detalle_estructuras[nombre] = 0.0
                 elif "valorML" in valores:
-                    detalle_estructuras[nombre] = ml * valores["valorML"]
+                    detalle_estructuras[nombre] = ml_facturable * valores["valorML"]
                 elif "valorUNIT" in valores:
                     detalle_estructuras[nombre] = cant_efectiva * valores["valorUNIT"]
                 else:
