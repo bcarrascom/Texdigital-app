@@ -69,6 +69,16 @@ class VentanaResumen(tk.Toplevel):
                     hay que entrar por cualquier producto y usar el
                     cuadrado de la barra de navegación (ver
                     ui/pantalla_medidas_base.py).
+    on_toggle_despacho    Callback() opcional — si se pasa, aparece un
+                    checkbox "Despacho" que lo activa/desactiva (se llama
+                    tras destruir esta ventana, mismo patrón que on_editar;
+                    quien lo recibe decide si activarlo o desactivarlo
+                    según su propio estado). Pensado para editar una
+                    cotización ya guardada (agregar o quitar Despacho sin
+                    tener que recrearla desde cero).
+    despacho_activo bool — estado actual del checkbox de Despacho.
+    on_toggle_instalacion  Igual que on_toggle_despacho, para Instalación.
+    instalacion_activo     Igual que despacho_activo, para Instalación.
     """
 
     _ALTO_BASE     = _esc.px(600)
@@ -88,7 +98,11 @@ class VentanaResumen(tk.Toplevel):
                  on_cerrar,
                  on_agregar=None,
                  on_eliminar=None,
-                 filas_extra=None):
+                 filas_extra=None,
+                 on_toggle_despacho=None,
+                 despacho_activo=False,
+                 on_toggle_instalacion=None,
+                 instalacion_activo=False):
         super().__init__()
         self.title(titulo)
         self.configure(bg=COLORES["fondo"])
@@ -106,11 +120,17 @@ class VentanaResumen(tk.Toplevel):
         self._on_agregar     = on_agregar
         self._on_eliminar    = on_eliminar
         self._filas_extra    = filas_extra or []
+        self._on_toggle_despacho    = on_toggle_despacho
+        self._despacho_activo       = despacho_activo
+        self._on_toggle_instalacion = on_toggle_instalacion
+        self._instalacion_activo    = instalacion_activo
 
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
         _construir_cabecera(self, lambda _: self._cerrar())
 
         n_filas_extra = max(0, len(filas) - 2) + len(self._filas_extra)
+        if self._on_toggle_despacho or self._on_toggle_instalacion:
+            n_filas_extra += 1
         alto = self._ALTO_BASE + n_filas_extra * self._ALTO_POR_FILA
         _centrar(self, ancho_ventana, alto)
 
@@ -136,6 +156,22 @@ class VentanaResumen(tk.Toplevel):
         tk.Label(cuerpo, text="Haz clic en una fila para editarla.",
                  font=FUENTE_LABEL, bg=COLORES["fondo"],
                  fg=COLORES["texto_suave"]).pack(anchor="w", pady=(0, 12))
+
+        # Checkboxes de Despacho/Instalación (opcionales — solo al editar
+        # una cotización ya guardada, ver on_toggle_despacho/instalacion en
+        # el docstring). Mismo patrón visual que ui/pantalla_inicio.py.
+        if self._on_toggle_despacho or self._on_toggle_instalacion:
+            fila_extras = tk.Frame(cuerpo, bg=COLORES["fondo"])
+            fila_extras.pack(anchor="w", pady=(0, 12))
+            if self._on_toggle_despacho:
+                self._construir_checkbox_extra(
+                    fila_extras, "Despacho", self._despacho_activo,
+                    self._on_toggle_despacho)
+            if self._on_toggle_instalacion:
+                self._construir_checkbox_extra(
+                    fila_extras, "Instalación", self._instalacion_activo,
+                    self._on_toggle_instalacion,
+                    padx=(20, 0) if self._on_toggle_despacho else (0, 0))
 
         # ── Tabla ─────────────────────────────────────────────────────────────
         # Un único frame con grid compartido garantiza que todas las filas
@@ -245,6 +281,37 @@ class VentanaResumen(tk.Toplevel):
         btn_conf.bind("<Button-1>", lambda _: self._confirmar())
         btn_conf.bind("<Enter>", lambda _: btn_conf.config(bg=COLORES["btn_en_hover"]))
         btn_conf.bind("<Leave>", lambda _: btn_conf.config(bg=COLORES["btn_enabled"]))
+
+    def _construir_checkbox_extra(self, parent, texto_label, activo, on_toggle, padx=(0, 0)):
+        """Checkbox custom para Despacho/Instalación — sin tk.BooleanVar
+        propio: el estado (`activo`) lo controla el cotizador, no esta
+        ventana (que se destruye y se reconstruye entera cada vez que algo
+        cambia, igual que el resto de VentanaResumen)."""
+        fila = tk.Frame(parent, bg=COLORES["fondo"])
+        fila.pack(side="left", padx=padx)
+
+        color_caja = COLORES["acento"] if activo else "#FFFFFF"
+        color_borde = COLORES["acento"] if activo else COLORES["borde"]
+        caja = tk.Frame(fila, width=24, height=24, bg=color_caja,
+                         highlightthickness=2, highlightbackground=color_borde,
+                         cursor="hand2")
+        caja.pack_propagate(False)
+        caja.pack(side="left")
+        marca = tk.Label(caja, text="✓", font=(FUENTE_LABEL[0], 13, "bold"),
+                          bg=color_caja, fg="#FFFFFF" if activo else color_caja,
+                          cursor="hand2")
+        marca.place(relx=0.5, rely=0.5, anchor="center")
+
+        texto = tk.Label(fila, text=texto_label, font=FUENTE_LABEL,
+                          bg=COLORES["fondo"], fg=COLORES["texto"], cursor="hand2")
+        texto.pack(side="left", padx=(8, 0))
+
+        def _click(_e=None):
+            self.destroy()
+            on_toggle()
+
+        for w in (caja, marca, texto):
+            w.bind("<Button-1>", _click)
 
     # ── Eliminar (con confirmación) ─────────────────────────────────────────────
 
