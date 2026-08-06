@@ -49,8 +49,6 @@ Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
   ui/cotizador_backlight.py) NO pasan por este piso.
 """
 
-import math
-
 from core.repositorio import (
     TEXTILES_ANCHOS,
     TEXTILES_VALORES,
@@ -80,28 +78,17 @@ def formatear_clp(valor: float) -> str:
     return "$" + f"{round(valor):,}".replace(",", ".")
 
 
-def _redondear_excel(x: float) -> int:
-    """Redondeo estilo Excel (mitad hacia arriba): 3.5 -> 4. El round()
-    nativo de Python usa redondeo bancario (mitad al par más cercano:
-    3.5 -> 4 pero 2.5 -> 2), que no calza con el Excel original."""
-    return math.floor(x + 0.5)
-
-
 def calcular_ml(d: dict, ancho_tela: float | None) -> tuple[float | None, float | None]:
     """
-    Calcula Ratio y ML impresos para un producto no-backlight. Traducción
-    literal de la fórmula del Excel original:
-        =SI(ESNUMERO([@Ancho]),
-            SI(REDONDEAR.MENOS([@[Ancho Tela]]/[@Ancho],0)<1,
-                [@[Ancho Tela]]/[@Ancho],
-                REDONDEAR([@[Ancho Tela]]/[@Ancho],0)),
-            "")
-    O sea:
-        UxA   = ancho_tela / ancho_producto, SIN redondear, si el truncado
-                da menos de 1 (para no terminar dividiendo por 0 más abajo)
-              = REDONDEADO al entero más cercano en cualquier otro caso
-                (NO truncado/floor — ahí estaba el bug: 1.58/0.45=3.511
-                truncaba a 3, pero el Excel redondea a 4)
+    Calcula Ratio y ML impresos para un producto no-backlight.
+        UxA   = ancho_tela / ancho_producto, SIN truncar, si el truncado
+                da menos de 1 (para no terminar dividiendo por 0 más abajo —
+                ese caso, además, habilita el checkbox "Forzar")
+              = TRUNCADO hacia abajo al entero en cualquier otro caso: UxA
+                son las unidades que caben físicamente a lo ancho del rollo
+                de tela, y una unidad "y tanto" no cabe — 1,5 m de tela con
+                recortes de 0,8 m de ancho da 1 unidad por pasada (no 2):
+                3.9 -> 3, 4.1 -> 4.
         ratio = cantidad / UxA
         ml = ratio * alto
         si Tiro y retiro: ml *= 2 (se imprimen las dos caras, mismo cálculo
@@ -121,7 +108,12 @@ def calcular_ml(d: dict, ancho_tela: float | None) -> tuple[float | None, float 
     if ancho_tela is None:
         return None, None
     cruda = ancho_tela / d["ancho"]
-    uxa = cruda if int(cruda) < 1 else _redondear_excel(cruda)
+    # +1e-9 antes de truncar: sin esto, un caso que matemáticamente debería
+    # dar un entero exacto (ej. 1.2/0.4=3) puede llegar como 2.9999999999999996
+    # por el punto flotante, y truncar de más (UxA=2 en vez de 3). El
+    # epsilon es muchísimo más chico que cualquier medida real (metros con
+    # 2-3 decimales), así que no afecta casos genuinos cerca de un entero.
+    uxa = cruda if int(cruda) < 1 else int(cruda + 1e-9)
     ratio = d["cantidad"] / uxa
     ml = ratio * d["alto"]
     if d.get("impresion") == "Tiro y retiro":
