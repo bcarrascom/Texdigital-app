@@ -715,7 +715,39 @@ class CotizacionNueva(tk.Tk):
             on_agregar=self._on_agregar_desde_resumen,
             on_eliminar=self._on_eliminar_desde_resumen,
             filas_extra=filas_extra,
+            # Agregar/quitar Despacho o Instalación solo tiene sentido al
+            # editar una cotización ya guardada — en el flujo normal, esa
+            # decisión ya se tomó en la pantalla inicial (ver
+            # ui/pantalla_inicio.py) y no hace falta un segundo camino.
+            on_toggle_despacho=self._on_toggle_despacho if self._edicion else None,
+            despacho_activo=self._con_despacho,
+            on_toggle_instalacion=self._on_toggle_instalacion if self._edicion else None,
+            instalacion_activo=self._con_instalacion,
         )
+
+    def _on_toggle_despacho(self):
+        if self._con_despacho:
+            self._con_despacho = False
+            self._despacho_valor = None
+            self._abrir_resumen()
+        else:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            self._con_despacho = True
+            self._mostrar_extras(volver_a_resumen=True)
+
+    def _on_toggle_instalacion(self):
+        if self._con_instalacion:
+            self._con_instalacion = False
+            self._instalacion_valor = None
+            self._abrir_resumen()
+        else:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            self._con_instalacion = True
+            self._mostrar_extras(volver_a_resumen=True)
 
     def _on_agregar_desde_resumen(self):
         self.deiconify()
