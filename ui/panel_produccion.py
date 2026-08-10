@@ -94,7 +94,9 @@ _proceso_panel_mac = None      # Popen del proceso del panel, si está corriendo
 
 def _leer_carpeta(carpeta):
     ops = []
-    for archivo in sorted(carpeta.glob("*.json")):
+    # rglob (no glob): los JSON de OPs viven en subcarpetas AAAA/MM según
+    # su Fecha_ingreso (ver core/repositorio_ops.py).
+    for archivo in sorted(carpeta.rglob("*.json")):
         try:
             ops.append(json.loads(archivo.read_text(encoding="utf-8")))
         except Exception:

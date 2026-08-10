@@ -114,7 +114,9 @@ class VentanaCotizaciones(tk.Toplevel):
     def _cargar_cotizaciones(self):
         carpeta = carpeta_json()
         entradas = []
-        for archivo in sorted(carpeta.glob("*.json")):
+        # rglob (no glob): los JSON activos viven en subcarpetas AAAA/MM
+        # según su Fecha (ver core/repositorio_cotizaciones.py).
+        for archivo in sorted(carpeta.rglob("*.json")):
             try:
                 datos   = json.loads(archivo.read_text(encoding="utf-8"))
                 num     = int(datos.get("Cotizacion", archivo.stem))
@@ -867,16 +869,13 @@ class VentanaCotizaciones(tk.Toplevel):
         dlg.wait_window()
 
     def _ejecutar_eliminacion(self):
+        from core.repositorio_cotizaciones import eliminar_cotizacion
         for iid in list(self._selected):
             try:
                 num = int(iid)
             except ValueError:
                 continue
-            for nombre in (f"{num}.json", f"{num:04d}.json"):
-                p = carpeta_json() / nombre
-                if p.exists():
-                    p.unlink()
-                    break
+            eliminar_cotizacion(num)
             for nombre in (f"Cotización {num:04d}.xlsx", f"Cotización {num}.xlsx"):
                 p = carpeta_excel() / nombre
                 if p.exists():

@@ -257,6 +257,30 @@ class VentanaPrincipal(tk.Tk):
             w.bind("<Leave>",    _revisar_leave)
             w.bind("<Button-1>", lambda _: self._abrir_revisar_cotizaciones())
 
+        # ── Fila 1, columna 2: botón Historial OPs (mismo ancho que
+        # "Revisar OPs" arriba — misma columna del grid — y mismo alto que
+        # "Revisar Cotizaciones" a su izquierda — misma fila del grid) ──
+        btn_historial = tk.Frame(grid, bg=COLORES["acento"], cursor="hand2")
+        btn_historial.grid(row=1, column=2, sticky="nsew", pady=(10, 0))
+
+        lbl_historial = tk.Label(btn_historial, text="Historial OPs",
+                                 font=FUENTE_BTN, bg=COLORES["acento"],
+                                 fg="#FFFFFF")
+        lbl_historial.pack(expand=True)
+
+        def _historial_enter(_):
+            btn_historial.config(bg=COLORES["acento_hover"])
+            lbl_historial.config(bg=COLORES["acento_hover"])
+
+        def _historial_leave(_):
+            btn_historial.config(bg=COLORES["acento"])
+            lbl_historial.config(bg=COLORES["acento"])
+
+        for w in (btn_historial, lbl_historial):
+            w.bind("<Enter>",    _historial_enter)
+            w.bind("<Leave>",    _historial_leave)
+            w.bind("<Button-1>", lambda _: self._abrir_historial_ops())
+
     # ── Callbacks ─────────────────────────────────────────────────────────────
     def _abrir_cotizador_backlight(self):
         from ui.cotizador_backlight import CotizadorBacklight
@@ -271,6 +295,10 @@ class VentanaPrincipal(tk.Tk):
     def _abrir_revisar_cotizaciones(self):
         from ui.revisar_cotizaciones import VentanaCotizaciones
         VentanaCotizaciones(self)
+
+    def _abrir_historial_ops(self):
+        from ui.historial_ops import VentanaHistorialOps
+        VentanaHistorialOps(self)
 
     def _abrir_revisar_ops(self):
         import sys
