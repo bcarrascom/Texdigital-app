@@ -2,6 +2,13 @@
 core/repositorio_cotizaciones.py
 Persistencia de cotizaciones como JSON en la carpeta Dropbox compartida.
 Fallback a AppData si Dropbox Desktop no está instalado.
+
+JSON/ y Historial/ guardan cada cotización en una subcarpeta AAAA/MM según
+su campo "Fecha" (la fecha de creación de la cotización) — mismo mecanismo
+que las OPs (ver core/repositorio_ops.py y core/carpetas_mensuales.py),
+para que "Buscar cotización" desde el historial de OPs (ui/historial_ops.py)
+pueda ubicar la cotización de origen de una OP mirando solo un puñado de
+meses, no todo Historial/.
 """
 
 import json
@@ -9,6 +16,9 @@ from pathlib import Path
 
 from core.rutas import DATOS, _detectar_dropbox
 from core.repositorio import TEXTILES_ANCHOS
+from core import carpetas_mensuales as cm
+
+_CAMPO_FECHA = "Fecha"
 
 
 def _ruta_base() -> Path:
@@ -26,25 +36,39 @@ def carpeta_cotizaciones() -> Path:
     return p
 
 
-def carpeta_json() -> Path:
-    p = _ruta_base() / "JSON"
+_migradas: set[str] = set()
+
+
+def _carpeta_migrada(nombre: str) -> Path:
+    """JSON/ o Historial/, migrada a la estructura AAAA/MM la primera vez
+    que se pide en esta sesión (clave por ruta completa, no por nombre —
+    ver el mismo patrón en core/repositorio_ops.py)."""
+    p = _ruta_base() / nombre
     p.mkdir(parents=True, exist_ok=True)
+    clave = str(p)
+    if clave not in _migradas:
+        cm.migrar_archivos_planos(p, _CAMPO_FECHA)
+        _migradas.add(clave)
     return p
 
 
+def carpeta_json() -> Path:
+    return _carpeta_migrada("JSON")
+
+
+def carpeta_historial() -> Path:
+    return _carpeta_migrada("Historial")
+
+
 def carpeta_excel() -> Path:
+    """Excel exportado — no es la fuente de verdad, se deja plana."""
     p = _ruta_base() / "Excel"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
-def carpeta_historial() -> Path:
-    p = _ruta_base() / "Historial"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
 def carpeta_html() -> Path:
+    """HTML impreso — se regenera cada vez, se deja plana."""
     p = _ruta_base() / "HTML"
     p.mkdir(parents=True, exist_ok=True)
     return p
@@ -67,7 +91,10 @@ def siguiente_numero() -> int:
     ]
     numeros = []
     for carpeta in carpetas:
-        for archivo in carpeta.glob("*.json"):
+        # rglob (no glob): las carpetas de OPs guardan los JSON en
+        # subcarpetas AAAA/MM (ver core/repositorio_ops.py); rglob también
+        # encuentra los planos de Cotizaciones sin cambiar nada ahí.
+        for archivo in carpeta.rglob("*.json"):
             try:
                 numeros.append(int(archivo.stem))
             except ValueError:
@@ -77,8 +104,8 @@ def siguiente_numero() -> int:
 
 def cargar_cotizacion(numero: int) -> dict | None:
     """Lee el JSON de una cotización guardada por número, o None si no existe."""
-    ruta = carpeta_json() / f"{numero}.json"
-    if not ruta.exists():
+    ruta = cm.buscar(carpeta_json(), numero)
+    if ruta is None:
         return None
     try:
         return json.loads(ruta.read_text(encoding="utf-8"))
@@ -87,9 +114,12 @@ def cargar_cotizacion(numero: int) -> dict | None:
 
 
 def guardar_cotizacion(datos: dict) -> Path:
-    """Guarda datos como JSON. Sobreescribe si ya existe el número."""
+    """Guarda datos como JSON, en la subcarpeta AAAA/MM de JSON/ que
+    corresponde a su Fecha. Sobreescribe si ya existe el número (mismo
+    mes — editar una cotización no cambia su Fecha de creación)."""
     numero = datos["Cotizacion"]
-    destino = carpeta_json() / f"{numero}.json"
+    anio, mes = cm.anio_mes(datos, _CAMPO_FECHA)
+    destino = cm.subcarpeta_mes(carpeta_json(), anio, mes) / f"{numero}.json"
     destino.write_text(
         json.dumps(datos, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -98,10 +128,37 @@ def guardar_cotizacion(datos: dict) -> Path:
 
 
 def mover_a_historial(numero: int) -> None:
-    """Mueve el JSON de la cotización aprobada de JSON/ a Historial/."""
-    origen = carpeta_json() / f"{numero}.json"
-    if origen.exists():
-        origen.replace(carpeta_historial() / origen.name)
+    """Mueve el JSON de la cotización aprobada de JSON/ a Historial/
+    (misma subcarpeta AAAA/MM, la Fecha no cambia)."""
+    cm.mover_preservando_mes(carpeta_json(), carpeta_historial(), numero)
+
+
+def eliminar_cotizacion(numero: int) -> bool:
+    """Elimina el JSON de una cotización, esté activa o en Historial.
+    Devuelve True si encontró y borró algo."""
+    return cm.eliminar([carpeta_json(), carpeta_historial()], numero)
+
+
+def buscar_en_ultimos_meses(numero: int, anio_ref: int, mes_ref: int, cantidad_meses: int = 3) -> dict | None:
+    """Busca una cotización por número dentro de los `cantidad_meses`
+    meses terminando en (anio_ref, mes_ref) inclusive (ese mes y los
+    anteriores) — para "Buscar cotización" desde el historial de OPs
+    (ui/historial_ops.py): la cotización de origen se mueve a Historial/
+    en el momento en que se aprueba la OP, así que su Fecha debería caer
+    en el mismo mes que la Fecha_ingreso de la OP, o poco antes. Revisa
+    JSON/ (por si la cotización, contra lo esperado, no llegó a moverse) e
+    Historial/, sin abrir ningún archivo fuera de esos meses."""
+    anio, mes = anio_ref, mes_ref
+    for _ in range(cantidad_meses):
+        for carpeta in (carpeta_json(), carpeta_historial()):
+            ruta = carpeta / f"{anio:04d}" / f"{mes:02d}" / f"{numero}.json"
+            if ruta.exists():
+                try:
+                    return json.loads(ruta.read_text(encoding="utf-8"))
+                except Exception:
+                    return None
+        anio, mes = cm.restar_meses(anio, mes, 1)
+    return None
 
 
 def eliminar_excel(numero: int) -> None:
