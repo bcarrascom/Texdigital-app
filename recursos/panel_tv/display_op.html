@@ -96,6 +96,11 @@
   .caja-item .v{ font-size:1.9vh; color:var(--txt); flex:1; min-width:0;
     overflow-wrap:break-word; word-break:break-word; }
   .caja-item .n{ font-size:1.9vh; font-weight:700; color:var(--azul); flex:none; }
+  /* Corte (ancho/alto) dentro de .caja-item .v: dos líneas con la
+     etiqueta a ancho fijo, para que los números de ambas líneas queden
+     alineados verticalmente aunque "ancho:" y "alto:" tengan distinto largo. */
+  .corte-linea{ display:flex; }
+  .corte-linea .corte-label{ flex:0 0 4vw; }
   .card.listo{ border-left-color:var(--azul);
     background:linear-gradient(160deg,#151A21,#10141A); }
   .card.listo .tipo,
@@ -350,6 +355,17 @@ function ml(p){
 const med = n => n.toFixed(3).replace(".", ",");        // medidas: SIEMPRE 3 decimales
 const fmt = n => (Math.round(n*100)/100).toLocaleString("es-CL");
 
+/* Corte de tela para backlight = medida final + margen de costura, según
+   TerminacionesCaja (un solo valor por OP, ver ui/formulario_cliente.py y
+   core/presentar_op.py — mismas constantes/fórmula que ahí). Las OPs de
+   antes de este campo no lo traen: se tratan como "CAJA TERMINADA", el
+   default del formulario. */
+const MARGEN_CAJA_TERMINADA = 0.013, MARGEN_AREA_VISUAL = 0.023;
+function corte(medida, terminacionesCaja){
+  const esCajaTerminada = (terminacionesCaja || "CAJA TERMINADA") === "CAJA TERMINADA";
+  return medida + (esCajaTerminada ? MARGEN_CAJA_TERMINADA : MARGEN_AREA_VISUAL);
+}
+
 /* ── Persistencia (prototipo). En Claude.ai usa window.storage; si se abre el HTML
       suelto, degrada a memoria. En producción (Fase 4) el estado va al JSON de la OP. ── */
 const mem = {};
@@ -442,6 +458,19 @@ function render(){
     const isListo = set.has(i);
     const obsHTML = (p.Obs && p.Obs.trim())
       ? `<div class="obs"><b>Obs:</b> ${p.Obs}</div>` : "";
+    // Corte de tela (solo backlight): reusa el mismo estilo compacto de
+    // fila que cajaHTML/extraHTML (.caja-detalle/.caja-item), en vez de un
+    // bloque nuevo — así no le suma tamaño de fuente extra a la tarjeta.
+    const corteHTML = bl ? `
+        <div class="caja-detalle">
+          <div class="caja-item">
+            <div class="k">Corte</div>
+            <div class="v">
+              <div class="corte-linea"><span class="corte-label">ancho:</span>${med(corte(p.Ancho, op.TerminacionesCaja))} m</div>
+              <div class="corte-linea"><span class="corte-label">alto:</span>${med(corte(p.Alto, op.TerminacionesCaja))} m</div>
+            </div>
+          </div>
+        </div>` : "";
     // Detalle de caja: solo ocupa el espacio extra (2 filas de la grilla)
     // si hay algo más que mostrar además del perfil (que ya aparece en la
     // tela-line) — traseras, luces, FP u obs de la caja.
@@ -483,6 +512,7 @@ function render(){
           <span class="dim">${med(p.Ancho)}</span><span class="x">×</span>
           <span class="dim">${med(p.Alto)}</span><span class="u">m</span>
         </div>
+        ${corteHTML}
         ${cajaHTML}
         ${extraHTML}
         ${obsHTML}

@@ -847,6 +847,10 @@ class FormularioCliente(tk.Toplevel):
                 json_dict["Despacho"] = self._despacho
             if self._instalacion is not None:
                 json_dict["Instalacion"] = self._instalacion
+            if self._incluir_terminaciones:
+                # Solo backlight — usada para el margen de corte de tela
+                # (Corte ancho/alto en la OP, ver core/presentar_op.py).
+                json_dict["TerminacionesCaja"] = datos_cliente.get("terminaciones_caja", "CAJA TERMINADA")
             guardar_cotizacion(json_dict)
 
             if abrir_html:

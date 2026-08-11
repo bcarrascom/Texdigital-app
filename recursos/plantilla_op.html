@@ -112,23 +112,11 @@
 
   <table class="tabla-productos">
     <thead>
-      <tr>
-        <th style="width:38%">Producto</th>
-        <th style="width:16%">Medidas</th>
-        <th class="num" style="width:10%">Cant.</th>
-        <th style="width:20%">Tema</th>
-        <th class="num" style="width:16%">Metros impresos</th>
-      </tr>
+{{encabezado_productos}}
     </thead>
     <tbody>
 {{filas_productos}}
-      <tr class="fila-totales">
-        <td></td>
-        <td></td>
-        <td class="num">{{total_cantidad}}</td>
-        <td></td>
-        <td class="num">{{total_metros}}</td>
-      </tr>
+{{fila_totales}}
     </tbody>
   </table>
 
