@@ -20,6 +20,22 @@ from core.repositorio import TEXTILES_ANCHOS, ESTRUCTURAS_VALORES
 
 RUTA_PLANTILLA = RECURSOS / "plantilla_op.html"
 
+# Márgenes de costura para el corte de tela de backlight — mismas fórmulas
+# que el Excel original (=SI($J$7="CAJA TERMINADA",[@ANCHO]+0.013,[@ANCHO]+0.023)).
+# "TerminacionesCaja" es un valor único por cotización/OP (switch en
+# ui/formulario_cliente.py), no por producto.
+_MARGEN_CAJA_TERMINADA = 0.013
+_MARGEN_AREA_VISUAL    = 0.023
+
+
+def _corte(medida: float, terminaciones_caja: str) -> float:
+    """Medida de corte de tela (ancho o alto) para un producto backlight:
+    la medida final del producto + el margen de costura según
+    TerminacionesCaja ("CAJA TERMINADA" -> 1,3 cm, cualquier otro valor,
+    incluido "AREA VISUAL" -> 2,3 cm, mismo default que el formulario)."""
+    margen = _MARGEN_CAJA_TERMINADA if terminaciones_caja == "CAJA TERMINADA" else _MARGEN_AREA_VISUAL
+    return medida + margen
+
 
 def _fmt_medida(valor: float) -> str:
     """1.5 -> '1,500' (formato chileno, 3 decimales, igual que la cotización)."""
@@ -49,9 +65,11 @@ def _metrica_producto(interno: dict) -> tuple[float, str]:
     return (ml or 0.0), "ML"
 
 
-def _fila_producto(p: dict, interno: dict) -> tuple[str, float, str]:
+def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMINADA") -> tuple[str, float, str]:
     """Fila de la tabla de productos (sin precios). Devuelve el HTML de la
-    fila, más (metros, unidad) para acumular en los totales."""
+    fila, más (metros, unidad) para acumular en los totales. `terminaciones_caja`
+    solo importa para productos backlight (agrega 2 columnas de corte de
+    tela, ver _corte) — se ignora para el resto."""
     cantidad = p.get("Cantidad", 0)
     tema = p.get("Tema", "").strip() or "—"
     medidas = f"{_fmt_medida(p.get('Ancho', 0))} × {_fmt_medida(p.get('Alto', 0))} m"
@@ -67,7 +85,13 @@ def _fila_producto(p: dict, interno: dict) -> tuple[str, float, str]:
             nombre = f"Backlight · {p.get('Tela', '')}"
             detalle = "Solo tela impresa"
         extras_html = ""
+        corte_ancho = _fmt_medida(_corte(p.get("Ancho", 0), terminaciones_caja))
+        corte_alto  = _fmt_medida(_corte(p.get("Alto", 0), terminaciones_caja))
+        celdas_corte = f"""
+        <td class="num">{corte_ancho} m</td>
+        <td class="num">{corte_alto} m</td>"""
     else:
+        celdas_corte = ""
         nombre = p.get("producto", "")
         detalle = p.get("Tela", "")
         # Los ajustes manuales (montos escritos directo, ver
@@ -95,7 +119,7 @@ def _fila_producto(p: dict, interno: dict) -> tuple[str, float, str]:
         </td>
         <td>{medidas}</td>
         <td class="num">{cantidad}</td>
-        <td>{tema}</td>
+        <td>{tema}</td>{celdas_corte}
         <td class="num">{_fmt_cantidad(metros)} {unidad}</td>
       </tr>"""
     return fila, metros, unidad
@@ -228,6 +252,44 @@ def _html_caja(caja: dict) -> str:
     return _bloque_valores("Materiales de caja", filas)
 
 
+def _encabezado_productos(es_backlight: bool) -> str:
+    """<thead> de la tabla de productos. Backlight suma 2 columnas de
+    corte de tela (ver _corte) — el resto de las columnas se angostan
+    para que sigan entrando cómodas en la hoja (ver docstring del módulo:
+    esto solo pasa en OPs backlight, las demás quedan exactamente igual
+    que antes)."""
+    if es_backlight:
+        return """      <tr>
+        <th style="width:30%">Producto</th>
+        <th style="width:14%">Medidas</th>
+        <th class="num" style="width:8%">Cant.</th>
+        <th style="width:14%">Tema</th>
+        <th class="num" style="width:11%">Corte ancho</th>
+        <th class="num" style="width:11%">Corte alto</th>
+        <th class="num" style="width:12%">Metros impresos</th>
+      </tr>"""
+    return """      <tr>
+        <th style="width:38%">Producto</th>
+        <th style="width:16%">Medidas</th>
+        <th class="num" style="width:10%">Cant.</th>
+        <th style="width:20%">Tema</th>
+        <th class="num" style="width:16%">Metros impresos</th>
+      </tr>"""
+
+
+def _fila_totales(es_backlight: bool, total_cantidad: int, total_metros_txt: str) -> str:
+    """Fila de totales — mismo número de columnas que _encabezado_productos
+    (2 <td> vacíos de más para Corte ancho/alto en backlight)."""
+    celdas_corte = "\n        <td></td>\n        <td></td>" if es_backlight else ""
+    return f"""      <tr class="fila-totales">
+        <td></td>
+        <td></td>
+        <td class="num">{total_cantidad}</td>
+        <td></td>{celdas_corte}
+        <td class="num">{total_metros_txt}</td>
+      </tr>"""
+
+
 def generar_html(op: dict) -> Path:
     """Genera el HTML de la OP y lo deja guardado en carpeta_html() (de
     core.repositorio_ops). Devuelve la ruta del archivo."""
@@ -236,6 +298,8 @@ def generar_html(op: dict) -> Path:
     numero = op.get("Cotizacion", "")
     productos_raw = op.get("productos", [])
     productos_internos = [producto_desde_json(p) for p in productos_raw]
+    es_backlight = bool(productos_raw) and "Caja" in productos_raw[0]
+    terminaciones_caja = op.get("TerminacionesCaja", "CAJA TERMINADA")
 
     contacto = op.get("Contacto", "")
     email = op.get("Email", "")
@@ -252,7 +316,7 @@ def generar_html(op: dict) -> Path:
     total_ml = 0.0
     total_m2 = 0.0
     for p, interno in zip(productos_raw, productos_internos):
-        fila, metros, unidad = _fila_producto(p, interno)
+        fila, metros, unidad = _fila_producto(p, interno, terminaciones_caja)
         filas_html.append(fila)
         total_cantidad += p.get("Cantidad", 0)
         if unidad == "ML":
@@ -289,9 +353,9 @@ def generar_html(op: dict) -> Path:
         "{{empresa}}":          op.get("Empresa", ""),
         "{{contacto_email}}":   contacto_email,
         "{{descripcion_bloque}}": descripcion_bloque,
+        "{{encabezado_productos}}": _encabezado_productos(es_backlight),
         "{{filas_productos}}":  "\n".join(filas_html),
-        "{{total_cantidad}}":   str(total_cantidad),
-        "{{total_metros}}":     total_metros_txt,
+        "{{fila_totales}}":     _fila_totales(es_backlight, total_cantidad, total_metros_txt),
         "{{seccion_materiales}}": seccion_materiales,
     }
     html = plantilla
