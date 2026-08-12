@@ -46,6 +46,30 @@ def migrar_archivos_planos(base: Path, campo_fecha: str, formato: str = FORMATO_
         archivo.replace(destino)
 
 
+def aplanar_archivos(base: Path) -> None:
+    """Inverso de migrar_archivos_planos: mueve JSON que hayan quedado en
+    subcarpetas AAAA/MM directo a `base`, sin subcarpetas, y borra las
+    subcarpetas AAAA/MM que quedan vacías. Para carpetas que NO se
+    organizan por mes (ver core/repositorio_ops.py: JSON/Completadas/
+    Pendiente quedan planas a propósito — se leen siempre completas, sin
+    importar el mes, así que AAAA/MM ahí no aporta nada y solo complica).
+    Segura de llamar siempre: una vez aplanados, no encuentra nada en
+    subcarpetas y no hace nada."""
+    for archivo in base.rglob("*.json"):
+        if archivo.parent == base:
+            continue  # ya está plano
+        archivo.replace(base / archivo.name)
+
+    for dir_anio in list(base.iterdir()):
+        if not (dir_anio.is_dir() and dir_anio.name.isdigit()):
+            continue
+        for dir_mes in list(dir_anio.iterdir()):
+            if dir_mes.is_dir() and dir_mes.name.isdigit() and not any(dir_mes.iterdir()):
+                dir_mes.rmdir()
+        if not any(dir_anio.iterdir()):
+            dir_anio.rmdir()
+
+
 def buscar(carpeta: Path, numero: int) -> Path | None:
     """Ubica el JSON de `numero` dentro de `carpeta`, sin saber de
     antemano en qué subcarpeta AAAA/MM está."""
