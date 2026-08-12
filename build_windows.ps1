@@ -28,12 +28,27 @@ Write-Host ""
 Write-Host "=== Empaquetando... ==="
 Set-Location $ScriptDir
 
+# pywebview en Windows depende de pythonnet (clr) para CUALQUIER backend,
+# incluido EdgeChromium/WebView2 (no solo el WinForms viejo — ver
+# webview/platforms/edgechromium.py, que igual hace `import clr`). El hook
+# de pythonnet para PyInstaller no siempre deja Python.Runtime.deps.json y
+# sus DLLs .NET compañeras (System.*.dll, netstandard.dll) junto a
+# Python.Runtime.dll — sin eso ahí al lado, clr_loader encuentra el .dll
+# pero no puede inicializar el runtime .NET ("Failed to resolve
+# Python.Runtime.Loader.Initialize"). Se agrega toda pythonnet/runtime/
+# como un solo --add-data para que quede completa y junta.
+$pynetRuntime = python -c "import pythonnet, os; print(os.path.join(os.path.dirname(pythonnet.__file__), 'runtime'))"
+
 python -m PyInstaller `
     --name "$AppName" `
     --windowed `
     --onedir `
     --collect-all openpyxl `
+    --collect-all pythonnet `
+    --collect-all clr_loader `
+    --collect-all webview `
     --add-data "recursos;recursos" `
+    --add-data "$pynetRuntime;pythonnet/runtime" `
     --hidden-import "PIL._tkinter_finder" `
     main.py
 
