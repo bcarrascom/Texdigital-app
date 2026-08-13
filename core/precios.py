@@ -47,6 +47,15 @@ Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
   cuánta tela se corta de verdad, no cuánto se cobra) y las columnas
   informativas "ML imp."/"M² imp." de la ventana de resumen (ui/cotizacion.py,
   ui/cotizador_backlight.py) NO pasan por este piso.
+
+Descuento-textil (ver descuento_textil/costo_cotizacion, confirmado con el
+  usuario): descuento adicional por volumen de tela impresa, aparte del %
+  manual "Descuento" del contacto — se calcula siempre, pero de los dos
+  descuentos SOLO se aplica el que dé más ahorro en $ para toda la
+  cotización, nunca los dos juntos. Backlight usa un solo tramo (5/10/20%
+  sobre 10/20/50 m²) para el total de m² impresos de la cotización entera;
+  no-backlight usa un tramo por cada textil individual (agrupando por
+  d["textil"]), aplicado solo al costo de impresión de esos productos.
 """
 
 from core.repositorio import (
@@ -296,6 +305,88 @@ def costo_producto(
     return resultado
 
 
+# ── Descuento por textil (tramos según volumen de m² impresos) ──────────────
+# Confirmado con el usuario: mismos tramos para Backlight y no-backlight,
+# solo cambia qué se suma para ubicar el tramo (ver descuento_textil). Lista
+# ordenada de mayor a menor piso para que tramo_descuento_textil() pueda
+# recorrerla de arriba hacia abajo y quedarse con el primer piso que se
+# cumple.
+TRAMOS_DESCUENTO_TEXTIL = [
+    (50.0, 20.0),
+    (20.0, 10.0),
+    (10.0, 5.0),
+]
+
+
+def tramo_descuento_textil(m2: float) -> float:
+    """% de descuento-textil según m² impresos: 10-20 m² -> 5%, 20-50 m²
+    -> 10%, 50 m² en adelante -> 20%. Bajo 10 m², 0% (no aplica)."""
+    for piso, pct in TRAMOS_DESCUENTO_TEXTIL:
+        if m2 >= piso:
+            return pct
+    return 0.0
+
+
+def _area_producto(d: dict) -> float:
+    """m² impresos de una línea para efectos del descuento-textil: Alto ×
+    Ancho × Cantidad efectiva — mismo cálculo que ya usa Backlight para su
+    total (ahí ES el total, no hay estructuras/terminaciones que sumar
+    aparte), reutilizado acá también para no-backlight como métrica de
+    volumen (no de costo de impresión, que sigue siendo ML × valor tela —
+    ver calcular_ml)."""
+    return d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad_efectiva(d)
+
+
+def descuento_textil(productos: list[dict], **kwargs) -> dict:
+    """
+    Descuento adicional por volumen de tela impresa — independiente del %
+    manual "Descuento" del contacto (ver costo_cotizacion, que se queda
+    solo con el que dé más ahorro entre los dos, nunca ambos a la vez).
+
+    - Backlight (todos los productos traen "tela"): un solo tramo para toda
+      la cotización, según la suma de m² impresos de TODOS los productos.
+      Backlight no tiene estructuras/terminaciones — su total YA es 100%
+      costo de impresión, así que el % se aplica sobre el total completo.
+    - No-backlight: un tramo POR TEXTIL — se agrupan los productos por
+      d["textil"], se suma el m² de cada grupo por separado (puede caer en
+      tramos distintos entre sí dentro de la misma cotización), y el % de
+      cada grupo se aplica SOLO al costo de impresión de esos productos, no
+      a sus estructuras/terminaciones (que no dependen del textil).
+
+    Devuelve {"monto": $ total descontado, "neto": $ neto de los productos
+    (sin despacho/instalación — no son tela), "pct_visual": monto/neto×100}.
+    `pct_visual` es un % derivado del $ ahorrado, pensado solo para mostrar
+    en pantalla/impreso (ver docstring de costo_cotizacion) — el monto real
+    ya viene armado tramo por tramo/textil, no se recalcula a partir de
+    este %. kwargs se pasan tal cual a costo_producto (catálogos fijos para
+    tests, ver ahí)."""
+    if not productos:
+        return {"monto": 0.0, "neto": 0.0, "pct_visual": 0.0}
+
+    neto = sum(costo_producto(p, **kwargs)["total"] for p in productos)
+
+    if all("tela" in p for p in productos):
+        area_total = sum(_area_producto(p) for p in productos)
+        pct = tramo_descuento_textil(area_total)
+        monto = neto * pct / 100
+    else:
+        grupos: dict[str, list[dict]] = {}
+        for p in productos:
+            grupos.setdefault(p.get("textil", ""), []).append(p)
+        monto = 0.0
+        for grupo in grupos.values():
+            pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p in grupo))
+            if not pct_grupo:
+                continue
+            costo_impresion_grupo = sum(
+                costo_producto(p, **kwargs)["costo_impresion"] for p in grupo
+            )
+            monto += costo_impresion_grupo * pct_grupo / 100
+
+    pct_visual = (monto / neto * 100) if neto else 0.0
+    return {"monto": monto, "neto": neto, "pct_visual": pct_visual}
+
+
 def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
                       despacho: float = 0.0, instalacion: float = 0.0,
                       **kwargs) -> dict:
@@ -307,18 +398,42 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
     porque todavía no se generan guías de despacho ni se detalla la
     instalación. Quedan sujetos al mismo descuento % e IVA que el resto —
     son un ítem más de la cotización cada uno.
-    Devuelve {neto, descuento, neto_total, iva, total}. kwargs se pasan tal
-    cual a costo_producto (catálogos fijos para tests, ver ahí)."""
-    neto = (sum(costo_producto(p, **kwargs)["total"] for p in productos)
-            + (despacho or 0.0) + (instalacion or 0.0))
-    descuento = neto * descuento_pct / 100
+
+    Descuento-textil (ver descuento_textil): se calcula siempre, pero SOLO
+    se aplica uno de los dos descuentos, el que dé más ahorro en $ — nunca
+    los dos juntos. El despacho/instalación no entran en la comparación del
+    descuento-textil (no son tela), pero si gana el % normal, sí quedan
+    descontados igual que antes (comportamiento sin cambios).
+
+    Devuelve {neto, descuento, descuento_textil_pct, fuente_descuento,
+    neto_total, iva, total}. `descuento_textil_pct` es el % (derivado,
+    "visual") del descuento-textil calculado para esta cotización, se
+    devuelve siempre (haya ganado o no) para poder mostrarlo en pantalla.
+    `fuente_descuento` es "normal" o "textil", según cuál se aplicó.
+    kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
+    ver ahí)."""
+    neto_productos = sum(costo_producto(p, **kwargs)["total"] for p in productos)
+    neto = neto_productos + (despacho or 0.0) + (instalacion or 0.0)
+
+    monto_normal = neto * descuento_pct / 100
+    dtextil = descuento_textil(productos, **kwargs)
+
+    if dtextil["monto"] > monto_normal:
+        descuento = dtextil["monto"]
+        fuente_descuento = "textil"
+    else:
+        descuento = monto_normal
+        fuente_descuento = "normal"
+
     neto_total = neto - descuento
     iva = neto_total * IVA_PORCENTAJE / 100
     total = neto_total + iva
     return {
-        "neto":       neto,
-        "descuento":  descuento,
-        "neto_total": neto_total,
-        "iva":        iva,
-        "total":      total,
+        "neto":                 neto,
+        "descuento":            descuento,
+        "descuento_textil_pct": dtextil["pct_visual"],
+        "fuente_descuento":     fuente_descuento,
+        "neto_total":           neto_total,
+        "iva":                  iva,
+        "total":                total,
     }

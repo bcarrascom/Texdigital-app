@@ -18,7 +18,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.precios import calcular_ml, cantidad_efectiva, costo_producto, costo_cotizacion
+from core.precios import (
+    calcular_ml, cantidad_efectiva, costo_producto, costo_cotizacion,
+    descuento_textil, tramo_descuento_textil,
+)
 
 TEXTILES_ANCHOS = {"TelaTest": 1.2, "Popelina Test": 1.53}
 TEXTILES_VALORES = {"TelaTest": 0.0, "Popelina Test": 1000.0}
@@ -283,6 +286,84 @@ class TestPrecios(unittest.TestCase):
                                               instalacion=0.0, **CATALOGOS)
         self.assertEqual(totales_sin_kwarg["neto"], totales_con_cero["neto"])
         self.assertEqual(totales_sin_kwarg["neto"], 1140)
+
+
+class TestDescuentoTextil(unittest.TestCase):
+
+    def test_tramos_por_m2(self):
+        self.assertEqual(tramo_descuento_textil(9.99), 0)
+        self.assertEqual(tramo_descuento_textil(10), 5)
+        self.assertEqual(tramo_descuento_textil(19.99), 5)
+        self.assertEqual(tramo_descuento_textil(20), 10)
+        self.assertEqual(tramo_descuento_textil(49.99), 10)
+        self.assertEqual(tramo_descuento_textil(50), 20)
+        self.assertEqual(tramo_descuento_textil(100), 20)
+
+    def test_backlight_un_solo_tramo_para_toda_la_cotizacion(self):
+        # Popelina Test vale 1000/m². area1=2*2*3=12, area2=1*1*3=3 ->
+        # total 15 m² -> tramo 5% (10-20), aplicado sobre el total (backlight
+        # no tiene estructuras/terminaciones que descontar aparte).
+        p1 = {"tela": "Popelina Test", "caja": "Sin caja", "alto": 2, "ancho": 2, "cantidad": 3}
+        p2 = {"tela": "Popelina Test", "caja": "Sin caja", "alto": 1, "ancho": 1, "cantidad": 3}
+        res = descuento_textil([p1, p2], **CATALOGOS)
+        self.assertAlmostEqual(res["neto"], 15000)  # 12*1000 + 3*1000
+        self.assertAlmostEqual(res["monto"], 750)    # 15000 * 5%
+        self.assertAlmostEqual(res["pct_visual"], 5.0)
+
+    def test_no_backlight_tramo_independiente_por_textil(self):
+        # Grupo "Popelina Test": ancho_producto=ancho_tela (uxa=1),
+        # cantidad=3, alto=5 -> ml=15, area=5*1.53*3=22.95 -> tramo 10%.
+        # costo_impresion=15*1000=15000 -> descuento de este grupo=1500.
+        # Grupo "TelaTest" (valor 0): area=10 -> tramo 5%, pero como el
+        # textil vale 0 el $ que aporta es 0 igual — confirma que cada
+        # grupo se evalúa por separado sin contaminar al otro.
+        popelina = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)
+        telatest = _producto(alto=10, ancho=1, cantidad=1)
+        res = descuento_textil([popelina, telatest], **CATALOGOS)
+        self.assertAlmostEqual(res["neto"], 15000)   # 15000 (Popelina) + 0 (TelaTest)
+        self.assertAlmostEqual(res["monto"], 1500)
+        self.assertAlmostEqual(res["pct_visual"], 10.0)
+
+    def test_no_backlight_no_descuenta_estructuras_ni_terminaciones(self):
+        # El % de textil se aplica SOLO al costo de impresión de esa línea
+        # (confirmado con el usuario) — una estructura/terminación sumada a
+        # la misma línea no debe verse afectada por el descuento-textil.
+        # Asta 2 mts (valorUNIT 17000) × cantidad efectiva 3 = 51.000, sin
+        # descuento.
+        d = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3,
+                       estructuras=["Asta 2 mts"])
+        res = descuento_textil([d], **CATALOGOS)
+        # costo_impresion=15000 (tramo 10% -> 1500), estructuras=51000 intactas
+        self.assertAlmostEqual(res["neto"], 15000 + 51000)
+        self.assertAlmostEqual(res["monto"], 1500)
+
+    def test_costo_cotizacion_aplica_solo_el_mas_alto(self):
+        # Un solo producto no-backlight: descuento-textil daría 1500 (10%
+        # de 15000). Con descuento manual 5% (750, menor) debe ganar el
+        # textil; con 20% (3000, mayor) debe ganar el normal — pero
+        # descuento_textil_pct se sigue informando en los dos casos (solo
+        # visual, no depende de cuál ganó).
+        d = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)
+
+        totales_gana_textil = costo_cotizacion([d], descuento_pct=5, **CATALOGOS)
+        self.assertEqual(totales_gana_textil["fuente_descuento"], "textil")
+        self.assertAlmostEqual(totales_gana_textil["descuento"], 1500)
+        self.assertAlmostEqual(totales_gana_textil["descuento_textil_pct"], 10.0)
+
+        totales_gana_normal = costo_cotizacion([d], descuento_pct=20, **CATALOGOS)
+        self.assertEqual(totales_gana_normal["fuente_descuento"], "normal")
+        self.assertAlmostEqual(totales_gana_normal["descuento"], 3000)
+        self.assertAlmostEqual(totales_gana_normal["descuento_textil_pct"], 10.0)
+
+    def test_descuento_textil_no_afecta_despacho_ni_instalacion(self):
+        # despacho/instalación no son tela — el descuento-textil se calcula
+        # solo sobre productos, aunque termine ganando y aplicándose al
+        # neto completo de la cotización (igual que el % normal).
+        d = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)
+        totales = costo_cotizacion([d], descuento_pct=0, despacho=5000, **CATALOGOS)
+        self.assertEqual(totales["fuente_descuento"], "textil")
+        self.assertAlmostEqual(totales["descuento"], 1500)  # no 1550
+        self.assertAlmostEqual(totales["neto"], 15000 + 5000)
 
 
 if __name__ == "__main__":

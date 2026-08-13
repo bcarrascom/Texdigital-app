@@ -426,7 +426,7 @@ class VentanaCotizaciones(tk.Toplevel):
             return
 
         import webbrowser
-        from core.repositorio_cotizaciones import cargar_cotizacion
+        from core.repositorio_cotizaciones import cargar_cotizacion, recalcular_descuentos
         from core.presentar_cotizacion import generar_html
 
         for numero in numeros:
@@ -437,6 +437,11 @@ class VentanaCotizaciones(tk.Toplevel):
                     fg=COLORES["error"])
                 continue
             try:
+                # Refresca Neto/Total (y con eso, el descuento-textil) antes
+                # de abrir el HTML — así una cotización guardada antes de
+                # este cambio de precios queda al día, no solo esta vista
+                # puntual (ver docstring de recalcular_descuentos).
+                datos = recalcular_descuentos(datos)
                 ruta_html = generar_html(datos)
                 webbrowser.open(ruta_html.as_uri())
             except Exception as e:
@@ -1009,7 +1014,10 @@ class VentanaCotizaciones(tk.Toplevel):
                 fg=COLORES["error"])
             return
 
-        from core.repositorio_cotizaciones import producto_desde_json
+        from core.repositorio_cotizaciones import producto_desde_json, recalcular_descuentos
+        # Refresca Neto/Total (y con eso, el descuento-textil) antes de
+        # editar — ver docstring de recalcular_descuentos.
+        datos = recalcular_descuentos(datos)
         productos = [producto_desde_json(p) for p in datos.get("productos", [])]
         edicion = {"json": datos, "productos": productos}
         es_backlight = bool(productos) and "caja" in productos[0]

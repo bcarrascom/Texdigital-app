@@ -53,8 +53,15 @@
   }
 
   .totales{ margin-top:5mm; display:flex; justify-content:flex-end; }
-  .totales table{ width:64mm; font-size:13px; }
-  .totales td{ padding:2.2mm 3.5mm; border:none; }
+  /* min-width en vez de un ancho fijo: si el % de descuento o el monto
+     quedan más largos de lo normal (ej. el % derivado del descuento-textil,
+     ver core/precios.py::descuento_textil), la tabla crece para que quepan
+     en una sola línea en vez de recortarse — como está pegada al borde
+     derecho (justify-content:flex-end), crece hacia la izquierda, no tapa
+     nada del resto de la hoja. */
+  .totales table{ min-width:64mm; width:max-content; font-size:13px; }
+  .totales td{ padding:2.2mm 3.5mm; border:none; white-space:nowrap; }
+  .totales tr td:first-child{ text-align:left; }
   .totales tr td:last-child{ text-align:right; font-variant-numeric:tabular-nums; }
   .totales .fila-total td{ background:var(--azul); color:#fff; font-weight:700; font-size:15px;
     border-radius:0; }

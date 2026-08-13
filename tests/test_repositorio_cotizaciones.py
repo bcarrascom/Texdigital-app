@@ -104,6 +104,52 @@ class TestMigracionArchivosPlanos(_ConRutaTemporal):
         self.assertTrue((carpeta / "2022" / "09" / "3001.json").exists())
 
 
+class TestRecalcularDescuentos(_ConRutaTemporal):
+    # Sin productos (Despacho es el único monto, no depende de catálogos de
+    # textiles/estructuras/terminaciones) para que el resultado sea
+    # determinístico sin importar los catálogos reales de la máquina donde
+    # corre el test — mismo criterio que el resto de este archivo.
+
+    def _cotizacion_con_totales_desactualizados(self, numero):
+        datos = _cotizacion(numero, "15/08/2026")
+        datos["Descuento"] = 10
+        datos["Despacho"] = 10000
+        # Simula una cotización guardada antes de un cambio a la fórmula de
+        # precios: estos montos ya no coinciden con lo que costo_cotizacion
+        # calcularía hoy para los mismos productos/Descuento/Despacho.
+        datos["Neto"] = 0
+        datos["NetoTotal"] = 0
+        datos["IVA"] = 0
+        datos["Total"] = 0
+        return datos
+
+    def test_recalcula_neto_y_total_a_partir_de_descuento_y_despacho(self):
+        datos = self._cotizacion_con_totales_desactualizados(5001)
+        resultado = repo_cot.recalcular_descuentos(datos, guardar=False)
+        # neto = 10000 (despacho, sin productos); descuento 10% = 1000;
+        # neto_total = 9000; iva = 9000*0.19 = 1710; total = 10710.
+        self.assertAlmostEqual(resultado["Neto"], 10000)
+        self.assertAlmostEqual(resultado["NetoTotal"], 9000)
+        self.assertAlmostEqual(resultado["IVA"], 1710)
+        self.assertAlmostEqual(resultado["Total"], 10710)
+
+    def test_guardar_true_persiste_la_correccion_en_disco(self):
+        numero = 5002
+        repo_cot.guardar_cotizacion(self._cotizacion_con_totales_desactualizados(numero))
+        datos = repo_cot.cargar_cotizacion(numero)
+        repo_cot.recalcular_descuentos(datos)  # guardar=True por default
+        self.assertAlmostEqual(repo_cot.cargar_cotizacion(numero)["Total"], 10710)
+
+    def test_guardar_false_no_toca_el_archivo(self):
+        numero = 5003
+        repo_cot.guardar_cotizacion(self._cotizacion_con_totales_desactualizados(numero))
+        datos = repo_cot.cargar_cotizacion(numero)
+        repo_cot.recalcular_descuentos(datos, guardar=False)
+        # El dict en memoria se actualizó, pero el archivo en disco sigue
+        # con el Total desactualizado (0) porque guardar=False.
+        self.assertEqual(repo_cot.cargar_cotizacion(numero)["Total"], 0)
+
+
 class TestBuscarEnUltimosMeses(_ConRutaTemporal):
 
     def test_encuentra_en_el_mismo_mes_de_referencia(self):
