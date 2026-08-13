@@ -129,6 +129,23 @@ class TestGenerarHtml(unittest.TestCase):
         fila_totales = fila_totales[:fila_totales.index("</tr>")]
         self.assertEqual(fila_totales.count("<td"), 7)
 
+    def test_nombre_del_trabajo_aparece_entre_el_header_y_los_datos_del_cliente(self):
+        from core.presentar_op import generar_html
+        op = _op_normal(9007)
+        op["Nombre"] = "Banderas plaza de armas"
+        ruta = generar_html(op)
+        html = ruta.read_text(encoding="utf-8")
+        i_header = html.index("</header>")
+        i_trabajo = html.index("Banderas plaza de armas")
+        i_datos = html.index('class="datos"')
+        self.assertTrue(i_header < i_trabajo < i_datos)
+
+    def test_sin_nombre_no_deja_un_bloque_vacio(self):
+        from core.presentar_op import generar_html
+        ruta = generar_html(_op_normal(9008))  # _op_normal no trae "Nombre"
+        html = ruta.read_text(encoding="utf-8")
+        self.assertNotIn('class="trabajo"', html)
+
 
 if __name__ == "__main__":
     unittest.main()
