@@ -20,6 +20,19 @@ def _base_recursos() -> Path:
     return Path(__file__).parent.parent / "recursos"
 
 
+def _base_docs() -> Path:
+    """
+    Carpeta con documentación de solo lectura (manual de usuario, etc.),
+    mismo criterio que _base_recursos().
+    - Normal:      <raíz del proyecto>/docs
+    - PyInstaller: sys._MEIPASS/docs (agregada al build con --add-data,
+      ver build_windows.ps1 / .github/workflows/release.yml)
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "docs"
+    return Path(__file__).parent.parent / "docs"
+
+
 def _base_datos() -> Path:
     """
     Carpeta local (por máquina) para datos que no dependen de Dropbox.
@@ -89,5 +102,6 @@ def _base_conf() -> Path:
 
 
 RECURSOS  = _base_recursos()   # recursos/: plantilla xlsx, assets/, seeds de fábrica
+DOCS      = _base_docs()       # docs/: manual de usuario y otra documentación de solo lectura
 DATOS     = _base_datos()      # datos locales por máquina (fallback sin Dropbox)
 CONF      = _base_conf()       # clientes.json, contactos.json, productos.json, textiles.json

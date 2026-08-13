@@ -48,6 +48,7 @@ python -m PyInstaller `
     --collect-all clr_loader `
     --collect-all webview `
     --add-data "recursos;recursos" `
+    --add-data "docs;docs" `
     --add-data "$pynetRuntime;pythonnet/runtime" `
     --hidden-import "PIL._tkinter_finder" `
     main.py

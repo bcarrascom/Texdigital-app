@@ -37,8 +37,28 @@ COLORES = {
     "placeholder_txt":  "#BBBBBB",
 }
 
-from core.rutas import RECURSOS as _RECURSOS
+from core.rutas import RECURSOS as _RECURSOS, DOCS as _DOCS
 ASSETS = _RECURSOS / "assets"
+
+
+def _abrir_manual_usuario():
+    """Abre el manual de usuario (docs/Manual_de_Uso.pdf) con el visor de
+    PDF por defecto del SO — mismo mecanismo que "abrir carpeta" en
+    ui/revisar_cotizaciones.py (Explorador/Finder/xdg-open también abren
+    un archivo con su aplicación asociada, no solo carpetas)."""
+    ruta = _DOCS / "Manual_de_Uso.pdf"
+    if not ruta.exists():
+        return
+    ruta = str(ruta)
+    if sys.platform == "win32":
+        import os
+        os.startfile(ruta)
+    elif sys.platform == "darwin":
+        import subprocess
+        subprocess.run(["open", ruta])
+    else:
+        import subprocess
+        subprocess.run(["xdg-open", ruta])
 
 if sys.platform == "darwin":
     FUENTE_CABECERA  = ("Helvetica Neue", 17, "bold")
@@ -170,6 +190,20 @@ class VentanaPrincipal(tk.Tk):
         from core.version import VERSION
         tk.Label(contenido_cab, text=f"v{VERSION}",
                  font=FUENTE_FECHA, bg=COLORES["acento"], fg="#8AAFC8").pack(side="right")
+
+        # Botón "?" — abre el manual de usuario (ver _abrir_manual_usuario).
+        # Empacado DESPUÉS de la versión (mismo side="right") para quedar
+        # justo a su izquierda.
+        btn_ayuda = tk.Label(
+            contenido_cab, text="?", font=FUENTE_BTN,
+            bg=COLORES["acento"], fg="#FFFFFF",
+            width=2, height=1, cursor="hand2",
+            highlightthickness=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF",
+        )
+        btn_ayuda.pack(side="right", padx=(0, 10))
+        btn_ayuda.bind("<Button-1>", lambda _: _abrir_manual_usuario())
+        btn_ayuda.bind("<Enter>", lambda _: btn_ayuda.config(bg=COLORES["acento_hover"]))
+        btn_ayuda.bind("<Leave>", lambda _: btn_ayuda.config(bg=COLORES["acento"]))
 
         # ── Fecha ──
         tk.Label(self, text=fecha_actual, font=FUENTE_FECHA,

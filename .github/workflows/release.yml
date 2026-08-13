@@ -80,6 +80,7 @@ jobs:
           python -m PyInstaller --name "Sistema de Gestion" --windowed --onedir `
             --collect-all openpyxl --collect-all pythonnet --collect-all clr_loader --collect-all webview `
             --add-data "recursos;recursos" `
+            --add-data "docs;docs" `
             --add-data "$pynetRuntime;pythonnet/runtime" `
             --hidden-import "PIL._tkinter_finder" main.py
 
@@ -87,7 +88,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: >-
           python -m PyInstaller --name "Sistema de Gestion" --windowed --onedir
-          --collect-all openpyxl --add-data "recursos:recursos"
+          --collect-all openpyxl --add-data "recursos:recursos" --add-data "docs:docs"
           --hidden-import "PIL._tkinter_finder" main.py
 
       - name: Crear archivo (Windows)
