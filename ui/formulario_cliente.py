@@ -36,7 +36,7 @@ from core.repositorio_cotizaciones import (
     carpeta_excel,
     mapear_producto,
 )
-from core.precios import costo_cotizacion
+from core.precios import costo_cotizacion, descuento_textil
 
 # Desactivado temporalmente: exportar_cotizacion_backlight/nueva no saben
 # escribir el campo "Caja" cuando es un dict con el detalle de la caja
@@ -448,6 +448,17 @@ class FormularioCliente(tk.Toplevel):
         self._crear_entry(_frame_descuento, self._var_descuento, width=10).pack(side="left", ipady=7, ipadx=6)
         tk.Label(_frame_descuento, text="%", font=FUENTE_LABEL,
                  bg=COLORES["fondo"], fg=COLORES["texto"]).pack(side="left", padx=(2, 0))
+
+        # Descuento textil (ver core.precios.descuento_textil): calculado
+        # solo, no editable — por volumen de tela impresa, aparte del %
+        # manual de arriba. Al guardar se aplica el que dé más ahorro entre
+        # los dos, nunca los dos juntos (ver costo_cotizacion).
+        self._descuento_textil_pct = descuento_textil(self._datos_productos)["pct_visual"]
+        tk.Label(
+            col_descuento,
+            text=f"Descuento textil: {self._descuento_textil_pct:.1f}%",
+            font=FUENTE_LABEL, bg=COLORES["fondo"], fg=COLORES["texto_suave"],
+        ).pack(anchor="w", pady=(4, 0))
 
         # Fila: Condición de pago + botón Guardar Contacto
         fila_condicion = tk.Frame(cuerpo, bg=COLORES["fondo"])

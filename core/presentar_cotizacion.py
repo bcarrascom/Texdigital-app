@@ -130,15 +130,25 @@ def generar_html(json_dict: dict) -> Path:
     )
 
     # Sin descuento, Neto == Neto total — mostrar ambas filas es redundante,
-    # así que se omiten las dos y queda solo "Neto total".
+    # así que se omiten las dos y queda solo "Neto total". Solo uno de los
+    # dos descuentos (normal o textil) queda aplicado — ver
+    # core.precios.costo_cotizacion — pero de cara al cliente la etiqueta
+    # siempre dice "Descuento", sin distinguir el origen (confirmado con el
+    # usuario: no debe decir "Descuento textil" al imprimir); el % que se
+    # muestra es el de quien haya ganado.
+    if totales["fuente_descuento"] == "textil":
+        pct_mostrado = totales["descuento_textil_pct"]
+    else:
+        pct_mostrado = descuento_pct
+    etiqueta_descuento = f"Descuento ({pct_mostrado:g}%)"
     fila_neto = (
         f'      <tr class="sub"><td>Neto</td><td>{formatear_clp(totales["neto"])}</td></tr>'
-        if descuento_pct else ""
+        if totales["descuento"] else ""
     )
     fila_descuento = (
-        f'      <tr class="sub"><td>Descuento ({descuento_pct:g}%)</td>'
+        f'      <tr class="sub"><td>{etiqueta_descuento}</td>'
         f'<td>−{formatear_clp(totales["descuento"])}</td></tr>'
-        if descuento_pct else ""
+        if totales["descuento"] else ""
     )
 
     reemplazos = {

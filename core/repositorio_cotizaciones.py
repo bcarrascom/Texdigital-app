@@ -16,6 +16,7 @@ from pathlib import Path
 
 from core.rutas import DATOS, _detectar_dropbox
 from core.repositorio import TEXTILES_ANCHOS
+from core.precios import costo_cotizacion
 from core import carpetas_mensuales as cm
 
 _CAMPO_FECHA = "Fecha"
@@ -125,6 +126,52 @@ def guardar_cotizacion(datos: dict) -> Path:
         encoding="utf-8",
     )
     return destino
+
+
+def recalcular_descuentos(datos: dict, *, guardar: bool = True) -> dict:
+    """
+    Recalcula Neto/NetoTotal/IVA/Total de una cotización ya guardada, a
+    partir de sus productos y su % de Descuento manual — misma fórmula que
+    usa ui/formulario_cliente.py al crearla (ver core.precios.costo_cotizacion).
+    Pensada para refrescar cotizaciones guardadas ANTES de un cambio a la
+    fórmula de precios (ej. el descuento-textil, ver
+    core.precios.descuento_textil) sin tener que reabrirlas y reguardarlas
+    a mano una por una.
+
+    Se llama justo antes de abrir el HTML (botón Ver/Imprimir) y justo
+    antes de editar (botón Editar), ambos en ui/revisar_cotizaciones.py,
+    para que los dos caminos siempre reflejen la lógica de precios
+    vigente, no la que estaba vigente cuando se guardó por última vez. El
+    % de Descuento manual y los productos NO se tocan — solo los montos
+    derivados de ellos.
+
+    Muta y devuelve el mismo dict recibido. Si `guardar` es True (default)
+    y algún monto cambió, además reescribe el archivo en disco (mismo
+    mecanismo que guardar_cotizacion) para que la corrección quede
+    permanente y no solo para esta vista puntual.
+    """
+    productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
+    descuento_pct = datos.get("Descuento", 0.0) or 0.0
+    despacho = datos.get("Despacho")
+    instalacion = datos.get("Instalacion")
+    totales = costo_cotizacion(productos_internos, descuento_pct,
+                                despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+
+    cambio = (
+        datos.get("Neto") != totales["neto"]
+        or datos.get("NetoTotal") != totales["neto_total"]
+        or datos.get("IVA") != totales["iva"]
+        or datos.get("Total") != totales["total"]
+    )
+    datos["Neto"]      = totales["neto"]
+    datos["NetoTotal"] = totales["neto_total"]
+    datos["IVA"]       = totales["iva"]
+    datos["Total"]     = totales["total"]
+
+    if guardar and cambio and "Cotizacion" in datos:
+        guardar_cotizacion(datos)
+
+    return datos
 
 
 def mover_a_historial(numero: int) -> None:
