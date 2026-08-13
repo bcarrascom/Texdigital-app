@@ -301,6 +301,11 @@ def generar_html(op: dict) -> Path:
     es_backlight = bool(productos_raw) and "Caja" in productos_raw[0]
     terminaciones_caja = op.get("TerminacionesCaja", "CAJA TERMINADA")
 
+    nombre_trabajo = op.get("Nombre", "").strip()
+    nombre_trabajo_bloque = (
+        f'<div class="trabajo">{nombre_trabajo}</div>' if nombre_trabajo else ""
+    )
+
     contacto = op.get("Contacto", "")
     email = op.get("Email", "")
     contacto_email = " · ".join(x for x in (contacto, email) if x)
@@ -350,6 +355,7 @@ def generar_html(op: dict) -> Path:
         "{{numero}}":           str(numero),
         "{{fecha_ingreso}}":    op.get("Fecha_ingreso", ""),
         "{{fecha_entrega}}":    op.get("Fecha_entrega", ""),
+        "{{nombre_trabajo_bloque}}": nombre_trabajo_bloque,
         "{{empresa}}":          op.get("Empresa", ""),
         "{{contacto_email}}":   contacto_email,
         "{{descripcion_bloque}}": descripcion_bloque,

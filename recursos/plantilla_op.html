@@ -24,7 +24,10 @@
   .cot-box .fechas{ font-size:12.5px; color:var(--gris); margin-top:3px; }
   .cot-box .fechas b{ color:var(--tinta); font-weight:600; }
 
-  .datos{ display:flex; gap:8mm; margin:7mm 0 6mm; }
+  .trabajo{ font-family:'Barlow Condensed'; font-size:19px; font-weight:700;
+    color:var(--tinta); margin-top:6mm; }
+
+  .datos{ display:flex; gap:8mm; margin:3mm 0 6mm; }
   .dato{ flex:1; background:var(--fondo-suave); border-radius:8px; padding:4mm 5mm; }
   .dato.entrega{ background:#FBF1E4; }
   .dato .k{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--gris); font-weight:600; }
@@ -95,6 +98,8 @@
       <div class="fechas">Ingreso: <b>{{fecha_ingreso}}</b></div>
     </div>
   </header>
+
+  {{nombre_trabajo_bloque}}
 
   <div class="datos">
     <div class="dato">
