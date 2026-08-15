@@ -34,7 +34,7 @@ from ui.estilos import (
 
 # Pantallas compartidas
 from ui.pantalla_inicio import PantallaInicio
-from ui.pantalla_medidas_base import PantallaMedidasBase
+from ui.pantalla_medidas_base import PantallaMedidasBase, _hay_contenido_parcial
 
 # Widget de autocompletado ya existente
 from ui.formulario_cliente import EntradaAutocompletado
@@ -194,11 +194,13 @@ class _PantallaMedidas(PantallaMedidasBase):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, on_siguiente, on_nav,
-                 con_extras=False, extras_texto="", extras_completo=False):
+                 con_extras=False, extras_texto="", extras_completo=False,
+                 on_guardar_progreso=None):
         super().__init__(parent, ventana_raiz, indice, total,
                           datos_previos, datos_todos, on_siguiente, on_nav,
                           con_extras=con_extras, extras_texto=extras_texto,
-                          extras_completo=extras_completo)
+                          extras_completo=extras_completo,
+                          on_guardar_progreso=on_guardar_progreso)
 
         if datos_previos:
             producto_ini      = datos_previos.get("producto", "")
@@ -465,8 +467,8 @@ class _PantallaMedidas(PantallaMedidasBase):
                                  font=FUENTE_MEDIDA, fill=COLORES["texto"],
                                  anchor="e", angle=90)
 
-    def _siguiente(self):
-        self._on_siguiente({
+    def _recolectar_actual(self) -> dict:
+        return {
             "producto":      self._var_producto.get().strip(),
             "textil":        self._var_textil.get().strip(),
             "estructuras":   list(self._widget_estructuras.items),
@@ -477,7 +479,29 @@ class _PantallaMedidas(PantallaMedidasBase):
             "cantidad":      int(self._var_cant.get()),
             "tema":          self._var_tema.get().strip(),
             "obs":           self._var_obs.get().strip(),
-        })
+        }
+
+    def _recolectar_parcial(self) -> dict:
+        """Como _recolectar_actual(), pero sin validar ni convertir tipos —
+        para "Guardar progreso" con un producto todavía incompleto (ver
+        PantallaMedidasBase._guardar_progreso): alto/ancho/cantidad quedan
+        tal cual el texto escrito (puede estar vacío o a medio escribir),
+        no como float/int."""
+        return {
+            "producto":      self._var_producto.get().strip(),
+            "textil":        self._var_textil.get().strip(),
+            "estructuras":   list(self._widget_estructuras.items),
+            "terminaciones": list(self._widget_terminaciones.items),
+            "impresion":     self._var_impresion.get(),
+            "alto":          self._var_alto.get().strip(),
+            "ancho":         self._var_ancho.get().strip(),
+            "cantidad":      self._var_cant.get().strip(),
+            "tema":          self._var_tema.get().strip(),
+            "obs":           self._var_obs.get().strip(),
+        }
+
+    def _siguiente(self):
+        self._on_siguiente(self._recolectar_actual())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -491,7 +515,7 @@ class CotizacionNueva(tk.Tk):
     TAM_INICIO  = (800, 560)
     TAM_MEDIDAS = (960, 1480)
 
-    def __init__(self, edicion: dict | None = None):
+    def __init__(self, edicion: dict | None = None, pendiente: dict | None = None):
         super().__init__()
         if sys.platform == "darwin":
             self.TAM_INICIO  = (_esc.px(800), _esc.px(730))
@@ -531,6 +555,28 @@ class CotizacionNueva(tk.Tk):
         # edicion = {"json": <dict completo de la cotización>, "productos": [<dict interno>, ...]}
         # No None ⇒ se está editando una cotización ya guardada (viene de Revisar Cotizaciones).
         self._edicion           = edicion
+        # pendiente = dict guardado por core.repositorio_pendientes (ver
+        # "Guardar progreso" más abajo) — No None ⇒ se está retomando una
+        # cotización a medio hacer (viene de Revisar Cotizaciones →
+        # Pendientes). A diferencia de `edicion`, todavía no tiene N° de
+        # cotización ni cliente — al confirmar el resumen sigue yendo a
+        # FormularioCliente como una cotización nueva cualquiera (ver
+        # _on_confirmar_resumen), solo que borra el pendiente al guardar.
+        self._pendiente_id = pendiente.get("id") if pendiente else None
+        # Producto a medio llenar (campos sueltos, sin validar) del último
+        # "Guardar progreso" — {"indice": int, ...campos crudos...} o None.
+        # Se carga una sola vez al retomar un pendiente (ver más abajo) y se
+        # consume la primera vez que se muestra su pantalla de medidas (ver
+        # _mostrar_medidas); mientras tanto también se actualiza en vivo con
+        # cada "Guardar progreso" (ver _on_guardar_progreso_medidas).
+        self._producto_parcial_actual = (pendiente.get("producto_parcial") if pendiente else None)
+        # Pantalla de medidas actualmente mostrada en self._area, o None si
+        # se está mostrando otra cosa (resumen, extras, inicio) — usado por
+        # el atajo Ctrl+S/Cmd+S para saber si hay que juntar el producto
+        # actual antes de guardar el progreso (ver _atajo_guardar_progreso).
+        self._pantalla_medidas_activa = None
+        self.bind_all("<Control-s>", self._atajo_guardar_progreso)
+        self.bind_all("<Command-s>", self._atajo_guardar_progreso)
 
         _construir_cabecera(self, self._volver)
 
@@ -550,6 +596,40 @@ class CotizacionNueva(tk.Tk):
                 self._con_instalacion  = True
                 self._instalacion_valor = float(instalacion_json)
             self._abrir_resumen()
+        elif pendiente:
+            from core.repositorio_cotizaciones import producto_desde_json
+            # "productos" conserva los huecos (null = todavía sin
+            # completar, ver _guardar_progreso_pendiente) en su posición
+            # real, así el largo de la lista YA es el total de productos
+            # (no hace falta guardar un campo aparte para eso).
+            self._datos = [
+                producto_desde_json(p) if p is not None else None
+                for p in pendiente.get("productos", [])
+            ] or [None]
+            self._nombre_trabajo   = pendiente.get("nombre_trabajo", "")
+            self._total_productos  = len(self._datos)
+            despacho_pend = pendiente.get("despacho")
+            if despacho_pend is not None:
+                self._con_despacho   = True
+                self._despacho_valor = float(despacho_pend)
+            instalacion_pend = pendiente.get("instalacion")
+            if instalacion_pend is not None:
+                self._con_instalacion   = True
+                self._instalacion_valor = float(instalacion_pend)
+            if self._producto_parcial_actual:
+                indice = self._producto_parcial_actual.get("indice", 0)
+                self._iteracion_actual = max(0, min(indice, self._total_productos - 1))
+                self._mostrar_medidas()
+            elif all(d is not None for d in self._datos):
+                self._abrir_resumen()
+            else:
+                # Hay al menos un producto sin completar y sin datos
+                # parciales guardados para ninguno — retoma en el primer
+                # índice incompleto, como una cotización nueva (pero con
+                # nombre/cantidad/despacho/instalación ya cargados).
+                self._iteracion_actual = next(
+                    i for i, d in enumerate(self._datos) if d is None)
+                self._mostrar_medidas()
         else:
             PantallaInicio(self._area, subtitulo="Cotizacion nueva",
                            on_confirmar=self._on_inicio_confirmado)
@@ -559,6 +639,7 @@ class CotizacionNueva(tk.Tk):
         for w in self._area.winfo_children():
             w.destroy()
         self.unbind("<Return>")
+        self._pantalla_medidas_activa = None
 
     def _on_inicio_confirmado(self, cantidad: int, nombre: str,
                                con_despacho: bool, con_instalacion: bool):
@@ -589,18 +670,32 @@ class CotizacionNueva(tk.Tk):
         self._desde_resumen = desde_resumen
         self._limpiar()
         _centrar(self, *self.TAM_MEDIDAS)
-        _PantallaMedidas(
+        datos_previos = self._datos[self._iteracion_actual]
+        # Producto a medio llenar (guardado por "Guardar progreso" o
+        # retomado de un pendiente, ver __init__) — se usa como valor
+        # inicial mientras este índice siga sin completarse (datos_previos
+        # sigue siendo None); una vez que se completa, self._datos[indice]
+        # ya no es None y este fallback deja de consultarse solo.
+        if (datos_previos is None and self._producto_parcial_actual
+                and self._producto_parcial_actual.get("indice") == self._iteracion_actual):
+            datos_previos = self._producto_parcial_actual
+        self._pantalla_medidas_activa = _PantallaMedidas(
             self._area,
             ventana_raiz=self,
             indice=self._iteracion_actual,
             total=self._total_productos,
-            datos_previos=self._datos[self._iteracion_actual],
+            datos_previos=datos_previos,
             datos_todos=self._datos,
             on_siguiente=self._on_medidas_confirmadas,
             on_nav=self._on_nav,
             con_extras=self._con_despacho or self._con_instalacion,
             extras_texto=self._extras_texto(),
             extras_completo=self._extras_completo(),
+            # Guardar progreso no aplica al editar una cotización YA
+            # guardada (ver docstring de self._pendiente_id) — ahí ya tiene
+            # dueño (su N° de cotización) y su propio guardado ("Confirmar"
+            # en el resumen).
+            on_guardar_progreso=None if self._edicion else self._on_guardar_progreso_medidas,
         )
 
     def _mostrar_extras(self, volver_a_resumen: bool):
@@ -629,6 +724,11 @@ class CotizacionNueva(tk.Tk):
 
     def _on_medidas_confirmadas(self, datos: dict):
         self._datos[self._iteracion_actual] = datos
+        # Si había un producto parcial guardado para este mismo índice (ver
+        # "Guardar progreso"), ya quedó obsoleto — este índice está completo.
+        if (self._producto_parcial_actual
+                and self._producto_parcial_actual.get("indice") == self._iteracion_actual):
+            self._producto_parcial_actual = None
 
         if self._desde_resumen:
             self._abrir_resumen()
@@ -784,6 +884,7 @@ class CotizacionNueva(tk.Tk):
             incluir_terminaciones=False,
             despacho=self._despacho_valor if self._con_despacho else None,
             instalacion=self._instalacion_valor if self._con_instalacion else None,
+            pendiente_id=self._pendiente_id,
         )
 
     def _on_cerrar_resumen(self):
@@ -843,3 +944,67 @@ class CotizacionNueva(tk.Tk):
         from ui.interfaz import VentanaPrincipal
         self.destroy()
         VentanaPrincipal().mainloop()
+
+    # ── Guardar progreso (cotización pendiente, ver core/repositorio_pendientes.py) ──
+
+    def _atajo_guardar_progreso(self, _event=None):
+        """Ctrl+S / Cmd+S — funciona en cualquier pantalla del flujo (medidas,
+        resumen, incluso el formulario de cliente, todos Toplevel de esta
+        misma ventana raíz — bind_all es interpreter-wide). No aplica al
+        editar una cotización ya guardada (ver self._edicion)."""
+        if self._edicion:
+            return
+        if self._pantalla_medidas_activa is not None:
+            self._pantalla_medidas_activa._guardar_progreso()
+        else:
+            self._guardar_progreso_pendiente()
+        return "break"
+
+    def _on_guardar_progreso_medidas(self, dato_completo, dato_parcial):
+        """Callback de _PantallaMedidas (botón "💾 Guardar progreso"): si el
+        producto actual ya está completo, lo guarda en su lugar; si no,
+        guarda los campos sueltos que sí llegó a llenar (aunque no alcancen
+        para un producto válido) para poder mostrarlos de nuevo al
+        retomarla — ver PantallaMedidasBase._guardar_progreso."""
+        if dato_completo is not None:
+            self._datos[self._iteracion_actual] = dato_completo
+            self._producto_parcial_actual = None
+        elif dato_parcial is not None and _hay_contenido_parcial(dato_parcial, ignorar={"impresion"}):
+            self._producto_parcial_actual = {"indice": self._iteracion_actual, **dato_parcial}
+        else:
+            self._producto_parcial_actual = None
+        self._guardar_progreso_pendiente()
+
+    def _guardar_progreso_pendiente(self):
+        """Guarda un checkpoint de la cotización en curso (ver
+        core/repositorio_pendientes.py) — NO cierra ni navega, la ventana
+        se queda tal cual estaba. Funciona incluso sin ningún producto
+        completo (basta con el nombre y la cantidad de la pantalla
+        inicial): se guardan los productos ya completos, en su posición
+        real (con huecos = None para los que faltan), y el producto a
+        medio llenar si había uno."""
+        from tkinter import messagebox
+        from datetime import datetime
+        from core.repositorio_cotizaciones import mapear_producto
+        from core.repositorio_pendientes import guardar_pendiente, nuevo_id
+
+        if not self._pendiente_id:
+            self._pendiente_id = nuevo_id()
+
+        guardar_pendiente({
+            "id":             self._pendiente_id,
+            "tipo":           "normal",
+            "nombre_trabajo": self._nombre_trabajo,
+            "productos":      [mapear_producto(d) if d is not None else None
+                                for d in self._datos],
+            "producto_parcial": self._producto_parcial_actual,
+            "despacho":       self._despacho_valor if self._con_despacho else None,
+            "instalacion":    self._instalacion_valor if self._con_instalacion else None,
+            "guardado_en":    datetime.now().strftime("%d/%m/%Y %H:%M"),
+        })
+        n_completos = sum(1 for d in self._datos if d is not None)
+        messagebox.showinfo(
+            "Progreso guardado",
+            f"Se guardó el progreso de \"{self._nombre_trabajo}\" "
+            f"({n_completos} de {len(self._datos)} producto(s) completos).\n\n"
+            "Puedes continuarla desde Revisar Cotizaciones → Pendientes.")
