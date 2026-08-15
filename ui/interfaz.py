@@ -191,6 +191,21 @@ class VentanaPrincipal(tk.Tk):
         tk.Label(contenido_cab, text=f"v{VERSION}",
                  font=FUENTE_FECHA, bg=COLORES["acento"], fg="#8AAFC8").pack(side="right")
 
+        # Botón "Actualizar" — abre ui/actualizador.py::VentanaActualizar.
+        # Empacado DESPUÉS de la versión (mismo side="right") para quedar
+        # justo a su izquierda; el botón "?" (más abajo) queda más a la
+        # izquierda todavía.
+        btn_actualizar = tk.Label(
+            contenido_cab, text="⟳", font=FUENTE_BTN,
+            bg=COLORES["acento"], fg="#FFFFFF", cursor="hand2",
+            highlightthickness=1, highlightbackground="#FFFFFF", highlightcolor="#FFFFFF",
+            padx=8, pady=4,
+        )
+        btn_actualizar.pack(side="right", padx=(0, 10))
+        btn_actualizar.bind("<Button-1>", lambda _: self._abrir_actualizador())
+        btn_actualizar.bind("<Enter>", lambda _: btn_actualizar.config(bg=COLORES["acento_hover"]))
+        btn_actualizar.bind("<Leave>", lambda _: btn_actualizar.config(bg=COLORES["acento"]))
+
         # Botón "?" — abre el manual de usuario (ver _abrir_manual_usuario).
         # Empacado DESPUÉS de la versión (mismo side="right") para quedar
         # justo a su izquierda.
@@ -325,6 +340,10 @@ class VentanaPrincipal(tk.Tk):
         from ui.cotizacion import CotizacionNueva
         self.destroy()
         CotizacionNueva().mainloop()
+
+    def _abrir_actualizador(self):
+        from ui.actualizador import VentanaActualizar
+        VentanaActualizar(self)
 
     def _abrir_revisar_cotizaciones(self):
         from ui.revisar_cotizaciones import VentanaCotizaciones

@@ -1,21 +1,25 @@
 """
 core/actualizador.py
-Auto-actualización del build empaquetado.
+Actualización del build empaquetado, disparada a mano desde el botón
+"Actualizar" del menú principal (ver ui/actualizador.py) — no hay ningún
+chequeo automático al iniciar.
 
-Al iniciar, compara la VERSION embebida contra el último release publicado
-en GitHub. Si hay una más nueva, descarga el paquete de este sistema
-operativo, lo deja listo en una carpeta temporal y lanza un script
-separado que: espera a que este proceso termine, reemplaza la carpeta de
-instalación por la nueva, y vuelve a abrir la app. Este proceso termina
-justo después de lanzar ese script (ver main.py).
+buscar_actualizacion() consulta el último release publicado en GitHub y lo
+compara contra la VERSION embebida. Si hay una más nueva, aplicar_actualizacion()
+descarga el paquete de este sistema operativo, lo deja extraído, y lanza un
+script separado que: espera a que este proceso termine, reemplaza la carpeta
+de instalación por la nueva, y vuelve a abrir la app — el llamador debe
+cerrar la app enseguida después (ver ui/actualizador.py, que usa
+ui.panel_produccion.salir_app()).
 
 Como toda la persistencia real (cotizaciones, OPs, clientes, catálogos)
 vive en Dropbox y no en la carpeta del programa, reemplazar los archivos
 de la app entre un inicio y el siguiente no pone en riesgo ningún dato.
 
-Nunca se activa corriendo desde código fuente (sys.frozen es False) — solo
+Nunca hace nada corriendo desde código fuente (sys.frozen es False) — solo
 tiene sentido para el build empaquetado que se distribuye por GitHub
-Releases.
+Releases (corriendo desde código fuente, sys.executable es el intérprete
+de Python, no hay ninguna carpeta de instalación que reemplazar).
 """
 
 import json
@@ -34,8 +38,9 @@ from core.version import VERSION
 
 REPO_GITHUB = "bcarrascom/Texdigital-app"
 API_ULTIMO_RELEASE = f"https://api.github.com/repos/{REPO_GITHUB}/releases/latest"
-TIMEOUT_CONSULTA = 6
+TIMEOUT_CONSULTA = 8
 TIMEOUT_DESCARGA = 120
+TAMANO_CHUNK = 262144  # 256 KiB
 
 
 def _contexto_ssl() -> ssl.SSLContext | None:
@@ -43,11 +48,9 @@ def _contexto_ssl() -> ssl.SSLContext | None:
     disponible. El build empaquetado con PyInstaller en macOS no siempre
     encuentra el bundle de certificados que usaría una instalación normal
     de Python (falta el paso "Install Certificates.command"), lo que hace
-    fallar en silencio toda request HTTPS con
-    "certificate verify failed: unable to get local issuer certificate" —
-    buscar_actualizacion() lo traga como cualquier otro error de red y la
-    app sigue abriendo la versión vieja sin avisar nada. Devuelve None
-    (contexto por defecto de Python) si certifi no está disponible."""
+    fallar toda request HTTPS con "certificate verify failed: unable to
+    get local issuer certificate". Devuelve None (contexto por defecto de
+    Python) si certifi no está disponible."""
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
@@ -77,38 +80,55 @@ def _asset_para_este_os(assets: list[dict]) -> dict | None:
 def buscar_actualizacion() -> dict | None:
     """
     Devuelve {"tag", "url", "nombre"} del release de GitHub si hay una
-    versión más nueva que la actual y trae un paquete para este OS. Si no
-    hay ninguna más nueva, o falla la consulta (sin internet, GitHub
-    caído, etc.), devuelve None sin lanzar excepciones — la app debe
-    poder arrancar igual.
+    versión más nueva que la actual. Devuelve None si ya se tiene la
+    versión más reciente (o si se está corriendo desde código fuente, ver
+    docstring del módulo) — en cambio, cualquier error real (sin internet,
+    GitHub caído, el release no trae paquete para este OS, respuesta
+    inesperada) se deja propagar como excepción, para que quien llama
+    (ui/actualizador.py) pueda mostrar un error de verdad en vez de
+    confundirlo con "ya estás al día".
     """
     if not getattr(sys, "frozen", False):
         return None
 
-    try:
-        req = urllib.request.Request(
-            API_ULTIMO_RELEASE, headers={"Accept": "application/vnd.github+json"}
-        )
-        with urllib.request.urlopen(req, timeout=TIMEOUT_CONSULTA, context=_contexto_ssl()) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
+    req = urllib.request.Request(
+        API_ULTIMO_RELEASE, headers={"Accept": "application/vnd.github+json"}
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT_CONSULTA, context=_contexto_ssl()) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
 
     tag = data.get("tag_name", "")
-    if not tag or _version_tupla(tag) <= _version_tupla(VERSION):
+    if not tag:
+        raise RuntimeError("El último release de GitHub no trae un tag válido.")
+    if _version_tupla(tag) <= _version_tupla(VERSION):
         return None
 
     asset = _asset_para_este_os(data.get("assets", []))
     if asset is None:
-        return None
+        raise RuntimeError(
+            f"El release {tag} no trae un paquete para este sistema operativo ({_nombre_os()}).")
 
     return {"tag": tag, "url": asset["browser_download_url"], "nombre": asset["name"]}
 
 
-def _descargar(url: str, destino: Path) -> None:
+def _descargar(url: str, destino: Path, on_progreso=None) -> None:
+    """on_progreso(bytes_leidos, bytes_total) — bytes_total es 0 si el
+    servidor no informó Content-Length. Se llama en el mismo hilo que
+    corre la descarga (quien la use desde Tkinter debe marshalear a la UI
+    con .after(), ver ui/actualizador.py)."""
     req = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT_DESCARGA, context=_contexto_ssl()) as resp, open(destino, "wb") as f:
-        shutil.copyfileobj(resp, f)
+    with urllib.request.urlopen(req, timeout=TIMEOUT_DESCARGA, context=_contexto_ssl()) as resp:
+        total = int(resp.headers.get("Content-Length") or 0)
+        leidos = 0
+        with open(destino, "wb") as f:
+            while True:
+                chunk = resp.read(TAMANO_CHUNK)
+                if not chunk:
+                    break
+                f.write(chunk)
+                leidos += len(chunk)
+                if on_progreso:
+                    on_progreso(leidos, total)
 
 
 def _extraer(archivo: Path, destino: Path) -> Path | None:
@@ -195,21 +215,22 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
     subprocess.Popen(["/bin/sh", str(script)], start_new_session=True)
 
 
-def aplicar_actualizacion(release: dict) -> bool:
+def aplicar_actualizacion(release: dict, on_progreso=None) -> None:
     """
     Descarga el release, lo deja extraído, y lanza el script que hace el
-    reemplazo real una vez que este proceso termine. Devuelve True si
-    quedó todo listo (el llamador debe cerrar la app de inmediato después);
-    False si algo falló (sin internet a mitad de descarga, etc.) — en ese
-    caso no se tocó nada y la app debe seguir abriendo normalmente.
+    reemplazo real una vez que este proceso termine. Si termina sin lanzar
+    excepción, quedó todo listo y el llamador debe cerrar la app de
+    inmediato (ver ui/actualizador.py, que usa
+    ui.panel_produccion.salir_app()) — si lanza una excepción, no se tocó
+    nada y la app debe seguir abierta con normalidad.
     """
     tmp = Path(tempfile.mkdtemp(prefix="sgtd_update_"))
     try:
         paquete = tmp / release["nombre"]
-        _descargar(release["url"], paquete)
+        _descargar(release["url"], paquete, on_progreso=on_progreso)
         nueva = _extraer(paquete, tmp / "nueva")
         if nueva is None:
-            raise RuntimeError("el paquete descargado no tiene la carpeta esperada")
+            raise RuntimeError("El paquete descargado no tiene la carpeta esperada.")
 
         instalada = _carpeta_instalada()
         exe_nombre = Path(sys.executable).name
@@ -218,7 +239,6 @@ def aplicar_actualizacion(release: dict) -> bool:
             _lanzar_actualizador_windows(instalada, nueva, tmp, exe_nombre)
         else:
             _lanzar_actualizador_unix(instalada, nueva, tmp, exe_nombre)
-        return True
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
-        return False
+        raise
