@@ -111,6 +111,46 @@ class TestBuscarActualizacion(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 act.buscar_actualizacion()
 
+    def test_default_consulta_releases_latest_no_la_lista(self):
+        data = {"tag_name": "v99.0.0", "assets": [
+            {"name": "SistemaGestion-windows.zip", "browser_download_url": "u"}]}
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("urllib.request.urlopen",
+                         return_value=self._mock_respuesta(data)) as m:
+            act.buscar_actualizacion()
+        url_pedida = m.call_args[0][0].full_url
+        self.assertEqual(url_pedida, act.API_ULTIMO_RELEASE)
+
+    def test_incluir_prerelease_consulta_la_lista_completa(self):
+        lista = [{
+            "tag_name": "v99.0.0-beta.2",
+            "assets": [{"name": "SistemaGestion-windows.zip",
+                        "browser_download_url": "https://example.com/beta2.zip"}],
+        }]
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("urllib.request.urlopen",
+                         return_value=self._mock_respuesta(lista)) as m:
+            release = act.buscar_actualizacion(incluir_prerelease=True)
+        url_pedida = m.call_args[0][0].full_url
+        self.assertEqual(url_pedida, act.API_RELEASES)
+        self.assertEqual(release["tag"], "v99.0.0-beta.2")
+
+    def test_incluir_prerelease_toma_el_primero_de_la_lista(self):
+        lista = [
+            {"tag_name": "v99.0.0-beta.2",
+             "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "nuevo"}]},
+            {"tag_name": "v99.0.0-beta.1",
+             "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "viejo"}]},
+        ]
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(lista)):
+            release = act.buscar_actualizacion(incluir_prerelease=True)
+        self.assertEqual(release["url"], "nuevo")
+
+    def test_incluir_prerelease_lista_vacia_da_none(self):
+        with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])):
+            self.assertIsNone(act.buscar_actualizacion(incluir_prerelease=True))
+
 
 if __name__ == "__main__":
     unittest.main()
