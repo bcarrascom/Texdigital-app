@@ -2,9 +2,11 @@
 main.py  –  Punto de entrada de la aplicación.
 """
 
+import os
 import sys
 import atexit
 import subprocess
+from pathlib import Path
 
 from ui.interfaz import VentanaPrincipal
 
@@ -89,7 +91,37 @@ def _iniciar_app_escritorio():
     app.mainloop()
 
 
+def _desbloquear_instalacion():
+    """
+    Confirmado a mano (v1.4.0-beta.1): los releases se distribuyen como
+    .zip, y Windows marca cada archivo extraído de un .zip descargado por
+    el navegador como "de Internet" (Mark of the Web, un stream NTFS
+    ":Zone.Identifier" aparte). El loader de .NET Framework que usa
+    pythonnet/clr_loader para pywebview en Windows se niega en silencio a
+    cargar un ensamblado marcado así — Python.Runtime.dll no carga, y el
+    error que tira ("Failed to resolve Python.Runtime.Loader.Initialize")
+    no menciona el bloqueo para nada. Desbloqueando el .zip a mano antes
+    de extraerlo (clic derecho → Propiedades → Desbloquear) el mismo build
+    corre bien — esto hace lo mismo por código, apenas arranca, para que
+    quien instala la app no tenga que enterarse nunca de este detalle:
+    borra el stream ":Zone.Identifier" de cada archivo de la carpeta de
+    instalación (si un archivo no está bloqueado, borrarlo falla y se
+    ignora — no hay nada que hacer ahí).
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    base = Path(sys.executable).resolve().parent
+    for archivo in base.rglob("*"):
+        if archivo.is_file():
+            try:
+                os.remove(f"{archivo}:Zone.Identifier")
+            except OSError:
+                pass
+
+
 def main():
+    _desbloquear_instalacion()
+
     if "--panel-produccion" in sys.argv:
         # Proceso hijo lanzado por mostrar_panel_mac() — SOLO en macOS.
         # Este proceso completo es el panel de producción, nada de
