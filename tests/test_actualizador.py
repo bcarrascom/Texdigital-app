@@ -19,22 +19,38 @@ import core.actualizador as act
 
 
 class TestVersionTupla(unittest.TestCase):
+    # Los dos últimos elementos de la tupla codifican la precedencia de
+    # sufijos (-beta.N, -dev, -rc1...) — ver docstring de _version_tupla.
 
     def test_con_v_y_puntos(self):
-        self.assertEqual(act._version_tupla("v1.2.3"), (1, 2, 3))
+        self.assertEqual(act._version_tupla("v1.2.3"), (1, 2, 3, 1, 0))
 
     def test_sin_v(self):
-        self.assertEqual(act._version_tupla("1.2.3"), (1, 2, 3))
+        self.assertEqual(act._version_tupla("1.2.3"), (1, 2, 3, 1, 0))
 
     def test_con_sufijo_dev(self):
-        self.assertEqual(act._version_tupla("1.2.3-dev"), (1, 2, 3))
+        self.assertEqual(act._version_tupla("1.2.3-dev"), (1, 2, 3, 0, 0))
 
     def test_vacio_da_cero(self):
-        self.assertEqual(act._version_tupla(""), (0,))
+        self.assertEqual(act._version_tupla(""), (0, 1, 0))
 
     def test_comparacion_mayor_menor(self):
         self.assertGreater(act._version_tupla("1.10.0"), act._version_tupla("1.9.0"))
         self.assertLess(act._version_tupla("1.2.0"), act._version_tupla("1.2.1"))
+
+    def test_release_final_es_mas_nuevo_que_su_propia_beta(self):
+        # Caso real: v1.4.0-beta.1 instalado, se publica v1.4.0 (mismo
+        # número, sin sufijo) como release final — antes de este fix, las
+        # dos colapsaban a la misma tupla y jamás se detectaba el update.
+        self.assertGreater(act._version_tupla("v1.4.0"), act._version_tupla("1.4.0-beta.1"))
+
+    def test_beta_2_es_mas_nueva_que_beta_1_mismo_numero(self):
+        self.assertGreater(act._version_tupla("1.4.0-beta.2"), act._version_tupla("1.4.0-beta.1"))
+
+    def test_beta_10_es_mas_nueva_que_beta_2_orden_numerico_no_textual(self):
+        # "10" < "2" como texto, pero 10 > 2 como número — confirma que el
+        # desempate usa el entero, no una comparación de strings.
+        self.assertGreater(act._version_tupla("1.4.0-beta.10"), act._version_tupla("1.4.0-beta.2"))
 
 
 class TestAssetParaEsteOS(unittest.TestCase):

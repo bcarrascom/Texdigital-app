@@ -24,6 +24,7 @@ de Python, no hay ninguna carpeta de instalación que reemplazar).
 
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -66,10 +67,35 @@ def _contexto_ssl() -> ssl.SSLContext | None:
 
 
 def _version_tupla(texto: str) -> tuple:
-    """'v1.2.3' o '1.2.3-dev' -> (1, 2, 3). Ignora lo que no sea numérico."""
-    cuerpo = texto.strip().lstrip("vV").split("-")[0]
+    """'v1.2.3' -> (1, 2, 3, 1, 0); '1.2.3-beta.2' -> (1, 2, 3, 0, 2).
+    Ignora lo que no sea numérico.
+
+    Los dos últimos elementos implementan la precedencia de semver para
+    sufijos (-beta.N, -dev, -rc1...):
+    - El primero castiga TENER sufijo: a igual versión numérica, algo con
+      sufijo compara como más viejo que lo mismo sin sufijo
+      (1.4.0-beta.1 < 1.4.0) — si no, promover una beta a versión final
+      sin cambiar el número (1.4.0-beta.1 -> 1.4.0, en vez de saltar a
+      1.4.1) nunca se detectaría como actualización para quien ya tiene
+      la beta instalada: ambas colapsaban a la misma tupla.
+    - El segundo desempata ENTRE sufijos del mismo número, tomando el
+      último grupo de dígitos del sufijo (1.4.0-beta.2 > 1.4.0-beta.1) —
+      si no, probar el updater beta-a-beta (ver incluir_prerelease) tendría
+      el mismo problema: dos betas seguidas colapsarían a la misma tupla.
+    """
+    texto = texto.strip().lstrip("vV")
+    if "-" in texto:
+        cuerpo, sufijo = texto.split("-", 1)
+        tiene_sufijo = 0
+        grupos_sufijo = re.findall(r"\d+", sufijo)
+        num_sufijo = int(grupos_sufijo[-1]) if grupos_sufijo else 0
+    else:
+        cuerpo = texto
+        tiene_sufijo = 1
+        num_sufijo = 0
     partes = [p for p in cuerpo.split(".") if p.isdigit()]
-    return tuple(int(p) for p in partes) or (0,)
+    numeros = tuple(int(p) for p in partes) or (0,)
+    return numeros + (tiene_sufijo, num_sufijo)
 
 
 def _nombre_os() -> str:
