@@ -177,6 +177,16 @@ class VentanaCotizaciones(tk.Toplevel):
         btn_carpeta.bind("<Enter>", lambda _: btn_carpeta.config(bg=COLORES["acento"]))
         btn_carpeta.bind("<Leave>", lambda _: btn_carpeta.config(bg=COLORES["acento_hover"]))
 
+        btn_pendientes = tk.Label(
+            cab, text="🕓 Pendientes", font=FUENTE_BTN,
+            bg=COLORES["acento_hover"], fg="#FFFFFF",
+            padx=12, pady=6, cursor="hand2",
+        )
+        btn_pendientes.pack(side="right", padx=(0, 8))
+        btn_pendientes.bind("<Button-1>", lambda _: self._abrir_pendientes())
+        btn_pendientes.bind("<Enter>", lambda _: btn_pendientes.config(bg=COLORES["acento"]))
+        btn_pendientes.bind("<Leave>", lambda _: btn_pendientes.config(bg=COLORES["acento_hover"]))
+
         # Instrucción
         tk.Label(self,
                  text="Doble clic sobre una fila para editarla.",
@@ -999,6 +1009,10 @@ class VentanaCotizaciones(tk.Toplevel):
         if focus and focus in self._iid_tags:
             self._editar_cotizacion(focus)
         return "break"
+
+    def _abrir_pendientes(self):
+        from ui.pendientes_cotizaciones import VentanaPendientes
+        VentanaPendientes(self)
 
     # ── Editar cotización ──────────────────────────────────────────────────────
 

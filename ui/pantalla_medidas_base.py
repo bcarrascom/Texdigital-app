@@ -25,11 +25,34 @@ from ui.estilos import (
 )
 
 
+def _hay_contenido_parcial(d: dict, ignorar: frozenset = frozenset()) -> bool:
+    """True si algún campo de un dict de _recolectar_parcial() tiene algo
+    escrito/elegido — para no guardar un "producto parcial" vacío cuando en
+    realidad no se alcanzó a tocar nada de este producto todavía.
+
+    `ignorar` excluye claves que siempre traen un valor por default no
+    vacío aunque el usuario no haya tocado nada (ej. el switch
+    Cara única/Tiro y retiro de ui/cotizacion.py, o la Tela/Caja
+    preseleccionadas de ui/cotizador_backlight.py) — sin esto, esas claves
+    por sí solas harían pensar que hay progreso real cuando no lo hay."""
+    for k, v in d.items():
+        if k in ignorar:
+            continue
+        if isinstance(v, list):
+            if v:
+                return True
+        elif isinstance(v, str):
+            if v.strip():
+                return True
+    return False
+
+
 class PantallaMedidasBase(tk.Frame):
 
     def __init__(self, parent, ventana_raiz, indice, total,
                  datos_previos, datos_todos, on_siguiente, on_nav,
-                 con_extras=False, extras_texto="", extras_completo=False):
+                 con_extras=False, extras_texto="", extras_completo=False,
+                 on_guardar_progreso=None):
         super().__init__(parent, bg=COLORES["fondo"])
         self.pack(fill="both", expand=True)
 
@@ -40,6 +63,11 @@ class PantallaMedidasBase(tk.Frame):
         self._on_siguiente   = on_siguiente
         self._on_nav         = on_nav
         self._btn_habilitado = False
+        # Guardar progreso (opcional — ver docstring de _guardar_progreso):
+        # None mientras se está editando una cotización YA guardada (ahí no
+        # aplica, ver ui/cotizacion.py::_mostrar_medidas), así que el botón
+        # solo se construye si viene un callback de verdad.
+        self._on_guardar_progreso = on_guardar_progreso
         # "Forzar": checkbox junto al botón Confirmar/Siguiente para
         # permitir medidas que exceden el ancho de la tela (ver _set_btn y
         # el _actualizar de cada cotizador). Reemplaza al viejo botón
@@ -76,6 +104,22 @@ class PantallaMedidasBase(tk.Frame):
     def _enter_sig(self):
         if self._btn_habilitado:
             self._siguiente()
+
+    def _guardar_progreso(self):
+        """Botón "💾 Guardar progreso" / Ctrl+S (bind global, ver
+        ventana_raiz de cada cotizador) — un checkpoint, no cierra nada:
+        junta el producto actual (completo si el botón "Siguiente" está
+        habilitado, reutilizando _recolectar_actual() de cada subclase; si
+        no, los campos sueltos que sí se alcanzaron a llenar, sin validar,
+        vía _recolectar_parcial() de cada subclase) y se lo pasa al
+        cotizador, que decide qué hacer (guardar como pendiente, sin salir
+        de esta pantalla)."""
+        if self._btn_habilitado:
+            dato_completo, dato_parcial = self._recolectar_actual(), None
+        else:
+            dato_completo, dato_parcial = None, self._recolectar_parcial()
+        if self._on_guardar_progreso:
+            self._on_guardar_progreso(dato_completo, dato_parcial)
 
     # ── UI ────────────────────────────────────────────────────────────────────
     def _construir_ui(self):
@@ -188,6 +232,21 @@ class PantallaMedidasBase(tk.Frame):
             "Confirmar ✓" if es_ultimo else "Siguiente →"
         )
         self._btn_sig.pack(side="left", padx=(16, 0))
+
+        # "Guardar progreso" (opcional, bottom-left — ver _guardar_progreso):
+        # deja la cotización a medio hacer guardada como pendiente y sale.
+        if self._on_guardar_progreso:
+            btn_guardar_progreso = tk.Label(
+                self, text="💾 Guardar progreso", font=FUENTE_LABEL,
+                bg=COLORES["borde"], fg=COLORES["texto"],
+                padx=16, pady=10, cursor="hand2",
+            )
+            btn_guardar_progreso.place(relx=0.0, rely=1.0, anchor="sw", x=30, y=-20)
+            btn_guardar_progreso.bind("<Button-1>", lambda _: self._guardar_progreso())
+            btn_guardar_progreso.bind(
+                "<Enter>", lambda _: btn_guardar_progreso.config(bg="#C0BCBA"))
+            btn_guardar_progreso.bind(
+                "<Leave>", lambda _: btn_guardar_progreso.config(bg=COLORES["borde"]))
 
     def _construir_checkbox_forzar(self, parent):
         """Checkbox custom "Forzar" — permite confirmar un producto con

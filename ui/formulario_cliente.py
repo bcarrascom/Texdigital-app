@@ -264,7 +264,8 @@ class FormularioCliente(tk.Toplevel):
                  subtitulo="Cotizador Backlight",
                  incluir_terminaciones=True,
                  despacho: float | None = None,
-                 instalacion: float | None = None):
+                 instalacion: float | None = None,
+                 pendiente_id: str | None = None):
         super().__init__(parent)
         self.title("Datos del cliente")
         self.configure(bg=COLORES["fondo"])
@@ -281,6 +282,12 @@ class FormularioCliente(tk.Toplevel):
         # instalación, pero igual hay que cobrarlos.
         self._despacho               = despacho
         self._instalacion            = instalacion
+        # pendiente_id (opcional, ver core/repositorio_pendientes.py y
+        # "Guardar progreso" en ui/cotizacion.py / ui/cotizador_backlight.py):
+        # esta cotización venía de un progreso guardado — al guardarla de
+        # verdad acá, el pendiente ya no corresponde, se elimina (ver
+        # _exportar).
+        self._pendiente_id           = pendiente_id
         self._clientes          = cargar_clientes()
         self._nombres_empresas  = [c["empresa"] for c in self._clientes]
         self._contactos         = cargar_contactos()
@@ -863,6 +870,10 @@ class FormularioCliente(tk.Toplevel):
                 # (Corte ancho/alto en la OP, ver core/presentar_op.py).
                 json_dict["TerminacionesCaja"] = datos_cliente.get("terminaciones_caja", "CAJA TERMINADA")
             guardar_cotizacion(json_dict)
+
+            if self._pendiente_id:
+                from core.repositorio_pendientes import eliminar_pendiente
+                eliminar_pendiente(self._pendiente_id)
 
             if abrir_html:
                 try:
