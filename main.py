@@ -89,45 +89,6 @@ def _iniciar_app_escritorio():
     app.mainloop()
 
 
-def _revisar_actualizacion() -> bool:
-    """
-    Si hay una versión más nueva publicada en GitHub, la descarga y deja
-    lista, mostrando un aviso mínimo mientras tanto. Devuelve True si la
-    actualización quedó lista para relanzarse (el proceso actual debe
-    cerrarse enseguida); False si no había nada nuevo, o si algo falló
-    (sin internet, etc.) y hay que seguir abriendo la versión actual.
-    """
-    from core.actualizador import buscar_actualizacion, aplicar_actualizacion
-
-    release = buscar_actualizacion()
-    if release is None:
-        return False
-
-    import tkinter as tk
-    import threading
-
-    resultado = {"ok": False}
-    aviso = tk.Tk()
-    aviso.title("Actualizando")
-    aviso.resizable(False, False)
-    ancho, alto = 380, 110
-    x = (aviso.winfo_screenwidth() - ancho) // 2
-    y = (aviso.winfo_screenheight() - alto) // 2
-    aviso.geometry(f"{ancho}x{alto}+{x}+{y}")
-    tk.Label(
-        aviso, text=f"Descargando la versión {release['tag']}...",
-        font=("Segoe UI", 11), pady=25,
-    ).pack(expand=True)
-
-    def _hacer():
-        resultado["ok"] = aplicar_actualizacion(release)
-        aviso.after(0, aviso.destroy)
-
-    threading.Thread(target=_hacer, daemon=True).start()
-    aviso.mainloop()
-    return resultado["ok"]
-
-
 def main():
     if "--panel-produccion" in sys.argv:
         # Proceso hijo lanzado por mostrar_panel_mac() — SOLO en macOS.
@@ -137,9 +98,6 @@ def main():
         from ui.panel_produccion import ejecutar_panel_standalone
         ejecutar_panel_standalone()
         return
-
-    if _revisar_actualizacion():
-        return  # la nueva versión se relanza sola; este proceso termina acá
 
     atexit.register(_cerrar_terminal_mac)
 
