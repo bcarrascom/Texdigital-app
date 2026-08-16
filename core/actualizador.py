@@ -208,6 +208,15 @@ def _ps1_literal(texto: str) -> str:
     return str(texto).replace("'", "''")
 
 
+def ruta_log_actualizador() -> Path:
+    """Log persistente del script de reemplazo (ver
+    _lanzar_actualizador_windows) — a diferencia de todo lo demás que usa
+    ese script, este archivo NO vive en la carpeta temporal de la
+    descarga (que el script borra sola al final, éxito o no), así que
+    sobrevive para poder revisarlo después de un intento fallido."""
+    return Path(tempfile.gettempdir()) / "SistemaGestion_actualizador.log"
+
+
 def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_nombre: str) -> None:
     # PowerShell en vez de un .bat con tasklist/find: esperar un PID por
     # substring de texto es frágil (puede matchear otra cosa en la salida
@@ -227,23 +236,60 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
     # relanza. Por eso: reintentar el borrado con verificación, y si sigue
     # sin poder borrarse después de varios intentos, ABORTAR sin tocar
     # nada más — nunca hacer el Move-Item si el destino sigue existiendo.
+    #
+    # OJO 2 — confirmado a mano (v1.4.2 -> v1.4.3): con eso ya arreglado,
+    # el "abortar sin tocar nada" puede ser justo lo que pasó y no hay
+    # forma de saberlo — el propio script se borra su carpeta temporal al
+    # final SIEMPRE (haya funcionado o no), así que no queda ningún rastro
+    # de qué falló. Se agrega un log a una ruta FIJA fuera de esa carpeta
+    # (ver ruta_log_actualizador) para poder revisar qué pasó realmente:
+    # si Remove-Item nunca soltó la carpeta vieja (y por qué), si el
+    # script ni siquiera llegó a correr, etc.
+    log = _ps1_literal(ruta_log_actualizador())
     ps1 = tmp / "actualizar.ps1"
     ps1.write_text(
+        f"$log = '{log}'\n"
+        "function Log($msg) {\n"
+        '    Add-Content -LiteralPath $log -Value "$(Get-Date -Format \'yyyy-MM-dd HH:mm:ss\') $msg" -Encoding UTF8 -ErrorAction SilentlyContinue\n'
+        "}\n"
+        f'Log "=== Actualizando (PID viejo {os.getpid()}) ==="\n'
         f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue\n"
+        'Log "Wait-Process termino"\n'
         "Start-Sleep -Seconds 1\n"
         f"$destino = '{_ps1_literal(instalada)}'\n"
         "$intentos = 0\n"
-        "while ((Test-Path -LiteralPath $destino) -and ($intentos -lt 10)) {\n"
-        "    Remove-Item -LiteralPath $destino -Recurse -Force -ErrorAction SilentlyContinue\n"
+        "while ((Test-Path -LiteralPath $destino) -and ($intentos -lt 30)) {\n"
+        "    try {\n"
+        "        Remove-Item -LiteralPath $destino -Recurse -Force -ErrorAction Stop\n"
+        '        Log "Remove-Item intento ${intentos}: OK"\n'
+        "    } catch {\n"
+        '        Log "Remove-Item intento ${intentos}: FALLO - $($_.Exception.Message)"\n'
+        "    }\n"
         "    if (Test-Path -LiteralPath $destino) { Start-Sleep -Seconds 1 }\n"
         "    $intentos++\n"
         "}\n"
         "if (-not (Test-Path -LiteralPath $destino)) {\n"
-        f"    Move-Item -LiteralPath '{_ps1_literal(nueva)}' -Destination $destino -Force\n"
-        f"    Start-Process -FilePath '{_ps1_literal(instalada / exe_nombre)}'\n"
+        f'    Log "Carpeta vieja borrada tras $intentos intento(s), moviendo la nueva..."\n'
+        "    try {\n"
+        f"        Move-Item -LiteralPath '{_ps1_literal(nueva)}' -Destination $destino -Force -ErrorAction Stop\n"
+        '        Log "Move-Item OK"\n'
+        f"        Start-Process -FilePath '{_ps1_literal(instalada / exe_nombre)}'\n"
+        '        Log "Start-Process lanzado"\n'
+        "    } catch {\n"
+        '        Log "Move-Item FALLO - $($_.Exception.Message)"\n'
+        "    }\n"
+        "} else {\n"
+        '    Log "ABORTADO: la carpeta vieja sigue sin poder borrarse tras $intentos intentos. No se toco nada."\n'
         "}\n"
-        f"Remove-Item -LiteralPath '{_ps1_literal(tmp)}' -Recurse -Force -ErrorAction SilentlyContinue\n",
-        encoding="utf-8",
+        f"Remove-Item -LiteralPath '{_ps1_literal(tmp)}' -Recurse -Force -ErrorAction SilentlyContinue\n"
+        'Log "=== Fin ==="\n',
+        # utf-8-sig (con BOM): Windows PowerShell 5.1 (no pwsh) sin BOM
+        # interpreta un .ps1 no-ASCII con el codepage activo del sistema,
+        # no UTF-8 — sin esto, cualquier caracter acentuado en el script
+        # (o en una ruta con tildes) puede llegar corrupto o, peor, hacer
+        # que el parser tropiece. Confirmado a mano: sin BOM, "FALLÓ" en
+        # un mensaje de Log salía como "FALLÃ“" al correr el script.
+        encoding="utf-8-sig",
     )
     # CREATE_NO_WINDOW (consola oculta) y no DETACHED_PROCESS (sin consola):
     # powershell.exe necesita algún tipo de consola para iniciar aunque sea
