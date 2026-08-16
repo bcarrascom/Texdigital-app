@@ -25,6 +25,14 @@ def _calcular() -> float:
     """
     Calcula el factor de escala midiendo la pantalla con una ventana Tk temporal.
     Funciona en Windows, macOS y Linux.  Nunca supera 1.0 (solo escala hacia abajo).
+
+    OJO en macOS: winfo_screenwidth()/winfo_screenheight() devuelven la
+    resolución LÓGICA (en puntos), no los píxeles físicos — Retina ya está
+    manejado de forma transparente por macOS/Tk. Un Mac con pantalla Retina
+    puede perfectamente reportar una resolución lógica MÁS CHICA que un
+    monitor Windows 1080p corriente (ej. MacBook 13" Retina: 1440×900
+    puntos), aunque la pantalla en sí sea de mayor densidad/calidad — no
+    es una pantalla chica de verdad, y no debería tratarse como una.
     """
     tmp = _tk.Tk()
     tmp.withdraw()
@@ -37,6 +45,13 @@ def _calcular() -> float:
 
 
 F: float = _calcular()
+# Piso más alto que el de F, solo para texto (ver pt()): F=0.60 shrinkea un
+# FUENTE_LABEL de 13pt a 7-8pt, ilegible — confirmado en un Mac con
+# resolución lógica chica (ver docstring de _calcular arriba), a pesar de
+# ser una pantalla de alta densidad. La geometría de ventanas/canvas sigue
+# shrinkeando hasta F para entrar en pantallas chicas de verdad, pero el
+# texto nunca baja de este piso, más conservador.
+F_FUENTE: float = max(F, 0.85)
 
 
 def px(v: int) -> int:
@@ -45,5 +60,7 @@ def px(v: int) -> int:
 
 
 def pt(v: int) -> int:
-    """Escala un tamaño de fuente en puntos."""
-    return max(7, round(v * F))
+    """Escala un tamaño de fuente en puntos — con un piso más alto que px()
+    (ver F_FUENTE) para que el texto se mantenga legible incluso en
+    pantallas con resolución lógica chica (típico en Mac con Retina)."""
+    return max(7, round(v * F_FUENTE))
