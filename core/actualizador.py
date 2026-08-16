@@ -318,31 +318,54 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
     else:
         comando_relanzar = f'"{instalada}/{exe_nombre}" &'
 
-    # Mismo cuidado que _lanzar_actualizador_windows (ver ahí el porqué):
-    # si "rm -rf" no llegara a borrar instalada del todo (poco probable en
-    # Unix, pero posible por permisos/montajes), "mv nueva instalada" con
-    # el destino todavía existiendo la mueve ADENTRO en vez de
-    # reemplazarla — se verifica y reintenta antes de mover, y si sigue
-    # sin poder borrarse, se aborta sin tocar nada más.
+    # Mismo cuidado que _lanzar_actualizador_windows (ver ahí el porqué,
+    # incluido el log persistente — confirmado a mano que sin loguear
+    # cada paso a una ruta fija, un intento fallido no deja ningún rastro
+    # de qué pasó, porque el propio script se borra su carpeta temporal
+    # al final haya funcionado o no): si "rm -rf" no llegara a borrar
+    # instalada del todo (poco probable en Unix, pero posible por
+    # permisos/montajes), "mv nueva instalada" con el destino todavía
+    # existiendo la mueve ADENTRO en vez de reemplazarla — se verifica y
+    # reintenta antes de mover, y si sigue sin poder borrarse, se aborta
+    # sin tocar nada más.
+    log = ruta_log_actualizador()
     script = tmp / "actualizar.sh"
     script.write_text(
         "#!/bin/sh\n"
+        f'LOG="{log}"\n'
+        'log() { echo "$(date "+%Y-%m-%d %H:%M:%S") $1" >> "$LOG" 2>/dev/null; }\n'
         f"PID={os.getpid()}\n"
+        f'log "=== Actualizando (PID viejo $PID) ==="\n'
         'while kill -0 "$PID" 2>/dev/null; do sleep 1; done\n'
+        'log "Proceso viejo terminado"\n'
         "sleep 1\n"
         f'DESTINO="{instalada}"\n'
         "intentos=0\n"
-        'while [ -e "$DESTINO" ] && [ $intentos -lt 10 ]; do\n'
+        'while [ -e "$DESTINO" ] && [ $intentos -lt 30 ]; do\n'
         '    rm -rf "$DESTINO"\n'
-        '    [ -e "$DESTINO" ] && sleep 1\n'
+        '    if [ -e "$DESTINO" ]; then\n'
+        '        log "rm -rf intento $intentos: sigue existiendo"\n'
+        "        sleep 1\n"
+        "    else\n"
+        '        log "rm -rf intento $intentos: OK"\n'
+        "    fi\n"
         "    intentos=$((intentos + 1))\n"
         "done\n"
         'if [ ! -e "$DESTINO" ]; then\n'
-        f'    mv "{nueva}" "$DESTINO"\n'
-        '    chmod -R +x "$DESTINO" 2>/dev/null\n'
-        f"    {comando_relanzar}\n"
+        '    log "Carpeta vieja borrada tras $intentos intento(s), moviendo la nueva..."\n'
+        f'    if mv "{nueva}" "$DESTINO"; then\n'
+        '        log "mv OK"\n'
+        '        chmod -R +x "$DESTINO" 2>/dev/null\n'
+        f"        {comando_relanzar}\n"
+        '        log "Relanzado"\n'
+        "    else\n"
+        '        log "mv FALLO"\n'
+        "    fi\n"
+        "else\n"
+        '    log "ABORTADO: la carpeta vieja sigue sin poder borrarse tras $intentos intentos. No se toco nada."\n'
         "fi\n"
-        f'rm -rf "{tmp}"\n',
+        f'rm -rf "{tmp}"\n'
+        'log "=== Fin ==="\n',
         encoding="utf-8",
     )
     script.chmod(0o755)
