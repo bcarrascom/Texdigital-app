@@ -213,13 +213,36 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
     # substring de texto es frágil (puede matchear otra cosa en la salida
     # de tasklist y quedar pegado en loop). Wait-Process espera el proceso
     # real por su PID, sin parsing de texto de por medio.
+    #
+    # OJO — confirmado a mano (v1.4.0 -> v1.4.1): justo después de que el
+    # proceso viejo termina, Windows a veces todavía tiene los .dll/.pyd de
+    # _internal/ tomados un instante más (antivirus escaneando el borrado,
+    # liberación de handles no instantánea) — un solo intento de
+    # Remove-Item con -ErrorAction SilentlyContinue puede fallar EN
+    # SILENCIO y dejar la carpeta vieja a medio borrar. Si eso pasa,
+    # Move-Item con -Destination apuntando a una carpeta que TODAVÍA EXISTE
+    # no la reemplaza — la mueve ADENTRO (mismo comportamiento que "mv" a
+    # un directorio existente), dejando "Sistema de Gestion\Sistema de
+    # Gestion\" anidado, con el .exe viejo todavía en el lugar que se
+    # relanza. Por eso: reintentar el borrado con verificación, y si sigue
+    # sin poder borrarse después de varios intentos, ABORTAR sin tocar
+    # nada más — nunca hacer el Move-Item si el destino sigue existiendo.
     ps1 = tmp / "actualizar.ps1"
     ps1.write_text(
         f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue\n"
         "Start-Sleep -Seconds 1\n"
-        f"Remove-Item -LiteralPath '{_ps1_literal(instalada)}' -Recurse -Force -ErrorAction SilentlyContinue\n"
-        f"Move-Item -LiteralPath '{_ps1_literal(nueva)}' -Destination '{_ps1_literal(instalada)}' -Force\n"
-        f"Start-Process -FilePath '{_ps1_literal(instalada / exe_nombre)}'\n",
+        f"$destino = '{_ps1_literal(instalada)}'\n"
+        "$intentos = 0\n"
+        "while ((Test-Path -LiteralPath $destino) -and ($intentos -lt 10)) {\n"
+        "    Remove-Item -LiteralPath $destino -Recurse -Force -ErrorAction SilentlyContinue\n"
+        "    if (Test-Path -LiteralPath $destino) { Start-Sleep -Seconds 1 }\n"
+        "    $intentos++\n"
+        "}\n"
+        "if (-not (Test-Path -LiteralPath $destino)) {\n"
+        f"    Move-Item -LiteralPath '{_ps1_literal(nueva)}' -Destination $destino -Force\n"
+        f"    Start-Process -FilePath '{_ps1_literal(instalada / exe_nombre)}'\n"
+        "}\n"
+        f"Remove-Item -LiteralPath '{_ps1_literal(tmp)}' -Recurse -Force -ErrorAction SilentlyContinue\n",
         encoding="utf-8",
     )
     # CREATE_NO_WINDOW (consola oculta) y no DETACHED_PROCESS (sin consola):
@@ -249,17 +272,31 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
     else:
         comando_relanzar = f'"{instalada}/{exe_nombre}" &'
 
+    # Mismo cuidado que _lanzar_actualizador_windows (ver ahí el porqué):
+    # si "rm -rf" no llegara a borrar instalada del todo (poco probable en
+    # Unix, pero posible por permisos/montajes), "mv nueva instalada" con
+    # el destino todavía existiendo la mueve ADENTRO en vez de
+    # reemplazarla — se verifica y reintenta antes de mover, y si sigue
+    # sin poder borrarse, se aborta sin tocar nada más.
     script = tmp / "actualizar.sh"
     script.write_text(
         "#!/bin/sh\n"
         f"PID={os.getpid()}\n"
         'while kill -0 "$PID" 2>/dev/null; do sleep 1; done\n'
         "sleep 1\n"
-        f'rm -rf "{instalada}"\n'
-        f'mv "{nueva}" "{instalada}"\n'
-        f'chmod -R +x "{instalada}" 2>/dev/null\n'
-        f"{comando_relanzar}\n"
-        'rm -- "$0"\n',
+        f'DESTINO="{instalada}"\n'
+        "intentos=0\n"
+        'while [ -e "$DESTINO" ] && [ $intentos -lt 10 ]; do\n'
+        '    rm -rf "$DESTINO"\n'
+        '    [ -e "$DESTINO" ] && sleep 1\n'
+        "    intentos=$((intentos + 1))\n"
+        "done\n"
+        'if [ ! -e "$DESTINO" ]; then\n'
+        f'    mv "{nueva}" "$DESTINO"\n'
+        '    chmod -R +x "$DESTINO" 2>/dev/null\n'
+        f"    {comando_relanzar}\n"
+        "fi\n"
+        f'rm -rf "{tmp}"\n',
         encoding="utf-8",
     )
     script.chmod(0o755)

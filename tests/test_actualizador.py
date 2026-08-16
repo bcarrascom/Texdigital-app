@@ -9,6 +9,7 @@ Correr con:  python -m unittest tests.test_actualizador -v
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -166,6 +167,58 @@ class TestBuscarActualizacion(unittest.TestCase):
     def test_incluir_prerelease_lista_vacia_da_none(self):
         with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])):
             self.assertIsNone(act.buscar_actualizacion(incluir_prerelease=True))
+
+
+class TestScriptDeReemplazoEsSeguro(unittest.TestCase):
+    """
+    Confirmado a mano (v1.4.0 -> v1.4.1 en Windows): si Remove-Item no
+    alcanza a borrar la carpeta instalada (locks transitorios justo
+    después de que el proceso viejo termina) y el script igual hace
+    Move-Item contra ese destino, PowerShell mueve la carpeta nueva
+    ADENTRO de la vieja en vez de reemplazarla — quedó un
+    "Sistema de Gestion\\Sistema de Gestion\\" anidado, con el .exe viejo
+    todavía en el lugar que se relanza. Estos tests verifican que el
+    script generado ahora SIEMPRE verifica que el borrado funcionó antes
+    de mover, tanto en Windows como en macOS/Linux — no ejecutan
+    PowerShell/sh de verdad, solo inspeccionan el texto generado.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._tmp_path = Path(self._tmp.name)
+        self._instalada = self._tmp_path / "instalada" / "Sistema de Gestion"
+        self._nueva = self._tmp_path / "nueva" / "Sistema de Gestion"
+
+    def test_windows_no_mueve_si_el_borrado_no_se_verifico(self):
+        with mock.patch("subprocess.Popen"):
+            act._lanzar_actualizador_windows(
+                self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion.exe")
+        contenido = (self._tmp_path / "actualizar.ps1").read_text(encoding="utf-8")
+        # Move-Item debe estar DENTRO del bloque "if (-not (Test-Path...))",
+        # nunca ejecutarse incondicionalmente después de Remove-Item.
+        self.assertIn("Test-Path", contenido)
+        idx_if = contenido.index("if (-not (Test-Path")
+        idx_move = contenido.index("Move-Item")
+        self.assertGreater(idx_move, idx_if)
+
+    def test_windows_reintenta_el_borrado_antes_de_rendirse(self):
+        with mock.patch("subprocess.Popen"):
+            act._lanzar_actualizador_windows(
+                self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion.exe")
+        contenido = (self._tmp_path / "actualizar.ps1").read_text(encoding="utf-8")
+        self.assertIn("intentos", contenido)
+        self.assertIn("Remove-Item", contenido)
+
+    def test_unix_no_mueve_si_el_borrado_no_se_verifico(self):
+        with mock.patch("subprocess.Popen"):
+            act._lanzar_actualizador_unix(
+                self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion")
+        contenido = (self._tmp_path / "actualizar.sh").read_text(encoding="utf-8")
+        self.assertIn('if [ ! -e "$DESTINO" ]; then', contenido)
+        idx_if = contenido.index('if [ ! -e "$DESTINO" ]')
+        idx_mv = contenido.index("mv ")
+        self.assertGreater(idx_mv, idx_if)
 
 
 if __name__ == "__main__":
