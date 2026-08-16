@@ -116,9 +116,15 @@ class VentanaActualizar(tk.Toplevel):
         self._limpiar_botones()
 
         def _hacer():
-            from core.actualizador import buscar_actualizacion
+            import os
+            from core.actualizador import buscar_actualizacion, VAR_ENTORNO_PRERELEASE
             try:
-                release = buscar_actualizacion()
+                # Ver VAR_ENTORNO_PRERELEASE en core/actualizador.py: solo
+                # se activa si alguien la define a mano antes de abrir la
+                # app (para probar el updater contra una beta) — en un uso
+                # normal esta variable no existe y no cambia nada.
+                incluir_prerelease = os.environ.get(VAR_ENTORNO_PRERELEASE) == "1"
+                release = buscar_actualizacion(incluir_prerelease=incluir_prerelease)
                 self.after(0, lambda: self._on_busqueda_ok(release))
             except Exception as e:
                 self.after(0, lambda: self._on_busqueda_error(e))

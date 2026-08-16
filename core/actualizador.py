@@ -24,6 +24,7 @@ de Python, no hay ninguna carpeta de instalación que reemplazar).
 
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -37,7 +38,14 @@ from pathlib import Path
 from core.version import VERSION
 
 REPO_GITHUB = "bcarrascom/Texdigital-app"
-API_ULTIMO_RELEASE = f"https://api.github.com/repos/{REPO_GITHUB}/releases/latest"
+API_RELEASES = f"https://api.github.com/repos/{REPO_GITHUB}/releases"
+API_ULTIMO_RELEASE = f"{API_RELEASES}/latest"
+# Variable de entorno que activa incluir_prerelease en buscar_actualizacion()
+# desde ui/actualizador.py — ver docstring de esa función. Nunca se activa
+# en un uso normal (nadie la define al abrir la app desde el acceso
+# directo/ícono), solo sirve para probar el updater contra una beta antes
+# de publicarla como "Latest".
+VAR_ENTORNO_PRERELEASE = "SGTD_ACTUALIZAR_PRERELEASE"
 TIMEOUT_CONSULTA = 8
 TIMEOUT_DESCARGA = 120
 TAMANO_CHUNK = 262144  # 256 KiB
@@ -59,10 +67,35 @@ def _contexto_ssl() -> ssl.SSLContext | None:
 
 
 def _version_tupla(texto: str) -> tuple:
-    """'v1.2.3' o '1.2.3-dev' -> (1, 2, 3). Ignora lo que no sea numérico."""
-    cuerpo = texto.strip().lstrip("vV").split("-")[0]
+    """'v1.2.3' -> (1, 2, 3, 1, 0); '1.2.3-beta.2' -> (1, 2, 3, 0, 2).
+    Ignora lo que no sea numérico.
+
+    Los dos últimos elementos implementan la precedencia de semver para
+    sufijos (-beta.N, -dev, -rc1...):
+    - El primero castiga TENER sufijo: a igual versión numérica, algo con
+      sufijo compara como más viejo que lo mismo sin sufijo
+      (1.4.0-beta.1 < 1.4.0) — si no, promover una beta a versión final
+      sin cambiar el número (1.4.0-beta.1 -> 1.4.0, en vez de saltar a
+      1.4.1) nunca se detectaría como actualización para quien ya tiene
+      la beta instalada: ambas colapsaban a la misma tupla.
+    - El segundo desempata ENTRE sufijos del mismo número, tomando el
+      último grupo de dígitos del sufijo (1.4.0-beta.2 > 1.4.0-beta.1) —
+      si no, probar el updater beta-a-beta (ver incluir_prerelease) tendría
+      el mismo problema: dos betas seguidas colapsarían a la misma tupla.
+    """
+    texto = texto.strip().lstrip("vV")
+    if "-" in texto:
+        cuerpo, sufijo = texto.split("-", 1)
+        tiene_sufijo = 0
+        grupos_sufijo = re.findall(r"\d+", sufijo)
+        num_sufijo = int(grupos_sufijo[-1]) if grupos_sufijo else 0
+    else:
+        cuerpo = texto
+        tiene_sufijo = 1
+        num_sufijo = 0
     partes = [p for p in cuerpo.split(".") if p.isdigit()]
-    return tuple(int(p) for p in partes) or (0,)
+    numeros = tuple(int(p) for p in partes) or (0,)
+    return numeros + (tiene_sufijo, num_sufijo)
 
 
 def _nombre_os() -> str:
@@ -77,7 +110,7 @@ def _asset_para_este_os(assets: list[dict]) -> dict | None:
     return None
 
 
-def buscar_actualizacion() -> dict | None:
+def buscar_actualizacion(incluir_prerelease: bool = False) -> dict | None:
     """
     Devuelve {"tag", "url", "nombre"} del release de GitHub si hay una
     versión más nueva que la actual. Devuelve None si ya se tiene la
@@ -87,15 +120,33 @@ def buscar_actualizacion() -> dict | None:
     inesperada) se deja propagar como excepción, para que quien llama
     (ui/actualizador.py) pueda mostrar un error de verdad en vez de
     confundirlo con "ya estás al día".
+
+    Por default (incluir_prerelease=False) consulta /releases/latest, que
+    de por sí SOLO devuelve el último release marcado "Latest" en GitHub —
+    nunca uno marcado "Pre-release" (confirmado: con dos betas publicadas
+    como Pre-release, este endpoint sigue devolviendo la última release
+    estable de verdad). Esto es intencional: en un uso normal, la app
+    nunca debe ofrecer instalar una beta hecha para probar.
+
+    incluir_prerelease=True (ver VAR_ENTORNO_PRERELEASE, activado desde
+    ui/actualizador.py) consulta /releases en cambio (trae también los
+    Pre-release) y toma el primero — solo para poder probar el updater
+    contra una beta antes de publicarla como Latest.
     """
     if not getattr(sys, "frozen", False):
         return None
 
+    url = API_RELEASES if incluir_prerelease else API_ULTIMO_RELEASE
     req = urllib.request.Request(
-        API_ULTIMO_RELEASE, headers={"Accept": "application/vnd.github+json"}
+        url, headers={"Accept": "application/vnd.github+json"}
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT_CONSULTA, context=_contexto_ssl()) as resp:
         data = json.loads(resp.read().decode("utf-8"))
+
+    if incluir_prerelease:
+        if not data:
+            return None
+        data = data[0]
 
     tag = data.get("tag_name", "")
     if not tag:
