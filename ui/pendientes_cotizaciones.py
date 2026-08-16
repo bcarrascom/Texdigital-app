@@ -77,8 +77,10 @@ def _abrir_carpeta(ruta):
 
 class VentanaPendientes(tk.Toplevel):
 
-    ANCHO = _esc.px(720)
-    ALTO  = _esc.px(560)
+    # Mismo tamaño que ui/revisar_cotizaciones.py::VentanaCotizaciones —
+    # ventana hermana, mismo look (ver COLORES/FUENTE_* arriba).
+    ANCHO = _esc.px(880)
+    ALTO  = _esc.px(720)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -129,7 +131,7 @@ class VentanaPendientes(tk.Toplevel):
             background=COLORES["fila_par"],
             foreground=COLORES["texto"],
             fieldbackground=COLORES["fila_par"],
-            rowheight=_esc.px(32),
+            rowheight=_esc.px(56),
             font=FUENTE_LISTA,
             borderwidth=0,
         )
@@ -180,7 +182,7 @@ class VentanaPendientes(tk.Toplevel):
                       "Se identifican por nombre y cantidad de productos "
                       "(todavía no tienen N° de cotización ni cliente).",
                  font=FUENTE_LABEL, bg=COLORES["fondo"], fg=COLORES["texto_suave"],
-                 wraplength=_esc.px(660), justify="left"
+                 wraplength=_esc.px(830), justify="left"
                  ).pack(anchor="w", padx=20, pady=(12, 6))
 
         # ── Footer (empacado antes del árbol para que expand=True no lo tape) ──
@@ -197,7 +199,7 @@ class VentanaPendientes(tk.Toplevel):
         self._lbl_estado = tk.Label(
             self, text="", font=FUENTE_LABEL,
             bg=COLORES["fondo"], fg=COLORES["error"],
-            wraplength=_esc.px(660), justify="left",
+            wraplength=_esc.px(830), justify="left",
         )
         self._lbl_estado.pack(side="bottom", anchor="w", padx=20, pady=(0, 4))
 
@@ -223,10 +225,10 @@ class VentanaPendientes(tk.Toplevel):
         self._tree.heading("tipo",      text="Tipo",       anchor="w")
         self._tree.heading("productos", text="Productos",  anchor="w")
         self._tree.heading("guardado",  text="Guardado",   anchor="w")
-        self._tree.column("nombre",    width=_esc.px(260), anchor="w")
-        self._tree.column("tipo",      width=_esc.px(110), anchor="w")
-        self._tree.column("productos", width=_esc.px(90),  anchor="w")
-        self._tree.column("guardado",  width=_esc.px(140), anchor="w")
+        self._tree.column("nombre",    width=_esc.px(380), minwidth=200, anchor="w", stretch=True)
+        self._tree.column("tipo",      width=_esc.px(120), minwidth=90,  anchor="w", stretch=False)
+        self._tree.column("productos", width=_esc.px(150), minwidth=100, anchor="w", stretch=False)
+        self._tree.column("guardado",  width=_esc.px(160), minwidth=120, anchor="w", stretch=False)
 
         for i, (id_, nombre, tipo, n_prod, guardado) in enumerate(self._entradas):
             tag = "par" if i % 2 == 0 else "impar"
