@@ -60,9 +60,12 @@ def _abrir_manual_usuario():
         import subprocess
         subprocess.run(["xdg-open", ruta])
 
+# Títulos (cabecera + títulos de botón) — misma tipografía en las tres
+# plataformas, a diferencia del resto de las fuentes de acá abajo.
+FUENTE_CABECERA  = ("DejaVu Sans", 17, "bold")
+FUENTE_BTN       = ("DejaVu Sans", 13, "bold")
+
 if sys.platform == "darwin":
-    FUENTE_CABECERA  = ("Helvetica Neue", 17, "bold")
-    FUENTE_BTN       = ("Helvetica Neue", 13, "bold")
     FUENTE_DESC      = ("Helvetica Neue", 10)
     FUENTE_FLECHA    = ("Helvetica Neue", 17)
     FUENTE_FECHA     = ("Helvetica Neue", 10)
@@ -70,8 +73,6 @@ if sys.platform == "darwin":
     FUENTE_PH_TITULO = ("Helvetica Neue", 13)
     FUENTE_PH_SUB    = ("Helvetica Neue", 10)
 else:
-    FUENTE_CABECERA  = ("Georgia", 17, "bold")
-    FUENTE_BTN       = ("Georgia", 13, "bold")
     FUENTE_DESC      = ("Segoe UI", 9)
     FUENTE_FLECHA    = ("Segoe UI", 17)
     FUENTE_FECHA     = ("Segoe UI", 10)
@@ -220,10 +221,6 @@ class VentanaPrincipal(tk.Tk):
         btn_ayuda.bind("<Enter>", lambda _: btn_ayuda.config(bg=COLORES["acento_hover"]))
         btn_ayuda.bind("<Leave>", lambda _: btn_ayuda.config(bg=COLORES["acento"]))
 
-        # ── Fecha ──
-        tk.Label(self, text=fecha_actual, font=FUENTE_FECHA,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(pady=(20, 10))
-
         # ── 4 columnas ────────────────────────────────────────────────────────
         grid = tk.Frame(self, bg=COLORES["fondo"])
         grid.pack(fill="both", expand=True, padx=30, pady=(0, 20))
@@ -231,12 +228,62 @@ class VentanaPrincipal(tk.Tk):
         # Las 4 columnas tienen el mismo peso
         for i in range(4):
             grid.columnconfigure(i, weight=1, uniform="col")
-        grid.rowconfigure(0, weight=3)
-        grid.rowconfigure(1, weight=1)
+        # Fila 0 (pendientes + fecha) no se estira — su alto es fijo (ver
+        # _ALTO_FILA_PENDIENTES más abajo), las otras dos sí.
+        grid.rowconfigure(1, weight=3)
+        grid.rowconfigure(2, weight=1)
+
+        # ── Fila 0: botón "Cotizaciones incompletas" (si hay alguna
+        # pendiente) + fecha. El espacio vertical arriba/abajo de esta fila
+        # (pady) es el mismo que el que separa la fila de botones grandes
+        # de la fila de "Revisar Cotizaciones"/"Historial OPs" (10px, ver
+        # pady=(10,0) más abajo) — mismo ritmo vertical en las tres filas.
+        _ALTO_FILA_PENDIENTES = 80  # 2 líneas de FUENTE_BTN (13pt bold) + margen
+        fila_pendientes = tk.Frame(grid, bg=COLORES["fondo"], height=_ALTO_FILA_PENDIENTES)
+        fila_pendientes.grid(row=0, column=0, columnspan=4, sticky="nsew", pady=(10, 10))
+        fila_pendientes.grid_propagate(False)
+
+        from core.repositorio_pendientes import listar_pendientes
+        if listar_pendientes():
+            # relx/relwidth como fracción del ANCHO TOTAL de las 4 columnas
+            # (fila_pendientes ocupa las 4, columnspan=4): la columna 0 va
+            # de 0 a 0.25 (medio = 0.125), la columna 1 de 0.25 a 0.5 (medio
+            # = 0.375) — el botón arranca en 0.125 y mide 0.25 (0.375-0.125),
+            # o sea de la mitad de la columna 0 a la mitad de la columna 1.
+            btn_pendientes = tk.Frame(fila_pendientes, bg=COLORES["acento"], cursor="hand2")
+            btn_pendientes.place(relx=0.125, rely=0, relwidth=0.25, relheight=1.0)
+
+            # Dos líneas, no una — el ancho del botón está fijo (exactamente
+            # una columna, ver relwidth arriba) y en una sola línea el
+            # texto no entra en pantallas más chicas/escaladas (ver
+            # core/escala.py: las fuentes de este archivo no se escalan
+            # con la ventana, así que a bajo factor de escala el texto se
+            # sale del botón).
+            lbl_pendientes = tk.Label(btn_pendientes, text="Cotizaciones\nincompletas",
+                                      font=("DejaVu Sans", 10, "bold"), bg=COLORES["acento"], fg="#FFFFFF",
+                                      justify="center")
+            lbl_pendientes.pack(expand=True)
+
+            def _pend_enter(_):
+                btn_pendientes.config(bg=COLORES["acento_hover"])
+                lbl_pendientes.config(bg=COLORES["acento_hover"])
+
+            def _pend_leave(_):
+                btn_pendientes.config(bg=COLORES["acento"])
+                lbl_pendientes.config(bg=COLORES["acento"])
+
+            for w in (btn_pendientes, lbl_pendientes):
+                w.bind("<Enter>",    _pend_enter)
+                w.bind("<Leave>",    _pend_leave)
+                w.bind("<Button-1>", lambda _: self._abrir_pendientes())
+
+        tk.Label(fila_pendientes, text=fecha_actual, font=FUENTE_FECHA,
+                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]
+                 ).place(relx=0.5, rely=0.5, anchor="center")
 
         # ── Columna 0: Cotizador Backlight ──
         col0 = tk.Frame(grid, bg=COLORES["fondo"])
-        col0.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        col0.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
 
         BotonPrincipal(
             col0,
@@ -250,7 +297,7 @@ class VentanaPrincipal(tk.Tk):
 
         # ── Columna 1: segundo botón azul ──
         col1 = tk.Frame(grid, bg=COLORES["fondo"])
-        col1.grid(row=0, column=1, sticky="nsew", padx=(6, 12))
+        col1.grid(row=1, column=1, sticky="nsew", padx=(6, 12))
 
         BotonPrincipal(
             col1,
@@ -264,7 +311,7 @@ class VentanaPrincipal(tk.Tk):
 
         # ── Columna 2: Revisar OPs ──
         col2 = tk.Frame(grid, bg=COLORES["fondo"])
-        col2.grid(row=0, column=2, sticky="nsew", padx=(0, 0))
+        col2.grid(row=1, column=2, sticky="nsew", padx=(0, 0))
 
         BotonPrincipal(
             col2,
@@ -281,11 +328,11 @@ class VentanaPrincipal(tk.Tk):
             grid,
             titulo="Próximamente",
             subtitulo="Esta sección\nestá por definir.",
-        ).grid(row=0, column=3, sticky="nsew")
+        ).grid(row=1, column=3, sticky="nsew")
 
-        # ── Fila 1: botón Revisar Cotizaciones (ancho = col0+col1, alto = 1/3 de fila 0) ──
+        # ── Fila 2: botón Revisar Cotizaciones (ancho = col0+col1, alto = 1/3 de fila 1) ──
         btn_revisar = tk.Frame(grid, bg=COLORES["acento"], cursor="hand2")
-        btn_revisar.grid(row=1, column=0, columnspan=2,
+        btn_revisar.grid(row=2, column=0, columnspan=2,
                          sticky="nsew", padx=(0, 12), pady=(10, 0))
 
         lbl_revisar = tk.Label(btn_revisar, text="Revisar Cotizaciones",
@@ -306,11 +353,11 @@ class VentanaPrincipal(tk.Tk):
             w.bind("<Leave>",    _revisar_leave)
             w.bind("<Button-1>", lambda _: self._abrir_revisar_cotizaciones())
 
-        # ── Fila 1, columna 2: botón Historial OPs (mismo ancho que
+        # ── Fila 2, columna 2: botón Historial OPs (mismo ancho que
         # "Revisar OPs" arriba — misma columna del grid — y mismo alto que
         # "Revisar Cotizaciones" a su izquierda — misma fila del grid) ──
         btn_historial = tk.Frame(grid, bg=COLORES["acento"], cursor="hand2")
-        btn_historial.grid(row=1, column=2, sticky="nsew", pady=(10, 0))
+        btn_historial.grid(row=2, column=2, sticky="nsew", pady=(10, 0))
 
         lbl_historial = tk.Label(btn_historial, text="Historial OPs",
                                  font=FUENTE_BTN, bg=COLORES["acento"],
@@ -348,6 +395,10 @@ class VentanaPrincipal(tk.Tk):
     def _abrir_revisar_cotizaciones(self):
         from ui.revisar_cotizaciones import VentanaCotizaciones
         VentanaCotizaciones(self)
+
+    def _abrir_pendientes(self):
+        from ui.pendientes_cotizaciones import VentanaPendientes
+        VentanaPendientes(self)
 
     def _abrir_historial_ops(self):
         from ui.historial_ops import VentanaHistorialOps

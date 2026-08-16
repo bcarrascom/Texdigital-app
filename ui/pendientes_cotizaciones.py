@@ -49,19 +49,14 @@ else:
     FUENTE_HEAD   = ("Segoe UI", 10, "bold")
     FUENTE_BTN    = ("Segoe UI", 10, "bold")
 
-_NOMBRES_TIPO = {"normal": "Normal", "backlight": "Backlight"}
-
-
 def _texto_productos(p: dict) -> str:
-    """"2/5" (completos/total, ver core/repositorio_pendientes.py — la
-    lista "productos" guarda huecos = null en su posición real para los
-    que faltan) + una nota si además hay un producto a medio llenar."""
+    """"3/7" (completos/total, sin decimales — ver
+    core/repositorio_pendientes.py: la lista "productos" guarda huecos =
+    null en su posición real para los que faltan, así que el largo de la
+    lista YA es el total)."""
     productos = p.get("productos", [])
     completos = sum(1 for x in productos if x is not None)
-    texto = f"{completos}/{len(productos)}"
-    if p.get("producto_parcial"):
-        texto += " (+1 a medias)"
-    return texto
+    return f"{completos}/{len(productos)}"
 
 
 def _abrir_carpeta(ruta):
@@ -91,7 +86,7 @@ class VentanaPendientes(tk.Toplevel):
         self.lift()
         self.focus_force()
 
-        self._entradas = []  # [(id, nombre, tipo, n_productos, guardado_en), ...]
+        self._entradas = []  # [(id, nombre, n_productos, guardado_en), ...]
         self._cargar_pendientes()
         self._aplicar_estilo()
         self._construir_ui()
@@ -115,7 +110,6 @@ class VentanaPendientes(tk.Toplevel):
             (
                 p.get("id", ""),
                 p.get("nombre_trabajo", "—"),
-                _NOMBRES_TIPO.get(p.get("tipo", ""), p.get("tipo", "—")),
                 _texto_productos(p),
                 p.get("guardado_en", "—"),
             )
@@ -212,7 +206,7 @@ class VentanaPendientes(tk.Toplevel):
 
         self._tree = ttk.Treeview(
             frame_tree,
-            columns=("nombre", "tipo", "productos", "guardado"),
+            columns=("nombre", "productos", "guardado"),
             show="headings",
             style="Pend.Treeview",
             yscrollcommand=scrollbar.set,
@@ -222,18 +216,16 @@ class VentanaPendientes(tk.Toplevel):
         scrollbar.config(command=self._tree.yview)
 
         self._tree.heading("nombre",    text="Nombre",     anchor="w")
-        self._tree.heading("tipo",      text="Tipo",       anchor="w")
         self._tree.heading("productos", text="Productos",  anchor="w")
         self._tree.heading("guardado",  text="Guardado",   anchor="w")
-        self._tree.column("nombre",    width=_esc.px(380), minwidth=200, anchor="w", stretch=True)
-        self._tree.column("tipo",      width=_esc.px(120), minwidth=90,  anchor="w", stretch=False)
+        self._tree.column("nombre",    width=_esc.px(500), minwidth=250, anchor="w", stretch=True)
         self._tree.column("productos", width=_esc.px(150), minwidth=100, anchor="w", stretch=False)
         self._tree.column("guardado",  width=_esc.px(160), minwidth=120, anchor="w", stretch=False)
 
-        for i, (id_, nombre, tipo, n_prod, guardado) in enumerate(self._entradas):
+        for i, (id_, nombre, n_prod, guardado) in enumerate(self._entradas):
             tag = "par" if i % 2 == 0 else "impar"
             self._tree.insert("", "end", iid=id_,
-                               values=(nombre, tipo, n_prod, guardado), tags=(tag,))
+                               values=(nombre, n_prod, guardado), tags=(tag,))
         self._tree.tag_configure("par",   background=COLORES["fila_par"])
         self._tree.tag_configure("impar", background=COLORES["fila_impar"])
 
@@ -257,11 +249,15 @@ class VentanaPendientes(tk.Toplevel):
                 fg=COLORES["error"])
             return
 
-        # self.master es VentanaCotizaciones (quien abrió esta ventana);
-        # su propio master es la ventana raíz (VentanaPrincipal) — se
-        # destruye desde ahí para cerrar toda la cadena de una vez, mismo
-        # patrón que ui/revisar_cotizaciones.py::_editar_cotizacion.
-        raiz = self.master.master
+        # Esta ventana puede abrirse desde el menú principal directo (1
+        # nivel) o desde Revisar Cotizaciones (2 niveles) — se camina
+        # hacia arriba hasta la raíz de verdad (tk.Tk, .master=None) en
+        # vez de asumir cuántos Toplevel hay de por medio, y se destruye
+        # desde ahí para cerrar toda la cadena de una vez, mismo patrón
+        # que ui/revisar_cotizaciones.py::_editar_cotizacion.
+        raiz = self
+        while raiz.master is not None:
+            raiz = raiz.master
         raiz.destroy()
         if pendiente.get("tipo") == "backlight":
             from ui.cotizador_backlight import CotizadorBacklight
