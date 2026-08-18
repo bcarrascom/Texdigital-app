@@ -75,11 +75,18 @@ def calcular_valor_caja(
         + _valor_fila_luz(filas_por_material["Luces 2"], precios["luces"])
     )
 
+    # Traseras se cobra por área real (Ancho×Alto), NO por la cantidad de
+    # planchas redondeada hacia arriba que usa calculo_cajas.calcular_caja()
+    # para saber cuánto material pedir. Son dos cálculos distintos a
+    # propósito: cuánto material comprar se redondea (no existen "0.4
+    # planchas" para pedir), pero cuánto cobrar es proporcional al área
+    # real usada — confirmado contra una cotización real (Excel original):
+    # área × $5.000/m² calzó exacto en 5 de 6 cajas; usar la cantidad
+    # redondeada sobrestimaba fuerte las cajas chicas (cobraba 1 plancha
+    # entera aunque se usara una fracción mínima).
     fila_traseras = filas_por_material["Traseras"]
-    traseras = (
-        precios["traseras"].get(fila_traseras["tipo"], 0.0)
-        * fila_traseras["cantidad_x_caja"]
-    )
+    area = resultado_materiales["lado_corto"] * resultado_materiales["lado_largo"]
+    traseras = precios["traseras"].get(fila_traseras["tipo"], 0.0) * area
 
     tramo = _tramo_armado(ml)
     armado = precios["armado"].get(tramo, 0.0) * ml if tramo else 0.0

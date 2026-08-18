@@ -92,7 +92,12 @@ def lados_a_cubrir(perfil: str, luces1_nombre: str, ancho: float, alto: float) -
         return 1
     if lc < 1.5:
         return 2
-    return 0
+    # lc >= 1.5: por defecto correspondería malla (ver luces1_default), pero
+    # si el usuario igual eligió un led lateral (M12, etc.) acá, la caja
+    # sigue necesitando cubrir 1 lado — no 0. Confirmado contra una
+    # cotización real (Excel original): caja de 2.68×2.785 con M12 dio
+    # lados_a_cubrir=1 (4 luces x lado), nunca 0.
+    return 1
 
 
 # ══════════════════════════════════════════════════════════════════════════════

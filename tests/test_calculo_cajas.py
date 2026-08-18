@@ -114,6 +114,28 @@ class TestPerfil60mm(unittest.TestCase):
         self.assertEqual(lados_a_cubrir("PERFIL 60 MM", "Malla 150", 1.0, 1.0), 1)
 
 
+class TestCajaGrandeConLedLateral(unittest.TestCase):
+    """Caja con lado corto >= 1.5 m (por defecto correspondería malla, ver
+    luces1_default) pero el usuario eligió un led lateral (M12) igual. La
+    caja sigue necesitando cubrir 1 lado, NO 0 — confirmado contra una
+    cotización real (Excel original): caja de 2.68x2.785 con M12 dio
+    4 luces por lado (lados_a_cubrir=1), watts=84, FP 100."""
+
+    def test_lados_a_cubrir_da_1_no_0(self):
+        self.assertEqual(lados_a_cubrir("PERFIL 100 MM SIMPLE", "M12", 2.680, 2.785), 1)
+
+    def test_caja_2_68x2_785_con_m12_ejemplo_real(self):
+        tabla = calcular_caja(
+            ancho=2.680, alto=2.785, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="M12", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        fila_luces1 = next(f for f in tabla["filas"] if f["material"] == "Luces 1")
+        self.assertEqual(fila_luces1["cantidad_x_caja"], 4.0)
+        self.assertEqual(tabla["watts"], 84.0)
+        self.assertEqual(tabla["fp"]["watts_unidad"], 100)
+
+
 class TestTraseras(unittest.TestCase):
 
     def test_perfil_doble_sin_traseras(self):

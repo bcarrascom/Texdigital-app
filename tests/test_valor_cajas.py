@@ -80,14 +80,14 @@ class TestValorCajas(unittest.TestCase):
             otros_unit=0, cantidad=2,
         )
         self.assertEqual(valor["iluminacion"], 50976)   # 2 * 25488
-        self.assertEqual(valor["traseras"], 5000)        # 1 * 5000
+        self.assertEqual(valor["traseras"], 5400)         # area (1.2*0.9=1.08) * 5000, NO por plancha entera
         self.assertEqual(valor["armado"], 25200)         # 6000 * 4.2
         self.assertEqual(valor["fp"], 13680)              # FP 50 * 1
         self.assertEqual(valor["perfil"], 33579)          # 7995 * 4.2
         self.assertEqual(valor["pintura"], 16800)         # 4.2 * 4000
         self.assertEqual(valor["otros"], 0)
-        self.assertEqual(valor["valor_caja"], 145235)
-        self.assertEqual(valor["valor_total"], 290470)
+        self.assertEqual(valor["valor_caja"], 145635)
+        self.assertEqual(valor["valor_total"], 291270)
 
     def test_2_bordes_de_tramo_de_armado(self):
         self.assertEqual(_tramo_armado(0), None)
@@ -112,6 +112,8 @@ class TestValorCajas(unittest.TestCase):
             ],
             "fp": fp_info,
             "mts_lineales_x_caja": 0,
+            "lado_corto": 0,
+            "lado_largo": 0,
         }
 
     def test_3_fp_mayor_a_450w_multiplica_fp_350(self):
@@ -138,6 +140,40 @@ class TestValorCajas(unittest.TestCase):
 
         valor = calcular_valor_caja(materiales, perfil="PERFIL 100 MM DOBLE", precios=PRECIOS)
         self.assertEqual(valor["traseras"], 0)
+
+    def test_6_traseras_por_area_no_por_plancha_entera(self):
+        # 0.97 x 0.50: área real 0.485 m² << 1 plancha (1.22x2.44=2.9768
+        # m²). calcular_caja() redondea a 1 plancha para saber cuánto
+        # material pedir, pero el cobro debe ser proporcional al área real
+        # (0.485 * 5000 = 2425), no 1 plancha completa (5000) — confirmado
+        # contra una cotización real (Excel original).
+        materiales = calcular_caja(
+            ancho=0.970, alto=0.500, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="M12", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        fila_traseras = next(f for f in materiales["filas"] if f["material"] == "Traseras")
+        self.assertEqual(fila_traseras["cantidad_x_caja"], 1)  # 1 plancha a pedir (redondeado)
+
+        valor = calcular_valor_caja(materiales, perfil="PERFIL 100 MM SIMPLE", precios=PRECIOS)
+        self.assertEqual(valor["traseras"], 2425.0)  # área real, no la plancha redondeada
+
+    def test_7_caja_grande_2_68x2_785_ejemplo_real(self):
+        # Cotización real N° 7359 (Excel original): caja de 2.68x2.785,
+        # PERFIL 100 MM SIMPLE, M12, Trovicel 122. Verifica el desglose
+        # completo contra los valores del Excel.
+        materiales = calcular_caja(
+            ancho=2.680, alto=2.785, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="M12", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        valor = calcular_valor_caja(materiales, perfil="PERFIL 100 MM SIMPLE", precios=PRECIOS)
+        self.assertEqual(valor["iluminacion"], 101952)  # 4 * 25488
+        self.assertAlmostEqual(valor["traseras"], 37319.0, places=2)  # 7.4638 m2 * 5000
+        self.assertEqual(valor["armado"], 49185.0)      # jumbo 4500 * 10.93
+        self.assertEqual(valor["fp"], 18794)             # FP 100
+        self.assertEqual(valor["perfil"], 107441.9)      # 9830 * 10.93
+        self.assertEqual(valor["pintura"], 43720.0)      # 10.93 * 4000
 
     def test_5_otros_unit_se_suma_directo(self):
         materiales = calcular_caja(
