@@ -13,7 +13,10 @@ from pathlib import Path
 
 from core.rutas import RECURSOS
 from core.repositorio_cotizaciones import carpeta_html, producto_desde_json
-from core.precios import costo_cotizacion, costo_producto, formatear_clp, parsear_valor_manual
+from core.precios import (
+    costo_cotizacion, costo_producto, formatear_clp, parsear_valor_manual,
+    ml_o_area_facturable_por_producto,
+)
 
 RUTA_PLANTILLA = RECURSOS / "plantilla_cotizacion.html"
 
@@ -23,13 +26,18 @@ def _fmt_medida(valor: float) -> str:
     return f"{float(valor):.3f}".replace(".", ",")
 
 
-def _fila_producto(p: dict) -> str:
+def _fila_producto(p: dict, ml_o_area_facturable: float | None = None) -> str:
     # producto_desde_json ya migra el esquema viejo de una sola Estructura/
     # Terminación (string) a listas — se usa una sola vez acá tanto para el
     # costo como para lo que se muestra, así los dos siempre coinciden
     # incluso en cotizaciones guardadas antes del modelo aditivo.
     interno = producto_desde_json(p)
-    costo = costo_producto(interno)
+    # ml_o_area_facturable viene de ml_o_area_facturable_por_producto()
+    # (calculado por generar_html() con la lista completa) — el piso mínimo
+    # de facturación se aplica por grupo de textil/tela, no línea por línea
+    # (ver core.precios, docstring "Piso mínimo de facturación"), así que
+    # esta fila sola no puede decidirlo por su cuenta.
+    costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable)
     cantidad = p.get("Cantidad", 0)
     valor_unit = formatear_clp(costo["valor_unitario"])
     total_fila = formatear_clp(costo["total"])
@@ -118,6 +126,11 @@ def generar_html(json_dict: dict) -> Path:
     instalacion = json_dict.get("Instalacion")
     totales = costo_cotizacion(productos_internos, descuento_pct,
                                 despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+    # Mismo piso-por-grupo que usó costo_cotizacion() arriba — si cada fila
+    # decidiera su propio piso por su cuenta, la suma de las filas podría no
+    # coincidir con el total del documento (ver core.precios, docstring
+    # "Piso mínimo de facturación").
+    facturables = ml_o_area_facturable_por_producto(productos_internos)
 
     contacto = json_dict.get("Contacto", "")
     email    = json_dict.get("Email", "")
@@ -159,7 +172,7 @@ def generar_html(json_dict: dict) -> Path:
         "{{condicion_pago}}":  json_dict.get("Condicion de pago", ""),
         "{{descripcion_bloque}}": descripcion_bloque,
         "{{filas_productos}}": "\n".join(
-            [_fila_producto(p) for p in productos]
+            [_fila_producto(p, f) for p, f in zip(productos, facturables)]
             + ([_fila_extra("Despacho", despacho)] if despacho else [])
             + ([_fila_extra("Instalación", instalacion)] if instalacion else [])
         ),
