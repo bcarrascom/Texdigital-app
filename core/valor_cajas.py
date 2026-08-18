@@ -12,6 +12,8 @@ Fórmula (por caja; `ml` = mts_lineales_x_caja = (Ancho×2)+(Alto×2)):
     valor_total = valor_caja × Cantidad
 """
 
+from core.calculo_cajas import lado_corto as _lado_corto, lado_largo as _lado_largo, mts_lineales_x_caja as _mts_lineales
+
 
 def _tramo_armado(ml: float) -> str | None:
     """
@@ -117,3 +119,62 @@ def calcular_valor_caja(
         "valor_caja":  valor_caja,
         "valor_total": valor_total,
     }
+
+
+def valor_caja_desde_guardado(
+    caja: dict,
+    precios: dict,
+    otros_unit: float = 0.0,
+    cantidad: int = 1,
+    ancho: float | None = None,
+    alto: float | None = None,
+) -> dict:
+    """
+    Igual que calcular_valor_caja(), pero a partir del dict ya guardado en
+    datos["caja"] (ver ui.cotizador_backlight._valor_caja_guardado) en vez
+    del resultado crudo de calcular_caja(). No necesita los catálogos de
+    luces/FP (catalogo_luces, catalogo_fp) — la selección de materiales ya
+    quedó fija al guardar la cotización; acá solo se re-valoriza en pesos
+    con los precios actuales del catálogo de cajas.
+
+    `caja` debe traer perfil, traseras/luces_1/luces_2/fp ({tipo,
+    cantidad_x_caja, ...}, y fp además con "watts_unidad"). lado_corto/
+    lado_largo/mts_lineales_x_caja idealmente vienen en `caja` (formato
+    nuevo); si no están (cotizaciones guardadas antes de este cálculo,
+    formato viejo), se derivan de `ancho`/`alto` (las medidas del producto,
+    que también son las de la caja — ver core.calculo_cajas).
+    """
+    lc = caja.get("lado_corto")
+    ll = caja.get("lado_largo")
+    ml = caja.get("mts_lineales_x_caja")
+    if lc is None or ll is None or ml is None:
+        ancho = ancho or 0.0
+        alto = alto or 0.0
+        lc = _lado_corto(ancho, alto)
+        ll = _lado_largo(ancho, alto)
+        ml = _mts_lineales(ancho, alto)
+
+    filas = [
+        {"material": "Traseras", "tipo": caja["traseras"].get("tipo"),
+         "cantidad_x_caja": caja["traseras"].get("cantidad_x_caja", 0.0)},
+        {"material": "Luces 1", "tipo": caja["luces_1"].get("tipo"),
+         "cantidad_x_caja": caja["luces_1"].get("cantidad_x_caja", 0.0)},
+        {"material": "Luces 2", "tipo": caja["luces_2"].get("tipo"),
+         "cantidad_x_caja": caja["luces_2"].get("cantidad_x_caja", 0.0)},
+        {"material": "FP", "tipo": caja["fp"].get("tipo"),
+         "cantidad_x_caja": caja["fp"].get("cantidad_x_caja", 0.0)},
+    ]
+    watts_unidad = caja["fp"].get("watts_unidad")
+    fp_info = {"watts_unidad": watts_unidad} if watts_unidad is not None else None
+
+    resultado_materiales = {
+        "filas": filas,
+        "fp": fp_info,
+        "lado_corto": lc,
+        "lado_largo": ll,
+        "mts_lineales_x_caja": ml,
+    }
+    return calcular_valor_caja(
+        resultado_materiales, caja["perfil"], precios,
+        otros_unit=otros_unit, cantidad=cantidad,
+    )

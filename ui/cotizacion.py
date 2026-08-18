@@ -52,6 +52,7 @@ from core.repositorio import (
 # necesita reactivar más adelante.
 from core.precios import (
     calcular_ml, costo_producto, parsear_valor_manual,
+    ml_o_area_facturable_por_producto,
     formatear_clp as _formatear_clp,
 )
 
@@ -764,13 +765,19 @@ class CotizacionNueva(tk.Tk):
         total_neto    = 0.0
         alguno_con_ml = False
 
+        # Piso mínimo de facturación por grupo de textil (ver
+        # core.precios, docstring "Piso mínimo de facturación") — se
+        # calcula una vez con la lista completa para que la fila de cada
+        # producto y el total de la cotización queden consistentes.
+        facturables = ml_o_area_facturable_por_producto(self._datos)
+
         for i, d in enumerate(self._datos):
             total_cant += d["cantidad"]
             ratio, ml = _calc_ml(d)
             if ml is not None:
                 total_ml      += ml
                 alguno_con_ml  = True
-            costo = costo_producto(d)
+            costo = costo_producto(d, ml_o_area_facturable=facturables[i])
             total_neto += costo["total"]
             filas.append([
                 str(i + 1),

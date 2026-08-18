@@ -900,13 +900,19 @@ class PantallaMedidas(PantallaMedidasBase):
             return {"tipo": f["tipo"], "cantidad_x_caja": f["cantidad_x_caja"],
                     "cantidad_total": f["cantidad_total"]}
 
+        fp_sub = _sub("FP")
+        fp_sub["watts_unidad"] = tabla["fp"]["watts_unidad"] if tabla["fp"] else None
+
         return {
             "perfil": perfil,
             "watts": tabla["watts"],
+            "lado_corto": tabla["lado_corto"],
+            "lado_largo": tabla["lado_largo"],
+            "mts_lineales_x_caja": tabla["mts_lineales_x_caja"],
             "traseras": _sub("Traseras"),
             "luces_1": _sub("Luces 1"),
             "luces_2": _sub("Luces 2"),
-            "fp": _sub("FP"),
+            "fp": fp_sub,
             "obs": "",
         }
 

@@ -26,20 +26,33 @@ producto):
     intentó un modelo ML-based para terminaciones (multiplicar por Alto ×
     Cantidad); ese modelo sobrestimaba el costo porque además de duplicar la
     cantidad, multiplicaba por Alto — algo que el Excel real no hace.
-  - Backlight: valor = M² impreso × valor de la tela (Alto × Ancho × Cantidad).
+  - Backlight: valor = M² impreso × valor de la tela (Alto × Ancho × Cantidad)
+                      + valor de la caja, si el producto lleva caja (ver
+                        core.valor_cajas.valor_caja_desde_guardado — perfil,
+                        luces, traseras, armado, fuente de poder y pintura,
+                        con los precios de recursos/precios_cajas.json).
     Backlight es el único tipo de producto que mide su tela en M² en vez de
-    ML. No incluye el costo de los materiales de la caja (perfiles/luces/
-    fuentes de poder) — esos catálogos no tienen precio todavía; queda para
-    una entrega futura.
+    ML. Si datos["caja"] es "Sin caja" (o no viene), el producto no lleva
+    caja y el valor es solo la tela impresa.
 
 Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
-  cada producto (una línea del cotizador, ya con su Cantidad aplicada — no
-  cada unidad por separado) se factura sobre un mínimo de 2 ML (no-backlight)
-  o 2 M² (Backlight). Si el ML/M² real de esa línea completa da menos de 2,
-  se factura como si fueran exactamente 2 — NO se aplica el piso a cada
-  unidad y después se multiplica por Cantidad (eso sobrestimaría e
-  producto con Cantidad > 1: 2 unidades de 0.5 ML cada una no son "2 × 2 ML
-  = 4 ML", son "1 ML real, que como está bajo el piso, se cobra como 2 ML").
+  el mínimo (2 ML no-backlight, 2 M² Backlight) existe porque cortar un
+  rollo de tela requiere ~1 m de tensión antes y después del corte — un
+  costo que se paga UNA VEZ POR ROLLO, no una vez por cada producto que
+  sale de ese mismo rollo. Por eso el piso se aplica POR GRUPO DE TEXTIL/
+  TELA (d["textil"] en no-backlight, d["tela"] en backlight — ver
+  ml_o_area_facturable_por_producto), no por línea de producto individual:
+  si dos productos del mismo textil no llegan a 2 ML cada uno pero suman
+  más de 2 ML entre ambos, no se aplica ningún piso — ya están usando tela
+  de sobra para cubrir esa tensión. Si el grupo entero queda bajo el
+  mínimo, el mínimo se reparte proporcional al ML/M² real de cada producto
+  dentro del grupo (no en partes iguales, ver _distribuir_piso) — cada uno
+  mantiene su peso relativo. Un textil con un solo producto se comporta
+  exactamente igual que antes (el "grupo" es ese único producto).
+  Tampoco se aplica el piso a cada unidad y después se multiplica por
+  Cantidad (eso sobrestimaría el producto con Cantidad > 1: 2 unidades de
+  0.5 ML cada una no son "2 × 2 ML = 4 ML", son "1 ML real, que como está
+  bajo el piso, se cobra como 2 ML").
   Este piso SOLO afecta el costo de impresión (y, en el modelo "aditivo",
   las estructuras valorML — ambas se calculan a partir del mismo ML) — el
   ML real (sin piso) se sigue usando tal cual para todo lo que no es plata:
@@ -47,6 +60,15 @@ Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
   cuánta tela se corta de verdad, no cuánto se cobra) y las columnas
   informativas "ML imp."/"M² imp." de la ventana de resumen (ui/cotizacion.py,
   ui/cotizador_backlight.py) NO pasan por este piso.
+  costo_producto() por sí sola NO conoce a los demás productos de la
+  cotización, así que no puede aplicar el piso grupal por su cuenta — quien
+  llama con la lista completa (costo_cotizacion(), descuento_textil(),
+  core/presentar_cotizacion.py, ui/cotizacion.py) debe calcular primero
+  ml_o_area_facturable_por_producto(productos) y pasarle a costo_producto()
+  el valor ya-con-piso-de-grupo-aplicado vía el parámetro
+  ml_o_area_facturable. Si se omite (default None, como en todos los tests
+  de un producto suelto), costo_producto() aplica el piso a esa única línea
+  como si fuera su propio grupo — mismo resultado que antes de este cambio.
 
 Descuento-textil (ver descuento_textil/costo_cotizacion, confirmado con el
   usuario): descuento adicional por volumen de tela impresa, aparte del %
@@ -65,7 +87,9 @@ from core.repositorio import (
     TERMINACIONES_VALORES,
     ESTRUCTURAS_LEGADO_VALORES,
     TERMINACIONES_LEGADO_VALORES,
+    PRECIOS_CAJAS,
 )
+from core.valor_cajas import valor_caja_desde_guardado
 
 IVA_PORCENTAJE = 19
 
@@ -172,6 +196,8 @@ def costo_producto(
     terminaciones_valores: dict[str, float] | None = None,
     estructuras_legado_valores: dict[str, float] | None = None,
     terminaciones_legado_valores: dict[str, float] | None = None,
+    precios_cajas: dict | None = None,
+    ml_o_area_facturable: float | None = None,
 ) -> dict:
     """
     Devuelve el desglose de costo de un producto (dict interno del
@@ -207,6 +233,14 @@ def costo_producto(
     total de esa categoría, sin pasar por el catálogo ni multiplicarse por
     Cantidad efectiva — es un ajuste manual puntual para ese producto, no
     un ítem reusable.
+
+    `ml_o_area_facturable`: ver docstring del módulo ("Piso mínimo de
+    facturación"). Si se pasa, se usa DIRECTO como el ML/M² ya-con-piso-de-
+    grupo-aplicado (se ignora el piso de un solo producto). Si es None
+    (default), se calcula el piso como si este producto fuera su propio
+    grupo — mismo comportamiento que antes de que existiera el piso grupal.
+    En ningún caso afecta "ml_o_area" del resultado, que sigue siendo
+    siempre el valor real sin piso.
     """
     textiles_valores       = TEXTILES_VALORES if textiles_valores is None else textiles_valores
     textiles_anchos        = TEXTILES_ANCHOS if textiles_anchos is None else textiles_anchos
@@ -214,28 +248,47 @@ def costo_producto(
     terminaciones_valores  = TERMINACIONES_VALORES if terminaciones_valores is None else terminaciones_valores
     estructuras_legado_valores   = ESTRUCTURAS_LEGADO_VALORES if estructuras_legado_valores is None else estructuras_legado_valores
     terminaciones_legado_valores = TERMINACIONES_LEGADO_VALORES if terminaciones_legado_valores is None else terminaciones_legado_valores
+    precios_cajas           = PRECIOS_CAJAS if precios_cajas is None else precios_cajas
 
     cantidad = d.get("cantidad", 0) or 0
 
     if "tela" in d:
         area = d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad
-        area_facturable = _con_piso(area, M2_MINIMO_POR_PRODUCTO)
+        area_facturable = (
+            _con_piso(area, M2_MINIMO_POR_PRODUCTO)
+            if ml_o_area_facturable is None else ml_o_area_facturable
+        )
         valor_tela = textiles_valores.get(d.get("tela", ""), 0.0)
         costo_impresion = area_facturable * valor_tela
+
+        detalle_caja = None
+        costo_caja = 0.0
+        if isinstance(d.get("caja"), dict):
+            detalle_caja = valor_caja_desde_guardado(
+                d["caja"], precios_cajas, cantidad=cantidad,
+                ancho=d.get("ancho"), alto=d.get("alto"),
+            )
+            costo_caja = detalle_caja["valor_total"]
+
         resultado = {
             "ml_o_area":          area,
             "costo_impresion":    costo_impresion,
             "costo_terminaciones": 0.0,
             "costo_estructuras":   0.0,
+            "costo_caja":         costo_caja,
             "detalle_estructuras":  {},
             "detalle_terminaciones": {},
-            "total":               costo_impresion,
+            "detalle_caja":       detalle_caja,
+            "total":               costo_impresion + costo_caja,
         }
     else:
         ancho_tela = textiles_anchos.get(d.get("textil", ""))
         _, ml = calcular_ml(d, ancho_tela)
         ml = ml or 0.0
-        ml_facturable = _con_piso(ml, ML_MINIMO_POR_PRODUCTO)
+        ml_facturable = (
+            _con_piso(ml, ML_MINIMO_POR_PRODUCTO)
+            if ml_o_area_facturable is None else ml_o_area_facturable
+        )
 
         valor_tela = textiles_valores.get(d.get("textil", ""), 0.0)
         costo_impresion = ml_facturable * valor_tela
@@ -337,6 +390,62 @@ def _area_producto(d: dict) -> float:
     return d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad_efectiva(d)
 
 
+def _clave_grupo_textil(d: dict) -> tuple[str, str]:
+    """Clave de agrupamiento para el piso mínimo de facturación (ver
+    ml_o_area_facturable_por_producto): separa backlight de no-backlight
+    (para no mezclar ML con M² en la misma suma) y agrupa por el nombre del
+    textil/tela dentro de cada tipo. Es un agrupamiento DISTINTO del que usa
+    descuento_textil() para el descuento por volumen (ese agrupa TODO el
+    backlight en un solo grupo global — regla de negocio aparte) — acá
+    backlight también se agrupa por tela individual, igual que no-backlight
+    por textil."""
+    if "tela" in d:
+        return ("backlight", d.get("tela", ""))
+    return ("no_backlight", d.get("textil", ""))
+
+
+def _distribuir_piso(valores_reales: list[float], piso: float) -> list[float]:
+    """Dado el ML/M² real (sin piso) de cada producto de un mismo grupo de
+    textil, devuelve el ML/M² facturable de cada uno (ver docstring del
+    módulo, "Piso mínimo de facturación"): si la suma del grupo ya supera
+    el piso, cada uno factura su valor real tal cual (ya se está usando
+    tela de sobra para cubrir la tensión de corte); si no, el piso se
+    reparte proporcional al peso real de cada producto — no en partes
+    iguales, para no regalarle más ML al producto chico que al grande."""
+    total_real = sum(valores_reales)
+    if total_real <= 0:
+        return [0.0 for _ in valores_reales]
+    if total_real >= piso:
+        return list(valores_reales)
+    return [v / total_real * piso for v in valores_reales]
+
+
+def ml_o_area_facturable_por_producto(productos: list[dict], **kwargs) -> list[float]:
+    """ML/M² facturable de cada producto de la cotización, con el piso
+    mínimo (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO) aplicado POR
+    GRUPO DE TEXTIL/TELA (ver _clave_grupo_textil y _distribuir_piso), no
+    por línea individual. Devuelve una lista alineada 1:1 con `productos`
+    (mismo orden). Pasarle el resultado a costo_producto(...,
+    ml_o_area_facturable=...) elemento a elemento.
+
+    kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
+    ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
+    sin piso, de cada producto individual)."""
+    reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
+
+    grupos: dict[tuple[str, str], list[int]] = {}
+    for i, p in enumerate(productos):
+        grupos.setdefault(_clave_grupo_textil(p), []).append(i)
+
+    facturables = [0.0] * len(productos)
+    for (tipo, _textil), indices in grupos.items():
+        piso = M2_MINIMO_POR_PRODUCTO if tipo == "backlight" else ML_MINIMO_POR_PRODUCTO
+        valores_grupo = [reales[i] for i in indices]
+        for i, valor in zip(indices, _distribuir_piso(valores_grupo, piso)):
+            facturables[i] = valor
+    return facturables
+
+
 def descuento_textil(productos: list[dict], **kwargs) -> dict:
     """
     Descuento adicional por volumen de tela impresa — independiente del %
@@ -345,8 +454,9 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
 
     - Backlight (todos los productos traen "tela"): un solo tramo para toda
       la cotización, según la suma de m² impresos de TODOS los productos.
-      Backlight no tiene estructuras/terminaciones — su total YA es 100%
-      costo de impresión, así que el % se aplica sobre el total completo.
+      El % se aplica SOLO al costo de impresión (igual que no-backlight) —
+      NO a la caja (perfil/luces/armado/etc., ver core.valor_cajas): es un
+      descuento por volumen de TELA impresa, la caja no es tela.
     - No-backlight: un tramo POR TEXTIL — se agrupan los productos por
       d["textil"], se suma el m² de cada grupo por separado (puede caer en
       tramos distintos entre sí dentro de la misma cotización), y el % de
@@ -363,24 +473,33 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
     if not productos:
         return {"monto": 0.0, "neto": 0.0, "pct_visual": 0.0}
 
-    neto = sum(costo_producto(p, **kwargs)["total"] for p in productos)
+    # Piso mínimo de facturación por grupo de textil/tela (ver docstring del
+    # módulo) — el costo_impresion/total de cada línea debe reflejar el
+    # piso YA repartido por grupo, no el piso de un solo producto.
+    facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
+
+    def _costo(p, f):
+        return costo_producto(p, ml_o_area_facturable=f, **kwargs)
+
+    neto = sum(_costo(p, f)["total"] for p, f in zip(productos, facturables))
 
     if all("tela" in p for p in productos):
         area_total = sum(_area_producto(p) for p in productos)
         pct = tramo_descuento_textil(area_total)
-        monto = neto * pct / 100
+        costo_impresion_total = sum(
+            _costo(p, f)["costo_impresion"] for p, f in zip(productos, facturables)
+        )
+        monto = costo_impresion_total * pct / 100
     else:
-        grupos: dict[str, list[dict]] = {}
-        for p in productos:
-            grupos.setdefault(p.get("textil", ""), []).append(p)
+        grupos: dict[str, list[tuple[dict, float]]] = {}
+        for p, f in zip(productos, facturables):
+            grupos.setdefault(p.get("textil", ""), []).append((p, f))
         monto = 0.0
         for grupo in grupos.values():
-            pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p in grupo))
+            pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _ in grupo))
             if not pct_grupo:
                 continue
-            costo_impresion_grupo = sum(
-                costo_producto(p, **kwargs)["costo_impresion"] for p in grupo
-            )
+            costo_impresion_grupo = sum(_costo(p, f)["costo_impresion"] for p, f in grupo)
             monto += costo_impresion_grupo * pct_grupo / 100
 
     pct_visual = (monto / neto * 100) if neto else 0.0
@@ -412,7 +531,13 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
     `fuente_descuento` es "normal" o "textil", según cuál se aplicó.
     kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
     ver ahí)."""
-    neto_productos = sum(costo_producto(p, **kwargs)["total"] for p in productos)
+    # Piso mínimo de facturación por grupo de textil/tela (ver docstring
+    # del módulo y ml_o_area_facturable_por_producto).
+    facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
+    neto_productos = sum(
+        costo_producto(p, ml_o_area_facturable=f, **kwargs)["total"]
+        for p, f in zip(productos, facturables)
+    )
     neto = neto_productos + (despacho or 0.0) + (instalacion or 0.0)
 
     monto_normal = neto * descuento_pct / 100
