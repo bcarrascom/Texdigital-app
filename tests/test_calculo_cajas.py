@@ -18,8 +18,6 @@ from core.calculo_cajas import (
     calcular_caja,
     lados_a_cubrir,
     luces1_default,
-    luces_x_caja_grilla,
-    plan_tiras,
     seleccionar_fp,
     traseras_tipo,
 )
@@ -31,8 +29,12 @@ CATALOGO_LUCES = [
     {"corto": "M9", "largo": "Led Lateral Actilum M9 -6k, 52 cms max 700mm", "medida": 0.52, "watts": 15},
     {"corto": "M6", "largo": "Led lateral Actilum M6 6k, 35 cms max 700mm", "medida": 0.35, "watts": 10},
     {"corto": "M3", "largo": "Led lateral Actilum M3 6k 19 cms. max 700 mm", "medida": 0.19, "watts": 5},
-    {"corto": "Malla 150", "largo": "Malla Front Led 50x150 5k", "medida": 0.3, "watts": 6},
-    {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 120},
+    # Malla 150: 6 luces/barra x 10 barras/malla = 60 luces, 60W por unidad
+    # (una "unidad" = una malla completa, medida 0.3m — se cuenta y se
+    # cobra IGUAL que cualquier led lateral, ver core/calculo_cajas.py).
+    {"corto": "Malla 150", "largo": "Malla Front Led 50x150 5k", "medida": 0.3, "watts": 60},
+    # Malla 12v: 99 luces x 0.46W = 45.54W por unidad.
+    {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 45.54},
     {"corto": "sin luces", "largo": "sin luces", "medida": 0, "watts": 0},
 ]
 
@@ -192,86 +194,73 @@ class TestSinLucesEnAmbas(unittest.TestCase):
         self.assertIsNone(r["fp"])
 
 
-class TestGrillaMallas(unittest.TestCase):
+class TestMallasComoLuzLateral(unittest.TestCase):
+    """Malla 150 y Malla 12v se cuentan EXACTAMENTE igual que cualquier led
+    lateral (su propio ancho físico en la fórmula led_x_lado), salvo que la
+    cantidad final NO se multiplica por lados_a_cubrir (una malla no "se
+    aplica por lado"). Verificado a la peseta contra dos ejemplos reales del
+    Excel original: caja 1.5x0.45, PERFIL 100 MM SIMPLE."""
 
-    def test_65x55_120_luces_12_tiras_fp_75(self):
-        self.assertEqual(luces_x_caja_grilla(0.65, 0.55), 120)
+    def test_malla_150_4_unidades_ejemplo_real(self):
         r = calcular_caja(
-            ancho=0.65, alto=0.55, cantidad=1, perfil="PERFIL 80 MM",
+            ancho=1.5, alto=0.45, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
             luces1="Malla 150", luces2="sin luces",
             catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
         )
         f = _fila(r, "Luces 1")
-        self.assertAlmostEqual(f["cantidad_x_caja"], 12.0)
-        self.assertAlmostEqual(r["watts"], 72)
-        self.assertEqual(r["fp"]["watts_unidad"], 75)
+        self.assertEqual(f["cantidad_x_caja"], 4.0)          # "4 led1xlado" del Excel
+        self.assertAlmostEqual(r["ml_x_cubrir"], 0.3)         # "0.3 ml x cubrir" del Excel
+        self.assertEqual(f["cantidad_x_caja"] * 40128, 160512)  # precio de iluminación del Excel
+        self.assertAlmostEqual(r["watts"], 4 * 60)
 
-    def test_63x55_mismos_120_luces_12_tiras(self):
-        self.assertEqual(luces_x_caja_grilla(0.63, 0.55), 120)
+    def test_malla_12v_1_unidad_ejemplo_real(self):
         r = calcular_caja(
-            ancho=0.63, alto=0.55, cantidad=1, perfil="PERFIL 80 MM",
+            ancho=1.5, alto=0.45, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="Malla 12v", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        f = _fila(r, "Luces 1")
+        self.assertEqual(f["cantidad_x_caja"], 1.0)           # "solo entra 1 luz"
+        self.assertAlmostEqual(r["ml_x_cubrir"], 0.5)          # "faltan 0.5m por cubrir"
+        self.assertEqual(f["cantidad_x_caja"] * 25000, 25000)  # precio del Excel
+        self.assertAlmostEqual(r["watts"], 45.54)
+
+    def test_malla_no_se_multiplica_por_lados_a_cubrir(self):
+        # Caja mediana (0.8 <= lado corto < 1.5) -> lados_a_cubrir=2 para un
+        # led lateral normal, pero una malla NO se aplica por lado: su
+        # cantidad es directamente led_x_lado, sin duplicar.
+        self.assertEqual(lados_a_cubrir("PERFIL 80 MM", "M3", 1.0, 1.0), 2)
+
+        r_lateral = calcular_caja(
+            ancho=1.0, alto=1.0, cantidad=1, perfil="PERFIL 80 MM",
+            luces1="M3", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        cant_m3_por_lado = math.floor(round((1.0 - 0.03) / 0.19, 6))
+        self.assertEqual(_fila(r_lateral, "Luces 1")["cantidad_x_caja"], 2 * cant_m3_por_lado)
+
+        r_malla = calcular_caja(
+            ancho=1.0, alto=1.0, cantidad=1, perfil="PERFIL 80 MM",
             luces1="Malla 150", luces2="sin luces",
             catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
         )
-        self.assertAlmostEqual(_fila(r, "Luces 1")["cantidad_x_caja"], 12.0)
+        cant_malla_por_lado = math.floor(round((1.0 - 0.03) / 0.3, 6))
+        self.assertEqual(_fila(r_malla, "Luces 1")["cantidad_x_caja"], cant_malla_por_lado)  # sin duplicar
 
-    def test_lado_menor_igual_10cm_da_n_1(self):
-        self.assertEqual(luces_x_caja_grilla(0.05, 0.05), 1)
-        self.assertEqual(luces_x_caja_grilla(0.10, 2.0), luces_x_caja_grilla(0.001, 2.0))
-
-
-class TestPlanTiras(unittest.TestCase):
-
-    def test_65x55_estrategia_optima(self):
-        p = plan_tiras(0.65, 0.55)
-        self.assertEqual(p["n_tiras"], 12)
-        self.assertEqual(p["n_recortadas"], 0)
-
-    def test_coordenadas_respetan_paso_y_bordes(self):
-        p = plan_tiras(0.65, 0.55)
-        xs = sorted({round(l["x"], 6) for l in p["luces"]})
-        ys = sorted({round(l["y"], 6) for l in p["luces"]})
-        # paso de 5 cm entre posiciones consecutivas
-        for a, b in zip(xs, xs[1:]):
-            self.assertAlmostEqual(b - a, 5.0, places=6)
-        for a, b in zip(ys, ys[1:]):
-            self.assertAlmostEqual(b - a, 5.0, places=6)
-        # ninguna luz a más de 5 cm de un borde
-        self.assertLessEqual(xs[0], 5.0 + 1e-9)
-        self.assertLessEqual(p["ancho_cm"] - xs[-1], 5.0 + 1e-9)
-        self.assertLessEqual(ys[0], 5.0 + 1e-9)
-        self.assertLessEqual(p["alto_cm"] - ys[-1], 5.0 + 1e-9)
-        # todas las luces dentro de la caja
-        for l in p["luces"]:
-            self.assertGreaterEqual(l["x"], 0)
-            self.assertLessEqual(l["x"], p["ancho_cm"])
-            self.assertGreaterEqual(l["y"], 0)
-            self.assertLessEqual(l["y"], p["alto_cm"])
-
-
-class TestMalla12v(unittest.TestCase):
-
-    def test_sin_cantidad_manual_queda_pendiente(self):
+    def test_malla_como_luces_2_llena_lo_que_deja_luces_1(self):
+        # Luces 1 = M12 (deja algo de ml_x_cubrir), Luces 2 = Malla 12v
+        # cubriendo el resto — misma fórmula led_x_lado, usando ml_x_cubrir
+        # como espacio disponible.
         r = calcular_caja(
-            ancho=1.0, alto=1.0, cantidad=1, perfil="PERFIL 80 MM",
-            luces1="Malla 12v", luces2="sin luces",
+            ancho=1.5, alto=0.45, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="M12", luces2="Malla 12v",
             catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
         )
-        f = _fila(r, "Luces 1")
-        self.assertTrue(f["pendiente_manual"])
-        self.assertEqual(f["cantidad_x_caja"], 0)
-
-    def test_con_cantidad_manual_watts_120_por_cantidad(self):
-        r = calcular_caja(
-            ancho=1.0, alto=1.0, cantidad=1, perfil="PERFIL 80 MM",
-            luces1="Malla 12v", luces2="sin luces",
-            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
-            cantidad_malla12v_1=2.5,
-        )
-        f = _fila(r, "Luces 1")
-        self.assertFalse(f["pendiente_manual"])
-        self.assertEqual(f["cantidad_x_caja"], 2.5)
-        self.assertAlmostEqual(r["watts"], 120 * 2.5)
+        # M12 (medida 0.6): floor((1.5-0.03)/0.6) = 2 -> ml_x_cubrir = 1.5-1.2 = 0.3
+        self.assertEqual(_fila(r, "Luces 1")["cantidad_x_caja"], 2)
+        self.assertAlmostEqual(r["ml_x_cubrir"], 0.3)
+        # Malla 12v (medida 1.0) sobre 0.3m disponibles -> no entra ninguna.
+        self.assertEqual(_fila(r, "Luces 2")["cantidad_x_caja"], 0)
 
 
 class TestRedondeoTrasteras(unittest.TestCase):
@@ -328,7 +317,6 @@ class TestRedondeoTrasteras(unittest.TestCase):
             ancho=1.0, alto=1.0, cantidad=2, perfil="PERFIL 80 MM",
             luces1="Malla 12v", luces2="sin luces",
             catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
-            cantidad_malla12v_1=5,
         )
         f = _fila(r, "Traseras")
         self.assertEqual(f["tipo"], "Sin traseras")

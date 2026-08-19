@@ -79,6 +79,20 @@ el repo), con dos correcciones encontradas durante las pruebas:
   especificación original proponía "Alucobond 122x244" para ese caso; en
   la práctica no se usa — la malla misma cubre el fondo. Ahora da "Sin
   traseras" con cantidad 0, igual que un perfil doble.
+- **Malla 150 y Malla 12v se cuentan y cobran EXACTAMENTE igual que
+  cualquier led lateral** (M12, M6, ...): su propio ancho físico ("medida"
+  en `luces.json` — 0.3 m y 1.0 m respectivamente) en la misma fórmula de
+  "cuántas unidades entran a lo largo del lado más largo" (`led_x_lado`).
+  La única diferencia real es que su cantidad final NO se multiplica por
+  `lados_a_cubrir` — a diferencia de un led lateral (que se repite
+  simétricamente en los lados que corresponda), una malla no "se aplica
+  por lado". Una versión anterior de este módulo las trataba como una
+  grilla de LEDs individuales cubriendo todo el fondo de la caja
+  (`luces_x_caja_grilla`/`plan_tiras`, ya eliminados) — esa interpretación
+  se probó contra el Excel original con dos ejemplos reales y no daba
+  resultados compatibles ni ajustando el precio proporcionalmente (con una
+  caja de 1.5×0.45 m, "Malla 12v" da literalmente 1 sola unidad usada, algo
+  que una grilla de área nunca podría dar).
 - **El default de Luces 1 para PERFIL 60 MM no depende de Ancho/Alto** (es
   siempre Malla 150). La UI lo aplica apenas se elige el perfil, sin
   esperar a que se completen las medidas — antes, si se elegía el perfil
@@ -91,13 +105,6 @@ el repo), con dos correcciones encontradas durante las pruebas:
 
 ## Pendiente (fuera del alcance de esta rama)
 
-- **Malla 12v**: sus especificaciones de tira (luces por tira, tiras por
-  malla) todavía no se conocen. La cantidad se ingresa a mano en un campo
-  aparte; cuando se tengan los datos, se calculará sola igual que Malla
-  150.
-- **Plan de tiras** (`plan_tiras()` en `calculo_cajas.py`, §5.4 del MD):
-  implementado y testeado, pero no está conectado a ninguna pantalla — es
-  la base para un futuro plano de instalación visual, no requerido todavía.
 - **Exportación a Excel**: desactivada, ver arriba.
 
 ## Cómo probar

@@ -38,9 +38,10 @@ def _tramo_armado(ml: float) -> str | None:
 def _valor_fila_luz(fila: dict, precios_luces: dict[str, float]) -> float:
     """precio_unidad × cantidad_x_caja de una fila "Luces 1"/"Luces 2".
     Mallas (Malla 150 / Malla 12v) usan exactamente la misma fórmula que
-    las laterales — TODO: confirmar la unidad real del precio de mallas
-    (¿por malla completa o por tira?, ver recursos/precios_cajas.json);
-    cuando se confirme, el fix es solo cambiar ese dato, no esta función."""
+    las laterales — confirmado contra dos ejemplos reales del Excel
+    original: precios_cajas.json["luces"] guarda el precio por UNIDAD de
+    malla completa (no por tira ni por LED individual), la misma unidad
+    que cuenta core.calculo_cajas.calcular_caja() (ver ese módulo)."""
     tipo = fila.get("tipo")
     if not tipo:
         return 0.0

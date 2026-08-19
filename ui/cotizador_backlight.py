@@ -76,7 +76,7 @@ def _desempaquetar_caja(valor) -> dict:
     """
     base = {
         "perfil": SIN_CAJA, "luces1": "M12", "luces2": "sin luces",
-        "malla12v_1": "", "malla12v_2": "", "luces1_tocado": False,
+        "luces1_tocado": False,
     }
     if not valor or valor == SIN_CAJA:
         return base
@@ -89,10 +89,6 @@ def _desempaquetar_caja(valor) -> dict:
     luces2 = valor.get("luces_2") or {}
     base["luces1"] = luces1.get("tipo") or "M12"
     base["luces2"] = luces2.get("tipo") or "sin luces"
-    if base["luces1"].strip().lower() == "malla 12v":
-        base["malla12v_1"] = str(luces1.get("cantidad_x_caja", ""))
-    if base["luces2"].strip().lower() == "malla 12v":
-        base["malla12v_2"] = str(luces2.get("cantidad_x_caja", ""))
     base["luces1_tocado"] = True  # ya venía con una elección guardada
     return base
 
@@ -641,8 +637,6 @@ class PantallaMedidas(PantallaMedidasBase):
         self._var_caja   = tk.StringVar(value=caja_ini["perfil"])
         self._var_luces1 = tk.StringVar(value=caja_ini["luces1"])
         self._var_luces2 = tk.StringVar(value=caja_ini["luces2"])
-        self._var_malla12v_1 = tk.StringVar(value=caja_ini["malla12v_1"])
-        self._var_malla12v_2 = tk.StringVar(value=caja_ini["malla12v_2"])
         # Si ya venía con una elección de Luces 1 guardada (edición), no se
         # pisa con el default al recalcular por cambios de Ancho/Alto/Perfil.
         self._luces1_tocado = caja_ini["luces1_tocado"]
@@ -666,8 +660,6 @@ class PantallaMedidas(PantallaMedidasBase):
         self._var_caja.trace_add("write",       self._actualizar_caja)
         self._var_luces1.trace_add("write",     self._on_luces1_cambiada)
         self._var_luces2.trace_add("write",     self._actualizar_caja)
-        self._var_malla12v_1.trace_add("write", self._actualizar_caja)
-        self._var_malla12v_2.trace_add("write", self._actualizar_caja)
         self._var_alto.trace_add("write",  self._actualizar_caja)
         self._var_ancho.trace_add("write", self._actualizar_caja)
         self._var_cant.trace_add("write",  self._actualizar_caja)
@@ -745,33 +737,13 @@ class PantallaMedidas(PantallaMedidasBase):
                                           style="Custom.TCombobox", width=13, font=FUENTE_MEDIDA)
         self._combo_luces2.pack(anchor="w", ipady=4)
 
-        vcmd = (self.register(self._validar_numero), "%P")
-
-        self._grp_malla12v_1 = tk.Frame(fila_luces, bg=COLORES["fondo"])
-        tk.Label(self._grp_malla12v_1, text="Cant. x caja (Malla 12v)", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        tk.Entry(self._grp_malla12v_1, textvariable=self._var_malla12v_1,
-                 validate="key", validatecommand=vcmd,
-                 font=FUENTE_MEDIDA, width=8, relief="flat", bd=0,
-                 bg="#FFFFFF", fg=COLORES["texto"], insertbackground=COLORES["texto"],
-                 highlightthickness=1, highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"]).pack(ipady=6, ipadx=6)
-        # Se empaqueta solo cuando Luces 1 == "Malla 12v" (ver _actualizar_caja)
-
-        self._grp_malla12v_2 = tk.Frame(fila_luces, bg=COLORES["fondo"])
-        tk.Label(self._grp_malla12v_2, text="Cant. x caja (Malla 12v)", font=FUENTE_LABEL,
-                 bg=COLORES["fondo"], fg=COLORES["texto_suave"]).pack(anchor="w")
-        tk.Entry(self._grp_malla12v_2, textvariable=self._var_malla12v_2,
-                 validate="key", validatecommand=vcmd,
-                 font=FUENTE_MEDIDA, width=8, relief="flat", bd=0,
-                 bg="#FFFFFF", fg=COLORES["texto"], insertbackground=COLORES["texto"],
-                 highlightthickness=1, highlightbackground=COLORES["borde"],
-                 highlightcolor=COLORES["acento"]).pack(ipady=6, ipadx=6)
-        # Se empaqueta solo cuando Luces 2 == "Malla 12v" (ver _actualizar_caja)
-
         self._lbl_watts = tk.Label(self._frame_caja, text="", font=FUENTE_AVISO,
                                    bg=COLORES["fondo"], fg=COLORES["texto_suave"])
         self._lbl_watts.pack(anchor="w", pady=(8, 0))
+
+        self._lbl_ml_x_cubrir = tk.Label(self._frame_caja, text="", font=FUENTE_AVISO,
+                                         bg=COLORES["fondo"], fg=COLORES["texto_suave"])
+        self._lbl_ml_x_cubrir.pack(anchor="w")
 
         self._frame_tabla = tk.Frame(self._frame_caja, bg=COLORES["fondo"])
         self._frame_tabla.pack(anchor="w", pady=(4, 0), fill="x")
@@ -854,33 +826,23 @@ class PantallaMedidas(PantallaMedidasBase):
         if not dimensiones_ok:
             self._limpiar_tabla()
             self._lbl_watts.config(text="")
+            self._lbl_ml_x_cubrir.config(text="")
             self._ultima_tabla = None
             return
 
         luces1 = self._var_luces1.get()
         luces2 = self._var_luces2.get()
 
-        if luces1.strip().lower() == "malla 12v":
-            self._grp_malla12v_1.pack(side="left", padx=(16, 0))
-        else:
-            self._grp_malla12v_1.pack_forget()
-        if luces2.strip().lower() == "malla 12v":
-            self._grp_malla12v_2.pack(side="left", padx=(16, 0))
-        else:
-            self._grp_malla12v_2.pack_forget()
-
-        cant_manual_1 = self._parse_float(self._var_malla12v_1)
-        cant_manual_2 = self._parse_float(self._var_malla12v_2)
-
         tabla = calcular_caja(
             ancho=ancho, alto=alto, cantidad=cant or 1, perfil=perfil,
             luces1=luces1, luces2=luces2,
             catalogo_luces=LUCES, catalogo_fp=FUENTES_PODER,
-            cantidad_malla12v_1=cant_manual_1, cantidad_malla12v_2=cant_manual_2,
         )
         self._ultima_tabla = tabla
         self._lbl_watts.config(
             text=f"Watts totales por caja: {tabla['watts']:.0f} W" if tabla["watts"] else "Sin luces — sin watts")
+        self._lbl_ml_x_cubrir.config(
+            text=f"Metros lineales por cubrir: {tabla['ml_x_cubrir']:.2f} m")
         self._rebuild_tabla(tabla)
 
     def _valor_caja_guardado(self):

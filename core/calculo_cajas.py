@@ -1,12 +1,28 @@
 """
 core/calculo_cajas.py
-Cálculos de materiales para productos backlight con caja. Implementa
-exactamente logica_cajas_backlight.md (§3 a §8, más el plan de tiras
-de §5.4). Funciones puras: no leen archivos ni tocan la UI — reciben los
-catálogos (luces, fuentes de poder) ya cargados desde core.repositorio.
+Cálculos de materiales para productos backlight con caja. Funciones puras:
+no leen archivos ni tocan la UI — reciben los catálogos (luces, fuentes de
+poder) ya cargados desde core.repositorio.
 
-Nomenclatura de las funciones y variables intermedias sigue la del MD para
-poder auditar el código línea a línea contra la especificación.
+Malla 150 y Malla 12v (§5.3/§5.4 de logica_cajas_backlight.md, versión
+anterior): la especificación original las trataba distinto a las luces
+laterales — como una grilla de LEDs individuales repartida por todo el
+fondo de la caja (luces_x_caja_grilla/plan_tiras, ya eliminados de este
+archivo). Esa interpretación se probó CONTRA el Excel original con dos
+ejemplos reales del usuario y no daba resultados compatibles ni ajustando
+el precio proporcionalmente (ver conversación — con una caja de 1.5x0.45m,
+"Malla 12v" da literalmente 1 sola unidad usada, algo que una grilla que
+cubre toda el área nunca podría dar por chica que fuera la caja).
+
+Lo que sí reproduce el Excel exacto (confirmado a la peseta con esos mismos
+dos ejemplos): Malla 150 y Malla 12v se cuentan EXACTAMENTE igual que
+cualquier luz lateral (M12, M6, M9, M3, Basic...) — usando su propio ancho
+físico ("medida" en luces.json: 0.3 m y 1.0 m respectivamente) en la misma
+fórmula de "cuántas unidades entran a lo largo del lado más largo"
+(led_x_lado). La única diferencia real de las mallas es que la cantidad
+usada NO se multiplica por lados_a_cubrir — a diferencia de un led lateral,
+que se repite simétricamente en los lados que corresponda, una malla no
+"se aplica por lado": la cantidad final es directamente led_x_lado.
 """
 
 import math
@@ -21,12 +37,10 @@ def _buscar_luz(catalogo_luces: list[dict], nombre_corto: str) -> dict | None:
 
 def _es_malla(nombre_corto: str) -> bool:
     """"Malla 150" y "Malla 12v" son mallas; el resto (M12, Basic 5, ...,
-    sin luces) no lo son."""
+    sin luces) no lo son. Se cuentan igual que cualquier luz lateral (ver
+    docstring del módulo) — esto solo importa para decidir si la cantidad
+    final se multiplica por lados_a_cubrir o no."""
     return (nombre_corto or "").strip().lower().startswith("malla")
-
-
-def _es_malla_150(nombre_corto: str) -> bool:
-    return (nombre_corto or "").strip().lower() == "malla 150"
 
 
 def _es_sin_luces(nombre_corto: str) -> bool:
@@ -101,141 +115,6 @@ def lados_a_cubrir(perfil: str, luces1_nombre: str, ancho: float, alto: float) -
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# §5.3 — Grilla de mallas
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _n_lado_cm(l_cm: float) -> int:
-    """n(L) de §5.3: cantidad mínima de luces a lo largo de un lado de L cm
-    tal que ninguna quede a más de 5 cm de un borde, con paso de 5 cm."""
-    # redondear antes de operar: convertir metros a cm (ancho*100) puede
-    # dejar ruido de punto flotante (0.55*100 == 55.00000000000001), que
-    # ceil() convertiría en un resultado incorrecto.
-    l_cm = round(l_cm, 6)
-    if l_cm <= 10:
-        return 1
-    return math.ceil(round((l_cm - 10) / 5, 6)) + 1
-
-
-def luces_x_caja_grilla(ancho: float, alto: float) -> int:
-    """Cantidad de luces de la grilla de una malla (Ancho y Alto en metros)."""
-    return _n_lado_cm(ancho * 100) * _n_lado_cm(alto * 100)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# §5.4 — Plan de tiras (plano de instalación de mallas)
-# No participa del conteo de la tabla de materiales (eso es §5.3); es solo
-# para poder dibujar un plano a escala más adelante.
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _posiciones_centradas(l_cm: float, n: int) -> list[float]:
-    """Posiciones (cm desde el borde 0) de n luces con paso de 5 cm,
-    centradas en l_cm de forma que ningún margen a un borde supere 5 cm."""
-    if n <= 1:
-        return [l_cm / 2]
-    span = 5 * (n - 1)
-    offset = (l_cm - span) / 2
-    return [offset + 5 * i for i in range(n)]
-
-
-def _agrupar_en_tiras(n: int) -> list[int]:
-    """Reparte n luces consecutivas en tiras de hasta 10 luces; la última
-    del grupo puede quedar recortada (< 10)."""
-    grupos = []
-    restante = n
-    while restante > 0:
-        grupos.append(min(10, restante))
-        restante -= 10
-    return grupos
-
-
-def _tiras_horizontales(n_ancho: int, n_alto: int, pos_x: list[float], pos_y: list[float]) -> list[dict]:
-    tiras = []
-    for fila in range(n_alto):
-        y = pos_y[fila]
-        idx = 0
-        for k in _agrupar_en_tiras(n_ancho):
-            xs = pos_x[idx:idx + k]
-            tiras.append({"orientacion": "h", "y": y, "x0": xs[0], "x1": xs[-1],
-                          "n_luces": k, "recortada": k < 10})
-            idx += k
-    return tiras
-
-
-def _tiras_verticales(n_ancho: int, n_alto: int, pos_x: list[float], pos_y: list[float]) -> list[dict]:
-    tiras = []
-    for col in range(n_ancho):
-        x = pos_x[col]
-        idx = 0
-        for k in _agrupar_en_tiras(n_alto):
-            ys = pos_y[idx:idx + k]
-            tiras.append({"orientacion": "v", "x": x, "y0": ys[0], "y1": ys[-1],
-                          "n_luces": k, "recortada": k < 10})
-            idx += k
-    return tiras
-
-
-def _plan_hibrida_h(n_ancho, n_alto, pos_x, pos_y) -> list[dict]:
-    bloque = 10 * (n_ancho // 10)
-    tiras = []
-    if bloque > 0:
-        tiras += _tiras_horizontales(bloque, n_alto, pos_x[:bloque], pos_y)
-    resto = n_ancho - bloque
-    if resto > 0:
-        tiras += _tiras_verticales(resto, n_alto, pos_x[bloque:], pos_y)
-    return tiras
-
-
-def _plan_hibrida_v(n_ancho, n_alto, pos_x, pos_y) -> list[dict]:
-    bloque = 10 * (n_alto // 10)
-    tiras = []
-    if bloque > 0:
-        tiras += _tiras_verticales(n_ancho, bloque, pos_x, pos_y[:bloque])
-    resto = n_alto - bloque
-    if resto > 0:
-        tiras += _tiras_horizontales(n_ancho, resto, pos_x, pos_y[bloque:])
-    return tiras
-
-
-def plan_tiras(ancho: float, alto: float) -> dict:
-    """
-    Evalúa las 4 estrategias de §5.4 (pura horizontal, pura vertical,
-    híbrida H, híbrida V) y elige la de menos tiras colocadas, desempatando
-    por menos tiras recortadas. Devuelve la estrategia elegida con las
-    coordenadas (en cm, relativas a la esquina inferior-izquierda de la
-    caja) de cada tira y cada luz.
-    """
-    ancho_cm, alto_cm = ancho * 100, alto * 100
-    n_ancho, n_alto = _n_lado_cm(ancho_cm), _n_lado_cm(alto_cm)
-    pos_x = _posiciones_centradas(ancho_cm, n_ancho)
-    pos_y = _posiciones_centradas(alto_cm, n_alto)
-
-    estrategias = {
-        "pura_horizontal": _tiras_horizontales(n_ancho, n_alto, pos_x, pos_y),
-        "pura_vertical":   _tiras_verticales(n_ancho, n_alto, pos_x, pos_y),
-        "hibrida_h":       _plan_hibrida_h(n_ancho, n_alto, pos_x, pos_y),
-        "hibrida_v":       _plan_hibrida_v(n_ancho, n_alto, pos_x, pos_y),
-    }
-
-    def _costo(tiras):
-        return (len(tiras), sum(1 for t in tiras if t["recortada"]))
-
-    mejor_nombre = min(estrategias, key=lambda k: _costo(estrategias[k]))
-    tiras = estrategias[mejor_nombre]
-
-    luces = [{"x": x, "y": y} for x in pos_x for y in pos_y]
-
-    return {
-        "estrategia": mejor_nombre,
-        "n_tiras": len(tiras),
-        "n_recortadas": sum(1 for t in tiras if t["recortada"]),
-        "tiras": tiras,
-        "luces": luces,
-        "n_ancho": n_ancho, "n_alto": n_alto,
-        "ancho_cm": ancho_cm, "alto_cm": alto_cm,
-    }
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # §6 — Watts y Fuente de poder
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -289,60 +168,63 @@ def traseras_tipo(perfil: str, luces1_nombre: str) -> str:
 # §8 — Tabla de materiales completa
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _ancho_y_conteo(nombre: str, disponible: float, catalogo_luces: list[dict]) -> tuple[float, int]:
+    """Ancho físico ("medida") de una luz y cuántas unidades enteras entran
+    en `disponible` metros — misma fórmula para CUALQUIER luz, mallas
+    incluidas (ver docstring del módulo): Malla 150/Malla 12v no son un
+    caso especial, solo tienen su propio ancho (0.3 m / 1.0 m)."""
+    if _es_sin_luces(nombre):
+        return 0.0, 0
+    luz = _buscar_luz(catalogo_luces, nombre)
+    ancho_luz = luz["medida"] if luz else 0.0
+    conteo = 0 if ancho_luz == 0 else math.floor(round(disponible / ancho_luz, 6))
+    return ancho_luz, conteo
+
+
 def calcular_caja(ancho: float, alto: float, cantidad: int, perfil: str,
                    luces1: str, luces2: str,
-                   catalogo_luces: list[dict], catalogo_fp: list[dict],
-                   cantidad_malla12v_1: float | None = None,
-                   cantidad_malla12v_2: float | None = None) -> dict:
+                   catalogo_luces: list[dict], catalogo_fp: list[dict]) -> dict:
     """
     Calcula la tabla de materiales (§8) de una caja de backlight.
     `cantidad` es el n° de cajas del producto (Cantidad ingresada por el
-    usuario). `cantidad_malla12v_N` es la cantidad x caja ingresada a mano
-    cuando Luces N == "Malla 12v" (§5.3, pendiente de especificaciones de
-    tira); se ignora para cualquier otra luz.
+    usuario).
 
-    Devuelve {"filas": [...], "watts": float, "fp": dict|None, ...intermedios}.
-    Cada fila: {"material", "tipo", "cantidad_x_caja", "cantidad_total",
-    "pendiente_manual"} (pendiente_manual solo aplica a filas de Luces con
-    Malla 12v sin cantidad ingresada).
+    Devuelve {"filas": [...], "watts": float, "fp": dict|None, "ml_x_cubrir":
+    float, ...intermedios}. Cada fila: {"material", "tipo",
+    "cantidad_x_caja", "cantidad_total", "pendiente_manual"}
+    ("pendiente_manual" queda siempre False — ya no hay ninguna luz que
+    requiera un ingreso manual, ver docstring del módulo).
+
+    "ml_x_cubrir" = lado_largo − (ancho_led1 × led1_x_lado): metros
+    lineales que le quedan al lado más largo después de acomodar Luces 1,
+    disponibles para Luces 2 (§7 del Excel original, "Metros lineales por
+    cubrir" — se muestra en pantalla igual que el resto de la tabla).
     """
     lc = lado_corto(ancho, alto)
     ll = lado_largo(ancho, alto)
     mts_lineales = mts_lineales_x_caja(ancho, alto)
     lac = lados_a_cubrir(perfil, luces1, ancho, alto)
 
-    # "Led 1 x lado" (§5.2): solo aplica si Luces 1 es un led lateral. Una
-    # malla no ocupa el borde (cubre el fondo, §5.3), así que no le resta
-    # espacio a Luces 2 en el borde.
-    if _es_malla(luces1) or _es_sin_luces(luces1):
-        led1_x_lado, ancho_led1 = 0, 0.0
-    else:
-        luz1 = _buscar_luz(catalogo_luces, luces1)
-        ancho_led1 = luz1["medida"] if luz1 else 0.0
-        led1_x_lado = 0 if ancho_led1 == 0 else math.floor(round((ll - 0.03) / ancho_led1, 6))
+    # "Led 1 x lado": cuántas unidades de Luces 1 (con su ancho físico
+    # propio, sea led lateral o malla) entran a lo largo del lado más largo
+    # (con 0.03 m de margen de borde).
+    ancho_led1, led1_x_lado = _ancho_y_conteo(luces1, ll - 0.03, catalogo_luces)
+    ml_x_cubrir = ll - (ancho_led1 * led1_x_lado)
+    ancho_led2, led2_x_lado = _ancho_y_conteo(luces2, ml_x_cubrir, catalogo_luces)
 
-    def _cantidad_luz(nombre, cantidad_manual, es_luces1):
-        """Cantidad x caja de una fila de luz, y si quedó pendiente de
-        ingreso manual (Malla 12v sin cantidad todavía)."""
+    def _cantidad_luz(nombre, led_x_lado):
+        """Cantidad x caja de una fila de luz. Las mallas NO se aplican
+        "por lado" (a diferencia de un led lateral, que se repite
+        simétricamente en los lados que corresponda) — su cantidad final es
+        directamente led_x_lado, sin multiplicar por lados_a_cubrir."""
         if _es_sin_luces(nombre):
-            return 0.0, False
+            return 0.0
         if _es_malla(nombre):
-            if _es_malla_150(nombre):
-                return luces_x_caja_grilla(ancho, alto) / 10, False
-            # Malla 12v: pendiente de especificaciones de tira (§5.3 / MD §1.1)
-            if cantidad_manual is None:
-                return 0.0, True
-            return float(cantidad_manual), False
-        if es_luces1:
-            return float(lac * led1_x_lado), False
-        luz = _buscar_luz(catalogo_luces, nombre)
-        ancho_led2 = luz["medida"] if luz else 0.0
-        ml_x_cubrir = ll - (led1_x_lado * ancho_led1)
-        led2_x_lado = 0 if ancho_led2 == 0 else math.floor(round(ml_x_cubrir / ancho_led2, 6))
-        return float(lac * led2_x_lado), False
+            return float(led_x_lado)
+        return float(lac * led_x_lado)
 
-    cant1_x_caja, luces1_pendiente = _cantidad_luz(luces1, cantidad_malla12v_1, True)
-    cant2_x_caja, luces2_pendiente = _cantidad_luz(luces2, cantidad_malla12v_2, False)
+    cant1_x_caja = _cantidad_luz(luces1, led1_x_lado)
+    cant2_x_caja = _cantidad_luz(luces2, led2_x_lado)
 
     watts = (_watts_de(luces1, catalogo_luces) * cant1_x_caja
              + _watts_de(luces2, catalogo_luces) * cant2_x_caja)
@@ -371,10 +253,10 @@ def calcular_caja(ancho: float, alto: float, cantidad: int, perfil: str,
          "pendiente_manual": False},
         {"material": "Luces 1", "tipo": luces1,
          "cantidad_x_caja": cant1_x_caja, "cantidad_total": cant1_x_caja * cantidad,
-         "pendiente_manual": luces1_pendiente},
+         "pendiente_manual": False},
         {"material": "Luces 2", "tipo": luces2,
          "cantidad_x_caja": cant2_x_caja, "cantidad_total": cant2_x_caja * cantidad,
-         "pendiente_manual": luces2_pendiente},
+         "pendiente_manual": False},
     ]
     if fp is None:
         filas.append({"material": "FP", "tipo": None,
@@ -392,4 +274,5 @@ def calcular_caja(ancho: float, alto: float, cantidad: int, perfil: str,
         "lado_corto": lc,
         "lado_largo": ll,
         "mts_lineales_x_caja": mts_lineales,
+        "ml_x_cubrir": ml_x_cubrir,
     }
