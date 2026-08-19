@@ -5,7 +5,7 @@
   {"corto": "M9", "largo": "Led Lateral Actilum M9 -6k, 52 cms max 700mm", "medida": 0.52, "watts": 15},
   {"corto": "M6", "largo": "Led lateral Actilum M6 6k, 35 cms max 700mm", "medida": 0.35, "watts": 10},
   {"corto": "M3", "largo": "Led lateral Actilum M3 6k 19 cms. max 700 mm", "medida": 0.19, "watts": 5},
-  {"corto": "Malla 150", "largo": "Malla Front Led 50x150 5k", "medida": 0.3, "watts": 6},
-  {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 120},
+  {"corto": "Malla 150", "largo": "Malla Front Led 50x150 5k", "medida": 0.3, "watts": 60},
+  {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 45.54},
   {"corto": "sin luces", "largo": "sin luces", "medida": 0, "watts": 0}
 ]
