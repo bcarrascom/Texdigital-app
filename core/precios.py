@@ -9,23 +9,28 @@ Modelo (confirmado con el usuario y verificado contra una cotización real —
 Excel "Cubre alarma", ver test_precios.py — no hay precio "manual" por
 producto):
   - No-backlight: valor = impresión     (ML impresión × valor de la tela)
-                        + terminaciones (Σ valor de cada agregada × Cantidad efectiva)
-                        + estructuras   (ML impresión × Σ valorML + Cantidad efectiva × Σ valorUNIT)
+                        + terminaciones (Σ valor de cada agregada, por ML o
+                                          por unidad según el ítem)
+                        + estructuras   (ídem, por ML o por unidad)
     Las Estructuras/Terminaciones son ADITIVAS: una lista de nombres por
     producto, no una selección única.
     "Cantidad efectiva" = Cantidad × 2 si Tiro y retiro, si no Cantidad tal
     cual. Tiro y retiro (imprimir las dos caras) implica coser/rematar cada
     cara por separado, así que duplica cuánta terminación/estructura-unitaria
     se aplica — igual que duplica el ML impreso.
-    OJO: las terminaciones NO se calculan en base a ML ni a Alto — son un
-    valor FIJO por catálogo (terminaciones.json solo guarda un número por
-    ítem, sin distinguir valorML/valorUNIT como estructuras.json). Se
-    verificó con una cotización real: "Cubre alarma" con Cantidad 80, Tiro y
-    retiro, terminación "Cubre alarmas" ($3.500) — el Excel cobra
-    3.500 × 160 (Cantidad efectiva) = $560.000, NO 3.500 × ML. Antes se
-    intentó un modelo ML-based para terminaciones (multiplicar por Alto ×
-    Cantidad); ese modelo sobrestimaba el costo porque además de duplicar la
-    cantidad, multiplicaba por Alto — algo que el Excel real no hace.
+    Las terminaciones/estructuras del catálogo legado (recursos/
+    estructuras_legado.json, terminaciones_legado.json) son por UNIDAD
+    (valorUNIT × Cantidad efectiva) — confirmado con una cotización real:
+    "Cubre alarma" con Cantidad 80, Tiro y retiro, terminación "Cubre
+    alarmas" — el Excel cobra valor × 160 (Cantidad efectiva), NO valor ×
+    ML (ver test_precios_legado.py); y con el usuario para "Basta"/
+    "Bolsillos" ($3.500 por producto cada una). El catálogo también admite
+    ítems por ML impreso (valorML × ml_facturable en vez de valorUNIT) —
+    mismo mecanismo que ya usa el modelo aditivo para estructuras.json (ver
+    core.repositorio.cargar_estructuras / cargar_estructuras_legado: cada
+    ítem del catálogo trae "valor" (→ valorUNIT) o "valorML", nunca los
+    dos) — por si algún ítem futuro lo necesita, aunque hoy ninguno del
+    catálogo legado lo usa.
   - Backlight: valor = M² impreso × valor de la tela (Alto × Ancho × Cantidad)
                       + valor de la caja, si el producto lleva caja (ver
                         core.valor_cajas.valor_caja_desde_guardado — perfil,
@@ -217,9 +222,10 @@ def costo_producto(
       - "legado" (DEFAULT, modelo "Demo" — adoptado como modelo principal):
         los nombres se buscan en estructuras_legado_valores/
         terminaciones_legado_valores (recursos/estructuras_legado.json,
-        terminaciones_legado.json — precios por unidad derivados de "Lista
-        vieja.pdf"). Todo es por unidad: valor × Cantidad efectiva (ver
-        cantidad_efectiva), sin distinción ML/unidad.
+        terminaciones_legado.json — precios derivados de "Lista vieja.pdf").
+        Igual que "aditivo": cada ítem puede traer "valorML" (× ML impreso)
+        o "valorUNIT" (× Cantidad efectiva) — la mayoría son valorUNIT, pero
+        no todos (ver docstring del módulo).
       - "aditivo" (modelo "Neo" — código de la versión anterior, dejado
         andando para una eventual vuelta atrás, ya no es el default): los
         nombres se buscan en estructuras_valores/terminaciones_valores
@@ -299,22 +305,27 @@ def costo_producto(
         estructuras = d.get("estructuras") or []
 
         if modelo == "legado":
-            detalle_terminaciones = {}
-            for t in terminaciones:
-                valor_manual = parsear_valor_manual(t)
-                detalle_terminaciones[t] = (
-                    valor_manual if valor_manual is not None
-                    else terminaciones_legado_valores.get(t, 0.0) * cant_efectiva
-                )
+            def _valorizar_legado(nombre, catalogo):
+                valor_manual = parsear_valor_manual(nombre)
+                if valor_manual is not None:
+                    return valor_manual
+                valores = catalogo.get(nombre)
+                if not valores:
+                    return 0.0
+                if "valorML" in valores:
+                    return ml_facturable * valores["valorML"]
+                if "valorUNIT" in valores:
+                    return cant_efectiva * valores["valorUNIT"]
+                return 0.0
+
+            detalle_terminaciones = {
+                t: _valorizar_legado(t, terminaciones_legado_valores) for t in terminaciones
+            }
             costo_terminaciones = sum(detalle_terminaciones.values())
 
-            detalle_estructuras = {}
-            for e in estructuras:
-                valor_manual = parsear_valor_manual(e)
-                detalle_estructuras[e] = (
-                    valor_manual if valor_manual is not None
-                    else estructuras_legado_valores.get(e, 0.0) * cant_efectiva
-                )
+            detalle_estructuras = {
+                e: _valorizar_legado(e, estructuras_legado_valores) for e in estructuras
+            }
             costo_estructuras = sum(detalle_estructuras.values())
         else:
             detalle_terminaciones = {}

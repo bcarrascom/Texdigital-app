@@ -1,7 +1,7 @@
 [
-  {"nombre": "Basta", "valor": 10000},
+  {"nombre": "Basta", "valor": 3500},
   {"nombre": "Calce", "valor": 10000},
-  {"nombre": "Bolsillos", "valor": 10000},
+  {"nombre": "Bolsillos", "valor": 3500},
   {"nombre": "Cubre alarmas", "valor": 7000},
   {"nombre": "Estuches", "valor": 3000},
   {"nombre": "Fundas", "valor": 4000},

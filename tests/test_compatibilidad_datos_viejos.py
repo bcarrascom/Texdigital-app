@@ -257,12 +257,12 @@ class TestCompatibilidadCotizacionesViejas(unittest.TestCase):
 
 class TestCompatibilidadCatalogosViejos(unittest.TestCase):
     """estructuras.json/terminaciones.json pasaron de lista de strings a
-    lista de objetos con precio. Si una instalación no alcanzó a
-    sincronizar el catálogo nuevo (o Dropbox tarda en propagar el cambio a
-    otra máquina), core.repositorio debe poder seguir leyendo el formato
-    viejo sin que la app entera falle al arrancar."""
+    lista de objetos con precio. Si el archivo empaquetado en recursos/
+    quedó en el formato viejo (build vieja, o edición manual incompleta),
+    core.repositorio debe poder seguir leyéndolo sin que la app entera
+    falle al arrancar."""
 
-    def _con_conf_temporal(self, nombre_archivo, contenido):
+    def _con_recursos_temporal(self, nombre_archivo, contenido):
         tmp = tempfile.TemporaryDirectory()
         (Path(tmp.name) / nombre_archivo).write_text(
             json.dumps(contenido, ensure_ascii=False), encoding="utf-8")
@@ -271,8 +271,8 @@ class TestCompatibilidadCatalogosViejos(unittest.TestCase):
     def test_cargar_estructuras_formato_viejo_lista_de_strings(self):
         import core.repositorio as repo
         contenido_viejo = ["Sin estructura", "Asta fibra de vidrio vela 2 mts", "Base auto"]
-        with self._con_conf_temporal("estructuras.json", contenido_viejo) as tmp:
-            with mock.patch.object(repo, "_CONF_DIR", Path(tmp)):
+        with self._con_recursos_temporal("estructuras.json", contenido_viejo) as tmp:
+            with mock.patch.object(repo, "_RECURSOS_DIR", Path(tmp)):
                 nombres, valores = repo.cargar_estructuras()
         self.assertEqual(nombres, contenido_viejo)
         self.assertEqual(valores, {})  # formato viejo no trae precio, no explota
@@ -280,8 +280,8 @@ class TestCompatibilidadCatalogosViejos(unittest.TestCase):
     def test_cargar_terminaciones_formato_viejo_lista_de_strings(self):
         import core.repositorio as repo
         contenido_viejo = ["Sin terminaciones", "Basta perimetral", "Con bolsillo"]
-        with self._con_conf_temporal("terminaciones.json", contenido_viejo) as tmp:
-            with mock.patch.object(repo, "_CONF_DIR", Path(tmp)):
+        with self._con_recursos_temporal("terminaciones.json", contenido_viejo) as tmp:
+            with mock.patch.object(repo, "_RECURSOS_DIR", Path(tmp)):
                 nombres, valores = repo.cargar_terminaciones()
         self.assertEqual(nombres, contenido_viejo)
         self.assertEqual(valores, {})

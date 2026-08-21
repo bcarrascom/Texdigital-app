@@ -5,7 +5,9 @@ como modelo PRINCIPAL de costo_producto (default). Usa los mismos campos
 d["estructuras"]/d["terminaciones"] que el modelo "aditivo" (Neo, ver
 tests/test_precios.py, código dejado intacto para una eventual vuelta
 atrás) — lo que cambia es en qué catálogo se buscan los nombres y cómo se
-valorizan: todo por unidad (Cantidad efectiva), sin distinción ML/unidad.
+valorizan: la mayoría por unidad (Cantidad efectiva), pero algunos ítems
+son por ML impreso (valorML) — mismo mecanismo que ya usa el modelo
+aditivo para estructuras.json (ver core.repositorio.cargar_estructuras).
 
 También cubre parsear_valor_manual (ajustes manuales de precio, ej.
 "$10.000" agregado directo en vez de un nombre de catálogo).
@@ -27,15 +29,16 @@ TEXTILES_VALORES = {"TelaTest": 0.0}  # en 0 para aislar estructura/terminación
 # Recortes reales derivados de "Lista vieja.pdf" — ver core/repositorio.py
 # cargar_estructuras_legado/cargar_terminaciones_legado para el catálogo
 # completo en recursos/estructuras_legado.json y terminaciones_legado.json.
+# Mismo formato {"valorUNIT": x} / {"valorML": x} que devuelve _cargar_legado().
 TERMINACIONES_LEGADO = {
-    "Basta": 10000,
-    "Calce": 10000,
-    "Cubre alarmas": 7000,
+    "Basta": {"valorUNIT": 10000},
+    "Calce": {"valorUNIT": 10000},
+    "Cubre alarmas": {"valorUNIT": 7000},
 }
 ESTRUCTURAS_LEGADO = {
-    "Fleje plastico": 7500,
-    "Madera y cancamos": 15000,
-    "Tubo + Pletina + Candados": 12000,
+    "Fleje plastico": {"valorUNIT": 7500},
+    "Madera y cancamos": {"valorUNIT": 15000},
+    "Tubo + Pletina + Candados": {"valorUNIT": 12000},
 }
 
 CATALOGOS = dict(
@@ -76,6 +79,25 @@ class TestPreciosLegado(unittest.TestCase):
         self.assertEqual(costo["costo_estructuras"], 0)
         self.assertEqual(costo["total"], 20000)
 
+    def test_terminacion_legado_por_ml_no_por_unidad(self):
+        # Ítem con "valorML" en vez de "valor" (ver core.repositorio.
+        # _cargar_legado): se cobra por ML impreso, no por Cantidad
+        # efectiva. El mecanismo existe para cualquier ítem que lo necesite
+        # (aunque hoy Basta/Bolsillos terminaron siendo por unidad, ver
+        # test_catalogo_legado_completo_carga_desde_recursos) — acá se
+        # prueba con un catálogo sintético para no depender de eso.
+        catalogo = {"Bolsillos ML": {"valorML": 5000}}
+        d = _producto(textil="Popelina", ancho=1.0, alto=10.0, cantidad=1,
+                       terminaciones=["Bolsillos ML"])
+        costo = costo_producto(
+            d, modelo="legado", textiles_valores={"Popelina": 0.0},
+            textiles_anchos={"Popelina": 1.0},
+            terminaciones_legado_valores=catalogo,
+        )
+        # ancho_tela=1.0=ancho -> uxa=1, ratio=1, ml=1*10=10
+        self.assertEqual(costo["ml_o_area"], 10.0)
+        self.assertEqual(costo["costo_terminaciones"], 50000)  # 5000 * 10 ML, no * Cantidad(1)
+
     def test_estructura_legado_combinada_tubo_pletina_candados(self):
         # "Tubo + Pletina + Candados" (combo único, ver conversación —
         # nunca aparecen separados en la lista vieja) + Madera y cancamos,
@@ -115,7 +137,7 @@ class TestPreciosLegado(unittest.TestCase):
         costo_legado = costo_producto(
             d, modelo="legado", textiles_valores=TEXTILES_VALORES,
             textiles_anchos=TEXTILES_ANCHOS,
-            estructuras_legado_valores={"Poste": 5000})
+            estructuras_legado_valores={"Poste": {"valorUNIT": 5000}})
         costo_aditivo = costo_producto(
             d, modelo="aditivo", textiles_valores=TEXTILES_VALORES,
             textiles_anchos=TEXTILES_ANCHOS,
@@ -182,10 +204,14 @@ class TestPreciosLegado(unittest.TestCase):
         # ESTRUCTURAS_LEGADO_VALORES/TERMINACIONES_LEGADO_VALORES, cargados
         # desde recursos/estructuras_legado.json y terminaciones_legado.json.
         from core.repositorio import ESTRUCTURAS_LEGADO_VALORES, TERMINACIONES_LEGADO_VALORES
-        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Cubre alarmas"), 7000)
-        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Calce"), 10000)
-        self.assertEqual(ESTRUCTURAS_LEGADO_VALORES.get("Asta fibra de vidrio vela 2 mts"), 17000)
-        self.assertEqual(ESTRUCTURAS_LEGADO_VALORES.get("Tubo + Pletina + Candados"), 12000)
+        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Cubre alarmas"), {"valorUNIT": 7000.0})
+        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Calce"), {"valorUNIT": 10000.0})
+        # Basta/Bolsillos: $3.500 por producto (por unidad, no por ML) —
+        # confirmado con el usuario.
+        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Basta"), {"valorUNIT": 3500.0})
+        self.assertEqual(TERMINACIONES_LEGADO_VALORES.get("Bolsillos"), {"valorUNIT": 3500.0})
+        self.assertEqual(ESTRUCTURAS_LEGADO_VALORES.get("Asta fibra de vidrio vela 2 mts"), {"valorUNIT": 17000.0})
+        self.assertEqual(ESTRUCTURAS_LEGADO_VALORES.get("Tubo + Pletina + Candados"), {"valorUNIT": 12000.0})
 
 
 class TestValorManual(unittest.TestCase):

@@ -101,7 +101,7 @@ def _base_conf() -> Path:
     return base
 
 
-RECURSOS  = _base_recursos()   # recursos/: plantilla xlsx, assets/, seeds de fábrica
+RECURSOS  = _base_recursos()   # recursos/: catálogos de referencia (solo lectura), plantilla xlsx, assets/
 DOCS      = _base_docs()       # docs/: manual de usuario y otra documentación de solo lectura
 DATOS     = _base_datos()      # datos locales por máquina (fallback sin Dropbox)
-CONF      = _base_conf()       # clientes.json, contactos.json, productos.json, textiles.json
+CONF      = _base_conf()       # clientes.json, contactos.json (datos que el operador va agregando)
