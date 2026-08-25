@@ -26,6 +26,7 @@ from datetime import datetime
 from core.repositorio import (
     PRODUCTOS, TEXTILES, TEXTILES_ANCHOS,
     ESTRUCTURAS_LEGADO, TERMINACIONES_LEGADO,
+    ESTRUCTURAS_LEGADO_VALORES, TERMINACIONES_LEGADO_VALORES,
     PERFILES, LUCES, FUENTES_PODER,
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
@@ -311,6 +312,16 @@ class ApiCotizacion:
             "telas_backlight": _TELAS_BACKLIGHT,
             "estructuras": ESTRUCTURAS_LEGADO,
             "terminaciones": TERMINACIONES_LEGADO,
+            # Nombres que se cobran POR UNIDAD (valorUNIT) — las que son por
+            # ML necesitan el ancho del textil para convertirse en metros
+            # lineales, así que en un producto sin textil solo se pueden
+            # agregar estas (ver nueva-cotizacion.html::agregar()).
+            "estructuras_unit": [
+                n for n in ESTRUCTURAS_LEGADO if "valorUNIT" in ESTRUCTURAS_LEGADO_VALORES.get(n, {})
+            ],
+            "terminaciones_unit": [
+                n for n in TERMINACIONES_LEGADO if "valorUNIT" in TERMINACIONES_LEGADO_VALORES.get(n, {})
+            ],
             "perfiles": PERFILES,
             "luces": [l["corto"] for l in LUCES],
             "clientes": [

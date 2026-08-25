@@ -251,5 +251,61 @@ class TestValorManual(unittest.TestCase):
         self.assertEqual(costo["costo_estructuras"], 10000)  # no x3
 
 
+class TestSinTextil(unittest.TestCase):
+    """fix/sin-textil: un producto puede no llevar textil/tela — el valor
+    de impresión queda SIEMPRE en $0 (no hay de dónde sacar ML impresos),
+    pero estructuras/terminaciones por unidad y la caja de un backlight
+    (independiente del textil, ver core/calculo_cajas.py) se siguen
+    cobrando normal. La validación de "esto no se puede agregar sin
+    textil" (ítems por ML) vive en el frontend
+    (nueva-cotizacion.html::agregar) — acá solo se confirma que, si de
+    todos modos llegara un ítem por ML sin textil, no revienta y da $0
+    en vez de cobrar de más."""
+
+    def test_estandar_sin_textil_da_valor_impresion_cero(self):
+        d = _producto(textil="", terminaciones=["Cubre alarmas"])
+        costo = costo_producto(d, **CATALOGOS)
+        self.assertEqual(costo["ml_o_area"], 0.0)
+        self.assertEqual(costo["costo_impresion"], 0)
+
+    def test_estandar_sin_textil_sigue_cobrando_estructura_por_unidad(self):
+        d = _producto(textil="", estructuras=["Fleje plastico"])
+        costo = costo_producto(d, **CATALOGOS)
+        self.assertEqual(costo["costo_estructuras"], 7500)
+        self.assertEqual(costo["total"], 7500)
+
+    def test_estandar_sin_textil_item_por_ml_da_cero_no_revienta(self):
+        # No es el flujo esperado (el frontend ya lo bloquea, ver
+        # nueva-cotizacion.html), pero el backend no debe explotar ni
+        # cobrar de más si de todos modos llega un nombre por ML sin
+        # textil: sin ancho de tela no hay ML que calcular, así que da 0.
+        catalogo = {"Bolsillos ML": {"valorML": 5000}}
+        d = _producto(textil="", terminaciones=["Bolsillos ML"])
+        costo = costo_producto(d, modelo="legado", textiles_valores=TEXTILES_VALORES,
+                                textiles_anchos=TEXTILES_ANCHOS,
+                                terminaciones_legado_valores=catalogo)
+        self.assertEqual(costo["ml_o_area"], 0.0)
+        self.assertEqual(costo["costo_terminaciones"], 0)
+
+    def test_backlight_sin_tela_da_valor_impresion_cero(self):
+        d = {"tela": "", "caja": "Sin caja", "ancho": 1.0, "alto": 1.0, "cantidad": 1}
+        costo = costo_producto(d, textiles_valores=TEXTILES_VALORES, textiles_anchos=TEXTILES_ANCHOS)
+        self.assertEqual(costo["costo_impresion"], 0)
+        self.assertEqual(costo["total"], 0)
+
+    def test_backlight_sin_tela_cobra_la_caja_igual(self):
+        # La caja no depende del textil/tela en ningún momento (ver
+        # core.calculo_cajas.calcular_caja) — un backlight sin tela pero
+        # con caja de verdad puesta cobra la caja normal.
+        detalle_caja = {"valor_total": 45000}
+        d = {"tela": "", "caja": {"detalle": "ya calculado"}, "ancho": 1.0, "alto": 1.0, "cantidad": 1}
+        from unittest import mock
+        with mock.patch("core.precios.valor_caja_desde_guardado", return_value=detalle_caja):
+            costo = costo_producto(d, textiles_valores=TEXTILES_VALORES, textiles_anchos=TEXTILES_ANCHOS)
+        self.assertEqual(costo["costo_impresion"], 0)
+        self.assertEqual(costo["costo_caja"], 45000)
+        self.assertEqual(costo["total"], 45000)
+
+
 if __name__ == "__main__":
     unittest.main()

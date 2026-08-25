@@ -800,14 +800,23 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
   }
 
   /* Un producto está completo cuando su pantalla dejaría avanzar. Mismas
-     reglas que PantallaMedidasBase._set_btn / _actualizar_btn. */
+     reglas que PantallaMedidasBase._set_btn / _actualizar_btn — el textil/
+     tela ya NO es obligatorio por sí solo (fix/sin-textil): un backlight
+     sin tela vale si tiene una caja de verdad puesta, y un estándar sin
+     textil vale si tiene alguna estructura o terminación (si no, no
+     tendría nada que cobrar — ver core.precios.costo_producto, que ya deja
+     el valor de impresión en $0 cuando no hay textil/tela). */
   function completo(p) {
     const n = (v) => { const x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? 0 : x; };
     const base = n(p.ancho) > 0 && n(p.alto) > 0 && parseInt(p.cantidad, 10) > 0;
     if (!base) return false;
     if (p.calc && p.calc.error && !p.forzar) return false;
-    return p.tipo === "backlight" ? !!p.tela
-                                  : !!p.producto.trim() && !!p.textil.trim();
+    if (p.tipo === "backlight") {
+      const conCaja = !!p.perfil && p.perfil !== "Sin caja";
+      return !!p.tela || conCaja;
+    }
+    const conExtras = (p.estructuras || []).length > 0 || (p.terminaciones || []).length > 0;
+    return !!p.producto.trim() && (!!p.textil.trim() || conExtras);
   }
 
   /* ── Navegación ───────────────────────────────────────────────────────── */
@@ -889,11 +898,11 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     pintarMapa();
   }
 
-  function opciones(sel, valores, valor) {
+  function opciones(sel, valores, valor, etiquetas) {
     sel.textContent = "";
     valores.forEach((v) => {
       const o = document.createElement("option");
-      o.value = v; o.textContent = v;
+      o.value = v; o.textContent = (etiquetas && etiquetas[v]) || v;
       if (v === valor) o.selected = true;
       sel.appendChild(o);
     });
@@ -942,7 +951,17 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     });
 
     // ── Selects de backlight ──────────────────────────────────────────────
-    opciones($('[data-c="tela"]', raiz), CAT.telas_backlight || [], p.tela || (CAT.telas_backlight || [])[0]);
+    /* "" (Sin tela) es una opción de verdad ahora (fix/sin-textil): un
+       backlight puede venderse solo por su caja, sin tela impresa. Ya no
+       se fuerza el primer textil del catálogo como valor por defecto —
+       si p.tela viene vacío (nuevoProducto() lo inicializa así), el
+       select arranca en "Sin tela" hasta que el usuario elija una. */
+    opciones(
+      $('[data-c="tela"]', raiz),
+      [""].concat(CAT.telas_backlight || []),
+      p.tela || "",
+      { "": "— Sin tela —" },
+    );
     opciones($('[data-c="perfil"]', raiz), ["Sin caja"].concat(CAT.perfiles || []), p.perfil);
     opciones($('[data-c="luces_1"]', raiz), CAT.luces || [], p.luces_1);
     opciones($('[data-c="luces_2"]', raiz), CAT.luces || [], p.luces_2);
@@ -992,6 +1011,18 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
         const texto = entrada.value.trim();
         if (!texto) return;
         if (p[clave].includes(texto)) { entrada.value = ""; return; }   // sin duplicados
+        /* Sin textil no hay de dónde sacar ML impresos — un ítem que se
+           cobra por ML quedaría gratis (ver core.precios.costo_producto).
+           Los montos escritos a mano ("$10.000") no pasan por esto: no
+           son del catálogo, se suman directo. */
+        const esMonto = /^\$?\s*[\d.,]+$/.test(texto);
+        if (!esMonto && !p.textil.trim()) {
+          const permitidas = (clave === "estructuras" ? CAT.estructuras_unit : CAT.terminaciones_unit) || [];
+          if (!permitidas.includes(texto)) {
+            TD.aviso("Sin textil, este producto solo admite ítems que se cobren por unidad.", "aviso");
+            return;
+          }
+        }
         p[clave].push(texto);
         entrada.value = "";
         pintarAditiva(cont, p, clave);
