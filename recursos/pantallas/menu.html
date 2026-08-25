@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="menu">
+<head>
+<meta charset="utf-8">
+<title>Sistema de Gestión · TexDigital</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Menú principal
+   Reemplaza a ui/interfaz.py::VentanaPrincipal.
+
+   Tres estados, todos en esta misma página (la transición nunca se corta por
+   una navegación):
+     1. menú      → logo + dos módulos
+     2. expansión → el relleno Y EL BORDE del módulo crecen hasta pasarse de
+                    los bordes de la ventana, TAPANDO el resto del menú, y ese
+                    color queda de fondo
+     3. panel     → las acciones del módulo, sobre ese fondo
+
+   Estructura de un módulo (el orden importa, ver z-index):
+     .modulo            posicionador, sin pintura
+       .modulo__caja    la pieza visual: relleno, borde, título   (z-index 2)
+       .modulo__lista   las tarjetas, que viven DETRÁS de la caja (z-index 1)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.menu {
+  /* ── Escala del menú ────────────────────────────────────────────────────
+     La geometría (logo, ancho de los módulos, columnas) se deriva de este
+     número: cambiarlo re-escala el menú entero de forma coherente.
+     Las tipografías NO se derivan de acá a propósito — bajarlas en la misma
+     proporción sería reintroducir justo el problema que el proyecto viene a
+     resolver. Se eligieron escalones de la escala tipográfica, con piso. */
+  --menu-escala: .5;
+  --logo-ancho:  calc(32rem * var(--menu-escala));
+  --modulos-ancho: calc(62rem * var(--menu-escala));
+  --modulo-min:  calc(19rem * var(--menu-escala));
+
+  /* ── Tarjetas ───────────────────────────────────────────────────────────
+     UN solo gap manda: es la separación entre tarjeta y tarjeta Y la que hay
+     entre la caja del módulo y la primera fila (ver el `top` de
+     .modulo__lista).
+
+     --reg-alto es un valor de respaldo: lo recalcula el JS
+     (ajustarRatioTarjetas) para que cada tarjeta tenga EL MISMO RATIO
+     alto/ancho que la caja del módulo. No se puede resolver con
+     `aspect-ratio` en CSS porque el reposo de la animación necesita saber el
+     alto de cada fila para esconderlas detrás de la caja. */
+  --reg-alto: 3.2rem;
+  --reg-gap:  var(--e-2);
+
+  position: relative; z-index: 2;
+  /* Rejilla con dos filas elásticas de distinto peso (1fr arriba, 2.4fr
+     abajo): el bloque logo+módulos queda por encima del centro óptico y la
+     lista desplegada tiene lugar de sobra. */
+  display: grid;
+  grid-template-rows: 1fr auto auto 2.4fr auto;
+  justify-items: center;
+  row-gap: var(--e-5);
+  height: 100vh; padding: var(--e-6) var(--e-6) var(--e-5);
+  overflow: auto;
+  transition: opacity var(--m-media) var(--ease-entrada),
+              transform var(--m-media) var(--ease-entrada),
+              filter var(--m-media) var(--ease-entrada);
+}
+body[data-fase="panel"] .menu,
+body[data-fase="saliendo"] .menu {
+  opacity: 0; transform: scale(.97); filter: blur(3px); pointer-events: none;
+}
+
+/* Las flechas de módulo solo tienen sentido con un panel abierto — mismo
+   instante en que aparece el panel (ver "body[data-fase='panel']
+   .panel[data-abierto]" más abajo), nunca sobre el mazo de tarjetas. */
+.flecha-nav[data-flecha-modulo] { display: none; }
+body[data-fase="panel"] .flecha-nav[data-flecha-modulo] { display: grid; }
+
+.menu__marca {
+  grid-row: 2;
+  display: grid; justify-items: center; gap: var(--e-2);
+  animation: aparecer var(--m-lenta) var(--ease-salida) both;
+}
+.menu__logo { width: min(var(--logo-ancho), 60vw); height: auto; display: block; }
+.menu__sub {
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+  letter-spacing: .3em; text-transform: uppercase;
+  color: var(--c-texto-tenue);
+  padding-left: .3em;   /* compensa el letter-spacing del último carácter */
+}
+
+.menu__modulos {
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--modulo-min), 1fr));
+  gap: var(--e-4);
+  /* stretch, no start: los dos módulos quedan del mismo alto aunque un título
+     use dos líneas, y así los mazos de tarjetas arrancan a la misma altura. */
+  align-items: stretch;
+  width: min(100%, var(--modulos-ancho));
+}
+
+/* ── El módulo: solo posiciona ───────────────────────────────────────────── */
+.modulo {
+  position: relative; z-index: 1;
+  animation: aparecer var(--m-lenta) var(--ease-salida) both;
+  animation-delay: calc(var(--i) * 90ms + 120ms);
+}
+.modulo:hover, .modulo:focus-within { z-index: 3; }
+
+/* ── La caja: la pieza visual ────────────────────────────────────────────── */
+.modulo__caja {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: var(--e-1) var(--e-3);
+  width: 100%; height: 100%; padding: var(--e-3); text-align: left; cursor: pointer;
+  align-content: center;
+  background: var(--c-tema-relleno);
+  border: 2px solid var(--c-tema-borde);
+  border-radius: var(--r-lg);
+  transition: background var(--m-media) var(--ease-salida),
+              border-color var(--m-media) var(--ease-salida),
+              box-shadow var(--m-media) var(--ease-salida),
+              transform var(--m-media) var(--ease-salida);
+}
+.modulo:hover .modulo__caja, .modulo:focus-within .modulo__caja {
+  background: color-mix(in srgb, var(--c-tema-relleno) 55%, var(--c-superficie));
+  border-color: var(--c-tema-fuerte);
+  box-shadow: var(--s-3);
+  transform: translateY(-3px);
+}
+
+.modulo__titulo {
+  grid-column: 1; font-size: var(--t-lg); font-weight: var(--peso-fuerte);
+  letter-spacing: -.03em; color: var(--c-tema-tinta); line-height: 1.1;
+}
+.modulo__meta {
+  grid-column: 1; font-size: var(--t-xs); color: var(--c-tema-fuerte); opacity: .85;
+  font-variant-numeric: tabular-nums;
+}
+.modulo__flecha {
+  grid-column: 2; grid-row: 1 / span 2;
+  display: grid; place-items: center;
+  width: 1.75rem; height: 1.75rem; border-radius: var(--r-full);
+  background: var(--c-tema-fuerte); color: var(--c-texto-inv);
+  font-size: var(--t-sm); line-height: 1;
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.modulo:hover .modulo__flecha, .modulo:focus-within .modulo__flecha { transform: translateX(3px) scale(1.08); }
+
+/* ── La lista: vive DETRÁS de la caja ─────────────────────────────────────
+   Arranca un --reg-gap por debajo de la caja, que es exactamente el mismo
+   gap que separa una fila de otra: la primera fila no queda ni más pegada ni
+   más suelta que las demás. En reposo las tarjetas están escondidas detrás de
+   la caja; al hacer hover salen de ahí a su lugar en la rejilla.
+
+   Ese --reg-gap es PADDING de este elemento, no un `top` más grande: con
+   `top: calc(100% + gap)` el gap quedaba como una franja vacía —sin
+   ningún elemento— entre el borde inferior de la caja y el techo de esta
+   lista, y ahí el :hover se cortaba apenas el mouse cruzaba esa franja
+   yendo de la caja hacia una tarjeta (las tarjetas se escondían solas al
+   intentar seguirlas). Con el gap como padding, el área de hover de
+   .modulo__lista arranca pegada a la caja (top: 100%, sin hueco) y las
+   tarjetas siguen apareciendo visualmente en el mismo lugar de
+   siempre — el padding-top las empuja para abajo tanto como antes lo
+   hacía el `top`. */
+.modulo__lista {
+  position: absolute; z-index: 1;
+  top: 100%; left: 0; right: 0;
+  padding-top: var(--reg-gap);
+  pointer-events: none;             /* en reposo no se puede clickear lo escondido */
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.modulo:hover .modulo__lista, .modulo:focus-within .modulo__lista {
+  pointer-events: auto;
+  transform: translateY(-3px);      /* acompaña el lift de la caja */
+}
+
+.modulo__rejilla {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);   /* dos tarjetas por fila */
+  gap: var(--reg-gap);
+}
+
+/* Reposo: TODAS las tarjetas se esconden en el mismo lugar — justo detrás del
+   borde inferior de la caja — y de ahí salen repartiéndose a su fila.
+     posición natural (fila f) = gap + f·(alto + gap)   [desde el borde de la caja]
+     posición de reposo         = −alto                 [tapada por la caja]
+   La resta de las dos es este translateY. */
+.modulo__rejilla > * {
+  height: var(--reg-alto);
+  opacity: 0;
+  z-index: calc(50 - var(--i));
+  transform: translateY(calc(-1 * (var(--fila, 0) + 1) * (var(--reg-alto) + var(--reg-gap))));
+  transition: transform var(--m-media) var(--ease-salida),
+              opacity var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida);
+  transition-delay: 0ms;
+}
+.modulo:hover .modulo__rejilla > *,
+.modulo:focus-within .modulo__rejilla > * {
+  transform: none; opacity: 1;
+  /* Ordenado: sale primero la de más arriba. */
+  transition-delay: calc(var(--i, 0) * var(--m-escalon));
+}
+/* Más específica que la regla de arriba: si no, el hover de una tarjeta suelta
+   no puede sobreescribir el transform del mazo. */
+.modulo:hover .modulo__rejilla > *:hover,
+.modulo:focus-within .modulo__rejilla > *:hover {
+  transform: translateY(-3px); opacity: 1;
+  transition-delay: 0ms;
+}
+
+.modulo__vacio {
+  grid-column: 1 / -1; height: auto !important; transform: none !important;
+  font-size: var(--t-xs); color: var(--c-tema-fuerte); opacity: 0;
+  padding-top: var(--e-2);
+}
+.modulo:hover .modulo__vacio, .modulo:focus-within .modulo__vacio { opacity: .7; }
+
+.menu__pie {
+  grid-row: 5;
+  display: flex; align-items: center; gap: var(--e-4);
+  font-size: var(--t-xs); color: var(--c-texto-tenue);
+  animation: aparecer var(--m-lenta) var(--ease-salida) both; animation-delay: 320ms;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+.menu__pie .cab-btn { color: var(--c-texto-suave); }
+/* Con un módulo abierto la lista puede llegar hasta acá abajo: el pie se
+   aparta en vez de quedar tapado a medias. */
+.menu:has(.modulo:hover) .menu__pie,
+.menu:has(.modulo:focus-within) .menu__pie { opacity: 0; pointer-events: none; }
+
+/* ── 2 · Expansión del color ─────────────────────────────────────────────
+   Arranca calcada de la caja (relleno, borde y radio) y termina PASADA de los
+   bordes de la ventana: el borde también crece y se va de pantalla, que es lo
+   que le da el contorno definido a la animación.
+
+   Va POR ENCIMA del menú (z-index 5 contra 2): a medida que crece va tapando
+   el logo y el otro módulo, que es lo que hace que se lea como entrar dentro
+   del módulo y no como un fondo que aparece detrás. */
+
+.expansion {
+  position: fixed; z-index: 5;
+  top: 0; left: 0; width: 0; height: 0;
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
+  opacity: 0; pointer-events: none;
+  transition: top var(--m-expansion) var(--ease-expandir),
+              left var(--m-expansion) var(--ease-expandir),
+              width var(--m-expansion) var(--ease-expandir),
+              height var(--m-expansion) var(--ease-expandir),
+              border-radius var(--m-expansion) var(--ease-expandir),
+              opacity var(--m-rapida) linear,
+              background var(--m-media) var(--ease-salida),
+              border-color var(--m-media) var(--ease-salida);
+}
+body[data-fase="saliendo"] .expansion,
+body[data-fase="panel"] .expansion,
+body[data-fase="volviendo"] .expansion { opacity: 1; }
+
+/* ── 3 · Panel del módulo ────────────────────────────────────────────────── */
+
+.panel {
+  position: fixed; inset: 0; z-index: 6;   /* por encima de la expansión */
+  display: none; flex-direction: column;
+  padding: var(--e-5) var(--e-6) var(--e-6);
+  overflow: auto;
+  color: var(--c-tema-tinta);
+}
+body[data-fase="panel"] .panel[data-abierto] { display: flex; }
+
+.panel__cab { display: flex; align-items: center; gap: var(--e-4); }
+.panel__cab .cabecera__sep { flex: 1; }
+
+.panel__cuerpo {
+  width: min(100%, 62rem); margin: auto;
+  display: grid; gap: var(--e-6); padding: var(--e-6) 0;
+}
+.panel__titulo {
+  font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  letter-spacing: -.035em; line-height: 1;
+}
+.panel__bajada { font-size: var(--t-md); opacity: .7; margin-top: var(--e-2); }
+
+.acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
+
+/* ── Transición entre documentos: menú → nueva cotización ──────────────────
+   Cross-Document View Transitions: navegar a otra página con esto prendido
+   ya anima la salida sola (todo lo que no tenga nombre se desvanece). Acá
+   solo hace falta nombrar la pieza que va a "viajar": el botón de Nueva
+   cotización, que en la otra punta (nueva-cotizacion.html) tiene el mismo
+   nombre puesto en la hoja "Trabajo" — por eso el botón termina
+   transformándose en ese panel en vez de solo desvanecerse.
+   Nada de esto rompe nada si el navegador no soporta la API: sin ella la
+   navegación es la de siempre, sin animar. */
+@view-transition { navigation: auto; }
+.accion[data-ir="nueva_cotizacion"] { view-transition-name: nc-morph; }
+
+.accion {
+  display: grid; gap: var(--e-1); align-content: start;
+  padding: var(--e-5); text-align: left; cursor: pointer;
+  background: var(--c-superficie);
+  border: 1.5px solid color-mix(in srgb, var(--c-tema-borde) 55%, transparent);
+  border-radius: var(--r-lg);
+  transition: transform var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              background var(--m-rapida) var(--ease-salida);
+}
+.accion:hover { transform: translateY(-3px); box-shadow: var(--s-2); border-color: var(--c-tema-fuerte); }
+.accion:active { transform: translateY(-1px) scale(.99); }
+.accion__titulo { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta);
+                   transition: color var(--m-rapida) var(--ease-salida); }
+.accion__desc { font-size: var(--t-sm); color: var(--c-texto-suave);
+                transition: color var(--m-rapida) var(--ease-salida); }
+
+/* "Panel de producción" en hover pasa a la paleta oscura del panel de
+   producción en sí (no la del resto de acciones de este módulo): así el
+   hover ya anticipa a qué pantalla vas a entrar. */
+.accion[data-ir="panel_produccion"]:hover {
+  background: #161b23;
+  border-color: #3a84cd;
+}
+.accion[data-ir="panel_produccion"]:hover .accion__titulo { color: #edf1f7; }
+.accion[data-ir="panel_produccion"]:hover .accion__desc { color: #8b97a8; }
+.accion__marca {
+  justify-self: start; margin-top: var(--e-2);
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte);
+  padding: .1rem var(--e-2); border-radius: var(--r-full);
+  background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
+}
+
+.panel__seccion > .seccion-titulo { color: var(--c-tema-fuerte); opacity: .8; }
+.panel__rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: var(--e-3); }
+.panel__rejilla .reg { height: auto; }
+
+/* Las OP van un 33% más anchas que el resto de las tarjetas del panel: antes
+   entraban 3 por fila, ahora 2 — el espacio de más es para la cuenta
+   regresiva de entrega, no cabía en el ancho angosto. */
+.panel__rejilla[data-lista-panel="ops"] { grid-template-columns: repeat(auto-fill, minmax(calc(9.5rem * 1.33), 1fr)); }
+.reg__entrega { font-size: var(--t-xs); font-weight: var(--peso-medio); color: var(--c-tema-fuerte); }
+
+/* Las incompletas sueltas junto a "Nueva cotización": mismas tarjetas que
+   abajo, mismo tamaño de grilla — pero sin panel ni título propios, porque
+   acá no son un listado, son el aviso de "esto quedó a medio hacer".
+   Vacío (sin incompletas) no deja rastro: ni título ni caja vacía. */
+.incompletas-sueltas {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: var(--e-3); align-content: start;
+}
+.incompletas-sueltas .reg { height: auto; }
+</style>
+</head>
+
+<body data-fase="menu">
+
+<!-- ═══ 2 · el color que se expande ═══════════════════════════════════════ -->
+<div class="expansion" id="expansion"></div>
+
+<!-- ═══ 1 · menú ══════════════════════════════════════════════════════════ -->
+<div class="menu" id="menu">
+
+  <div class="menu__marca">
+    <img class="menu__logo" src="assets/logo_texdigital.png" alt="TexDigital">
+    <p class="menu__sub">Sistema de Gestión</p>
+  </div>
+
+  <div class="menu__modulos">
+
+    <section class="modulo" data-tema="cotizaciones" data-modulo="cotizaciones" style="--i:0">
+      <button class="modulo__caja" type="button">
+        <span class="modulo__titulo">Cotizaciones</span>
+        <span class="modulo__meta" data-meta="cotizaciones">—</span>
+        <span class="modulo__flecha" aria-hidden="true">→</span>
+      </button>
+      <div class="modulo__lista">
+        <div class="modulo__rejilla" data-lista="cotizaciones"></div>
+      </div>
+    </section>
+
+    <section class="modulo" data-tema="ops" data-modulo="ops" style="--i:1">
+      <button class="modulo__caja" type="button">
+        <span class="modulo__titulo">Órdenes de Producción</span>
+        <span class="modulo__meta" data-meta="ops">—</span>
+        <span class="modulo__flecha" aria-hidden="true">→</span>
+      </button>
+      <div class="modulo__lista">
+        <div class="modulo__rejilla" data-lista="ops"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="menu__pie">
+    <span data-fecha></span>
+    <span data-version></span>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+    <button class="cab-btn cab-btn--icono" data-accion="actualizar" title="Buscar actualizaciones">⟳</button>
+  </footer>
+</div>
+
+<!-- ═══ 3 · paneles ═══════════════════════════════════════════════════════ -->
+
+<div class="panel" data-panel="cotizaciones" data-tema="cotizaciones">
+  <div class="panel__cab">
+    <button class="cab-btn cab-btn--fantasma" data-cerrar>← Volver</button>
+    <span class="cabecera__sep"></span>
+    <span class="cabecera__version" data-version></span>
+  </div>
+  <div class="panel__cuerpo">
+    <div>
+      <h1 class="panel__titulo">Cotizaciones</h1>
+    </div>
+    <div class="acciones aparecer">
+      <button class="accion" data-ir="nueva_cotizacion" style="--i:0">
+        <span class="accion__titulo">Nueva cotización</span>
+        <span class="accion__desc">Empezar un trabajo nuevo, de cualquier tipo de producto.</span>
+      </button>
+      <div class="incompletas-sueltas" data-lista-incompletas></div>
+    </div>
+    <section class="panel__seccion">
+      <h2 class="seccion-titulo">cotizaciones</h2>
+      <div class="panel__rejilla" data-lista-panel="cotizaciones"></div>
+    </section>
+  </div>
+</div>
+
+<div class="panel" data-panel="ops" data-tema="ops">
+  <div class="panel__cab">
+    <button class="cab-btn cab-btn--fantasma" data-cerrar>← Volver</button>
+    <span class="cabecera__sep"></span>
+    <span class="cabecera__version" data-version></span>
+  </div>
+  <div class="panel__cuerpo">
+    <div>
+      <h1 class="panel__titulo">Órdenes de Producción</h1>    </div>
+    <div class="acciones aparecer">
+      <button class="accion" data-ir="panel_produccion" style="--i:0">
+        <span class="accion__titulo">Panel de producción</span>
+        <span class="accion__desc">Listado y calendario de las OPs activas</span>
+      </button>
+      <button class="accion" data-ir="historial_ops" style="--i:1">
+        <span class="accion__titulo">Historial de OPs</span>
+        <span class="accion__desc">Todas las OPs</span>
+      </button>
+    </div>
+    <section class="panel__seccion">
+      <h2 class="seccion-titulo">OPs activas</h2>
+      <div class="panel__rejilla" data-lista-panel="ops"></div>
+    </section>
+  </div>
+</div>
+
+<!-- Navegación entre módulos — click o teclado (←/→, ver TD.atajo más abajo).
+     Solo visibles con un panel expandido (ver
+     "body[data-fase='panel'] .flecha-nav[data-flecha-modulo]" arriba, en el
+     <style> de esta misma pantalla). Recorren .modulo[data-modulo] en el
+     mismo orden en que aparecen en el menú, así que un módulo nuevo entra
+     solo con agregar su <section class="modulo"> — no hace falta tocar
+     este JS. -->
+<button class="flecha-nav flecha-nav--izq" data-flecha-modulo="anterior" aria-label="Módulo anterior">
+  <div class="icon-chevron-left"></div>
+</button>
+<button class="flecha-nav flecha-nav--der" data-flecha-modulo="siguiente" aria-label="Módulo siguiente">
+  <div class="icon-chevron-right"></div>
+</button>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  const cuerpo    = document.body;
+  const expansion = $("#expansion");
+
+  /* Cuántas tarjetas asoman por detrás de cada módulo. Con 2 por fila, 6 son
+     3 filas de mazo. Provisorio — pendiente de definir. */
+  const MAX_TARJETAS = 6;
+  const COLUMNAS = 2;
+
+  /* ── Tarjetas ─────────────────────────────────────────────────────────── */
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  /* fecha_entrega llega como "DD-MM-AAAA" (aFechaLarga, en demo.js). Cuenta
+     días de calendario, sin horas: "hoy" no puede depender de a qué hora del
+     día se mire la pantalla. */
+  function diasHasta(fechaDMA) {
+    if (!fechaDMA) return null;
+    const [d, m, a] = fechaDMA.split("-").map(Number);
+    if (!d || !m || !a) return null;
+    const entrega = new Date(a, m - 1, d);
+    const hoy = new Date();
+    const hoyLimpio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.round((entrega - hoyLimpio) / 86400000);
+  }
+
+  function textoEntrega(fechaDMA) {
+    const n = diasHasta(fechaDMA);
+    if (n == null) return "";
+    if (n > 0) return `Entrega en ${n} ${n === 1 ? "día" : "días"}`;
+    if (n === 0) return "Entrega hoy";
+    return `Entrega atrasada hace ${-n} ${-n === 1 ? "día" : "días"}`;
+  }
+
+  function tarjetaCotizacion(c) {
+    const b = document.createElement("button");
+    b.className = "reg";
+    b.dataset.abrir = "cotizacion";
+    b.dataset.numero = c.numero;
+    b.innerHTML =
+      `<span class="reg__num">${c.numero}</span>` +
+      `<span class="reg__sub">${esc(c.empresa || "—")}</span>`;
+    return b;
+  }
+
+  /* Las incompletas no tienen número: muestran "3/7". Su barra de progreso
+     vive en el CANTO de la tarjeta (ver .reg__barra en base.css), así que en
+     el estado escondido esa línea de color es el aviso de que hay cotizaciones
+     a medio hacer — sin necesidad de hacer hover. */
+  function tarjetaPendiente(p) {
+    const b = document.createElement("button");
+    b.className = "reg reg--incompleta";
+    b.dataset.abrir = "pendiente";
+    b.dataset.id = p.id;
+    const pct = p.total ? Math.round((p.completos / p.total) * 100) : 0;
+    b.title = `Incompleta · ${p.completos} de ${p.total} productos · ${p.nombre_trabajo || ""}`;
+    b.innerHTML =
+      `<span class="reg__num">${p.completos}/${p.total}</span>` +
+      `<span class="reg__sub">${esc(p.nombre_trabajo || "Sin nombre")}</span>` +
+      `<span class="reg__barra"><i style="width:${pct}%"></i></span>`;
+    return b;
+  }
+
+  /* `conPie` solo en los paneles: en el mazo la tarjeta es de alto fijo y no
+     hay lugar para la fecha de entrega. */
+  function tarjetaOp(o, conPie) {
+    const b = document.createElement("button");
+    b.className = "reg";
+    b.dataset.abrir = "op";
+    b.dataset.numero = o.numero;
+    b.title = `OP ${o.numero} · ${o.empresa || ""} · entrega ${o.fecha_entrega || "—"}`;
+    b.innerHTML =
+      `<span class="reg__num">${o.numero}</span>` +
+      `<span class="reg__sub">${esc(o.empresa || "—")}</span>` +
+      (conPie
+        ? `<span class="reg__pie">${esc(o.fecha_entrega || "")}</span>` +
+          `<span class="reg__entrega">${esc(textoEntrega(o.fecha_entrega))}</span>`
+        : "");
+    return b;
+  }
+
+  /* --i ordena el escalonado y el z-index del mazo; --fila, la posición de
+     reposo (cuánto hay que subir cada tarjeta para esconderla). */
+  function indexar(nodos) {
+    nodos.forEach((n, i) => {
+      n.style.setProperty("--i", i);
+      n.style.setProperty("--fila", Math.floor(i / COLUMNAS));
+    });
+    return nodos;
+  }
+
+  function pintar(destino, nodos, textoVacio) {
+    destino.textContent = "";
+    if (!nodos.length) {
+      const v = document.createElement("p");
+      v.className = "modulo__vacio";
+      v.textContent = textoVacio;
+      destino.appendChild(v);
+      return;
+    }
+    nodos.forEach((n) => destino.appendChild(n));
+  }
+
+  /* ── Ratio de las tarjetas ────────────────────────────────────────────
+     Cada tarjeta guarda la misma proporción alto/ancho que la caja de su
+     módulo. El ancho lo decide la rejilla (2 columnas), así que lo único que
+     hay que calcular es el alto. Se recalcula ante cualquier cambio de
+     tamaño de la caja: redimensionar la ventana, o mover la escala de texto
+     con A− / A+. */
+  function ajustarRatioTarjetas() {
+    $$(".modulo").forEach((m) => {
+      const caja = $(".modulo__caja", m).getBoundingClientRect();
+      if (!caja.width || !caja.height) return;
+      const rejilla = $(".modulo__rejilla", m);
+      const gap = parseFloat(getComputedStyle(rejilla).columnGap) || 0;
+      const ancho = (caja.width - gap * (COLUMNAS - 1)) / COLUMNAS;
+      m.style.setProperty("--reg-alto", (ancho * (caja.height / caja.width)).toFixed(2) + "px");
+    });
+  }
+
+  /* ── Carga de datos ───────────────────────────────────────────────────── */
+
+  async function cargar() {
+    const r = (await TD.api.obtener_resumen()) || {};
+    const pendientes   = r.pendientes   || [];
+    const cotizaciones = r.cotizaciones || [];
+    const ops          = r.ops          || [];
+
+    /* Las incompletas van primero: son las que hay que terminar, y así su
+       canto de color queda en la fila que más asoma. */
+    const mazoCot = indexar(
+      pendientes.map(tarjetaPendiente)
+        .concat(cotizaciones.map(tarjetaCotizacion))
+        .slice(0, MAX_TARJETAS)
+    );
+    pintar($("[data-lista='cotizaciones']"), mazoCot, "Todavía no hay cotizaciones.");
+
+    const mazoOps = indexar(ops.slice(0, MAX_TARJETAS).map((o) => tarjetaOp(o, false)));
+    pintar($("[data-lista='ops']"), mazoOps, "No hay OPs activas.");
+
+    /* El panel de cotizaciones ahora es "todo lo que no está incompleto": las
+       incompletas se movieron sueltas, junto a "Nueva cotización". */
+    pintar($("[data-lista-panel='cotizaciones']"), cotizaciones.map(tarjetaCotizacion),
+           "Todavía no hay cotizaciones.");
+    pintar($("[data-lista-panel='ops']"), ops.map((o) => tarjetaOp(o, true)), "No hay OPs activas.");
+
+    /* Sueltas junto al botón de "Nueva cotización": sin título ni caja vacía
+       cuando no hay ninguna, por eso no pasa por pintar(). */
+    const listaIncompletas = $("[data-lista-incompletas]");
+    listaIncompletas.textContent = "";
+    pendientes.map(tarjetaPendiente).forEach((n) => listaIncompletas.appendChild(n));
+
+    /* Si no hay nada que contar, el texto no aparece — nunca "0 incompletas"
+       ni "ninguna activa": un cero no es información, es ruido. */
+    const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+    const partes = [];
+    if (cotizaciones.length) partes.push(plural(cotizaciones.length, "guardada", "guardadas"));
+    if (pendientes.length)   partes.push(plural(pendientes.length, "incompleta", "incompletas"));
+    $("[data-meta='cotizaciones']").textContent = partes.join(" · ");
+    $("[data-meta='ops']").textContent =
+      ops.length ? plural(ops.length, "activa", "activas") : "";
+
+    ajustarRatioTarjetas();
+  }
+
+  /* ── Expansión / regreso ──────────────────────────────────────────────── */
+
+  let moduloActivo = null;
+
+  /* Aplica cambios de estilo sin que se animen (salto instantáneo). */
+  function sinTransicion(el, fn) {
+    const previa = el.style.transition;
+    el.style.transition = "none";
+    fn();
+    void el.offsetWidth;            // fuerza el reflow: el salto ya quedó aplicado
+    el.style.transition = previa;   // "" devuelve la transición del CSS
+  }
+
+  function duracion(token) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    return v.endsWith("ms") ? parseFloat(v) : parseFloat(v) * 1000;
+  }
+
+  /* Calca la caja del módulo sobre el div de expansión. */
+  function calcar(caja) {
+    const r = caja.getBoundingClientRect();
+    const est = getComputedStyle(caja);
+    expansion.style.background   = est.backgroundColor;
+    expansion.style.borderColor  = est.borderTopColor;
+    expansion.style.borderWidth  = est.borderTopWidth;
+    expansion.style.borderRadius = est.borderTopLeftRadius;
+    expansion.style.top    = r.top + "px";
+    expansion.style.left   = r.left + "px";
+    expansion.style.width  = r.width + "px";
+    expansion.style.height = r.height + "px";
+  }
+
+  function abrirModulo(modulo) {
+    if (moduloActivo) return;
+    moduloActivo = modulo;
+
+    const nombre = modulo.dataset.modulo;
+    /* Python no tiene otra forma de saber que se abrió un panel (esto es
+       puramente del lado del cliente) — sin este aviso, "Volver" desde
+       una cotización/OP/pendiente abierta con el panel expandido
+       terminaría en el menú a secas en vez de en este mismo panel (ver
+       ui/api_app.py::notificar_panel). */
+    TD.api.notificar_panel(nombre);
+
+    /* El punto de partida se fija CON LAS TRANSICIONES APAGADAS: si no, ese
+       primer salto (0 → rectángulo de la caja) también se anima, cada
+       propiedad arranca en un momento distinto y la expansión sale
+       descoordinada. */
+    sinTransicion(expansion, () => calcar($(".modulo__caja", modulo)));
+
+    cuerpo.dataset.fase = "saliendo";
+
+    /* Termina PASADO de los bordes de la ventana, no justo en ellos: así el
+       borde también se expande y se va de pantalla, en vez de quedar
+       dibujado como un marco alrededor del panel. */
+    requestAnimationFrame(() => {
+      expansion.style.top = "-6vh";
+      expansion.style.left = "-6vw";
+      expansion.style.width = "112vw";
+      expansion.style.height = "112vh";
+      expansion.style.borderRadius = "0px";
+    });
+
+    setTimeout(() => {
+      cuerpo.dataset.fase = "panel";
+      cuerpo.dataset.tema = nombre;
+      $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
+      const panel = $(`.panel[data-panel='${nombre}']`);
+      panel.setAttribute("data-abierto", "");
+      /* Reinicia la animación escalonada de las acciones cada vez que se abre. */
+      const acc = $(".acciones", panel);
+      acc.classList.remove("aparecer");
+      void acc.offsetWidth;
+      acc.classList.add("aparecer");
+      $(".cab-btn", panel).focus({ preventScroll: true });
+    }, duracion("--m-expansion"));
+  }
+
+  /* Llegar con ?panel=cotizaciones (p. ej. desde "Volver" en ver-cotizacion)
+     entra directo al panel, sin la animación de expansión: esa animación es
+     para la elección de abrir un módulo, no para un regreso — acá el módulo
+     ya se había elegido antes. */
+  function abrirModuloDirecto(nombre) {
+    const modulo = $(`.modulo[data-modulo='${nombre}']`);
+    const panel = $(`.panel[data-panel='${nombre}']`);
+    if (!modulo || !panel) return;
+    moduloActivo = modulo;
+    TD.api.notificar_panel(nombre);
+
+    sinTransicion(expansion, () => {
+      calcar($(".modulo__caja", modulo));
+      expansion.style.top = "-6vh";
+      expansion.style.left = "-6vw";
+      expansion.style.width = "112vw";
+      expansion.style.height = "112vh";
+      expansion.style.borderRadius = "0px";
+    });
+
+    cuerpo.dataset.fase = "panel";
+    cuerpo.dataset.tema = nombre;
+    $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
+    panel.setAttribute("data-abierto", "");
+    $(".cab-btn", panel).focus({ preventScroll: true });
+  }
+
+  /* Flechas ←/→ (solo visibles con un panel ya abierto, click o teclado —
+     ver TD.atajo("arrowleft"/"arrowright") más abajo): pasan al módulo
+     anterior/siguiente en el mismo orden en que aparecen en el menú — DOM
+     order de .modulo[data-modulo], así que un módulo nuevo entra solo con
+     agregar su <section class="modulo"> en el HTML, sin tocar este JS. Da
+     la vuelta en las puntas (del último salta al primero y viceversa). Ya
+     está expandido, así que no repite la animación de expansión de
+     abrirModulo/abrirModuloDirecto — solo cambia qué panel se muestra.
+
+     El color de #expansion (que sigue cubriendo toda la pantalla mientras
+     dura la fase "panel" — no es solo un efecto de transición) se calcó
+     UNA vez del módulo que se abrió originalmente (ver calcar() en
+     abrirModulo/abrirModuloDirecto) y se queda ahí si nada lo actualiza:
+     sin este repintado, cambiar de módulo con las flechas dejaba el
+     título/contenido del panel nuevo correcto pero el fondo con el color
+     del módulo anterior. */
+  function irAModuloAdyacente(direccion) {
+    if (!moduloActivo) return;
+    const modulos = $$(".modulo[data-modulo]");
+    const i = modulos.indexOf(moduloActivo);
+    if (i === -1) return;
+    const paso = direccion === "siguiente" ? 1 : -1;
+    const destino = modulos[(i + paso + modulos.length) % modulos.length];
+    if (destino === moduloActivo) return;
+
+    const nombre = destino.dataset.modulo;
+    const panel = $(`.panel[data-panel='${nombre}']`);
+    if (!panel) return;
+
+    moduloActivo = destino;
+    TD.api.notificar_panel(nombre);
+    cuerpo.dataset.tema = nombre;
+    const est = getComputedStyle($(".modulo__caja", destino));
+    expansion.style.background = est.backgroundColor;
+    expansion.style.borderColor = est.borderTopColor;
+    $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
+    panel.setAttribute("data-abierto", "");
+    const acc = $(".acciones", panel);
+    acc.classList.remove("aparecer");
+    void acc.offsetWidth;
+    acc.classList.add("aparecer");
+    $(".cab-btn", panel).focus({ preventScroll: true });
+  }
+
+  /* Se resuelve ACÁ, sincrónico, no adentro de TD.iniciar: ese callback es
+     async y en el navegador tarda hasta TIMEOUT (1200 ms, ver api.js)
+     detectando que no hay pywebview — en ese rato el menú ya se pintó y
+     animó su entrada, así que "Volver" se veía como un salto al menú
+     principal que después corregía solo. Puesto acá corre antes del primer
+     paint: el menú nunca llega a mostrarse. */
+  /* La app real carga esta pantalla por file:// — ahí el query string
+     (?panel=...) no es confiable (algunos backends lo tratan como parte
+     del nombre de archivo, no como parámetro; confirmado abriendo la
+     ventana de verdad). El fragmento (#panel=...) sí es estándar en
+     file://, así que la app real lo manda por ahí — se revisan los dos,
+     query primero, para no romper el preview en navegador (demo.js sigue
+     usando location.href="menu.html?panel=..."). */
+  const panelInicial =
+    new URLSearchParams(location.search).get("panel") ||
+    new URLSearchParams(location.hash.slice(1)).get("panel");
+  if (panelInicial) abrirModuloDirecto(panelInicial);
+
+  function cerrarModulo() {
+    if (!moduloActivo) return;
+    const modulo = moduloActivo;
+    moduloActivo = null;
+    TD.api.notificar_panel(null);
+
+    /* Si se llegó acá con ?panel=… en la URL (volviendo de ver-op.html o
+       ver-cotizacion.html), hay que sacarlo: si no, la URL sigue diciendo
+       "abrí el panel de Ops" mucho después de haber cerrado ese panel, y
+       recargar en el menú principal reabre el módulo en vez de mostrar el
+       menú. history.replaceState no navega ni agrega una entrada al
+       historial — solo corrige lo que dice la barra de direcciones para
+       que calce con lo que ya se ve en pantalla. */
+    if (new URLSearchParams(location.search).has("panel") ||
+        new URLSearchParams(location.hash.slice(1)).has("panel")) {
+      history.replaceState(null, "", location.pathname);
+    }
+
+    cuerpo.dataset.fase = "volviendo";
+    delete cuerpo.dataset.tema;
+
+    requestAnimationFrame(() => calcar($(".modulo__caja", modulo)));
+
+    setTimeout(() => {
+      cuerpo.dataset.fase = "menu";
+      $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
+      $(".modulo__caja", modulo).focus({ preventScroll: true });
+    }, duracion("--m-expansion"));
+  }
+
+  /* ── Cableado ─────────────────────────────────────────────────────────── */
+
+  $$(".modulo").forEach((modulo) => {
+    $(".modulo__caja", modulo).addEventListener("click", () => abrirModulo(modulo));
+  });
+
+  /* Las tarjetas son atajo directo: abren ese registro sin pasar por el panel.
+     Delegación, porque se crean después de cargar los datos. */
+  document.addEventListener("click", (e) => {
+    const reg = e.target.closest("[data-abrir]");
+    if (reg) {
+      e.stopPropagation();
+      const tipo = reg.dataset.abrir;
+      if (tipo === "cotizacion")  TD.api.abrir_cotizacion(Number(reg.dataset.numero));
+      if (tipo === "op")          TD.api.abrir_op(Number(reg.dataset.numero));
+      if (tipo === "pendiente")   TD.api.abrir_pendiente(reg.dataset.id);
+      return;
+    }
+    const accion = e.target.closest("[data-ir]");
+    if (accion) TD.api.ir(accion.dataset.ir);
+    const cerrar = e.target.closest("[data-cerrar]");
+    if (cerrar) cerrarModulo();
+    const flecha = e.target.closest("[data-flecha-modulo]");
+    if (flecha) irAModuloAdyacente(flecha.dataset.flechaModulo);
+  });
+
+  $("[data-accion='actualizar']").addEventListener("click", () => TD.api.buscar_actualizacion());
+
+  TD.atajo("escape", () => cerrarModulo());
+  TD.atajo("f5", () => cargar());
+  TD.atajo("arrowleft",  () => irAModuloAdyacente("anterior"));
+  TD.atajo("arrowright", () => irAModuloAdyacente("siguiente"));
+
+  /* Al cambiar el tamaño de la ventana, si hay un panel abierto la expansión
+     tiene que seguir cubriendo todo. */
+  /* El alto de la caja cambia con el ancho de la ventana (el título envuelve)
+     y con la escala de texto: el ratio de las tarjetas tiene que seguirlo. */
+  if (window.ResizeObserver) {
+    const observador = new ResizeObserver(() => ajustarRatioTarjetas());
+    $$(".modulo__caja").forEach((c) => observador.observe(c));
+  }
+
+  window.addEventListener("resize", () => {
+    ajustarRatioTarjetas();
+    if (!moduloActivo) return;
+    sinTransicion(expansion, () => {
+      expansion.style.top = "-6vh";  expansion.style.left = "-6vw";
+      expansion.style.width = "112vw"; expansion.style.height = "112vh";
+    });
+  });
+
+  TD.iniciar(async (ctx) => {
+    $$("[data-version]").forEach((n) => { if (ctx.version) n.textContent = "v" + ctx.version; });
+    const f = $("[data-fecha]");
+    if (f) f.textContent = ctx.fecha || "";
+    await cargar();
+  });
+})();
+</script>
+
+</body>
+</html>

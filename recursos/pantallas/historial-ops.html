@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="historial-ops" data-tema="ops">
+<head>
+<meta charset="utf-8">
+<title>Historial de OPs · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Historial de OPs — obtener_historial(anio, mes) / buscar_historial(filtros)
+
+   En la app real cada OP es un JSON en carpetas/<año>/<mes>: con miles de
+   archivos, no se puede cargar todo el historial de una sentada. La pantalla
+   calca esa organización en vez de esconderla — el selector de mes y de año
+   ARRIBA no es un adorno, es "qué carpeta estoy mirando". El buscador de al
+   lado es la excepción: cliente, material o rango de fechas no tienen
+   sentido acotados a un mes, así que cruzan todo el historial.
+
+   Las filas son una tabla, no tarjetas: acá se hojea y se compara, no se
+   entra en detalle — para eso está abrir la OP.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista-historial {
+  width: min(100%, 72rem); margin-inline: auto;
+  display: grid; gap: var(--e-4);
+}
+
+.filtros {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3);
+}
+.filtros__nav { display: flex; gap: var(--e-2); flex: 0 0 auto; }
+.filtros__nav .entrada { width: 10rem; min-height: 2.75rem; }
+.filtros__busqueda { display: flex; gap: var(--e-2); flex: 1 1 16rem; min-width: 0; }
+.filtros__busqueda .entrada { min-height: 2.75rem; }
+.filtros__busqueda input[type="search"] { flex: 1 1 auto; min-width: 0; }
+
+/* El botón de filtros avisa que hay algo aplicado con un puntito — si no,
+   cerrar el diálogo borra el rastro de que el listado está filtrado y el
+   "no hay resultados" de más abajo no se explica solo. */
+.btn-filtros { position: relative; flex: 0 0 auto; }
+.btn-filtros[data-activo]::after {
+  content: ""; position: absolute; top: -2px; right: -2px;
+  width: 8px; height: 8px; border-radius: var(--r-full);
+  background: var(--c-tema-fuerte); border: 1.5px solid var(--c-superficie);
+}
+
+/* Cada OP es su propio <tbody> —fila principal + fila de detalle—, no dos
+   <tr> sueltas en un solo cuerpo: así el :hover se puede poner en el
+   <tbody> entero, y sigue activo aunque el mouse baje desde la fila
+   compacta hacia el detalle que recién se reveló. Con :hover en un solo
+   <tr> eso no se puede: al mover el mouse hacia abajo, se sale de la fila
+   y el detalle se cierra antes de llegar.
+   Todas las filas van blancas, sin rayado par/impar: lo único que separa
+   una de otra es el borde fino de abajo (heredado de .tabla), nada de
+   color — ni en reposo ni en hover ni con el foco del teclado, que es
+   justo lo que .tabla tbody tr:hover de base.css rompía por default. */
+.tabla tbody tr.fila-principal,
+.tabla tbody tr.fila-principal:hover { background: var(--c-superficie); }
+
+.fila-principal { cursor: pointer; }
+.tabla .num { white-space: nowrap; }
+
+/* El truco de "grid-template-rows: 0fr → 1fr" en vez de max-height: anima
+   a la altura real del contenido sin tener que medirla a mano en JS, y sin
+   el salto brusco que da display:none/block. El overflow:hidden vive en el
+   hijo, no en la fila con la transición: así el interior no se recorta a
+   media transición mientras crece.
+   El padding y el borde de esta <td> tienen que llegar a cero de verdad:
+   ".tabla tbody td" de base.css (padding + border-top) le gana a
+   ".fila-detalle td" en especificidad (dos selectores de tipo contra uno),
+   así que sin el "tbody tr" de acá el padding original seguía vivo — la
+   fila "colapsada" en realidad medía ~19px de alto (puro padding) con su
+   borde superior encima, y ESO era el contorno celeste que aparecía: no
+   estaba en el detalle que se revela, estaba siempre ahí, en la fila de al
+   lado, escondido a simple vista hasta que el vecino crecía y lo hacía
+   notorio. */
+.tabla tbody tr.fila-detalle td { padding: 0; border: 0; }
+.fila-detalle__marco {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--m-media) ease-in-out;
+}
+.fila-detalle__interior { overflow: hidden; min-height: 0; }
+.fila-grupo:hover .fila-detalle__marco,
+.fila-grupo:focus-within .fila-detalle__marco { grid-template-rows: 1fr; }
+
+/* Mitad izquierda: los productos, uno por línea (nombre y detalle lado a
+   lado, no apilados: es lo que ahorra el alto de más). Mitad derecha: los
+   cuatro datos del trabajo en una grilla 2×2, no en cuatro filas — el
+   mismo motivo. Blanco, como el resto de la fila: la única separación es
+   la línea fina de arriba, que ya viene del borde entre filas de .tabla. */
+.fila-detalle__cuerpo {
+  padding: var(--e-3) var(--e-4) var(--e-4) calc(var(--e-4) + 1px);
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-4);
+  background: var(--c-superficie);
+  border-top: 1px solid var(--c-borde);
+}
+.fila-detalle__col { display: grid; gap: var(--e-1); align-content: start; min-width: 0; }
+.fila-detalle__col + .fila-detalle__col { padding-left: var(--e-4); border-left: 1px solid var(--c-borde); }
+
+.fila-detalle__productos {
+  display: grid; gap: var(--e-1);
+  list-style: none; padding: 0; margin: 0;
+}
+.fila-detalle__productos li {
+  display: flex; align-items: baseline; gap: var(--e-2); min-width: 0;
+  font-size: var(--t-xs);
+}
+.fila-detalle__productos b { flex: 0 0 auto; font-weight: var(--peso-medio); color: var(--c-texto); }
+.fila-detalle__productos span {
+  flex: 1 1 auto; color: var(--c-texto-suave); text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fila-detalle__mas { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+.fila-detalle__datos {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-2) var(--e-3);
+}
+.fila-detalle__dato { display: grid; gap: 1px; min-width: 0; font-size: var(--t-xs); }
+.fila-detalle__dato span { color: var(--c-texto-tenue); }
+.fila-detalle__dato b { font-weight: var(--peso-medio); color: var(--c-texto); white-space: nowrap; }
+/* El número de OP ancla a la izquierda, no a la derecha como el resto de
+   los números de la tabla: acá no se están comparando dígito contra
+   dígito, es un identificador, se lee como texto. */
+.tabla th.num--izq, .tabla td.num--izq { text-align: left; }
+
+.historial-vacio {
+  padding: var(--e-6); text-align: center;
+  color: var(--c-texto-suave); font-size: var(--t-sm);
+}
+
+/* ── Diálogo de filtros avanzados ─────────────────────────────────────────── */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 28rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo">Historial de OPs</span>
+    <span class="cabecera__sep"></span>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista-historial" data-tras-carga hidden>
+
+      <div class="filtros">
+        <div class="filtros__nav">
+          <select class="entrada" data-mes aria-label="Mes">
+            <option value="1">Enero</option>
+            <option value="2">Febrero</option>
+            <option value="3">Marzo</option>
+            <option value="4">Abril</option>
+            <option value="5">Mayo</option>
+            <option value="6">Junio</option>
+            <option value="7">Julio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+          <select class="entrada" data-anio aria-label="Año"></select>
+        </div>
+        <div class="filtros__busqueda">
+          <input class="entrada" type="search" placeholder="Buscar por número o nombre…" data-buscar>
+          <button class="cab-btn btn-filtros" type="button" data-accion="filtros">Filtros</button>
+        </div>
+      </div>
+
+      <div class="tabla-caja">
+        <table class="tabla" data-tabla>
+          <thead>
+            <tr>
+              <th class="num num--izq">N°</th>
+              <th>Nombre</th>
+              <th>Cliente</th>
+              <th class="num">Entrega</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+        </table>
+        <p class="historial-vacio" data-vacio hidden>No hay OPs que calcen con la búsqueda.</p>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<dialog id="dlg-filtros">
+  <h2 class="dlg__titulo">Filtros avanzados</h2>
+  <div class="dlg__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" for="f-cliente">Cliente</label>
+      <input class="entrada" id="f-cliente" type="text" placeholder="Nombre de la empresa">
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" for="f-desde">Entrega desde</label>
+        <input class="entrada" id="f-desde" type="date">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="f-hasta">Entrega hasta</label>
+        <input class="entrada" id="f-hasta" type="date">
+      </div>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" for="f-material">Material</label>
+      <input class="entrada" id="f-material" type="text" placeholder="Textil, material de caja o estructura">
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" data-limpiar-filtros>Limpiar</button>
+    <button class="btn btn--primario btn--chico" data-aplicar-filtros>Aplicar</button>
+  </div>
+</dialog>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  const ESTADOS = {
+    activa:              { texto: "Activa",              clase: "etiqueta--tema" },
+    entregada:           { texto: "Entregada",           clase: "etiqueta--ok" },
+    entregada_atrasada:  { texto: "Entregada atrasada",  clase: "etiqueta--aviso" },
+    cancelada:           { texto: "Cancelada",           clase: "etiqueta--neutra" },
+  };
+
+  const selMes  = $("[data-mes]");
+  const selAnio = $("[data-anio]");
+  const buscar  = $("[data-buscar]");
+  const btnFiltros = $("[data-accion='filtros']");
+  const dlgFiltros  = $("#dlg-filtros");
+
+  /* Los filtros del diálogo viven acá, no solo en el DOM del diálogo: así
+     "Buscar" los sigue usando aunque el diálogo esté cerrado. */
+  let filtros = { cliente: "", desde: "", hasta: "", material: "" };
+
+  function hayFiltrosActivos() {
+    return !!(filtros.cliente || filtros.desde || filtros.hasta || filtros.material);
+  }
+
+  const MAX_PRODUCTOS = 3;
+
+  /* Backlight no se nombra por su tela (eso va en la línea de abajo, junto
+     con el resto): el nombre es "Backlight", y si lleva caja de verdad
+     (no "Sin caja") pasa a "Backlight + Caja" — es la única variación que
+     importa para reconocer el producto de un vistazo. Estándar no tiene
+     caja, así que ahí el nombre es directamente el producto. */
+  function resumenProducto(p) {
+    const bl = p.tipo === "backlight";
+    let nombre;
+    if (bl) {
+      nombre = p.caja && p.caja !== "Sin caja" ? "Backlight + Caja" : "Backlight";
+    } else {
+      nombre = p.producto || "—";
+    }
+    const textil = bl ? p.tela : p.textil;
+    /* Backlight no tiene estructuras ni terminaciones — ese campo es solo
+       de estándar. */
+    const extras = bl ? [] : [...(p.estructuras || []), ...(p.terminaciones || [])];
+    return { nombre, textil, extras };
+  }
+
+  function filaPrincipal(o) {
+    const tr = document.createElement("tr");
+    tr.className = "fila-principal";
+    tr.tabIndex = 0;
+    const est = ESTADOS[o.estado] || { texto: o.estado || "—", clase: "etiqueta--neutra" };
+    tr.innerHTML = `
+      <td class="num num--izq"></td>
+      <td></td>
+      <td></td>
+      <td class="num"></td>
+      <td><span class="etiqueta"></span></td>`;
+    const celdas = $$("td", tr);
+    celdas[0].textContent = String(o.numero).padStart(4, "0");
+    celdas[1].textContent = o.nombre || "—";
+    celdas[2].textContent = o.empresa || "—";
+    celdas[3].textContent = o.fecha_entrega || "—";
+    const etq = $(".etiqueta", celdas[4]);
+    etq.classList.add(est.clase);
+    etq.textContent = est.texto;
+    const abrir = () => TD.api.abrir_op(o.numero);
+    tr.addEventListener("click", abrir);
+    tr.addEventListener("keydown", (e) => { if (e.key === "Enter") abrir(); });
+    return tr;
+  }
+
+  /* Lo básico para reconocer la OP sin tener que abrirla, en dos mitades:
+     a la izquierda qué se produce (hasta 3 productos, con su textil y sus
+     estructuras/terminaciones), a la derecha los datos del trabajo en sí
+     (ingreso, contacto, despacho, instalación) — no las cifras ni las
+     etiquetas completas, para eso está la pantalla de la OP. */
+  function filaDetalle(o) {
+    const tr = document.createElement("tr");
+    tr.className = "fila-detalle";
+    const td = document.createElement("td");
+    td.colSpan = 5;
+
+    const productos = (o.productos || []).map(resumenProducto);
+    const restantes = productos.length - MAX_PRODUCTOS;
+
+    td.innerHTML = `
+      <div class="fila-detalle__marco">
+        <div class="fila-detalle__interior">
+          <div class="fila-detalle__cuerpo">
+            <div class="fila-detalle__col">
+              <ul class="fila-detalle__productos"></ul>
+              <span class="fila-detalle__mas" hidden></span>
+            </div>
+            <div class="fila-detalle__col">
+              <div class="fila-detalle__datos">
+                <div class="fila-detalle__dato"><span>Ingreso</span><b></b></div>
+                <div class="fila-detalle__dato"><span>Contacto</span><b></b></div>
+                <div class="fila-detalle__dato"><span>Despacho</span><b></b></div>
+                <div class="fila-detalle__dato"><span>Instalación</span><b></b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    const lista = $(".fila-detalle__productos", td);
+    if (productos.length) {
+      productos.slice(0, MAX_PRODUCTOS).forEach((p) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<b></b><span></span>`;
+        li.firstElementChild.textContent = p.nombre;
+        li.lastElementChild.textContent = [p.textil, p.extras.join(", ")].filter(Boolean).join(" · ") || "—";
+        lista.appendChild(li);
+      });
+    } else {
+      const li = document.createElement("li");
+      li.innerHTML = `<b>Sin productos.</b>`;
+      lista.appendChild(li);
+    }
+    if (restantes > 0) {
+      const mas = $(".fila-detalle__mas", td);
+      mas.hidden = false;
+      mas.textContent = `+${restantes} más`;
+    }
+
+    const datos = $$(".fila-detalle__dato b", td);
+    datos[0].textContent = o.fecha_ingreso || "—";
+    datos[1].textContent = o.contacto || "—";
+    datos[2].textContent = o.despacho ? "Sí" : "No";
+    datos[3].textContent = o.instalacion ? "Sí" : "No";
+
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function grupoFila(o) {
+    const tbody = document.createElement("tbody");
+    tbody.className = "fila-grupo";
+    tbody.appendChild(filaPrincipal(o));
+    tbody.appendChild(filaDetalle(o));
+    return tbody;
+  }
+
+  function pintarFilas(lista) {
+    const tabla = $("[data-tabla]");
+    $$("tbody", tabla).forEach((tb) => tb.remove());
+    lista.forEach((o) => tabla.appendChild(grupoFila(o)));
+    $("[data-vacio]").hidden = !!lista.length;
+    tabla.hidden = !lista.length;
+  }
+
+  /* Con búsqueda o algún filtro avanzado activo, el mes/año elegido no
+     manda: se cruza todo el historial. Sin nada de eso, se vuelve a la
+     "carpeta" seleccionada. */
+  async function refrescar() {
+    const texto = buscar.value.trim();
+    let lista;
+    if (texto || hayFiltrosActivos()) {
+      lista = await TD.api.buscar_historial({
+        texto, cliente: filtros.cliente, desde: filtros.desde, hasta: filtros.hasta, material: filtros.material,
+      });
+    } else {
+      lista = await TD.api.obtener_historial(selAnio.value, selMes.value);
+    }
+    pintarFilas(lista || []);
+  }
+
+  /* Elegir mes o año es una intención clara de "quiero ver esa carpeta":
+     pisa cualquier búsqueda que hubiera quedado activa. */
+  function limpiarBusqueda() {
+    buscar.value = "";
+    filtros = { cliente: "", desde: "", hasta: "", material: "" };
+    btnFiltros.removeAttribute("data-activo");
+  }
+
+  selMes.addEventListener("change", () => { limpiarBusqueda(); refrescar(); });
+  selAnio.addEventListener("change", () => { limpiarBusqueda(); refrescar(); });
+  buscar.addEventListener("input", refrescar);
+
+  btnFiltros.addEventListener("click", () => {
+    $("#f-cliente").value = filtros.cliente;
+    $("#f-desde").value = filtros.desde;
+    $("#f-hasta").value = filtros.hasta;
+    $("#f-material").value = filtros.material;
+    dlgFiltros.showModal();
+  });
+
+  $("[data-limpiar-filtros]").addEventListener("click", () => {
+    filtros = { cliente: "", desde: "", hasta: "", material: "" };
+    btnFiltros.removeAttribute("data-activo");
+    dlgFiltros.close();
+    refrescar();
+  });
+
+  $("[data-aplicar-filtros]").addEventListener("click", () => {
+    filtros = {
+      cliente: $("#f-cliente").value.trim(),
+      desde: $("#f-desde").value,
+      hasta: $("#f-hasta").value,
+      material: $("#f-material").value.trim(),
+    };
+    btnFiltros.toggleAttribute("data-activo", hayFiltrosActivos());
+    dlgFiltros.close();
+    refrescar();
+  });
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  TD.iniciar(async (ctx) => {
+    const anioActual = ctx.anio_actual || new Date().getFullYear();
+    const mesActual = ctx.mes_actual || new Date().getMonth() + 1;
+
+    /* Cuatro años para atrás alcanza de sobra para una demo; en la app esto
+       lo arma la lista real de carpetas que existen en disco. */
+    for (let a = anioActual; a >= anioActual - 3; a--) {
+      const o = document.createElement("option");
+      o.value = a; o.textContent = a;
+      selAnio.appendChild(o);
+    }
+    selMes.value = String(mesActual);
+    selAnio.value = String(anioActual);
+
+    await refrescar();
+  });
+})();
+</script>
+
+</body>
+</html>

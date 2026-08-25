@@ -67,6 +67,26 @@ class TestGuardarYCargar(_ConRutaTemporal):
         self.assertEqual(len(list((self._base / "JSON").rglob("1003.json"))), 1)
 
 
+class TestListarCotizaciones(_ConRutaTemporal):
+
+    def test_lista_solo_activas_mas_nuevas_primero(self):
+        repo_cot.guardar_cotizacion(_cotizacion(1001, "15/08/2026"))
+        repo_cot.guardar_cotizacion(_cotizacion(1003, "03/01/2025"))
+        repo_cot.guardar_cotizacion(_cotizacion(1002, "20/12/2025"))
+        lista = repo_cot.listar_cotizaciones()
+        self.assertEqual([e["numero"] for e in lista], [1003, 1002, 1001])
+        self.assertEqual(lista[0]["empresa"], "Empresa 1003")
+        self.assertEqual(lista[0]["fecha"], "03/01/2025")
+
+    def test_no_incluye_las_movidas_a_historial(self):
+        repo_cot.guardar_cotizacion(_cotizacion(1001, "15/08/2026"))
+        repo_cot.mover_a_historial(1001)
+        self.assertEqual(repo_cot.listar_cotizaciones(), [])
+
+    def test_sin_cotizaciones_da_lista_vacia(self):
+        self.assertEqual(repo_cot.listar_cotizaciones(), [])
+
+
 class TestMoverYEliminar(_ConRutaTemporal):
 
     def test_mover_a_historial_mantiene_la_subcarpeta_anio_mes(self):

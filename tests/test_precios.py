@@ -325,6 +325,26 @@ class TestDescuentoTextil(unittest.TestCase):
         self.assertEqual(tramo_descuento_textil(50), 20)
         self.assertEqual(tramo_descuento_textil(100), 20)
 
+    def test_cotizacion_mixta_backlight_y_no_backlight_no_se_mezclan(self):
+        # Bug real: antes de _clave_grupo_descuento_textil, una cotización
+        # NO puramente backlight caía en la rama "else" y agrupaba TODO
+        # (incluido el producto backlight) por p.get("textil", "") — como
+        # un producto backlight nunca trae "textil", esa clave siempre daba
+        # "", así que un producto no-backlight con textil="" (editando a
+        # medio llenar, por ejemplo) terminaba MEZCLADO con el backlight en
+        # el mismo grupo. Acá se fuerza ese choque a propósito para
+        # confirmar que quedan separados.
+        backlight = {"tela": "Popelina Test", "caja": "Sin caja",
+                     "alto": 3, "ancho": 4, "cantidad": 1}          # area 12 m2 -> propio tramo 5%
+        no_backlight_textil_vacio = {"textil": "", "estructuras": [], "terminaciones": [],
+                                      "impresion": "Cara única",
+                                      "alto": 3, "ancho": 3, "cantidad": 1}  # area 9 m2 -> propio tramo 0%
+        res = descuento_textil([backlight, no_backlight_textil_vacio], **CATALOGOS)
+        # Si se mezclaran (bug viejo): área combinada 21 m2 -> tramo 10%,
+        # monto = 12000 * 10% = 1200. Separados (arreglado): solo el grupo
+        # backlight aporta (12000 * 5%); el grupo "" da 0% y no aporta nada.
+        self.assertAlmostEqual(res["monto"], 600.0)
+
     def test_backlight_un_solo_tramo_para_toda_la_cotizacion(self):
         # Popelina Test vale 1000/m². area1=2*2*3=12, area2=1*1*3=3 ->
         # total 15 m² -> tramo 5% (10-20), aplicado sobre el total (backlight

@@ -1,0 +1,66 @@
+TexDigital · las tres pantallas conectadas
+==========================================
+
+Abrí menu.html de un doble clic. Desde ahí se recorre todo:
+
+  menu.html
+    · hover sobre "Cotizaciones" → asoman las tarjetas
+    · click en el módulo → se expande y muestra el panel
+    · "Nueva cotización"        → nueva-cotizacion.html
+    · click en una tarjeta      → ver-cotizacion.html?n=NÚMERO
+    · click en una incompleta   → nueva-cotizacion.html?pendiente=ID
+
+  nueva-cotizacion.html
+    · "Guardar" o "Guardar y abrir" en el resumen → guarda y salta a
+      ver-cotizacion.html con esa cotización
+    · "Guardar progreso" (o Ctrl+S) → queda como incompleta en el menú
+    · "Volver" desde la zona de datos → menu.html
+
+  ver-cotizacion.html
+    · Editar   → nueva-cotizacion.html?editar=NÚMERO, con todo cargado
+    · Eliminar → la borra y vuelve al menú
+    · Aprobar  → la pasa a OP (aparece en el módulo de OPs) y vuelve al menú
+    · Imprimir → solo avisa: esa plantilla todavía no está rediseñada
+    · Volver   → menu.html
+
+
+Qué es demo.js
+--------------
+Es andamiaje, no la app. Reemplaza a los tres mocks sueltos por uno solo que
+además guarda en el navegador (localStorage), para que las pantallas se puedan
+pasar datos entre sí.
+
+Lo que hace demo.js y en la app hará Python:
+
+  · calcular precios     → core/precios.py + core/calculo_cajas.py
+  · guardar/leer         → los JSON de Dropbox (core/repositorio_*.py)
+  · cambiar de pantalla  → pywebview, desde la clase Api
+
+Cuando Claude Code integre las pantallas, demo.js se borra entero. Nada de lo
+que hay ahí adentro se migra: los contratos en texdigital-ui/contratos/ son la
+referencia de qué tiene que exponer cada clase Api.
+
+Las cifras que veas son inventadas. Sirven para mirar el diseño, no para
+cotizar.
+
+
+Empezar de cero
+---------------
+Abrí la consola del navegador (F12) y escribí:
+
+    TDdemo.reset()
+
+Vuelve a las tres cotizaciones de ejemplo y borra todo lo que hayas creado.
+
+
+Archivos
+--------
+  menu.html, nueva-cotizacion.html, ver-cotizacion.html   las pantallas
+  base.css      el sistema de diseño (colores, tipografía, componentes)
+  api.js        el puente a Python; en el navegador redirige a demo.js
+  app.js        cabecera, escala de texto A−/A+, atajos, avisos
+  demo.js       el "programa" de mentira (SOLO para esta demo)
+  assets/       el logo
+
+Los tres HTML son idénticos a los que ya tenías salvo una línea: la que cargaba
+mocks/<pantalla>.js ahora carga demo.js.
