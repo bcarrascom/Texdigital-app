@@ -1,0 +1,29 @@
+<!doctype html>
+<!--
+  _recargando.html
+  Paso intermedio de un solo instante, usado SOLO por
+  ui/api_app.py::ApiApp._cargar() para forzar una recarga real cuando el
+  destino es el MISMO archivo .html que ya está cargado (p. ej. paginar()
+  entre dos cotizaciones u OPs) — ahí la navegación cambia solo el
+  fragmento (#numero=...) y WebView2 la trata como navegación interna de
+  la misma página, sin recargarla de verdad ni volver a inyectar el
+  puente de pywebview. Pasar por un archivo de verdad, aparte, resuelve
+  eso — dos navegaciones de archivo distinto, ninguna "optimizable" a un
+  cambio de fragmento.
+
+  Tiene que ser un archivo real (file://), NO "about:blank": pywebview
+  trata cualquier URL que no empiece con "http://"/"https://"/"file://"
+  como una ruta local a servir con su servidor HTTP interno — con
+  "about:blank" eso significa buscar un archivo llamado así y no
+  encontrarlo, mostrando un 404 por una fracción de segundo antes de la
+  navegación real (el bug original que este archivo reemplaza).
+
+  Nunca visible más que un instante — ninguna pantalla lo referencia ni
+  navega hacia acá por su cuenta.
+-->
+<html>
+<head><meta charset="utf-8"><title>TexDigital</title>
+<style>html, body { margin: 0; height: 100%; background: #FCFCFB; }</style>
+</head>
+<body></body>
+</html>

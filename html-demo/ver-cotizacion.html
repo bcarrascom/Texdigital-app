@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="ver-cotizacion" data-tema="cotizaciones">
+<head>
+<meta charset="utf-8">
+<title>Cotización · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ver una cotización guardada — abrir_cotizacion(numero)
+
+   Dos columnas:
+     · izquierda, scrollea: la hoja con los datos + los montos por concepto, y
+       debajo las tarjetas de producto (3 por fila).
+     · derecha, fija: la figura del producto —que va ciclando— y el desglose
+       de plata.
+
+   Los montos NO son un gráfico: no hay magnitud codificada, son las cifras de
+   un documento comercial. Por eso van como texto con jerarquía (etiqueta
+   chica arriba, monto en monoespaciada abajo) y en tinta neutra — el color se
+   reserva para el total, que es el único dato que se busca de un vistazo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista {
+  /* Todo el contenido —hoja, tarjetas de producto y el panel lateral— al
+     93%: `zoom` escala también tipografías y espaciados, así que el 7% de
+     menos es parejo en todo, no solo en el alto de una pieza suelta. */
+  zoom: .93;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+  gap: var(--e-4);
+  width: min(100%, 82rem); margin-inline: auto;
+  align-items: start;
+}
+.vista__izq { display: grid; gap: var(--e-4); min-width: 0; }
+/* `align-items: start` en .vista deja el <aside> del alto de su contenido, y
+   entonces el sticky no tiene recorrido dónde pegarse: hay que estirarlo. */
+.vista__der { align-self: stretch; min-width: 0; }
+
+/* ── La tarjeta lateral: acompaña el scroll ─────────────────────────────── */
+.lateral {
+  position: sticky; top: 0;
+  display: grid; gap: var(--e-4);
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+
+/* Módulo 1 · la figura del producto */
+.visor {
+  /* La animación de este panel va al 50% de velocidad: el doble de tiempo
+     que el resto de la app, escalado local para no tocar --m-media/
+     --m-rapida globales. */
+  --m-visor: calc(var(--m-media) * 2);
+  --m-visor-rapida: calc(var(--m-rapida) * 2);
+  display: grid; gap: var(--e-2);
+}
+.visor__cab {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); font-weight: var(--peso-fuerte);
+  color: var(--c-tema-tinta);
+  min-height: 1.5rem;
+}
+.visor__n { font-family: var(--f-mono); color: var(--c-tema-fuerte); }
+.visor__tema {
+  font-weight: var(--peso-medio); color: var(--c-texto-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.visor__marco {
+  width: 100%; aspect-ratio: 1;
+  display: grid; place-items: center;
+  padding: var(--e-3);
+  background: #F2F1EF;
+  border-radius: var(--r-lg);
+}
+.visor__marco svg { width: 100%; height: 100%; overflow: visible; }
+/* Mismo dibujo que al crear un producto: solo contorno blanco con sombra, y
+   las medidas se reacomodan con transición en vez de saltar. */
+.visor__rect {
+  fill: none; stroke: #FFFFFF; stroke-width: 2.5;
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18));
+  transition: x var(--m-visor) var(--ease-salida),
+              y var(--m-visor) var(--ease-salida),
+              width var(--m-visor) var(--ease-salida),
+              height var(--m-visor) var(--ease-salida);
+}
+.visor__cota {
+  font-family: var(--f-mono); font-size: 7px; fill: var(--c-texto-suave);
+  transition: x var(--m-visor) var(--ease-salida), y var(--m-visor) var(--ease-salida);
+}
+.visor__pie {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.visor__unidades { font-family: var(--f-mono); color: var(--c-texto); font-weight: var(--peso-medio); }
+/* Puntitos: cuál de los productos se está mostrando. */
+.visor__puntos { display: flex; gap: 4px; align-items: center; }
+.visor__punto {
+  width: 5px; height: 5px; border-radius: var(--r-full);
+  background: var(--c-borde-fuerte);
+  transition: background var(--m-visor-rapida) var(--ease-salida),
+              transform var(--m-visor-rapida) var(--ease-salida);
+}
+.visor__punto[data-activo] { background: var(--c-tema-fuerte); transform: scale(1.5); }
+
+/* Módulo 2 · el desglose de plata, sin panel propio */
+.plata { display: grid; gap: var(--e-1); }
+.plata__linea {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.plata__linea b { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+                  font-weight: var(--peso-normal); color: var(--c-texto); }
+.plata__linea--total {
+  margin-top: var(--e-2); padding-top: var(--e-2);
+  border-top: 1.5px solid var(--c-borde);
+  font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta);
+}
+.plata__linea--total b { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+.plata__nota { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+/* ── La hoja de datos ───────────────────────────────────────────────────── */
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+.hoja__cab { display: grid; gap: var(--e-1); }
+.hoja__num {
+  font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+}
+.hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+.hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+/* align-content: start, si no el valor se va al fondo de la fila cuando otro
+   dato de la misma fila ocupa varias líneas (la descripción, casi siempre). */
+.dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.dato--ancho { grid-column: 1 / -1; }
+.dato__et {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+.dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Los montos por concepto, en una fila. Etiqueta arriba, cifra abajo. */
+.conceptos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--e-3);
+  padding-top: var(--e-4); border-top: 1px solid var(--c-borde);
+}
+.concepto { display: grid; gap: var(--e-1); min-width: 0; }
+.concepto__et {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.concepto__val {
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--t-lg); font-weight: var(--peso-medio); color: var(--c-texto);
+  white-space: nowrap;
+}
+
+/* ── Tarjetas de producto ───────────────────────────────────────────────── */
+.productos {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e-3);
+}
+@container vista (max-width: 62rem) { .productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container vista (max-width: 40rem) { .productos { grid-template-columns: 1fr; } }
+/* min-width: 0 es obligatorio: .contenido es item de la grilla .app y sin esto
+   su pista se estira al min-content del contenido, la columna se pasa del
+   ancho de la ventana y las container queries de abajo nunca se cumplen. */
+.contenido { container: vista / inline-size; min-width: 0; }
+
+/* Ventana angosta: la tarjeta lateral deja de acompañar el scroll y pasa
+   arriba de los productos, en vez de comerse media pantalla. */
+@container vista (max-width: 46rem) {
+  .vista { grid-template-columns: minmax(0, 1fr); }
+  .vista__der { order: -1; }
+  .lateral { position: static; }
+  /* Sigue siendo cuadrado —el dibujo depende de eso— pero acotado: a todo el
+     ancho de la ventana sería media pantalla de gris. */
+  .visor__marco { width: min(100%, 16rem); margin-inline: auto; }
+}
+
+/* Columna flex, no grilla: así el pie con el total se puede empujar al fondo
+   con margin-top: auto y todas las tarjetas de una fila cierran a la misma
+   altura, en vez de dejar el total flotando a media tarjeta. */
+.ficha-prod {
+  display: flex; flex-direction: column; gap: var(--e-2);
+  /* Sin min-width: 0 la tarjeta se ensancha hasta el min-content de su nombre
+     o de una etiqueta larga, se sale de su columna y le pisa el monto a la
+     tarjeta de al lado. */
+  min-width: 0;
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-1);
+  cursor: default;
+  animation: aparecer var(--m-media) var(--ease-salida) both;
+  animation-delay: calc(var(--i) * var(--m-escalon));
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.ficha-prod:hover { border-color: var(--c-tema-borde); box-shadow: var(--s-2); transform: translateY(-2px); }
+.ficha-prod[data-mirando] { border-color: var(--c-tema-fuerte); }
+
+.ficha-prod__cab { display: flex; align-items: baseline; gap: var(--e-2); min-width: 0; }
+.ficha-prod__n {
+  font-family: var(--f-mono); font-size: var(--t-md); font-weight: var(--peso-fuerte);
+  color: var(--c-tema-fuerte);
+}
+.ficha-prod__nombre {
+  font-weight: var(--peso-medio); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ficha-prod__linea {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.ficha-prod__linea b {
+  margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+}
+.ficha-prod__etiquetas { display: flex; flex-wrap: wrap; gap: var(--e-1); min-width: 0; }
+.ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.ficha-prod__tipo { align-self: flex-start; }
+.ficha-prod__pie {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  margin-top: auto; padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+  font-size: var(--t-sm);
+}
+.ficha-prod__pie b { margin-left: auto; font-family: var(--f-mono); color: var(--c-tema-tinta); }
+
+/* ── Diálogos ───────────────────────────────────────────────────────────── */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>Cotización</span>
+    <span class="cabecera__sep"></span>
+    <button class="cab-btn" data-accion="eliminar">Eliminar</button>
+    <button class="cab-btn" data-accion="editar">Editar</button>
+    <button class="cab-btn" data-accion="imprimir">Imprimir</button>
+    <button class="btn btn--primario btn--chico" data-accion="aprobar">Aprobar →</button>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista" data-tras-carga hidden>
+
+      <div class="vista__izq">
+
+        <section class="hoja">
+          <div class="hoja__cab">
+            <span class="hoja__num" data-numero>—</span>
+            <span class="hoja__nombre" data-nombre></span>
+            <span class="hoja__meta" data-meta></span>
+          </div>
+
+          <div class="datos" data-datos></div>
+
+          <div class="conceptos" data-conceptos></div>
+        </section>
+
+        <section>
+          <h2 class="seccion-titulo" data-titulo-productos>Productos</h2>
+          <div class="productos" data-productos></div>
+        </section>
+      </div>
+
+      <aside class="vista__der">
+        <div class="lateral">
+
+          <div class="visor">
+            <div class="visor__cab">
+              <span class="visor__n" data-visor-n></span>
+              <span class="visor__tema" data-visor-tema></span>
+            </div>
+            <div class="visor__marco">
+              <svg viewBox="0 0 100 100" role="img" aria-label="Proporción del producto">
+                <rect class="visor__rect" data-rect x="20" y="15" width="60" height="70" rx="2"></rect>
+                <text class="visor__cota" data-cota-ancho x="50" y="10" text-anchor="middle"></text>
+                <text class="visor__cota" data-cota-alto x="14" y="50" text-anchor="middle"
+                      transform="rotate(-90 14 50)"></text>
+              </svg>
+            </div>
+            <div class="visor__pie">
+              <span class="visor__unidades" data-visor-unidades></span>
+              <span class="visor__puntos" data-visor-puntos></span>
+            </div>
+          </div>
+
+          <div class="plata" data-plata></div>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+</div>
+
+<dialog id="dlg-eliminar">
+  <h2 class="dlg__titulo">¿Eliminar la cotización?</h2>
+  <p class="dlg__texto" data-dlg-eliminar-texto></p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" data-cerrar-dlg>Cancelar</button>
+    <button class="btn btn--peligro btn--chico" data-confirmar-eliminar>Eliminar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-aprobar">
+  <h2 class="dlg__titulo" data-dlg-aprobar-titulo>¿Aprobar la cotización?</h2>
+  <p class="dlg__texto">Aprobar una cotización la vuelve una OP: sale del listado y pasa al historial.</p>
+  <div class="dlg__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" for="fecha-ingreso" data-requerido>Fecha de ingreso</label>
+      <input class="entrada" id="fecha-ingreso" type="date">
+      <span class="campo__ayuda">Hoy, salvo que la cambies.</span>
+    </div>
+    <div class="campo" id="campo-entrega">
+      <label class="campo__etiqueta" for="fecha-entrega" data-requerido>Fecha de entrega</label>
+      <input class="entrada" id="fecha-entrega" type="date">
+      <span class="campo__error">Poné una fecha de entrega.</span>
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" data-cerrar-dlg>Cancelar</button>
+    <button class="btn btn--secundario btn--chico" data-dlg-editar>Editar</button>
+    <button class="btn btn--primario btn--chico" data-confirmar-aprobar disabled>Aprobar</button>
+  </div>
+</dialog>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  /* Cada cuánto pasa al producto siguiente, y cuánto espera antes de retomar
+     el ciclo después de que el usuario dejó de mirar una tarjeta. */
+  const CICLO_MS = 5200;
+  const REANUDAR_MS = 3000;
+
+  let cot = null;
+  let hoyISO = "";
+  let iVisor = 0;
+  let ciclo = null;
+  let reanudar = null;
+
+  const num = (v) => { const x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? 0 : x; };
+  const esc = (s) => String(s == null ? "" : s);
+
+  /* ── El visor de la derecha ───────────────────────────────────────────── */
+
+  function mostrar(i) {
+    if (!cot || !cot.productos.length) return;
+    iVisor = ((i % cot.productos.length) + cot.productos.length) % cot.productos.length;
+    const p = cot.productos[iVisor];
+
+    $("[data-visor-n]").textContent = `${iVisor + 1}.`;
+    $("[data-visor-tema]").textContent = p.tema || p.producto || p.tela || "Sin tema";
+    const cant = parseInt(p.cantidad, 10) || 0;
+    $("[data-visor-unidades]").textContent = `${cant} ${cant === 1 ? "unidad" : "unidades"}`;
+
+    /* La figura es una proporción, no una escala en metros: el lado largo
+       siempre ocupa el alto disponible, igual que al crear el producto. */
+    const ancho = num(p.ancho), alto = num(p.alto);
+    const rect = $("[data-rect]");
+    if (ancho > 0 && alto > 0) {
+      const largo = Math.max(ancho, alto), corto = Math.min(ancho, alto);
+      const h = 70, w = 70 * (corto / largo);
+      rect.setAttribute("width", w);
+      rect.setAttribute("height", h);
+      rect.setAttribute("x", 50 - w / 2);
+      rect.setAttribute("y", 15);
+      $("[data-cota-ancho]").textContent = `${TD.fmt.medida(corto)} m`;
+      $("[data-cota-alto]").textContent = `${TD.fmt.medida(largo)} m`;
+      const xc = 50 - w / 2 - 6;
+      $("[data-cota-alto]").setAttribute("x", xc);
+      $("[data-cota-alto]").setAttribute("transform", `rotate(-90 ${xc} 50)`);
+    }
+
+    $$("[data-visor-puntos] .visor__punto").forEach((d, k) => {
+      d.toggleAttribute("data-activo", k === iVisor);
+    });
+    $$(".ficha-prod").forEach((f, k) => f.toggleAttribute("data-mirando", k === iVisor));
+  }
+
+  function arrancarCiclo() {
+    detenerCiclo();
+    if (!cot || cot.productos.length < 2) return;
+    /* Con movimiento reducido no tiene sentido un carrusel automático. */
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    ciclo = setInterval(() => mostrar(iVisor + 1), CICLO_MS);
+  }
+  function detenerCiclo() {
+    if (ciclo) { clearInterval(ciclo); ciclo = null; }
+    if (reanudar) { clearTimeout(reanudar); reanudar = null; }
+  }
+
+  /* Mirar una tarjeta congela el visor en ese producto; al soltar, el ciclo
+     se retoma recién after REANUDAR_MS — si se retomara al instante, pasar el
+     mouse por encima de camino a otra cosa haría saltar el visor. */
+  function mirar(i) { detenerCiclo(); mostrar(i); }
+  function soltar() {
+    if (reanudar) clearTimeout(reanudar);
+    reanudar = setTimeout(arrancarCiclo, REANUDAR_MS);
+  }
+
+  /* ── Pintado ──────────────────────────────────────────────────────────── */
+
+  function dato(et, val, mono, ancho) {
+    if (!val && val !== 0) return null;
+    const d = document.createElement("div");
+    d.className = "dato" + (ancho ? " dato--ancho" : "");
+    d.innerHTML = `<span class="dato__et"></span><span class="dato__val${mono ? " dato__val--mono" : ""}"></span>`;
+    $(".dato__et", d).textContent = et;
+    $(".dato__val", d).textContent = esc(val);
+    return d;
+  }
+
+  function pintarCabecera() {
+    $("[data-numero]").textContent = String(cot.numero).padStart(4, "0");
+    $("[data-nombre]").textContent = cot.nombre || "";
+    $("[data-titulo]").textContent =
+      `Cotización ${String(cot.numero).padStart(4, "0")}` + (cot.empresa ? ` · ${cot.empresa}` : "");
+    const partes = [cot.empresa, cot.fecha].filter(Boolean);
+    $("[data-meta]").textContent = partes.join(" · ");
+
+    const cont = $("[data-datos]");
+    cont.textContent = "";
+    [
+      dato("Empresa", cot.empresa),
+      dato("RUT", cot.rut, true),
+      dato("Razón social", cot.razon_social),
+      dato("Contacto", cot.contacto),
+      dato("Email", cot.email),
+      dato("Condición de pago", cot.condicion),
+      dato("Fecha", cot.fecha, true),
+      dato("Descripción", cot.descripcion, false, true),
+    ].filter(Boolean).forEach((d) => cont.appendChild(d));
+  }
+
+  function pintarConceptos() {
+    const t = cot.totales || {};
+    const cont = $("[data-conceptos]");
+    cont.textContent = "";
+    /* Despacho e instalación solo aparecen si la cotización los lleva: un
+       "$0" es ruido, no información. */
+    [
+      ["Impresión", t.impresion],
+      ["Estructuras", t.estructuras],
+      ["Terminaciones", t.terminaciones],
+      ["Despacho", t.despacho],
+      ["Instalación", t.instalacion],
+    ].forEach(([et, v]) => {
+      if (v == null) return;
+      const d = document.createElement("div");
+      d.className = "concepto";
+      d.innerHTML = `<span class="concepto__et"></span><span class="concepto__val"></span>`;
+      $(".concepto__et", d).textContent = et;
+      $(".concepto__val", d).textContent = TD.fmt.pesos(v);
+      cont.appendChild(d);
+    });
+  }
+
+  function pintarPlata() {
+    const t = cot.totales || {};
+    const cont = $("[data-plata]");
+    cont.textContent = "";
+    const linea = (et, val, clase) => {
+      const d = document.createElement("div");
+      d.className = "plata__linea" + (clase ? " " + clase : "");
+      d.innerHTML = `<span></span><b></b>`;
+      d.firstElementChild.textContent = et;
+      d.lastElementChild.textContent = val;
+      cont.appendChild(d);
+    };
+    linea("Neto", TD.fmt.pesos(t.neto || 0));
+    if (t.descuento_monto) {
+      linea(`Descuento${t.descuento_pct ? ` (${t.descuento_pct}%)` : ""}`,
+            "− " + TD.fmt.pesos(t.descuento_monto));
+      linea("Neto total", TD.fmt.pesos(t.neto_total || 0));
+    }
+    linea(`IVA (${t.iva_pct != null ? t.iva_pct : 19}%)`, TD.fmt.pesos(t.iva || 0));
+    linea("Total", TD.fmt.pesos(t.total || 0), "plata__linea--total");
+  }
+
+  function fichaProducto(p, i) {
+    const el = document.createElement("article");
+    el.className = "ficha-prod";
+    el.style.setProperty("--i", i);
+    const bl = p.tipo === "backlight";
+    const nombre = bl ? (p.tela || "Backlight") : (p.producto || "—");
+    const cant = parseInt(p.cantidad, 10) || 0;
+
+    el.innerHTML = `
+      <div class="ficha-prod__cab">
+        <span class="ficha-prod__n"></span>
+        <span class="ficha-prod__nombre"></span>
+      </div>
+      <span class="etiqueta ficha-prod__tipo ${bl ? "etiqueta--neutra" : "etiqueta--tema"}"></span>
+      <div class="ficha-prod__linea"><span>Medidas</span><b></b></div>
+      <div class="ficha-prod__linea"><span>Cantidad</span><b></b></div>
+      <div class="ficha-prod__linea"><span>Superficie</span><b></b></div>
+      <div class="ficha-prod__etiquetas"></div>
+      <div class="ficha-prod__pie"><span>Total</span><b></b></div>`;
+
+    $(".ficha-prod__n", el).textContent = `${i + 1}.`;
+    $(".ficha-prod__nombre", el).textContent = nombre;
+    $(".etiqueta", el).textContent = bl ? "Backlight" : "Estándar";
+    const lineas = $$(".ficha-prod__linea b", el);
+    lineas[0].textContent = `${TD.fmt.medida(num(p.ancho))} × ${TD.fmt.medida(num(p.alto))} m`;
+    lineas[1].textContent = String(cant);
+    lineas[2].textContent = p.ml != null ? `${TD.fmt.cantidad(p.ml)} ML`
+                          : p.m2 != null ? `${TD.fmt.cantidad(p.m2)} M²` : "—";
+
+    /* El JSON guardado NO trae lo mismo en los dos tipos: backlight trae
+       Tela + Caja, el estándar trae producto + Estructuras + Terminaciones +
+       Impresion (ver core/repositorio_cotizaciones.py::mapear_producto). */
+    const etq = $(".ficha-prod__etiquetas", el);
+    const marca = (texto) => {
+      if (!texto) return;
+      const e = document.createElement("span");
+      e.className = "etiqueta etiqueta--neutra";
+      e.textContent = texto;
+      etq.appendChild(e);
+    };
+    if (p.tema) marca("Tema: " + p.tema);
+    if (bl) {
+      marca(p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja");
+    } else {
+      marca(p.textil || p.tela);
+      marca(p.impresion);
+      (p.estructuras || []).forEach(marca);
+      (p.terminaciones || []).forEach(marca);
+    }
+    if (p.obs) marca("Obs: " + p.obs);
+
+    $(".ficha-prod__pie b", el).textContent = p.total != null ? TD.fmt.pesos(p.total) : "—";
+
+    el.addEventListener("mouseenter", () => mirar(i));
+    el.addEventListener("mouseleave", soltar);
+    el.addEventListener("focusin", () => mirar(i));
+    el.addEventListener("focusout", soltar);
+    return el;
+  }
+
+  function pintarProductos() {
+    const cont = $("[data-productos]");
+    cont.textContent = "";
+    cot.productos.forEach((p, i) => cont.appendChild(fichaProducto(p, i)));
+    $("[data-titulo-productos]").textContent =
+      `Productos · ${cot.productos.length}`;
+
+    const puntos = $("[data-visor-puntos]");
+    puntos.textContent = "";
+    cot.productos.forEach(() => {
+      const d = document.createElement("span");
+      d.className = "visor__punto";
+      puntos.appendChild(d);
+    });
+  }
+
+  /* ── Acciones ─────────────────────────────────────────────────────────── */
+
+  function abrirDialogo(dlg) {
+    dlg.showModal();
+    $$("[data-cerrar-dlg]", dlg).forEach((b) => b.onclick = () => dlg.close());
+    /* Enter confirma, pero solo si el botón está habilitado — misma regla que
+       el diálogo Tkinter, que exige las dos fechas válidas. */
+    dlg.onkeydown = (e) => {
+      if (e.key !== "Enter" || e.target.tagName === "TEXTAREA") return;
+      const ok = $("[data-confirmar-aprobar]", dlg) || $("[data-confirmar-eliminar]", dlg);
+      if (ok && !ok.disabled) { e.preventDefault(); ok.click(); }
+    };
+  }
+
+  $("[data-accion='eliminar']").addEventListener("click", () => {
+    const dlg = $("#dlg-eliminar");
+    $("[data-dlg-eliminar-texto]", dlg).textContent =
+      `La cotización ${String(cot.numero).padStart(4, "0")} de ${cot.empresa || "—"} se borra del listado. No se puede deshacer.`;
+    abrirDialogo(dlg);
+    $("[data-confirmar-eliminar]", dlg).onclick = async () => {
+      dlg.close();
+      await TD.api.eliminar_cotizacion(cot.numero);
+    };
+  });
+
+  $("[data-accion='editar']").addEventListener("click", () => TD.api.editar_cotizacion(cot.numero));
+  $("[data-accion='imprimir']").addEventListener("click", () => TD.api.imprimir_cotizacion(cot.numero));
+
+  $("[data-accion='aprobar']").addEventListener("click", () => {
+    const dlg = $("#dlg-aprobar");
+    $("[data-dlg-aprobar-titulo]", dlg).textContent =
+      `¿Aprobar la cotización ${String(cot.numero).padStart(4, "0")}?`;
+    /* Las dos fechas que pide hoy ui/dialogo_aprobar.py, con su misma regla:
+       ingreso arranca en HOY (no en la fecha de la cotización) y se puede
+       cambiar; entrega arranca vacía, se lleva el foco y mientras no sea
+       válida el botón Aprobar queda apagado. */
+    const ingreso = $("#fecha-ingreso"), entrega = $("#fecha-entrega");
+    const btnOk = $("[data-confirmar-aprobar]", dlg);
+    ingreso.value = hoyISO;
+    entrega.value = "";
+    $("#campo-entrega").removeAttribute("data-invalido");
+
+    const revisar = () => { btnOk.disabled = !(entrega.value && ingreso.value); };
+    revisar();
+    entrega.oninput = ingreso.oninput = () => {
+      $("#campo-entrega").removeAttribute("data-invalido");
+      revisar();
+    };
+
+    abrirDialogo(dlg);
+    entrega.focus();
+
+    $("[data-dlg-editar]", dlg).onclick = () => { dlg.close(); TD.api.editar_cotizacion(cot.numero); };
+    btnOk.onclick = async () => {
+      if (!entrega.value) { $("#campo-entrega").setAttribute("data-invalido", ""); entrega.focus(); return; }
+      dlg.close();
+      await TD.api.aprobar_cotizacion(cot.numero, ingreso.value, entrega.value);
+    };
+  });
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  TD.iniciar(async (ctx) => {
+    /* La fecha de hoy la pone Python (ctx.hoy_iso): la del sistema puede
+       estar corrida y, sobre todo, tiene que ser la misma que usa el resto
+       de la app. El fallback es solo para mirar el diseño en el navegador. */
+    hoyISO = ctx.hoy_iso || new Date().toISOString().slice(0, 10);
+    cot = (await TD.api.obtener_cotizacion(ctx.numero)) || null;
+    if (!cot) { TD.aviso("No se pudo cargar la cotización.", "error", 8000); return; }
+    cot.productos = cot.productos || [];
+
+    pintarCabecera();
+    pintarConceptos();
+    pintarPlata();
+    pintarProductos();
+    mostrar(0);
+    arrancarCiclo();
+  });
+})();
+</script>
+
+<script src="demo.js"></script>
+</body>
+</html>

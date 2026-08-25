@@ -18,45 +18,43 @@ aprobar OPs, etc.). El botón "Recargar" de cada vista vuelve a leer las
 carpetas de OPs, por lo que recoge los cambios hechos desde la pantalla
 principal mientras tanto.
 
-── Arquitectura de hilos/procesos (importante) ─────────────────────────────
-En Windows, pywebview exige que su ventana "maestra" (la primera que se
-crea en el proceso) se cree y arranque desde el hilo principal — registra
-un manejador de SIGINT ahí, lo que sólo es legal en ese hilo — y bloquea
-ese hilo hasta que esa ventana se destruye. Por eso la app se invierte
-respecto a un programa Tkinter normal: el hilo principal lo ocupa
-pywebview (ver iniciar_panel) y el resto del programa (toda la app
-Tkinter) corre en un hilo secundario, que pywebview arranca por nosotros
-vía el parámetro `func` de webview.start(). Esto funciona en Windows (y
-en Linux) porque ahí Tkinter no exige que sus ventanas se creen en el
-hilo principal real del proceso.
+── Arquitectura de ventanas/procesos (importante) ───────────────────────────
+Desde que se retiró Tkinter, la app entera corre sobre pywebview, sin
+ningún otro toolkit de por medio — y desde que la ventana principal
+(menú + las 4 pantallas a las que se navega desde ahí, ver
+ui/api_app.py::ApiApp) pasó a ser UNA sola ventana persistente que navega
+con load_url() en vez de crear una ventana nueva por pantalla, este panel
+es la ÚNICA razón por la que sigue existiendo el modelo de "ventana
+aparte"/"proceso aparte": es una segunda ventana CONCURRENTE de verdad
+(coexiste con la ventana principal, no la reemplaza), a diferencia de
+las 4 pantallas de ApiApp, que ya no necesitan serlo.
 
-En **macOS** esa misma arquitectura crashea: Cocoa/AppKit exige que TODA
-ventana (también las de Tkinter, que son NSWindow por debajo) se cree en
-el hilo principal real — y pywebview exige lo mismo para sí mismo. Como
-las dos cosas no pueden compartir el único hilo principal que hay, en
-macOS el panel corre como un **proceso aparte** en vez de un hilo aparte:
-- La app de escritorio (VentanaPrincipal) corre en el hilo principal de
-  su propio proceso, normal, sin pywebview de por medio.
-- Al apretar "Revisar OPs", se lanza el mismo ejecutable de nuevo pero
-  con el flag `--panel-produccion` (ver main.py), que hace que ese nuevo
-  proceso corra ÚNICAMENTE ejecutar_panel_standalone() — ahí pywebview
-  tiene su propio hilo principal real, sin Tkinter compitiendo por él.
-  Se comunican solo a través de los JSON de Dropbox (igual que ya hacía
-  el panel con el resto de la app), no hace falta nada más.
-- mostrar_panel()/ocultar_panel()/iniciar_panel() son la versión
+En Windows/Linux es simplemente UNA VENTANA MÁS del mismo proceso
+pywebview: main.py la crea oculta al arrancar (preparar_panel_oculto,
+llamado ANTES de webview.start() junto con la ventana principal — ver
+ui.api_app.ApiApp.crear_ventana). mostrar_panel()/ocultar_panel() solo la
+muestran/ocultan (nunca la destruyen) cuando el usuario aprieta
+"Revisar OPs" (siempre arrancando en el listado).
+
+En **macOS**, en cambio, el panel corre como **proceso aparte** — porque
+Cocoa/AppKit exige que cada ventana pywebview se cree y controle desde el
+hilo principal real de SU PROPIO proceso, y ese hilo ya lo ocupa la
+ventana principal de la app. Esa restricción es sobre CREAR una ventana
+nueva, no sobre navegar una ya creada (por eso las 4 pantallas de
+ApiApp, que solo navegan la ventana principal ya existente, no necesitan
+esto) — pero el panel es una ventana genuinamente NUEVA y CONCURRENTE, así
+que sigue haciendo falta. Al apretar "Revisar OPs" en macOS se lanza el
+mismo ejecutable de nuevo con el flag `--panel-produccion` (ver main.py),
+que hace que ese nuevo proceso corra ÚNICAMENTE
+ejecutar_panel_standalone(). Se comunican solo a través de los JSON de
+Dropbox (igual que con el resto de la app), no hace falta nada más.
+- mostrar_panel()/ocultar_panel()/preparar_panel_oculto() son la versión
   Windows/Linux (un solo proceso); mostrar_panel_mac()/
-  ejecutar_panel_standalone() son la versión macOS (dos procesos). Cuál
-  se usa lo decide main.py según sys.platform.
-
-La ventana del panel (en el modo de un solo proceso) se crea oculta al
-iniciar la app y solo se muestra cuando el usuario aprieta "Revisar OPs"
-(siempre arrancando en el listado). Cerrarla (la X de la ventana, o
-Escape en el listado) no la destruye, solo la oculta — así sigue
-existiendo la misma ventana maestra y el hilo principal no se libera
-hasta que se cierra la app por completo (ver salir_app). En el modo de
-proceso aparte (macOS), en cambio, cerrar esa ventana sí termina el
-proceso del panel — la próxima vez que se apriete "Revisar OPs" se lanza
-uno nuevo, arrancando en el listado igual que siempre.
+  ejecutar_panel_standalone() son la versión macOS (proceso aparte). Cuál
+  se usa lo decide ui/api_app.py::ApiApp.ir() según sys.platform; en
+  Windows/Linux la ventana oculta ya existe siempre (preparada al
+  arrancar, ver arriba), en macOS mostrar_panel_mac() lanza el proceso
+  recién al primer click.
 """
 
 import json
@@ -208,14 +206,14 @@ def _on_closing():
     return False
 
 
-def iniciar_panel(func_app_escritorio):
+def preparar_panel_oculto() -> None:
     """
-    Crea (oculta) la ventana del panel, arrancando en el listado, y arranca
-    el bucle de pywebview en el hilo principal. `func_app_escritorio` (la
-    app Tkinter completa, con su propio mainloop) corre en el hilo
-    secundario que pywebview arranca por nosotros. Esta llamada bloquea
-    hasta que se cierra la app entera (ver salir_app) — debe ser lo último
-    que haga main().
+    Crea (oculta) la ventana del panel, arrancando en el listado — SOLO
+    Windows/Linux (modo un solo proceso). Debe llamarse ANTES de
+    webview.start() (ver main.py), junto con la creación de la ventana
+    principal (ui.api_app.ApiApp.crear_ventana) — main.py es quien arranca
+    el bucle de pywebview (webview.start()) recién después de crear todas
+    las ventanas iniciales, no esta función.
     """
     global _ventana
     _ventana = webview.create_window(
@@ -227,7 +225,6 @@ def iniciar_panel(func_app_escritorio):
         hidden=True,
     )
     _ventana.events.closing += _on_closing
-    webview.start(func_app_escritorio)
 
 
 def mostrar_panel():
@@ -313,11 +310,12 @@ def mostrar_panel_mac():
 
 def salir_app():
     """
-    Termina la app por completo. Reemplaza a sys.exit(0) en los cierres de
-    ventana: en Windows/Linux el hilo principal lo ocupa pywebview, así
-    que un sys.exit normal desde el hilo de Tkinter solo terminaría ese
-    hilo y dejaría el proceso colgado. También mata el proceso del panel
-    en macOS si quedó abierto, para no dejarlo huérfano.
+    Termina la app por completo. Reemplaza a un cierre de ventana normal:
+    en Windows/Linux la ventana oculta del panel (ver
+    preparar_panel_oculto) mantiene vivo el proceso durante toda la
+    sesión, así que hace falta un os._exit explícito para terminarlo de
+    verdad. También mata el proceso del panel en macOS si quedó abierto,
+    para no dejarlo huérfano.
     """
     if _proceso_panel_mac is not None and _proceso_panel_mac.poll() is None:
         try:

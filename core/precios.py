@@ -401,6 +401,19 @@ def _area_producto(d: dict) -> float:
     return d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad_efectiva(d)
 
 
+def _clave_grupo_descuento_textil(d: dict) -> tuple[str, str | None]:
+    """Clave de agrupamiento para el descuento-textil (ver descuento_textil)
+    — DISTINTA de _clave_grupo_textil (esa es para el piso mínimo): acá
+    TODO el backlight de la cotización es un solo grupo global
+    ("backlight", None), sin importar la tela de cada producto — regla de
+    negocio propia del descuento (confirmado con el usuario: "Backlight...
+    un solo tramo para toda la cotización"). No-backlight sigue siendo por
+    textil individual, igual que antes."""
+    if "tela" in d:
+        return ("backlight", None)
+    return ("no_backlight", d.get("textil", ""))
+
+
 def _clave_grupo_textil(d: dict) -> tuple[str, str]:
     """Clave de agrupamiento para el piso mínimo de facturación (ver
     ml_o_area_facturable_por_producto): separa backlight de no-backlight
@@ -463,16 +476,21 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
     manual "Descuento" del contacto (ver costo_cotizacion, que se queda
     solo con el que dé más ahorro entre los dos, nunca ambos a la vez).
 
-    - Backlight (todos los productos traen "tela"): un solo tramo para toda
-      la cotización, según la suma de m² impresos de TODOS los productos.
-      El % se aplica SOLO al costo de impresión (igual que no-backlight) —
-      NO a la caja (perfil/luces/armado/etc., ver core.valor_cajas): es un
-      descuento por volumen de TELA impresa, la caja no es tela.
+    - Backlight: TODOS los productos backlight de la cotización son un solo
+      grupo global (sin importar la tela de cada uno), con un solo tramo
+      según la suma de sus m² impresos. El % se aplica SOLO al costo de
+      impresión (igual que no-backlight) — NO a la caja (perfil/luces/
+      armado/etc., ver core.valor_cajas): es un descuento por volumen de
+      TELA impresa, la caja no es tela.
     - No-backlight: un tramo POR TEXTIL — se agrupan los productos por
       d["textil"], se suma el m² de cada grupo por separado (puede caer en
       tramos distintos entre sí dentro de la misma cotización), y el % de
       cada grupo se aplica SOLO al costo de impresión de esos productos, no
       a sus estructuras/terminaciones (que no dependen del textil).
+    - Ambos grupos conviven en la misma cotización sin pisarse (ver
+      _clave_grupo_descuento_textil) — una cotización MIXTA (backlight +
+      no-backlight a la vez) calcula el grupo backlight global y cada grupo
+      de textil no-backlight de forma completamente independiente.
 
     Devuelve {"monto": $ total descontado, "neto": $ neto de los productos
     (sin despacho/instalación — no son tela), "pct_visual": monto/neto×100}.
@@ -494,24 +512,17 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
 
     neto = sum(_costo(p, f)["total"] for p, f in zip(productos, facturables))
 
-    if all("tela" in p for p in productos):
-        area_total = sum(_area_producto(p) for p in productos)
-        pct = tramo_descuento_textil(area_total)
-        costo_impresion_total = sum(
-            _costo(p, f)["costo_impresion"] for p, f in zip(productos, facturables)
-        )
-        monto = costo_impresion_total * pct / 100
-    else:
-        grupos: dict[str, list[tuple[dict, float]]] = {}
-        for p, f in zip(productos, facturables):
-            grupos.setdefault(p.get("textil", ""), []).append((p, f))
-        monto = 0.0
-        for grupo in grupos.values():
-            pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _ in grupo))
-            if not pct_grupo:
-                continue
-            costo_impresion_grupo = sum(_costo(p, f)["costo_impresion"] for p, f in grupo)
-            monto += costo_impresion_grupo * pct_grupo / 100
+    grupos: dict[tuple[str, str | None], list[tuple[dict, float]]] = {}
+    for p, f in zip(productos, facturables):
+        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append((p, f))
+
+    monto = 0.0
+    for grupo in grupos.values():
+        pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _ in grupo))
+        if not pct_grupo:
+            continue
+        costo_impresion_grupo = sum(_costo(p, f)["costo_impresion"] for p, f in grupo)
+        monto += costo_impresion_grupo * pct_grupo / 100
 
     pct_visual = (monto / neto * 100) if neto else 0.0
     return {"monto": monto, "neto": neto, "pct_visual": pct_visual}

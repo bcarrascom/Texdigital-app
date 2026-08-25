@@ -33,6 +33,52 @@ _CAMPO_FECHA = "Fecha_ingreso"
 
 _CARPETAS_PLANAS = ("JSON", "Completadas", "Pendiente")
 
+# ── Estado de una OP (activa/entregada/entregada_atrasada/cancelada) ────────
+# No es lo mismo que "en qué carpeta vive" (JSON/Completadas/Pendiente/
+# Historial — eso sigue existiendo tal cual, es la mecánica de archivos).
+# "Estado" es un campo dentro del JSON: se escribe recién al completar o
+# cancelar una OP (ver mover_a_completadas/cancelar_op), comparando la
+# fecha real contra Fecha_entrega para decidir entre "entregada" y
+# "entregada_atrasada" — no es algo que el operador elija a mano.
+ESTADO_ACTIVA              = "activa"
+ESTADO_ENTREGADA           = "entregada"
+ESTADO_ENTREGADA_ATRASADA  = "entregada_atrasada"
+ESTADO_CANCELADA           = "cancelada"
+
+
+def _hoy_dma() -> str:
+    return datetime.now().strftime("%d/%m/%Y")
+
+
+def estado_op(datos: dict, origen: str | None = None) -> str:
+    """Estado de una OP para mostrar (ver docstring de la sección arriba).
+
+    - Si el JSON ya trae "Estado" (OP completada/cancelada con este
+      mecanismo), se usa tal cual.
+    - Si no, pero trae "Fecha_completada" (no debería pasar salvo un JSON
+      tocado a mano), se deriva comparando esa fecha contra Fecha_entrega.
+    - Si no hay ninguno de los dos (OP vieja, de antes de este campo):
+      "activa" si `origen` es "JSON"/"Pendiente" (sigue en una carpeta
+      activa) o no se indica `origen`; "entregada" como resultado neutro
+      si `origen` es "Completadas"/"Historial" (ya se sabe que se
+      completó, solo no se sabe si fue a tiempo)."""
+    estado = datos.get("Estado")
+    if estado:
+        return estado
+
+    fecha_completada = datos.get("Fecha_completada")
+    if fecha_completada:
+        try:
+            completada = datetime.strptime(fecha_completada, "%d/%m/%Y")
+            entrega = datetime.strptime(datos.get("Fecha_entrega", ""), "%d/%m/%Y")
+            return ESTADO_ENTREGADA if completada <= entrega else ESTADO_ENTREGADA_ATRASADA
+        except Exception:
+            pass
+
+    if origen in ("Completadas", "Historial"):
+        return ESTADO_ENTREGADA
+    return ESTADO_ACTIVA
+
 
 def _ruta_base() -> Path:
     dropbox = _detectar_dropbox()
@@ -127,8 +173,38 @@ def _mover_plano(origen_carpeta: Path, destino_carpeta: Path, numero: int) -> No
 
 
 def mover_a_completadas(numero: int) -> None:
-    """Mueve el JSON de la OP completada de JSON/ a Completadas/."""
-    _mover_plano(carpeta_json(), carpeta_completadas(), numero)
+    """Mueve el JSON de la OP completada de JSON/ a Completadas/, grabando
+    Fecha_completada (hoy) y Estado (entregada/entregada_atrasada, según
+    Fecha_completada vs Fecha_entrega — ver estado_op)."""
+    origen = carpeta_json() / f"{numero}.json"
+    if not origen.exists():
+        return
+    datos = json.loads(origen.read_text(encoding="utf-8"))
+    datos["Fecha_completada"] = _hoy_dma()
+    datos["Estado"] = estado_op(datos)
+    destino = carpeta_completadas() / origen.name
+    destino.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    origen.unlink()
+
+
+def cancelar_op(numero: int) -> None:
+    """Marca una OP como cancelada y la saca de circulación activa — busca
+    el JSON en JSON/ o Pendiente/ (las dos carpetas "activas"), le graba
+    Estado="cancelada" y Fecha_completada (hoy, aunque acá no se use para
+    derivar nada — es solo registro de cuándo se cerró), y lo mueve a
+    Completadas/ (mismo destino que una entrega real; lo distingue el
+    campo Estado, no la carpeta — envejecer_completadas la va a mover a
+    Historial/ igual que cualquier otra, sin importar cuál sea)."""
+    for carpeta in (carpeta_json(), carpeta_pendiente()):
+        origen = carpeta / f"{numero}.json"
+        if origen.exists():
+            datos = json.loads(origen.read_text(encoding="utf-8"))
+            datos["Fecha_completada"] = _hoy_dma()
+            datos["Estado"] = ESTADO_CANCELADA
+            destino = carpeta_completadas() / origen.name
+            destino.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+            origen.unlink()
+            return
 
 
 def mover_a_pendiente(numero: int) -> None:
@@ -239,17 +315,49 @@ def listar_ops_del_mes(anio: int, mes: int) -> list[tuple[dict, str]]:
     """OPs de un año/mes puntual, juntando las 4 carpetas — incluye las
     activas. Devuelve [(datos, origen), ...] con `origen` en
     "JSON"/"Completadas"/"Pendiente"/"Historial" (para que la ventana de
-    historial pueda mostrar el estado de cada una)."""
+    historial pueda mostrar el estado de cada una). Cada `datos` queda con
+    su "Estado" normalizado (ver estado_op) antes de devolverse, incluso
+    para OPs viejas que no lo traían guardado."""
     resultado = []
     for nombre in _CARPETAS_PLANAS:
         for archivo in _carpeta(nombre).glob("*.json"):
             datos = _leer_json(archivo)
             if datos is not None and cm.anio_mes(datos, _CAMPO_FECHA) == (anio, mes):
+                datos["Estado"] = estado_op(datos, nombre)
                 resultado.append((datos, nombre))
     carpeta_mes = carpeta_historial() / f"{anio:04d}" / f"{mes:02d}"
     if carpeta_mes.is_dir():
         for archivo in carpeta_mes.glob("*.json"):
             datos = _leer_json(archivo)
             if datos is not None:
+                datos["Estado"] = estado_op(datos, "Historial")
                 resultado.append((datos, "Historial"))
     return resultado
+
+
+def listar_todas_las_ops() -> list[dict]:
+    """Todas las OPs guardadas (activas + Pendiente + Completadas +
+    Historial), de TODOS los meses, cada una con su Estado normalizado
+    (ver estado_op) — para pantallas que necesitan cruzar todo sin filtrar
+    por mes (ver ui.api_menu._ops_activas, ui.api_historial_ops).
+
+    No hay una carpeta "todas juntas" para leer de una — listar_ops_del_mes
+    exige un (año, mes) puntual incluso para JSON/Completadas/Pendiente
+    (planas, pero igual filtradas por Fecha_ingreso ahí adentro). Se
+    recorre listar_meses_disponibles() (de Historial/, más que nada) + el
+    mes actual (por si una OP activa recién creada todavía no aparece en
+    ningún mes de Historial/), sin abrir un mismo número dos veces."""
+    meses = set(listar_meses_disponibles())
+    hoy = datetime.now()
+    meses.add((hoy.year, hoy.month))
+
+    vistos: set = set()
+    todas: list[dict] = []
+    for anio, mes in meses:
+        for datos, _origen in listar_ops_del_mes(anio, mes):
+            numero = datos.get("Cotizacion")
+            if numero in vistos:
+                continue
+            vistos.add(numero)
+            todas.append(datos)
+    return todas

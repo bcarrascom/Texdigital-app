@@ -8,8 +8,6 @@ import atexit
 import subprocess
 from pathlib import Path
 
-from ui.interfaz import VentanaPrincipal
-
 # ID de la ventana de Terminal que abrió la app (se guarda al inicio).
 _terminal_win_id = None
 
@@ -85,12 +83,6 @@ def _cerrar_terminal_mac():
         pass
 
 
-def _iniciar_app_escritorio():
-    _recordar_y_ocultar_terminal()
-    app = VentanaPrincipal()
-    app.mainloop()
-
-
 def _desbloquear_instalacion():
     """
     Confirmado a mano (v1.4.0-beta.1): los releases se distribuyen como
@@ -119,33 +111,83 @@ def _desbloquear_instalacion():
                 pass
 
 
+def _silenciar_ruido_navegacion():
+    """
+    Filtra del log un efecto colateral inofensivo de tener una sola
+    ventana persistente que navega con load_url() (ver ui/api_app.py):
+    cada TD.api.xxx() llamado desde JS se procesa en un hilo de fondo de
+    pywebview que, al terminar, siempre intenta devolver el resultado a un
+    callback registrado en la página que hizo la llamada
+    (window.pywebview._returnValuesCallbacks, ver webview/util.py::
+    js_bridge_call) — sin importar si ese resultado se usa o no. Si esa
+    llamada todavía estaba en camino cuando OTRA (p.ej. una navegación)
+    reemplazó la página, el callback ya no existe y pywebview tira una
+    JavascriptException en ese hilo de fondo. No se pierde nada (la página
+    vieja ya no está, nadie seguía esperando ese resultado) pero ensucia
+    la consola en cada navegación. Cualquier otra excepción de hilo se
+    deja pasar igual que siempre — esto NO es un manejador general de
+    errores, solo descarta esta forma de ruido puntual y ya identificada.
+    """
+    import threading
+    from webview.errors import JavascriptException
+
+    anterior = threading.excepthook
+
+    def _filtro(args):
+        exc = args.exc_value
+        if isinstance(exc, JavascriptException):
+            detalle = exc.args[0] if exc.args else None
+            mensaje = detalle.get("message", "") if isinstance(detalle, dict) else str(detalle)
+            if "_returnValuesCallbacks" in mensaje and "is not a function" in mensaje:
+                return
+        anterior(args)
+
+    threading.excepthook = _filtro
+
+
+def _iniciar_app():
+    """
+    Crea las ventanas iniciales (la ventana única de la app — menú + las
+    4 pantallas a las que se navega desde ahí, ver ui.api_app.ApiApp — más
+    la oculta del panel de producción, ver
+    ui.panel_produccion.preparar_panel_oculto) y arranca el loop de
+    pywebview en el hilo principal — sin `func`, ya no hay ningún otro
+    toolkit (Tkinter) que arrancar en un hilo aparte. Bloquea hasta que se
+    cierra la app entera (ver ui.panel_produccion.salir_app) — debe ser lo
+    último que haga main().
+
+    Igual en las 3 plataformas: ya no hace falta relanzar el proceso para
+    abrir una pantalla (ver ui.api_app — antes, en macOS, cada pantalla se
+    abría como proceso aparte; con una sola ventana persistente que solo
+    navega vía load_url(), esa restricción de Cocoa/AppKit no aplica más,
+    ver el docstring de ui/api_app.py). El panel de producción SÍ sigue
+    necesitando su propio manejo por plataforma (es una segunda ventana
+    concurrente de verdad, no una navegación de la principal) — ver
+    ui/panel_produccion.py.
+    """
+    _recordar_y_ocultar_terminal()
+    _silenciar_ruido_navegacion()
+
+    import webview
+    from ui.panel_produccion import preparar_panel_oculto
+    from ui.api_app import ApiApp
+
+    preparar_panel_oculto()
+    ApiApp().crear_ventana()
+    webview.start()
+
+
 def main():
     _desbloquear_instalacion()
 
     if "--panel-produccion" in sys.argv:
         # Proceso hijo lanzado por mostrar_panel_mac() — SOLO en macOS.
-        # Este proceso completo es el panel de producción, nada de
-        # Tkinter acá (ver el docstring de ui/panel_produccion.py sobre
-        # por qué macOS necesita esto en un proceso aparte).
         from ui.panel_produccion import ejecutar_panel_standalone
         ejecutar_panel_standalone()
         return
 
     atexit.register(_cerrar_terminal_mac)
-
-    if sys.platform == "darwin":
-        # macOS: Tkinter (Cocoa) y pywebview exigen CADA UNO el hilo
-        # principal real del proceso - no se puede repartir como en
-        # Windows/Linux. Acá la app de escritorio corre directo en este
-        # hilo; el panel de producción se abre como proceso aparte (ver
-        # ui/panel_produccion.py) cuando se aprieta "Revisar OPs".
-        _iniciar_app_escritorio()
-    else:
-        # Windows/Linux: pywebview necesita el hilo principal del proceso;
-        # la app de escritorio Tkinter corre en el hilo secundario que
-        # iniciar_panel() arranca por nosotros. Ver ui/panel_produccion.py.
-        from ui.panel_produccion import iniciar_panel
-        iniciar_panel(_iniciar_app_escritorio)
+    _iniciar_app()
 
 
 if __name__ == "__main__":

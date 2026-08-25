@@ -103,6 +103,37 @@ def siguiente_numero() -> int:
     return max(numeros) + 1 if numeros else 1000
 
 
+def listar_cotizaciones() -> list[dict]:
+    """Lista todas las cotizaciones activas (JSON/, con sus subcarpetas
+    AAAA/MM) — {numero, empresa, fecha} por cada una, más nuevas primero.
+    No incluye las de Historial/ (esas son las que ya se aprobaron a OP) ni
+    los "pendientes" (cotizaciones a medio hacer — ver
+    core.repositorio_pendientes.listar_pendientes, un concepto aparte).
+
+    Antes esta misma lectura (rglob sobre carpeta_json(), leyendo cada JSON
+    para sacarle Cotizacion/Empresa/Fecha) vivía duplicada dentro de
+    ui/revisar_cotizaciones.py — queda acá para que cualquier pantalla
+    (Tkinter o la que reemplace al menú) pueda listar sin reinventar el
+    escaneo."""
+    entradas = []
+    for archivo in sorted(carpeta_json().rglob("*.json")):
+        try:
+            datos = json.loads(archivo.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        try:
+            numero = int(datos.get("Cotizacion", archivo.stem))
+        except (TypeError, ValueError):
+            continue
+        entradas.append({
+            "numero":  numero,
+            "empresa": datos.get("Empresa", "—"),
+            "fecha":   datos.get("Fecha", "—"),
+        })
+    entradas.sort(key=lambda e: e["numero"], reverse=True)
+    return entradas
+
+
 def cargar_cotizacion(numero: int) -> dict | None:
     """Lee el JSON de una cotización guardada por número, o None si no existe."""
     ruta = cm.buscar(carpeta_json(), numero)

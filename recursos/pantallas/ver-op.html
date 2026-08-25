@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="ver-op" data-tema="ops">
+<head>
+<meta charset="utf-8">
+<title>OP · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ver una OP — abrir_op(numero)
+
+   Estructuralmente igual a ver-cotizacion.html (mismos dos paneles, mismas
+   tarjetas de producto): es la MISMA cotización aprobada, mirada desde el
+   lado de producción en vez del lado comercial. Por eso no lleva plata en
+   ningún lado —ni conceptos, ni total por producto, ni desglose de IVA—: acá
+   lo que importa es qué se produce, cuánto, y cuándo entra y sale.
+
+     · izquierda, scrollea: la hoja con los datos + las tarjetas de producto.
+     · derecha, fija: la figura del producto —que va ciclando, igual que en
+       la cotización— y los datos de logística (despacho, dirección,
+       instalación) en vez del desglose de plata.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista {
+  /* Mismo 93% que ver-cotizacion.html: son la misma pantalla en espíritu, y
+     tienen que sentirse del mismo tamaño una al lado de la otra. */
+  zoom: .93;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+  gap: var(--e-4);
+  width: min(100%, 82rem); margin-inline: auto;
+  align-items: start;
+}
+.vista__izq { display: grid; gap: var(--e-4); min-width: 0; }
+.vista__der { align-self: stretch; min-width: 0; }
+
+/* ── La tarjeta lateral: acompaña el scroll ─────────────────────────────── */
+.lateral {
+  position: sticky; top: 0;
+  display: grid; gap: var(--e-4);
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+
+/* Módulo 1 · la figura del producto (misma que en la cotización: es
+   proporción, no plata, así que no hay nada que sacarle acá) */
+.visor {
+  --m-visor: calc(var(--m-media) * 3);
+  --m-visor-rapida: calc(var(--m-rapida) * 2);
+  display: grid; gap: var(--e-2);
+}
+.visor__cab {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); font-weight: var(--peso-fuerte);
+  color: var(--c-tema-tinta);
+  min-height: 1.5rem;
+}
+.visor__n { font-family: var(--f-mono); color: var(--c-tema-fuerte); }
+.visor__tema {
+  font-weight: var(--peso-medio); color: var(--c-texto-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.visor__marco {
+  width: 100%; aspect-ratio: 1;
+  display: grid; place-items: center;
+  padding: var(--e-3);
+  background: #F2F1EF;
+  border-radius: var(--r-lg);
+}
+.visor__marco svg { width: 100%; height: 100%; overflow: visible; }
+.visor__rect {
+  fill: none; stroke: #FFFFFF; stroke-width: 2.5;
+  /* Las 3 últimas funciones empiezan "apagadas" (radio 0, alfa 0) — no
+     hacen nada acá, existen solo para que .visor__rect--brillo pueda
+     interpolar contra ellas: una lista de filtros solo anima función a
+     función cuando ambos lados tienen la MISMA cantidad de funciones en
+     el mismo orden; con listas de distinto largo el navegador no anima,
+     salta de golpe (eso pasaba antes: 1 drop-shadow acá vs. 3 en
+     --brillo). */
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18))
+          drop-shadow(0 0 0 rgba(20,20,24,0))
+          drop-shadow(0 0 0 rgba(255,255,255,0))
+          drop-shadow(0 0 0 rgba(255,255,255,0));
+  transition: x var(--m-visor) ease-in-out,
+              y var(--m-visor) ease-in-out,
+              width var(--m-visor) ease-in-out,
+              height var(--m-visor) ease-in-out,
+              stroke-width var(--m-visor) ease-in-out,
+              filter var(--m-visor) ease-in-out;
+}
+/* Brillo blanco controlado SOBRE el borde mientras la figura se reacomoda
+   de un producto a otro: el fondo del visor (#F2F1EF) es casi blanco, así
+   que un brillo blanco sin más se perdía contra el fondo (primer intento,
+   invisible) — el halo oscuro angosto de abajo le da el contraste que le
+   faltaba, y el trazo engrosa un poco, como si el borde mismo brillara en
+   vez de una nube difusa alrededor. No es un estado permanente: se
+   prende y apaga junto con el morph (misma duración/curva, --m-visor),
+   nunca se queda encendido en reposo. */
+.visor__rect--brillo {
+  stroke-width: 4;
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18))
+          drop-shadow(0 0 3px rgba(20,20,24,.45))
+          drop-shadow(0 0 6px #FFFFFF)
+          drop-shadow(0 0 16px #FFFFFF);
+}
+.visor__cota {
+  font-family: var(--f-mono); font-size: 7px; fill: var(--c-texto-suave);
+}
+.visor__pie {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.visor__unidades { font-family: var(--f-mono); color: var(--c-texto); font-weight: var(--peso-medio); }
+.visor__puntos { display: flex; gap: 4px; align-items: center; }
+.visor__punto {
+  width: 5px; height: 5px; border-radius: var(--r-full);
+  background: var(--c-borde-fuerte);
+  transition: background var(--m-visor-rapida) var(--ease-salida),
+              transform var(--m-visor-rapida) var(--ease-salida);
+}
+.visor__punto[data-activo] { background: var(--c-tema-fuerte); transform: scale(1.5); }
+
+/* Módulo 2 · logística: reemplaza al desglose de plata de la cotización.
+   Mismo componente .dato que ya usa la hoja de la izquierda — es la misma
+   idea (etiqueta chica arriba, valor abajo), no hace falta un tercer patrón
+   visual solo para esto. */
+.produccion { display: grid; gap: var(--e-3); }
+
+/* ── La hoja de datos ───────────────────────────────────────────────────── */
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+/* Número de OP a la izquierda, fecha de entrega a la derecha, las dos
+   arriba del todo — por eso `align-items: start` y no el `gap` simple de
+   antes: son dos columnas, no una pila. */
+.hoja__cab { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--e-4); }
+.hoja__cab-izq { display: grid; gap: var(--e-1); min-width: 0; }
+.hoja__num {
+  font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+}
+.hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+.hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+/* Fecha de entrega: mismo tamaño y peso que el número de OP, a la misma
+   altura pero a la derecha — es el dato que más importa de la pantalla, no
+   compite por atención con nada más chico. El subtítulo de abajo dice
+   cuánto falta; los cuatro colores calcan la escala del calendario del
+   panel de producción (negro → amarillo → naranjo → rojo), cada uno
+   elegido con suficiente contraste sobre el blanco de la tarjeta. */
+.entrega { display: grid; gap: 2px; justify-items: end; text-align: right; }
+.entrega__fecha {
+  font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+}
+.entrega__estado { font-size: var(--t-sm); font-weight: var(--peso-medio); white-space: nowrap; }
+.entrega__estado[data-urgencia="futuro"]   { color: var(--c-texto); }
+.entrega__estado[data-urgencia="manana"]   { color: #8A6D00; }
+.entrega__estado[data-urgencia="hoy"]      { color: #B54708; }
+.entrega__estado[data-urgencia="atrasada"] { color: var(--c-error); }
+
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+.dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.dato--ancho { grid-column: 1 / -1; }
+.dato__et {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+.dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Materiales: cuánto de qué lleva el trabajo, sumado entre todos los
+   productos. Tres columnas fijas —Textiles, Materiales de caja,
+   Estructuras— en vez de tres bloques apilados: apiladas desperdiciaban
+   todo el ancho de la hoja para listas que casi siempre son de una o dos
+   líneas. Una columna sin nada que listar queda en blanco, no se le pasa su
+   lugar a la de al lado — así la posición de cada categoría es siempre la
+   misma, de un vistazo. */
+.materiales {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  column-gap: 0; row-gap: var(--e-4);
+  padding-top: var(--e-4); border-top: 1px solid var(--c-borde);
+}
+/* La línea separadora vive en el padding, no en un gap: así queda a mitad
+   de camino entre columnas en vez de pegada a una de las dos. */
+.materiales__grupo {
+  display: grid; gap: var(--e-1); align-content: start; min-width: 0;
+  padding-inline: var(--e-4);
+}
+.materiales__grupo:first-child { padding-left: 0; }
+.materiales__grupo:last-child { padding-right: 0; }
+.materiales__grupo:not(:first-child) { border-left: 1px solid var(--c-borde); }
+.materiales__titulo {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.materiales__fila {
+  display: flex; align-items: baseline; gap: var(--e-2); min-width: 0;
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.materiales__fila span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.materiales__fila b {
+  flex: 0 0 auto; margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@container vista (max-width: 40rem) {
+  .materiales { grid-template-columns: 1fr; }
+  .materiales__grupo { padding-inline: 0; border-left: none; }
+}
+
+/* ── Tarjetas de producto ───────────────────────────────────────────────── */
+.productos {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e-3);
+}
+@container vista (max-width: 62rem) { .productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container vista (max-width: 40rem) { .productos { grid-template-columns: 1fr; } }
+.contenido { container: vista / inline-size; min-width: 0; }
+
+@container vista (max-width: 46rem) {
+  .vista { grid-template-columns: minmax(0, 1fr); }
+  .vista__der { order: -1; }
+  .lateral { position: static; }
+  .visor__marco { width: min(100%, 16rem); margin-inline: auto; }
+}
+
+.ficha-prod {
+  display: flex; flex-direction: column; gap: var(--e-2);
+  min-width: 0;
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-1);
+  cursor: default;
+  animation: aparecer var(--m-media) var(--ease-salida) both;
+  animation-delay: calc(var(--i) * var(--m-escalon));
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.ficha-prod:hover { border-color: var(--c-tema-borde); box-shadow: var(--s-2); transform: translateY(-2px); }
+.ficha-prod[data-mirando] { border-color: var(--c-tema-fuerte); }
+
+.ficha-prod__cab { display: flex; align-items: baseline; gap: var(--e-2); min-width: 0; }
+.ficha-prod__n {
+  font-family: var(--f-mono); font-size: var(--t-md); font-weight: var(--peso-fuerte);
+  color: var(--c-tema-fuerte);
+}
+.ficha-prod__nombre {
+  font-weight: var(--peso-medio); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ficha-prod__linea {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.ficha-prod__linea b {
+  margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+}
+.ficha-prod__etiquetas { display: flex; flex-wrap: wrap; gap: var(--e-1); min-width: 0; }
+.ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.ficha-prod__tipo { align-self: flex-start; }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>OP</span>
+    <span class="cabecera__sep"></span>
+    <button class="cab-btn" data-accion="imprimir">Imprimir</button>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista" data-tras-carga hidden>
+
+      <div class="vista__izq">
+
+        <section class="hoja">
+          <div class="hoja__cab">
+            <div class="hoja__cab-izq">
+              <span class="hoja__num" data-numero>—</span>
+              <span class="hoja__nombre" data-nombre></span>
+              <span class="hoja__meta" data-meta></span>
+            </div>
+            <div class="entrega">
+              <span class="entrega__fecha" data-entrega-fecha></span>
+              <span class="entrega__estado" data-entrega-estado></span>
+            </div>
+          </div>
+
+          <div class="datos" data-datos></div>
+
+          <div class="materiales" data-materiales></div>
+        </section>
+
+        <section>
+          <h2 class="seccion-titulo" data-titulo-productos>Productos</h2>
+          <div class="productos" data-productos></div>
+        </section>
+      </div>
+
+      <aside class="vista__der">
+        <div class="lateral">
+
+          <div class="visor">
+            <div class="visor__cab">
+              <span class="visor__n" data-visor-n></span>
+              <span class="visor__tema" data-visor-tema></span>
+            </div>
+            <div class="visor__marco">
+              <svg viewBox="0 0 100 100" role="img" aria-label="Proporción del producto">
+                <rect class="visor__rect" data-rect x="20" y="15" width="60" height="70" rx="2"></rect>
+                <text class="visor__cota" data-cota-ancho x="50" y="10" text-anchor="middle"></text>
+                <text class="visor__cota" data-cota-alto x="9" y="50" text-anchor="middle"
+                      transform="rotate(-90 9 50)"></text>
+              </svg>
+            </div>
+            <div class="visor__pie">
+              <span class="visor__unidades" data-visor-unidades></span>
+              <span class="visor__puntos" data-visor-puntos></span>
+            </div>
+          </div>
+
+          <div class="produccion" data-produccion></div>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  /* Mismo ritmo de ciclo que ver-cotizacion.html. */
+  const CICLO_MS = 5200;
+  const REANUDAR_MS = 3000;
+
+  let op = null;
+  let iVisor = 0;
+  let ciclo = null;
+  let reanudar = null;
+  let brilloTimer = null;
+
+  const num = (v) => { const x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? 0 : x; };
+  const esc = (s) => String(s == null ? "" : s);
+
+  /* --m-visor está definida en .visor, no en :root — leerla desde
+     documentElement devuelve "" (custom property inexistente ahí), lo que
+     hacía que el brillo se apagara casi al instante (setTimeout con NaN). */
+  function duracion(token) {
+    const v = getComputedStyle($(".visor")).getPropertyValue(token).trim();
+    return v.endsWith("ms") ? parseFloat(v) : parseFloat(v) * 1000;
+  }
+
+  /* ── El visor de la derecha ───────────────────────────────────────────── */
+
+  function mostrar(i, animar = true) {
+    if (!op || !op.productos.length) return;
+    iVisor = ((i % op.productos.length) + op.productos.length) % op.productos.length;
+    const p = op.productos[iVisor];
+
+    $("[data-visor-n]").textContent = `${iVisor + 1}.`;
+    $("[data-visor-tema]").textContent = p.tema || p.producto || p.tela || "Sin tema";
+    const cant = parseInt(p.cantidad, 10) || 0;
+    $("[data-visor-unidades]").textContent = `${cant} ${cant === 1 ? "unidad" : "unidades"}`;
+
+    const ancho = num(p.ancho), alto = num(p.alto);
+    const rect = $("[data-rect]");
+    if (ancho > 0 && alto > 0) {
+      if (animar) {
+        clearTimeout(brilloTimer);
+        rect.classList.add("visor__rect--brillo");
+        brilloTimer = setTimeout(() => rect.classList.remove("visor__rect--brillo"), duracion("--m-visor"));
+      }
+      const largo = Math.max(ancho, alto), corto = Math.min(ancho, alto);
+      const h = 70, w = 70 * (corto / largo);
+      rect.setAttribute("width", w);
+      rect.setAttribute("height", h);
+      rect.setAttribute("x", 50 - w / 2);
+      rect.setAttribute("y", 15);
+      $("[data-cota-ancho]").textContent = `${TD.fmt.medida(corto)} m`;
+      /* Posición fija (no sigue el borde izquierdo del rectángulo, que se
+         mueve al cambiar el ancho): igual que la cota de arriba, que
+         tampoco seguía al rectángulo — evita que el número quede atrás del
+         borde mientras dura la animación de cambio de tamaño. */
+      $("[data-cota-alto]").textContent = `${TD.fmt.medida(largo)} m`;
+    }
+
+    $$("[data-visor-puntos] .visor__punto").forEach((d, k) => {
+      d.toggleAttribute("data-activo", k === iVisor);
+    });
+    $$(".ficha-prod").forEach((f, k) => f.toggleAttribute("data-mirando", k === iVisor));
+  }
+
+  function arrancarCiclo() {
+    detenerCiclo();
+    if (!op || op.productos.length < 2) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    ciclo = setInterval(() => mostrar(iVisor + 1), CICLO_MS);
+  }
+  function detenerCiclo() {
+    if (ciclo) { clearInterval(ciclo); ciclo = null; }
+    if (reanudar) { clearTimeout(reanudar); reanudar = null; }
+  }
+
+  function mirar(i) { detenerCiclo(); mostrar(i); }
+  function soltar() {
+    if (reanudar) clearTimeout(reanudar);
+    reanudar = setTimeout(arrancarCiclo, REANUDAR_MS);
+  }
+
+  /* ── Pintado ──────────────────────────────────────────────────────────── */
+
+  function dato(et, val, mono, ancho) {
+    if (!val && val !== 0) return null;
+    const d = document.createElement("div");
+    d.className = "dato" + (ancho ? " dato--ancho" : "");
+    d.innerHTML = `<span class="dato__et"></span><span class="dato__val${mono ? " dato__val--mono" : ""}"></span>`;
+    $(".dato__et", d).textContent = et;
+    $(".dato__val", d).textContent = esc(val);
+    return d;
+  }
+
+  function pintarCabecera() {
+    $("[data-numero]").textContent = String(op.numero).padStart(4, "0");
+    $("[data-nombre]").textContent = op.nombre || "";
+    $("[data-titulo]").textContent =
+      `OP ${String(op.numero).padStart(4, "0")}` + (op.empresa ? ` · ${op.empresa}` : "");
+    $("[data-meta]").textContent = op.empresa || "";
+
+    const cont = $("[data-datos]");
+    cont.textContent = "";
+    [
+      dato("Empresa", op.empresa),
+      dato("Contacto", op.contacto),
+      dato("Email", op.email),
+      dato("Fecha de ingreso", op.fecha_ingreso, true),
+      dato("Descripción", op.descripcion, false, true),
+    ].filter(Boolean).forEach((d) => cont.appendChild(d));
+  }
+
+  /* fecha_entrega llega como "DD-MM-AAAA". Cuenta días de calendario, sin
+     horas: "hoy" no puede depender de a qué hora del día se mire la
+     pantalla. */
+  function diasHasta(fechaDMA) {
+    if (!fechaDMA) return null;
+    const [d, m, a] = fechaDMA.split("-").map(Number);
+    if (!d || !m || !a) return null;
+    const entrega = new Date(a, m - 1, d);
+    const hoy = new Date();
+    const hoyLimpio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.round((entrega - hoyLimpio) / 86400000);
+  }
+
+  /* El dato que más importa de la pantalla: grande, a la altura del número
+     de OP, con el subtítulo de urgencia coloreado según cercanía — así se
+     lee de un vistazo sin tener que restar fechas. */
+  function pintarEntrega() {
+    $("[data-entrega-fecha]").textContent = op.fecha_entrega || "—";
+    const n = diasHasta(op.fecha_entrega);
+    const el = $("[data-entrega-estado]");
+    if (n == null) { el.textContent = ""; el.removeAttribute("data-urgencia"); return; }
+    let texto, urgencia;
+    if (n > 1) { texto = `Entrega en ${n} días`; urgencia = "futuro"; }
+    else if (n === 1) { texto = "Entrega mañana"; urgencia = "manana"; }
+    else if (n === 0) { texto = "Entrega hoy"; urgencia = "hoy"; }
+    else { texto = `Entrega atrasada por ${-n} ${-n === 1 ? "día" : "días"}`; urgencia = "atrasada"; }
+    el.textContent = texto;
+    el.dataset.urgencia = urgencia;
+  }
+
+  /* Todo lo que el trabajo consume, sumado entre productos — textiles,
+     materiales de caja y estructuras. Un grupo entero desaparece si ningún
+     producto aporta nada a esa categoría, en vez de mostrar un título sin
+     filas debajo. */
+  function pintarMateriales() {
+    const textiles = new Map();   // nombre → {ml, m2}
+    const cajas = new Map();      // nombre → cantidad de cajas
+    const estructuras = new Map(); // nombre → cantidad
+
+    op.productos.forEach((p) => {
+      const cant = parseInt(p.cantidad, 10) || 0;
+      const bl = p.tipo === "backlight";
+      const tela = bl ? p.tela : p.textil;
+      if (tela) {
+        const acc = textiles.get(tela) || { ml: 0, m2: 0 };
+        if (p.ml != null) acc.ml += p.ml;
+        if (p.m2 != null) acc.m2 += p.m2;
+        textiles.set(tela, acc);
+      }
+      if (bl && p.caja && p.caja !== "Sin caja") {
+        cajas.set(p.caja, (cajas.get(p.caja) || 0) + cant);
+      }
+      if (!bl) {
+        (p.estructuras || []).forEach((nombre) => {
+          estructuras.set(nombre, (estructuras.get(nombre) || 0) + cant);
+        });
+      }
+    });
+
+    const cont = $("[data-materiales]");
+    cont.textContent = "";
+    cont.hidden = !textiles.size && !cajas.size && !estructuras.size;
+
+    /* Siempre las tres columnas, en el mismo orden — una sin nada que
+       listar queda en blanco, no le cede su lugar a la de al lado. */
+    const grupo = (titulo, mapa, formatear) => {
+      const g = document.createElement("div");
+      g.className = "materiales__grupo";
+      if (mapa.size) {
+        const t = document.createElement("span");
+        t.className = "materiales__titulo";
+        t.textContent = titulo;
+        g.appendChild(t);
+        mapa.forEach((valor, nombre) => {
+          const fila = document.createElement("div");
+          fila.className = "materiales__fila";
+          fila.innerHTML = `<span></span><b></b>`;
+          fila.firstElementChild.textContent = nombre;
+          fila.lastElementChild.textContent = formatear(valor);
+          g.appendChild(fila);
+        });
+      }
+      cont.appendChild(g);
+    };
+
+    grupo("Textiles", textiles, (v) => {
+      const partes = [];
+      if (v.ml) partes.push(`${TD.fmt.cantidad(v.ml)} ML`);
+      if (v.m2) partes.push(`${TD.fmt.cantidad(v.m2)} M²`);
+      return partes.join(" · ") || "—";
+    });
+    /* "×N" en vez de "N cajas/unidades": la cantidad no necesita una
+       palabra al lado para leerse, y así entra sin apretar el nombre. */
+    grupo("Materiales de caja", cajas, (n) => `×${n}`);
+    grupo("Estructuras", estructuras, (n) => `×${n}`);
+  }
+
+  /* Reemplaza al desglose de plata: acá van los datos de logística, no
+     montos. Despacho e instalación no aparecen si el trabajo no los lleva
+     — no tiene nada que decir ahí, así que no dice nada, en vez de un "No
+     incluye" que solo sería ruido. */
+  function pintarProduccion() {
+    const cont = $("[data-produccion]");
+    cont.textContent = "";
+    const linea = (et, val) => {
+      const d = document.createElement("div");
+      d.className = "dato";
+      d.innerHTML = `<span class="dato__et"></span><span class="dato__val"></span>`;
+      $(".dato__et", d).textContent = et;
+      $(".dato__val", d).textContent = val;
+      cont.appendChild(d);
+    };
+    if (op.despacho) linea("Despacho", "Incluye despacho");
+    if (op.instalacion) linea("Instalación", "Incluye instalación");
+  }
+
+  function fichaProducto(p, i) {
+    const el = document.createElement("article");
+    el.className = "ficha-prod";
+    el.style.setProperty("--i", i);
+    const bl = p.tipo === "backlight";
+    const nombre = bl ? (p.tela || "Backlight") : (p.producto || "—");
+    const cant = parseInt(p.cantidad, 10) || 0;
+
+    el.innerHTML = `
+      <div class="ficha-prod__cab">
+        <span class="ficha-prod__n"></span>
+        <span class="ficha-prod__nombre"></span>
+      </div>
+      <span class="etiqueta ficha-prod__tipo ${bl ? "etiqueta--neutra" : "etiqueta--tema"}"></span>
+      <div class="ficha-prod__linea"><span>Medidas</span><b></b></div>
+      <div class="ficha-prod__linea"><span>Cantidad</span><b></b></div>
+      <div class="ficha-prod__linea"><span>Superficie</span><b></b></div>
+      <div class="ficha-prod__etiquetas"></div>`;
+
+    $(".ficha-prod__n", el).textContent = `${i + 1}.`;
+    $(".ficha-prod__nombre", el).textContent = nombre;
+    $(".etiqueta", el).textContent = bl ? "Backlight" : "Estándar";
+    const lineas = $$(".ficha-prod__linea b", el);
+    lineas[0].textContent = `${TD.fmt.medida(num(p.ancho))} × ${TD.fmt.medida(num(p.alto))} m`;
+    lineas[1].textContent = String(cant);
+    lineas[2].textContent = p.ml != null ? `${TD.fmt.cantidad(p.ml)} ML`
+                          : p.m2 != null ? `${TD.fmt.cantidad(p.m2)} M²` : "—";
+
+    const etq = $(".ficha-prod__etiquetas", el);
+    const marca = (texto) => {
+      if (!texto) return;
+      const e = document.createElement("span");
+      e.className = "etiqueta etiqueta--neutra";
+      e.textContent = texto;
+      etq.appendChild(e);
+    };
+    if (p.tema) marca("Tema: " + p.tema);
+    if (bl) {
+      marca(p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja");
+    } else {
+      marca(p.textil || p.tela);
+      marca(p.impresion);
+      (p.estructuras || []).forEach(marca);
+      (p.terminaciones || []).forEach(marca);
+    }
+    if (p.obs) marca("Obs: " + p.obs);
+
+    el.addEventListener("mouseenter", () => mirar(i));
+    el.addEventListener("mouseleave", soltar);
+    el.addEventListener("focusin", () => mirar(i));
+    el.addEventListener("focusout", soltar);
+    return el;
+  }
+
+  function pintarProductos() {
+    const cont = $("[data-productos]");
+    cont.textContent = "";
+    op.productos.forEach((p, i) => cont.appendChild(fichaProducto(p, i)));
+    $("[data-titulo-productos]").textContent =
+      `Productos · ${op.productos.length}`;
+
+    const puntos = $("[data-visor-puntos]");
+    puntos.textContent = "";
+    op.productos.forEach(() => {
+      const d = document.createElement("span");
+      d.className = "visor__punto";
+      puntos.appendChild(d);
+    });
+  }
+
+  /* ── Acciones ─────────────────────────────────────────────────────────── */
+
+  $("[data-accion='imprimir']").addEventListener("click", () => TD.api.imprimir_op(op.numero));
+
+  /* ←/→ pasan a la OP siguiente/anterior (más nueva -> más antigua, con
+     vuelta, entre TODAS las OPs — ver ApiApp.paginar/ApiVerOp.
+     numero_adyacente). Sin flechas en pantalla a propósito: se probaron y
+     quedaban mal — se dejó solo el atajo de teclado. */
+  TD.atajo("arrowleft",  () => TD.api.paginar("anterior"));
+  TD.atajo("arrowright", () => TD.api.paginar("siguiente"));
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  TD.iniciar(async (ctx) => {
+    op = (await TD.api.obtener_op(ctx.numero)) || null;
+    if (!op) { TD.aviso("No se pudo cargar la OP.", "error", 8000); return; }
+    op.productos = op.productos || [];
+
+    pintarCabecera();
+    pintarEntrega();
+    pintarMateriales();
+    pintarProduccion();
+    pintarProductos();
+    mostrar(0, false);
+    arrancarCiclo();
+  });
+})();
+</script>
+
+</body>
+</html>

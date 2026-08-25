@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="cotizacion" data-tema="cotizaciones">
+<head>
+<meta charset="utf-8">
+<title>Nueva cotización · Sistema de Gestión</title>
+<script>
+  /* `pagereveal` dispara ANTES del primer paint de esta página — a tiempo
+     para marcar si esta llegada viene de una transición entre documentos
+     (view-transition) o de una carga normal (F5, escribir la URL). El CSS
+     usa esa marca para no correr a la vez la entrada normal de las hojas
+     (.hoja{animation:aparecer}) y la coreografía de la transición: dos
+     animaciones sobre lo mismo se pisan y se nota. */
+  window.addEventListener("pagereveal", (e) => {
+    if (e.viewTransition) document.documentElement.setAttribute("data-vt", "");
+  });
+</script>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Nueva cotización — "la pizarra"
+
+   Reemplaza SEIS pantallas Tkinter (pantalla_inicio, formulario_cliente,
+   pantalla_extras, pantalla_medidas_base, cotizacion/cotizador_backlight y
+   ventana_resumen) por una sola superficie continua por la que la vista se
+   mueve. No se abren ni se destruyen ventanas: se recorre un plano.
+
+     ┌─ zona 0 ─────────────────────────────┐
+     │  [ panel de venta ] [ panel cliente ] │   ← arriba
+     └──────────────────────────────────────┘
+     ┌─ zona 1 ─────────────────────────────┐
+     │  mapa fijo:  1  2  3  +   │  Resumen  │
+     │  ┌────────┐┌────────┐┌────────┐       │   ← abajo, se mueve de lado
+     │  │ prod 1 ││ prod 2 ││ resumen│  ...  │
+     └──────────────────────────────────────┘
+
+   Los dos movimientos son el mismo truco: un contenedor más grande que su
+   marco, corrido con translate. Vertical = --zona, horizontal = --p.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@view-transition { navigation: auto; }
+
+.pizarra {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+}
+
+/* ── Barra superior ──────────────────────────────────────────────────────── */
+.barra {
+  display: flex; align-items: center; gap: var(--e-3);
+  padding: var(--e-2) var(--e-5); height: var(--alto-cabecera);
+  color: var(--c-tema-tinta);
+}
+.barra__titulo {
+  font-size: var(--t-md); font-weight: var(--peso-fuerte);
+  letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.barra__sep { flex: 1; }
+.barra__guardado { font-size: var(--t-xs); opacity: .6; font-variant-numeric: tabular-nums; }
+
+/* ── El marco y el lienzo ────────────────────────────────────────────────── */
+/* `clip`, no `hidden`: hidden crea un contenedor scrolleable y el navegador lo
+   scrollea solo al enfocar un campo que está fuera de vista — con lo que la
+   pizarra queda corrida a mitad de camino entre dos paneles y el translate
+   deja de mandar. `clip` recorta sin poder scrollear. */
+.escena { overflow: clip; }
+.lienzo {
+  display: grid;
+  grid-template-rows: repeat(2, 100%);   /* dos zonas, cada una del alto del marco */
+  height: 100%;
+  transform: translateY(calc(var(--zona, 0) * -100%));
+  transition: transform var(--m-bajada) var(--ease-expandir);
+}
+.zona { min-height: 0; display: grid; }
+
+/* ── Zona 0 · venta + cliente ────────────────────────────────────────────── */
+.datos {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--e-4);
+  padding: 0 var(--e-5) var(--e-4);
+}
+.datos__paneles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: var(--e-4);
+  width: min(100%, 78rem); margin-inline: auto;
+  min-height: 0;
+}
+/* La izquierda son dos hojas apiladas: el trabajo y el documento. Con
+   subgrid, sus dos filas quedan compartidas con la columna derecha, así
+   "Documento" y "Contacto" arrancan a la misma altura. */
+.columna {
+  display: grid; grid-template-rows: subgrid; grid-row: span 2;
+  gap: var(--e-4); align-content: start; min-height: 0;
+}
+/* La derecha es una sola hoja: Empresa ocupa la primera fila del subgrid,
+   Contacto la segunda — mismo truco sin partir la hoja en dos.
+   `start`, no `center`: lo que tiene que calzar es la línea de arriba de cada
+   grupo (título, etiqueta, campo), no el centro del bloque. Si a la celda le
+   sobra alto, que sobre abajo. */
+.hoja--cliente {
+  display: grid; grid-template-rows: subgrid; grid-row: span 2;
+}
+.hoja--cliente > .grupo { align-content: start; }
+/* La fila de abajo de la izquierda es una tarjeta con su propio padding y
+   borde; la de la derecha es un grupo dentro de la misma tarjeta. El grupo de
+   abajo compensa esa diferencia para que "Documento" y "Contacto" arranquen a
+   la misma altura, igual que "Trabajo" y "Empresa" arriba. */
+.hoja--cliente > .grupo + .grupo { padding-top: calc(var(--e-4) + 1.5px); }
+@container pizarra (max-width: 58rem) {
+  .columna, .hoja--cliente { grid-template-rows: none; grid-row: auto; }
+}
+
+/* ── La fila de cantidad + servicios ──────────────────────────────────────
+   UNA sola rejilla de 3 columnas × 2 filas, no tres columnas cada una con su
+   propio apilado: así la fila de arriba (etiqueta y casillas) y la de abajo
+   (stepper y montos) son filas de verdad y quedan alineadas entre sí, y con
+   las del panel de la derecha. */
+.fila-trabajo {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 9rem) 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: var(--e-2) var(--e-4);
+  align-items: end;
+}
+.campo--angosto .stepper__btn, .fila-trabajo .stepper__btn { width: 2.25rem; }
+/* La casilla tiene que medir lo mismo que una etiqueta de campo, si no la
+   primera fila crece y los campos de abajo dejan de calzar con la derecha. */
+.fila-trabajo .chip-casilla input { width: 1.25rem; height: 1.25rem; }
+.fila-trabajo .chip-casilla__texto { line-height: 1.2; }
+/* Los montos se ocultan con visibility, no con display: así la fila conserva
+   su alto y nada salta al marcar o desmarcar. */
+.fila-trabajo__monto {
+  visibility: hidden; opacity: 0;
+  transition: opacity var(--m-media) var(--ease-salida);
+}
+.fila-trabajo:has(#despacho:checked)   [data-monto="despacho"],
+.fila-trabajo:has(#instalacion:checked) [data-monto="instalacion"] {
+  visibility: visible; opacity: 1;
+}
+/* Un botón compartiendo fila con un campo se alinea con el input, no con la
+   etiqueta: por eso `end` y no el `stretch` por defecto. */
+.fila--accion { align-items: end; }
+/* En ventanas angostas los dos paneles se apilan y la zona scrollea. */
+@container pizarra (max-width: 58rem) {
+  .datos__paneles { grid-template-columns: 1fr; }
+}
+.escena { container: pizarra / inline-size; }
+
+.hoja {
+  display: grid; align-content: start; gap: var(--e-3);
+  /* Apretado a propósito: con tres hojas en pantalla, el aire de más era lo
+     único que obligaba a scrollear en 768 px de alto. */
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+  overflow: auto; min-height: 0;
+  animation: aparecer var(--m-lenta) var(--ease-salida) both;
+}
+.hoja--venta   { animation-delay: 60ms; }
+.hoja--doc     { animation-delay: 110ms; }
+.hoja--cliente { animation-delay: 160ms; }
+
+/* ── Transición entre documentos: llegando desde menu.html ─────────────────
+   "Trabajo" lleva el mismo nombre que el botón de Nueva cotización en el
+   menú: el navegador la anima como una transformación de tamaño y
+   posición, no como una aparición nueva — por eso acá no le tocamos su
+   animación, ya viene puesta desde el otro lado.
+   Documento y Empresa no tienen con qué morphear (no existían en la
+   página de origen): entran con su propia animación, un poco más tarde y
+   desde más abajo, como si se hubieran desprendido del mismo botón. Los
+   cuatro controles de la barra bajan desde arriba, en cadena. */
+.hoja--venta   { view-transition-name: nc-morph; }
+.hoja--doc     { view-transition-name: nc-doc; }
+.hoja--cliente { view-transition-name: nc-cliente; }
+.barra__titulo               { view-transition-name: nc-titulo; }
+[data-accion="guardar-progreso"] { view-transition-name: nc-guardar; }
+.ctrl-texto                  { view-transition-name: nc-escala; }
+[data-accion="manual"]       { view-transition-name: nc-manual; }
+
+/* Con la transición activa, la entrada normal de las tres hojas se apaga:
+   la coreografía de acá abajo la reemplaza — sin esto, las dos animaciones
+   corren juntas y se pisan. */
+html[data-vt] .hoja--venta,
+html[data-vt] .hoja--doc,
+html[data-vt] .hoja--cliente { animation: none; }
+
+@keyframes nc-desprender {
+  from { opacity: 0; transform: translateY(14px) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes nc-bajar {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+::view-transition-new(nc-doc)     { animation: 420ms var(--ease-salida) 90ms  both nc-desprender; }
+::view-transition-new(nc-cliente) { animation: 420ms var(--ease-salida) 150ms both nc-desprender; }
+::view-transition-new(nc-titulo)  { animation: 340ms var(--ease-salida) 0ms   both nc-bajar; }
+::view-transition-new(nc-guardar) { animation: 340ms var(--ease-salida) 40ms  both nc-bajar; }
+::view-transition-new(nc-escala)  { animation: 340ms var(--ease-salida) 80ms  both nc-bajar; }
+::view-transition-new(nc-manual)  { animation: 340ms var(--ease-salida) 120ms both nc-bajar; }
+
+/* La bajada: las hojas de ARRIBA se van hacia arriba y dejan ver lo de abajo.
+   Ojo con el alcance: los paneles de producto también usan .hoja, así que la
+   regla tiene que quedar atada a .datos o se apaga media pizarra. */
+.datos .hoja { transition: opacity var(--m-media) var(--ease-entrada),
+                           transform var(--m-bajada) var(--ease-expandir); }
+.pizarra[data-zona="1"] .datos .hoja { opacity: 0; transform: translateY(-2rem); }
+
+.hoja__cab { display: grid; gap: var(--e-1); }
+.hoja__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.hoja__bajada { font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+.grupo { display: grid; gap: var(--e-3); }
+/* Estándar y backlight son grupos hermanos que se alternan con [hidden]:
+   el selector de adyacencia no sabe de eso, así que sin :not([hidden]) el
+   grupo visible hereda el borde aunque su "anterior" esté oculto. */
+.grupo:not([hidden]) + .grupo:not([hidden]) { padding-top: var(--e-2); border-top: 1px solid var(--c-borde); }
+.grupo__titulo {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+.fila--2 { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+
+.pie-datos {
+  display: flex; align-items: center; gap: var(--e-3);
+  width: min(100%, 78rem); margin-inline: auto;
+}
+.pie-datos__nota { flex: 1; font-size: var(--t-xs); color: var(--c-texto-suave); }
+
+/* ── Zona 1 · productos ──────────────────────────────────────────────────── */
+.productos { grid-template-rows: auto minmax(0, 1fr); gap: var(--e-3); padding-bottom: var(--e-4); }
+
+/* El mapa NO se mueve al cambiar de panel: es el índice del trabajo. */
+.mapa {
+  display: flex; align-items: center; gap: var(--e-2);
+  /* Los botones se levantan 2 px en hover y la escena recorta: sin este
+     respiro, el borde de arriba queda cortado contra la barra. */
+  padding: var(--e-2) var(--e-5) 0;
+  width: min(100%, 78rem); margin-inline: auto;
+  overflow-x: auto;
+}
+.mapa__num {
+  flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  border: 1.5px solid var(--c-tema-borde);
+  border-radius: var(--r-md);
+  background: var(--c-superficie);
+  font-family: var(--f-mono); font-size: var(--t-sm); font-weight: var(--peso-medio);
+  color: var(--c-texto-suave); cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.mapa__num:hover { transform: translateY(-2px); border-color: var(--c-tema-fuerte); }
+/* Completo: relleno suave. Actual: pleno. El resto, vacío. */
+.mapa__num[data-estado="completo"] { background: var(--c-tema-relleno); color: var(--c-tema-fuerte); border-color: var(--c-tema-borde); }
+.mapa__num[aria-current="true"] { background: var(--c-tema-fuerte); border-color: var(--c-tema-fuerte); color: var(--c-texto-inv); }
+.mapa__num--mas { border-style: dashed; font-size: var(--t-md); }
+.mapa__sep { flex: 0 0 auto; width: 1px; height: 1.5rem; background: var(--c-tema-borde); margin: 0 var(--e-2); }
+.mapa__resumen { flex: 0 0 auto; width: auto; padding: 0 var(--e-4); font-family: var(--f-ui); }
+.mapa__cuenta { margin-left: auto; padding-left: var(--e-4); font-size: var(--t-xs); color: var(--c-texto-suave); white-space: nowrap; }
+
+.carril-marco { overflow: clip; min-height: 0; }
+.carril {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100%;
+  height: 100%;
+  transform: translateX(calc(var(--p, 0) * -100%));
+  transition: transform var(--m-lateral) var(--ease-expandir);
+}
+/* El ancho máximo y el centrado viven acá, no en .prod: .prod tiene zoom, y
+   un porcentaje calculado dentro de un elemento con zoom se resuelve en un
+   espacio de coordenadas distinto al de afuera — el mismo 78rem deja de
+   coincidir con lo que .mapa (sin zoom, misma fórmula) calcula como 100%,
+   y el badge "1" y el panel terminan con bordes izquierdos distintos según
+   el ancho de ventana. Puesto acá, antes del zoom, ambos quedan en el mismo
+   sistema de referencia y se alinean siempre. */
+.tablero {
+  min-height: 0; overflow: auto; padding: var(--e-1) var(--e-5) 0;
+  width: min(100%, 78rem); margin-inline: auto;
+}
+
+/* Producto, Textil y el switch de impresión comparten fila. El switch va
+   pegado abajo, a la altura de los inputs, sin etiqueta — igual que el de
+   Estándar/Backlight de la cabecera. */
+.fila-prod {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--e-3);
+}
+.fila-prod .segmento label { padding: .35rem var(--e-3); }
+/* El switch no lleva etiqueta visible, pero sí una del alto de una etiqueta:
+   así cae solo a la altura de los inputs de al lado, sin números mágicos. La
+   segunda fila mide lo mismo que un input (3rem) y el switch se centra ahí. */
+.campo--switch { grid-template-rows: auto 3rem; align-items: center; }
+/* El switch vertical apilado mide más que la fila de 3rem, pero esa fila de
+   3rem es justo la altura de los selects vecinos (Luces 1, Luces 2): en vez
+   de agrandar la fila (lo que lo baja y empuja lo que viene después), se
+   deja la misma referencia de 3rem y con align-items:center el switch
+   sobresale parejo arriba y abajo — su propio centro cae en el centro de
+   esa franja, que es el de los selects. */
+.caja-bl { display: grid; gap: var(--e-3); }
+
+/* Las dos listas aditivas, una al lado de la otra: cada una lista lo agregado
+   hacia abajo, y juntas ocupan la mitad del alto que ocupaban apiladas. */
+.aditiva-bloque { display: grid; gap: var(--e-3); align-content: start; }
+.fila-listas { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
+
+/* ── Panel de producto ───────────────────────────────────────────────────── */
+/* Todo el panel —formulario y columna derecha— al 90 %. `zoom` escala también
+   las tipografías y los espaciados, que es justo lo que se pidió; con un
+   `transform: scale` el layout seguiría reservando el tamaño original. */
+.prod {
+  zoom: .9;
+  display: grid; gap: var(--e-4);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+}
+.prod__cab { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; }
+.prod__num {
+  font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em;
+  color: var(--c-tema-tinta);
+}
+.prod__num small { font-size: var(--t-sm); font-weight: var(--peso-normal); color: var(--c-texto-suave); }
+.prod__cab .barra__sep { flex: 1; }
+
+.prod__cuerpo {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
+  gap: var(--e-4); align-items: start; min-height: 0;
+}
+@container pizarra (max-width: 58rem) {
+  .prod__cuerpo { grid-template-columns: 1fr; }
+}
+
+/* ── La figura: reemplaza el Canvas de Tkinter ───────────────────────────── */
+.figura {
+  display: grid; gap: var(--e-3); justify-items: center;
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  position: sticky; top: 0;
+}
+/* El dibujo vive en un marco cuadrado gris muy pálido; la pieza en sí es solo
+   un contorno blanco con sombra, sin relleno. */
+.figura__marco {
+  width: 100%; aspect-ratio: 1;
+  display: grid; place-items: center;
+  padding: var(--e-3);
+  background: #F2F1EF;
+  border-radius: var(--r-lg);
+}
+.figura svg { width: 100%; height: 100%; overflow: visible; }
+.figura__rect {
+  fill: none;
+  stroke: #FFFFFF; stroke-width: 2.5;
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18));
+  /* x/y/width/height son propiedades CSS animables en SVG2: el rectángulo se
+     reacomoda con una transición al cambiar las medidas, en vez de saltar. */
+  transition: x var(--m-media) var(--ease-salida),
+              y var(--m-media) var(--ease-salida),
+              width var(--m-media) var(--ease-salida),
+              height var(--m-media) var(--ease-salida),
+              stroke var(--m-rapida) var(--ease-salida);
+}
+.figura[data-estado="error"]   .figura__rect { stroke: var(--c-error); }
+.figura[data-estado="forzado"] .figura__rect { stroke: #E8A020; }
+.figura__cota { transition: x var(--m-media) var(--ease-salida), y var(--m-media) var(--ease-salida); }
+.figura__cota { font-family: var(--f-mono); font-size: 7px; fill: var(--c-texto-suave); }
+.figura__vacio { font-size: var(--t-sm); color: var(--c-texto-tenue); text-align: center; padding: var(--e-6) 0; }
+
+.cifras { display: grid; gap: var(--e-1); width: 100%; }
+.cifra { display: flex; align-items: baseline; gap: var(--e-2); font-size: var(--t-sm); }
+.cifra__et { color: var(--c-texto-suave); }
+.cifra__val { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.cifra--total { padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+                font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+
+/* ── Resumen ─────────────────────────────────────────────────────────────── */
+.resumen {
+  display: grid; gap: var(--e-4);
+  width: min(100%, 78rem); margin-inline: auto; align-content: start;
+}
+.resumen__cab { display: flex; align-items: flex-end; gap: var(--e-4); }
+.resumen__cab .barra__sep { flex: 1; }
+.resumen .tabla-caja { border-radius: var(--r-xl); }
+.resumen .tabla tbody tr { cursor: pointer; }
+
+/* El cierre: los totales y las acciones sobre su propia superficie. Sin esto
+   las cifras quedan flotando sobre el fondo y no se leen como el remate de
+   la tabla. */
+/* El cierre es una tarjeta del ancho de su propio contenido, no de la fila:
+   envuelve los totales y nada más. Los botones van sueltos al lado. */
+.resumen__pie { display: flex; align-items: flex-end; gap: var(--e-4); flex-wrap: wrap; }
+.resumen__pie .barra__sep { flex: 1; }
+.resumen__cierre {
+  width: fit-content; min-width: 20rem; max-width: 28rem;
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-1);
+}
+.resumen__acciones { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+.tipo-chip {
+  display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+  background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
+}
+.tipo-chip--bl { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+.quitar-fila { color: var(--c-texto-tenue); cursor: pointer; padding: 0 var(--e-2); }
+.quitar-fila:hover { color: var(--c-error); }
+
+/* ── Diálogo ─────────────────────────────────────────────────────────────── */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); backdrop-filter: blur(2px); }
+dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(--t-sm); }
+.dialogo__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+</style>
+</head>
+
+<body>
+<div class="pizarra" id="pizarra" data-zona="0" style="--zona:0">
+
+  <header class="barra">
+    <button class="cab-btn cab-btn--fantasma" data-accion="salir">← Volver</button>
+    <span class="barra__titulo" data-titulo>Nueva cotización</span>
+    <span class="barra__sep"></span>
+    <span class="barra__guardado" data-guardado></span>
+    <button class="cab-btn" data-accion="guardar-progreso" title="Ctrl + S">💾 Guardar progreso</button>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <div class="escena">
+    <div class="lienzo" id="lienzo">
+
+      <!-- ═══ ZONA 0 · venta + cliente ═══════════════════════════════════ -->
+      <section class="zona datos">
+        <div class="datos__paneles">
+
+          <div class="columna">
+
+            <article class="hoja hoja--venta">
+              <span class="grupo__titulo">Trabajo</span>
+              <div class="campo" id="campo-nombre">
+                <label class="campo__etiqueta" for="nombre" data-requerido>Nombre del trabajo</label>
+                <input class="entrada" id="nombre" type="text" autocomplete="off" autofocus>
+                <span class="campo__error">Escribí un nombre para el trabajo.</span>
+              </div>
+
+              <div class="fila-trabajo">
+                <label class="campo__etiqueta" for="cantidad" data-requerido>Productos</label>
+
+                <label class="chip-casilla chip-casilla--suelta">
+                  <input type="checkbox" id="despacho">
+                  <span class="chip-casilla__texto">Despacho</span>
+                </label>
+
+                <label class="chip-casilla chip-casilla--suelta">
+                  <input type="checkbox" id="instalacion">
+                  <span class="chip-casilla__texto">Instalación</span>
+                </label>
+
+                <div class="stepper" id="campo-cantidad">
+                  <button class="stepper__btn" type="button" data-paso="-1" aria-label="Uno menos">−</button>
+                  <input class="entrada entrada--num" id="cantidad" type="text" inputmode="numeric"
+                         autocomplete="off" value="1">
+                  <button class="stepper__btn" type="button" data-paso="1" aria-label="Uno más">+</button>
+                </div>
+
+                <input class="entrada entrada--num fila-trabajo__monto" data-monto="despacho"
+                       id="despacho-monto" type="text" inputmode="numeric" autocomplete="off"
+                       placeholder="$0" aria-label="Valor del despacho">
+
+                <input class="entrada entrada--num fila-trabajo__monto" data-monto="instalacion"
+                       id="instalacion-monto" type="text" inputmode="numeric" autocomplete="off"
+                       placeholder="$0" aria-label="Valor de la instalación">
+              </div>
+            </article>
+
+            <article class="hoja hoja--doc">
+              <span class="grupo__titulo">Documento</span>
+              <div class="fila fila--2">
+                <div class="campo" id="campo-numero">
+                  <label class="campo__etiqueta" for="numero" data-requerido>N° cotización</label>
+                  <input class="entrada entrada--num" id="numero" type="text" inputmode="numeric"
+                         maxlength="4" autocomplete="off">
+                  <span class="campo__error">Tienen que ser 4 dígitos.</span>
+                </div>
+                <div class="campo">
+                  <label class="campo__etiqueta" for="fecha">Fecha</label>
+                  <input class="entrada" id="fecha" type="date">
+                </div>
+              </div>
+              <div class="fila fila--2">
+                <div class="campo">
+                  <label class="campo__etiqueta" for="condicion">Condición de pago</label>
+                  <input class="entrada" id="condicion" type="text" autocomplete="off">
+                </div>
+                <div class="campo">
+                  <label class="campo__etiqueta" for="descripcion">Descripción</label>
+                  <input class="entrada" id="descripcion" type="text" autocomplete="off">
+                </div>
+              </div>
+            </article>
+
+          </div>
+
+          <article class="hoja hoja--cliente">
+
+            <div class="grupo">
+              <span class="grupo__titulo">Empresa</span>
+              <div class="fila fila--2">
+                <div class="campo">
+                  <label class="campo__etiqueta" for="empresa" data-requerido>Empresa</label>
+                  <input class="entrada" id="empresa" type="text" list="lista-empresas" autocomplete="off">
+                  <datalist id="lista-empresas"></datalist>
+                </div>
+                <div class="campo">
+                  <label class="campo__etiqueta" for="rut">RUT</label>
+                  <input class="entrada" id="rut" type="text" autocomplete="off" placeholder="12.345.678-9">
+                </div>
+              </div>
+              <div class="fila fila--2 fila--accion">
+                <div class="campo">
+                  <label class="campo__etiqueta" for="razon">Razón social</label>
+                  <input class="entrada" id="razon" type="text" autocomplete="off">
+                </div>
+                <button class="btn btn--secundario" type="button" data-accion="guardar-cliente">Guardar datos</button>
+              </div>
+            </div>
+
+            <div class="grupo">
+              <span class="grupo__titulo">Contacto</span>
+              <div class="fila fila--2">
+                <div class="campo">
+                  <label class="campo__etiqueta" for="contacto">Contacto</label>
+                  <input class="entrada" id="contacto" type="text" list="lista-contactos" autocomplete="off">
+                  <datalist id="lista-contactos"></datalist>
+                </div>
+                <div class="campo">
+                  <label class="campo__etiqueta" for="email">Email</label>
+                  <input class="entrada" id="email" type="email" autocomplete="off">
+                </div>
+              </div>
+              <div class="fila fila--2 fila--accion">
+                <div class="campo">
+                  <label class="campo__etiqueta" for="descuento">Descuento (%)</label>
+                  <input class="entrada entrada--num" id="descuento" type="text" inputmode="decimal"
+                         autocomplete="off" value="0">
+                </div>
+                <button class="btn btn--secundario" type="button" data-accion="guardar-contacto">Guardar contacto</button>
+              </div>
+            </div>
+        </div>
+
+        <div class="pie-datos">
+          <span class="pie-datos__nota" data-nota-datos></span>
+          <button class="btn btn--primario btn--grande" type="button" data-accion="bajar" disabled>
+            Cargar productos <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ═══ ZONA 1 · productos ═════════════════════════════════════════ -->
+      <section class="zona productos">
+        <nav class="mapa" data-mapa aria-label="Productos de la cotización"></nav>
+        <div class="carril-marco">
+          <div class="carril" id="carril" style="--p:0"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- Plantilla de un panel de producto ─────────────────────────────────────-->
+<template id="tpl-producto">
+  <div class="tablero">
+    <article class="prod">
+      <header class="prod__cab">
+        <span class="prod__num">Producto <b data-n></b> <small data-de></small></span>
+        <div class="segmento" role="group" aria-label="Tipo de producto">
+          <input type="radio" data-tipo="estandar"><label data-lbl="estandar">Estándar</label>
+          <input type="radio" data-tipo="backlight"><label data-lbl="backlight">Backlight</label>
+        </div>
+        <span class="barra__sep"></span>
+        <button class="cab-btn" type="button" data-accion="duplicar">Duplicar</button>
+        <button class="cab-btn" type="button" data-accion="quitar">Eliminar</button>
+      </header>
+
+      <div class="prod__cuerpo">
+        <div class="hoja">
+
+          <!-- Campos exclusivos de ESTÁNDAR -->
+          <div class="grupo" data-solo="estandar">
+            <div class="fila-prod">
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Producto</label>
+                <input class="entrada" data-c="producto" type="text" list="lista-productos" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Textil</label>
+                <input class="entrada" data-c="textil" type="text" list="lista-textiles" autocomplete="off">
+                <span class="campo__ayuda" data-anchomax></span>
+              </div>
+              <div class="campo campo--switch">
+                <span class="campo__etiqueta" aria-hidden="true">&nbsp;</span>
+                <div class="segmento" role="group" aria-label="Impresión">
+                  <input type="radio" data-imp="Cara única"><label data-lbl-imp="Cara única">Cara única</label>
+                  <input type="radio" data-imp="Tiro y retiro"><label data-lbl-imp="Tiro y retiro">Tiro y retiro</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos exclusivos de BACKLIGHT -->
+          <div class="grupo" data-solo="backlight">
+            <div class="fila fila--2">
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Tela</label>
+                <select class="entrada" data-c="tela"></select>
+                <span class="campo__ayuda" data-anchomax-bl></span>
+              </div>
+              <div class="campo">
+                <label class="campo__etiqueta">Caja / perfil</label>
+                <select class="entrada" data-c="perfil"></select>
+              </div>
+            </div>
+            <div class="caja-bl" data-caja hidden>
+              <div class="fila-prod">
+                <div class="campo">
+                  <label class="campo__etiqueta">Luces 1</label>
+                  <select class="entrada" data-c="luces_1"></select>
+                </div>
+                <div class="campo">
+                  <label class="campo__etiqueta">Luces 2</label>
+                  <select class="entrada" data-c="luces_2"></select>
+                </div>
+                <div class="campo campo--switch">
+                  <span class="campo__etiqueta" aria-hidden="true">&nbsp;</span>
+                  <div class="segmento segmento--vertical" role="group" aria-label="Terminaciones de caja">
+                    <input type="radio" data-tc="CAJA TERMINADA"><label data-lbl-tc="CAJA TERMINADA">Caja terminada</label>
+                    <input type="radio" data-tc="AREA VISUAL"><label data-lbl-tc="AREA VISUAL">Área visual</label>
+                  </div>
+                </div>
+              </div>
+              <div class="fila fila--2">
+                <div class="campo" data-malla="1" hidden>
+                  <label class="campo__etiqueta">Cant. por caja · Luces 1 (Malla 12v)</label>
+                  <input class="entrada entrada--num" data-c="malla_1" type="text" inputmode="decimal">
+                </div>
+                <div class="campo" data-malla="2" hidden>
+                  <label class="campo__etiqueta">Cant. por caja · Luces 2 (Malla 12v)</label>
+                  <input class="entrada entrada--num" data-c="malla_2" type="text" inputmode="decimal">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Medidas: comunes a los dos tipos -->
+          <div class="grupo">
+            <div class="fila">
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Ancho (m)</label>
+                <input class="entrada entrada--num" data-c="ancho" type="text" inputmode="decimal" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Alto (m)</label>
+                <input class="entrada entrada--num" data-c="alto" type="text" inputmode="decimal" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label class="campo__etiqueta" data-requerido>Cantidad</label>
+                <input class="entrada entrada--num" data-c="cantidad" type="text" inputmode="numeric" autocomplete="off" value="1">
+              </div>
+            </div>
+            <div class="fila fila--2">
+              <div class="campo">
+                <label class="campo__etiqueta">Tema</label>
+                <input class="entrada" data-c="tema" type="text" autocomplete="off">
+              </div>
+              <div class="campo">
+                <label class="campo__etiqueta">Observaciones</label>
+                <input class="entrada" data-c="obs" type="text" autocomplete="off">
+              </div>
+            </div>
+            <div class="aviso aviso--error" data-error hidden></div>
+            <label class="chip-casilla" data-forzar-caja hidden>
+              <input type="checkbox" data-c="forzar">
+              <span class="chip-casilla__texto">Forzar igual</span>
+            </label>
+          </div>
+
+          <!-- Estructuras y terminaciones: solo estándar, lado a lado -->
+          <div class="grupo fila-listas" data-solo="estandar">
+            <div class="aditiva-bloque">
+              <span class="grupo__titulo">Estructuras</span>
+              <div class="aditiva" data-aditiva="estructuras">
+                <div class="aditiva__alta">
+                  <input class="entrada" type="text" list="lista-estructuras" autocomplete="off">
+                  <button class="btn btn--secundario" type="button">+</button>
+                </div>
+                <div class="aditiva__items"></div>
+              </div>
+            </div>
+            <div class="aditiva-bloque">
+              <span class="grupo__titulo">Terminaciones</span>
+              <div class="aditiva" data-aditiva="terminaciones">
+                <div class="aditiva__alta">
+                  <input class="entrada" type="text" list="lista-terminaciones" autocomplete="off">
+                  <button class="btn btn--secundario" type="button">+</button>
+                </div>
+                <div class="aditiva__items"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna derecha: proporción + cifras -->
+        <aside class="figura" data-figura>
+          <div class="figura__marco" data-marco>
+            <svg viewBox="0 0 100 100" role="img" aria-label="Proporción del paño impreso">
+              <rect class="figura__rect" data-rect x="20" y="15" width="60" height="70" rx="2"></rect>
+              <text class="figura__cota" data-cota-ancho x="50" y="10" text-anchor="middle"></text>
+              <text class="figura__cota" data-cota-alto x="14" y="50" text-anchor="middle"
+                    transform="rotate(-90 14 50)"></text>
+            </svg>
+          </div>
+          <p class="figura__vacio" data-figura-vacio>Ingresá las medidas para ver la proporción.</p>
+          <div class="cifras" data-cifras></div>
+        </aside>
+      </div>
+    </article>
+  </div>
+</template>
+
+<!-- Catálogos compartidos por todos los paneles -->
+<datalist id="lista-productos"></datalist>
+<datalist id="lista-textiles"></datalist>
+<datalist id="lista-estructuras"></datalist>
+<datalist id="lista-terminaciones"></datalist>
+
+<dialog id="dlg">
+  <h2 class="hoja__titulo" data-dlg-titulo></h2>
+  <p data-dlg-texto></p>
+  <div class="dialogo__acciones">
+    <button class="btn btn--fantasma" value="no" data-dlg-no>Cancelar</button>
+    <button class="btn btn--peligro" value="si" data-dlg-si>Eliminar</button>
+  </div>
+</dialog>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const pizarra = $("#pizarra");
+  const carril  = $("#carril");
+  const tpl     = $("#tpl-producto");
+
+  let CAT = {};                 // catálogos, los manda Python
+  let guardando = false;
+
+  /* ── Estado ───────────────────────────────────────────────────────────────
+     Un solo objeto. Es exactamente lo que se manda a Python en
+     guardar_progreso / guardar_cotizacion: si algo no está acá, no se guarda. */
+  const estado = {
+    id: null,
+    nombre_trabajo: "",
+    despacho: null,             // null = no lleva; número = monto
+    instalacion: null,
+    cliente: {
+      empresa: "", rut: "", razon_social: "",
+      contacto: "", email: "", descuento: "0", condicion: "",
+      fecha: "", numero: "", descripcion: "",
+    },
+    productos: [],
+    actual: 0,                  // índice de producto, o "resumen"
+  };
+
+  function productoVacio(tipo) {
+    return {
+      tipo: tipo || "estandar",
+      producto: "", textil: "", impresion: "Cara única",
+      estructuras: [], terminaciones: [],
+      tela: "", perfil: "Sin caja", luces_1: "", luces_2: "sin luces",
+      malla_1: "", malla_2: "", terminaciones_caja: "CAJA TERMINADA",
+      ancho: "", alto: "", cantidad: "1", tema: "", obs: "", forzar: false,
+      calc: null,               // lo que devuelve Python: costos, ml/m2, error…
+    };
+  }
+
+  /* Un producto está completo cuando su pantalla dejaría avanzar. Mismas
+     reglas que PantallaMedidasBase._set_btn / _actualizar_btn. */
+  function completo(p) {
+    const n = (v) => { const x = parseFloat(String(v).replace(",", ".")); return isNaN(x) ? 0 : x; };
+    const base = n(p.ancho) > 0 && n(p.alto) > 0 && parseInt(p.cantidad, 10) > 0;
+    if (!base) return false;
+    if (p.calc && p.calc.error && !p.forzar) return false;
+    return p.tipo === "backlight" ? !!p.tela
+                                  : !!p.producto.trim() && !!p.textil.trim();
+  }
+
+  /* ── Navegación ───────────────────────────────────────────────────────── */
+
+  function irAZona(z) {
+    pizarra.dataset.zona = z;
+    pizarra.style.setProperty("--zona", z);
+    if (z === 1) setTimeout(() => enfocarPanel(), 260);
+  }
+
+  function irA(destino) {
+    estado.actual = destino;
+    const i = destino === "resumen" ? estado.productos.length : destino;
+    carril.style.setProperty("--p", i);
+    pintarMapa();
+    if (destino === "resumen") pintarResumen();
+    setTimeout(() => enfocarPanel(), 120);
+  }
+
+  function enfocarPanel() {
+    const panel = carril.children[estado.actual === "resumen" ? estado.productos.length : estado.actual];
+    const primero = panel && panel.querySelector("input:not([type=radio]), select");
+    if (primero) primero.focus({ preventScroll: true });
+  }
+
+  /* ── Mapa de números ───────────────────────────────────────────────────── */
+
+  function pintarMapa() {
+    const mapa = $("[data-mapa]");
+    mapa.textContent = "";
+
+    estado.productos.forEach((p, i) => {
+      const b = document.createElement("button");
+      b.className = "mapa__num";
+      b.type = "button";
+      b.textContent = i + 1;
+      b.dataset.estado = completo(p) ? "completo" : "vacio";
+      if (estado.actual === i) b.setAttribute("aria-current", "true");
+      b.title = `Producto ${i + 1}${completo(p) ? " · completo" : " · incompleto"}`;
+      b.addEventListener("click", () => irA(i));
+      mapa.appendChild(b);
+    });
+
+    const mas = document.createElement("button");
+    mas.className = "mapa__num mapa__num--mas";
+    mas.type = "button";
+    mas.textContent = "+";
+    mas.title = "Agregar un producto";
+    /* Con la función pelada, el listener le pasa el Event como argumento y
+       termina metiendo un PointerEvent en la lista de productos. */
+    mas.addEventListener("click", () => agregarProducto());
+    mapa.appendChild(mas);
+
+    const sep = document.createElement("span");
+    sep.className = "mapa__sep";
+    mapa.appendChild(sep);
+
+    const res = document.createElement("button");
+    res.className = "mapa__num mapa__resumen";
+    res.type = "button";
+    res.textContent = "Resumen";
+    if (estado.actual === "resumen") res.setAttribute("aria-current", "true");
+    res.addEventListener("click", () => irA("resumen"));
+    mapa.appendChild(res);
+
+    const cuenta = document.createElement("span");
+    cuenta.className = "mapa__cuenta";
+    const hechos = estado.productos.filter(completo).length;
+    cuenta.textContent = `${hechos} de ${estado.productos.length} completos`;
+    mapa.appendChild(cuenta);
+  }
+
+  /* ── Paneles de producto ──────────────────────────────────────────────── */
+
+  function construirCarril() {
+    carril.textContent = "";
+    estado.productos.forEach((p, i) => carril.appendChild(panelProducto(p, i)));
+    carril.appendChild(panelResumen());
+    pintarMapa();
+  }
+
+  function opciones(sel, valores, valor) {
+    sel.textContent = "";
+    valores.forEach((v) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      if (v === valor) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
+  function panelProducto(p, i) {
+    const nodo = tpl.content.firstElementChild.cloneNode(true);
+    const raiz = $(".prod", nodo);
+    $("[data-n]", raiz).textContent = i + 1;
+    $("[data-de]", raiz).textContent = `de ${estado.productos.length}`;
+
+    /* Los radios necesitan un name único por panel, si no se pisan entre sí. */
+    $$('input[type="radio"]', raiz).forEach((r, k) => {
+      const grupo = r.dataset.tipo ? "tipo" : r.dataset.imp ? "imp" : "tc";
+      r.name = `${grupo}-${i}`;
+      r.id = `${grupo}-${i}-${k}`;
+      const lbl = r.nextElementSibling;
+      if (lbl) lbl.setAttribute("for", r.id);
+    });
+
+    /* Es un switch de dos posiciones, no un grupo de radios cualquiera: un
+       click en cualquier punto del segmento —incluida la opción ya
+       seleccionada— pasa a la otra. El click nativo del label (vía "for")
+       ya marca el que se clickeó; si se dejara correr junto con este
+       handler, un click sobre el lado no seleccionado terminaría marcando
+       ese Y volviendo a alternar al otro. Por eso se apaga el "for" nativo
+       (preventDefault) y el toggle completo lo maneja este único handler. */
+    $$(".segmento", raiz).forEach((seg) => {
+      $$("label", seg).forEach((lbl) => lbl.addEventListener("click", (e) => e.preventDefault()));
+      seg.addEventListener("click", () => {
+        const radios = $$('input[type="radio"]', seg);
+        const r = radios.find((x) => !x.checked);
+        if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); }
+      });
+    });
+
+    // ── Tipo de producto ──────────────────────────────────────────────────
+    $$("[data-tipo]", raiz).forEach((r) => {
+      r.checked = r.dataset.tipo === p.tipo;
+      r.addEventListener("change", () => {
+        p.tipo = r.dataset.tipo;
+        aplicarTipo(raiz, p);
+        recalcular(p, raiz);
+        pintarMapa();
+      });
+    });
+
+    // ── Selects de backlight ──────────────────────────────────────────────
+    opciones($('[data-c="tela"]', raiz), CAT.telas_backlight || [], p.tela || (CAT.telas_backlight || [])[0]);
+    opciones($('[data-c="perfil"]', raiz), ["Sin caja"].concat(CAT.perfiles || []), p.perfil);
+    opciones($('[data-c="luces_1"]', raiz), CAT.luces || [], p.luces_1);
+    opciones($('[data-c="luces_2"]', raiz), CAT.luces || [], p.luces_2);
+
+    /* Los selects arrancan con un valor por defecto elegido por el navegador
+       (la primera opción). Si no se copia al estado, Python recibe "" y el
+       cálculo se hace sin tela ni luces — no hay aviso de ancho máximo ni
+       error de medida, y parece que anduviera todo bien. */
+    ["tela", "perfil", "luces_1", "luces_2"].forEach((clave) => {
+      const el = $(`[data-c="${clave}"]`, raiz);
+      if (el && el.value) p[clave] = el.value;
+    });
+
+    // ── Campos simples ────────────────────────────────────────────────────
+    $$("[data-c]", raiz).forEach((el) => {
+      const clave = el.dataset.c;
+      if (el.type === "checkbox") {
+        el.checked = !!p[clave];
+        el.addEventListener("change", () => { p[clave] = el.checked; recalcular(p, raiz); });
+        return;
+      }
+      if (el.value === "" || el.tagName !== "SELECT") el.value = p[clave] != null ? p[clave] : "";
+      el.addEventListener("input", () => {
+        p[clave] = el.value;
+        if (clave === "perfil" || clave === "luces_1" || clave === "luces_2") aplicarTipo(raiz, p);
+        recalcular(p, raiz);
+      });
+      el.addEventListener("change", () => { p[clave] = el.value; recalcular(p, raiz); });
+    });
+
+    // ── Impresión y terminaciones de caja ─────────────────────────────────
+    $$("[data-imp]", raiz).forEach((r) => {
+      r.checked = r.dataset.imp === p.impresion;
+      r.addEventListener("change", () => { p.impresion = r.dataset.imp; recalcular(p, raiz); });
+    });
+    $$("[data-tc]", raiz).forEach((r) => {
+      r.checked = r.dataset.tc === p.terminaciones_caja;
+      r.addEventListener("change", () => { p.terminaciones_caja = r.dataset.tc; });
+    });
+
+    // ── Listas aditivas ───────────────────────────────────────────────────
+    ["estructuras", "terminaciones"].forEach((clave) => {
+      const cont = $(`[data-aditiva="${clave}"]`, raiz);
+      const entrada = $("input", cont);
+      const boton = $("button", cont);
+      const agregar = () => {
+        const texto = entrada.value.trim();
+        if (!texto) return;
+        if (p[clave].includes(texto)) { entrada.value = ""; return; }   // sin duplicados
+        p[clave].push(texto);
+        entrada.value = "";
+        pintarAditiva(cont, p, clave);
+        recalcular(p, raiz);
+      };
+      boton.addEventListener("click", agregar);
+      entrada.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault(); e.stopPropagation();
+        agregar();
+      });
+      pintarAditiva(cont, p, clave);
+    });
+
+    // ── Cabecera ──────────────────────────────────────────────────────────
+    $("[data-accion='quitar']", raiz).addEventListener("click", () => quitarProducto(i));
+    $("[data-accion='duplicar']", raiz).addEventListener("click", () => duplicarProducto(i));
+
+    aplicarTipo(raiz, p);
+    recalcular(p, raiz);
+    return nodo;
+  }
+
+  /* Muestra/oculta los bloques según el tipo y el perfil elegido. */
+  function aplicarTipo(raiz, p) {
+    $$("[data-solo]", raiz).forEach((g) => { g.hidden = g.dataset.solo !== p.tipo; });
+    const caja = $("[data-caja]", raiz);
+    caja.hidden = p.tipo !== "backlight" || p.perfil === "Sin caja";
+    $('[data-malla="1"]', raiz).hidden = (p.luces_1 || "").toLowerCase() !== "malla 12v";
+    $('[data-malla="2"]', raiz).hidden = (p.luces_2 || "").toLowerCase() !== "malla 12v";
+  }
+
+  function pintarAditiva(cont, p, clave) {
+    const items = $(".aditiva__items", cont);
+    items.textContent = "";
+    p[clave].forEach((nombre, k) => {
+      const el = document.createElement("div");
+      const esMonto = /^\$?\s*[\d.,]+$/.test(nombre);
+      el.className = "pastilla" + (esMonto ? " pastilla--manual" : "");
+      el.style.setProperty("--i", k);
+      const detalle = p.calc && p.calc[`detalle_${clave}`];
+      const monto = detalle && detalle[nombre];
+      el.innerHTML =
+        `<span class="pastilla__nombre"></span>` +
+        (monto != null ? `<span class="pastilla__monto">${TD.fmt.pesos(monto)}</span>` : "") +
+        `<button class="pastilla__quitar" type="button" aria-label="Quitar">✕</button>`;
+      $(".pastilla__nombre", el).textContent = nombre;
+      $(".pastilla__quitar", el).addEventListener("click", () => {
+        p[clave].splice(k, 1);
+        pintarAditiva(cont, p, clave);
+        recalcular(p, cont.closest(".prod"));
+      });
+      items.appendChild(el);
+    });
+  }
+
+  /* ── Cálculo ──────────────────────────────────────────────────────────────
+     TODO número sale de Python: precios, ML, M², la tabla de materiales de la
+     caja y el aviso de ancho máximo. Acá NO se replica ni una fórmula — el
+     día que cambie una tarifa en core/precios.py, esta pantalla ya está al
+     día. Se manda con retardo para no llamar en cada tecla. */
+  const pendientes = new WeakMap();
+  function recalcular(p, raiz) {
+    clearTimeout(pendientes.get(p));
+    pendientes.set(p, setTimeout(async () => {
+      p.calc = (await TD.api.calcular_producto(p)) || null;
+      pintarCalculo(p, raiz);
+      pintarMapa();
+      if (estado.actual === "resumen") pintarResumen();
+    }, 140));
+  }
+
+  function pintarCalculo(p, raiz) {
+    if (!raiz) return;
+    const c = p.calc || {};
+    const fig = $("[data-figura]", raiz);
+    const ancho = parseFloat(String(p.ancho).replace(",", "."));
+    const alto  = parseFloat(String(p.alto).replace(",", "."));
+    const hay = ancho > 0 && alto > 0;
+
+    // Figura: el lado largo siempre ocupa el alto disponible, igual que el
+    // canvas de Tkinter — es una proporción, no una escala en metros.
+    $("[data-marco]", fig).hidden = !hay;
+    $("[data-figura-vacio]", fig).hidden = hay;
+    if (hay) {
+      const largo = Math.max(ancho, alto), corto = Math.min(ancho, alto);
+      const h = 70, w = 70 * (corto / largo);
+      const rect = $("[data-rect]", fig);
+      rect.setAttribute("width", w);
+      rect.setAttribute("height", h);
+      rect.setAttribute("x", 50 - w / 2);
+      rect.setAttribute("y", 15);
+      $("[data-cota-ancho]", fig).textContent = `${corto} m`;
+      $("[data-cota-alto]", fig).textContent = `${largo} m`;
+      $("[data-cota-alto]", fig).setAttribute("x", 50 - w / 2 - 6);
+      $("[data-cota-alto]", fig).setAttribute("transform", `rotate(-90 ${50 - w / 2 - 6} 50)`);
+    }
+    fig.dataset.estado = c.error ? (p.forzar ? "forzado" : "error") : "ok";
+
+    // Aviso de ancho máximo + error de lado corto
+    const av = $("[data-error]", raiz);
+    av.hidden = !c.error;
+    if (c.error) av.textContent = c.error;
+    $("[data-forzar-caja]", raiz).hidden = !c.error;
+    const am = c.ancho_max != null ? `Ancho máximo de impresión: ${c.ancho_max} m` : "";
+    $("[data-anchomax]", raiz).textContent = am;
+    $("[data-anchomax-bl]", raiz).textContent = am;
+
+    // Cifras / tabla de materiales
+    const cifras = $("[data-cifras]", raiz);
+    cifras.textContent = "";
+    const linea = (et, val, clase) => {
+      const d = document.createElement("div");
+      d.className = "cifra" + (clase ? " " + clase : "");
+      d.innerHTML = `<span class="cifra__et"></span><span class="cifra__val"></span>`;
+      $(".cifra__et", d).textContent = et;
+      $(".cifra__val", d).textContent = val;
+      cifras.appendChild(d);
+    };
+
+    if (p.tipo === "estandar") {
+      if (c.ml != null) linea("Metros impresos", `${TD.fmt.cantidad(c.ml)} ML`);
+      if (c.costo_impresion != null) linea("Impresión", TD.fmt.pesos(c.costo_impresion));
+      if (c.costo_extras != null) linea("Estructuras + terminaciones", TD.fmt.pesos(c.costo_extras));
+      if (c.valor_unitario != null) linea("Valor unitario", TD.fmt.pesos(c.valor_unitario));
+      if (c.total != null) linea("Total producto", TD.fmt.pesos(c.total), "cifra--total");
+    } else {
+      if (c.m2 != null) linea("Superficie", `${TD.fmt.cantidad(c.m2)} M²`);
+      /* Sin caja no hay luces ni fuente: los watts no significan nada ahí. */
+      if (p.perfil && p.perfil !== "Sin caja" && c.watts != null)
+        linea("Watts por caja", `${c.watts} W`);
+      (c.materiales || []).forEach((m) => {
+        linea(`${m.material} · ${m.tipo}`, `${TD.fmt.cantidad(m.cantidad_total)}`);
+      });
+      /* Sin caja no hay materiales de caja que listar: mostrar "—" ahí solo
+         confundiría, como si faltara información en vez de no aplicar. */
+      if ((!c.materiales || !c.materiales.length) && p.perfil && p.perfil !== "Sin caja")
+        linea("Materiales", "—");
+    }
+
+    // Los montos por ítem de las listas aditivas los devuelve el mismo cálculo.
+    ["estructuras", "terminaciones"].forEach((clave) => {
+      const cont = $(`[data-aditiva="${clave}"]`, raiz);
+      if (cont) pintarAditiva(cont, p, clave);
+    });
+  }
+
+  /* ── Agregar / quitar / duplicar ──────────────────────────────────────── */
+
+  function agregarProducto(tipoOModelo) {
+    const base = typeof tipoOModelo === "object" ? tipoOModelo : productoVacio(
+      estado.productos.length ? estado.productos[estado.productos.length - 1].tipo : "estandar"
+    );
+    estado.productos.push(base);
+    construirCarril();
+    irA(estado.productos.length - 1);
+  }
+
+  function duplicarProducto(i) {
+    const copia = JSON.parse(JSON.stringify(estado.productos[i]));
+    copia.calc = null;
+    estado.productos.splice(i + 1, 0, copia);
+    construirCarril();
+    irA(i + 1);
+  }
+
+  async function quitarProducto(i) {
+    if (estado.productos.length <= 1) {
+      TD.aviso("La cotización tiene que tener al menos un producto.", "aviso");
+      return;
+    }
+    const ok = await confirmar("¿Quitar el producto " + (i + 1) + "?",
+                               "Se pierde lo que hayas cargado en él. No se puede deshacer.");
+    if (!ok) return;
+    estado.productos.splice(i, 1);
+    construirCarril();
+    irA(Math.min(i, estado.productos.length - 1));
+  }
+
+  function confirmar(titulo, texto) {
+    const dlg = $("#dlg");
+    $("[data-dlg-titulo]", dlg).textContent = titulo;
+    $("[data-dlg-texto]", dlg).textContent = texto;
+    dlg.showModal();
+    return new Promise((resolve) => {
+      const cerrar = (v) => { dlg.close(); resolve(v); };
+      $("[data-dlg-si]", dlg).onclick = () => cerrar(true);
+      $("[data-dlg-no]", dlg).onclick = () => cerrar(false);
+      dlg.oncancel = () => resolve(false);
+    });
+  }
+
+  /* ── Resumen ──────────────────────────────────────────────────────────── */
+
+  function panelResumen() {
+    const div = document.createElement("div");
+    div.className = "tablero";
+    div.innerHTML = `
+      <section class="resumen">
+        <header class="resumen__cab">
+          <div>
+            <h1 class="hoja__titulo">Resumen</h1>
+            <p class="hoja__bajada">Clic en una fila para volver a ese producto.</p>
+          </div>
+          <span class="barra__sep"></span>
+          <button class="btn btn--secundario btn--chico" type="button" data-accion="agregar">+ Agregar producto</button>
+        </header>
+
+        <div class="tabla-caja">
+          <table class="tabla">
+            <thead><tr>
+              <th style="width:3rem">#</th>
+              <th style="width:6rem">Tipo</th>
+              <th>Producto / tela</th>
+              <th>Tema</th>
+              <th class="num" style="width:5rem">Cant.</th>
+              <th class="num" style="width:6rem">Ancho</th>
+              <th class="num" style="width:6rem">Alto</th>
+              <th class="num" style="width:8rem">Superficie</th>
+              <th class="num" style="width:8rem">Valor unit.</th>
+              <th class="num" style="width:8rem">Total</th>
+              <th style="width:2.5rem"></th>
+            </tr></thead>
+            <tbody data-resumen-filas></tbody>
+          </table>
+        </div>
+
+        <div class="resumen__pie">
+          <div class="resumen__cierre">
+            <div class="cifras" data-resumen-cifras></div>
+          </div>
+          <span class="barra__sep"></span>
+          <div class="resumen__acciones">
+            <button class="btn btn--secundario btn--chico" type="button" data-accion="guardar">Guardar</button>
+            <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-abrir">
+              Guardar y abrir <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+      </section>`;
+    $("[data-accion='agregar']", div).addEventListener("click", () => agregarProducto());
+    $("[data-accion='guardar']", div).addEventListener("click", () => guardarCotizacion(false));
+    $("[data-accion='guardar-abrir']", div).addEventListener("click", () => guardarCotizacion(true));
+    return div;
+  }
+
+  function pintarResumen() {
+    const cuerpo = $("[data-resumen-filas]");
+    if (!cuerpo) return;
+    cuerpo.textContent = "";
+    let cant = 0, ml = 0, m2 = 0, total = 0, hayBacklight = false;
+
+    estado.productos.forEach((p, i) => {
+      const c = p.calc || {};
+      const tr = document.createElement("tr");
+      const bl = p.tipo === "backlight";
+      if (bl) hayBacklight = true;
+      const n = parseInt(p.cantidad, 10) || 0;
+      cant += n;
+      if (c.ml) ml += c.ml;
+      if (c.m2) m2 += c.m2;
+      if (c.total) total += c.total;
+
+      tr.innerHTML = `
+        <td class="num"></td>
+        <td><span class="tipo-chip${bl ? " tipo-chip--bl" : ""}"></span></td>
+        <td></td><td></td>
+        <td class="num"></td><td class="num"></td><td class="num"></td>
+        <td class="num"></td><td class="num"></td><td class="num"></td>
+        <td><span class="quitar-fila" title="Quitar">✕</span></td>`;
+      const td = tr.children;
+      td[0].textContent = i + 1;
+      td[1].firstElementChild.textContent = bl ? "Backlight" : "Estándar";
+      td[2].textContent = bl ? (p.tela || "—") : (p.producto || "—");
+      td[3].textContent = p.tema || "—";
+      td[4].textContent = p.cantidad || "—";
+      td[5].textContent = p.ancho ? TD.fmt.medida(String(p.ancho).replace(",", ".")) : "—";
+      td[6].textContent = p.alto ? TD.fmt.medida(String(p.alto).replace(",", ".")) : "—";
+      td[7].textContent = c.ml != null ? `${TD.fmt.cantidad(c.ml)} ML`
+                        : c.m2 != null ? `${TD.fmt.cantidad(c.m2)} M²` : "—";
+      td[8].textContent = c.valor_unitario != null ? TD.fmt.pesos(c.valor_unitario) : "—";
+      td[9].textContent = c.total != null ? TD.fmt.pesos(c.total) : "—";
+      if (!completo(p)) tr.style.opacity = ".6";
+
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".quitar-fila")) { e.stopPropagation(); quitarProducto(i); return; }
+        irA(i);
+      });
+      cuerpo.appendChild(tr);
+    });
+
+    const tot = document.createElement("tr");
+    tot.setAttribute("data-total", "");
+    tot.innerHTML = `<td></td><td></td><td>TOTAL</td><td></td>
+      <td class="num">${cant}</td><td></td><td></td>
+      <td class="num">${[ml ? TD.fmt.cantidad(ml) + " ML" : "", m2 ? TD.fmt.cantidad(m2) + " M²" : ""].filter(Boolean).join(" · ") || "—"}</td>
+      <td></td><td class="num">${total ? TD.fmt.pesos(total) : "—"}</td><td></td>`;
+    cuerpo.appendChild(tot);
+
+    const cifras = $("[data-resumen-cifras]");
+    cifras.textContent = "";
+    const linea = (et, val, clase) => {
+      const d = document.createElement("div");
+      d.className = "cifra" + (clase ? " " + clase : "");
+      d.innerHTML = `<span class="cifra__et"></span><span class="cifra__val"></span>`;
+      $(".cifra__et", d).textContent = et;
+      $(".cifra__val", d).textContent = val;
+      cifras.appendChild(d);
+    };
+    linea("Productos", total ? TD.fmt.pesos(total) : "—");
+    if (estado.despacho)    linea("Despacho", TD.fmt.pesos(estado.despacho));
+    if (estado.instalacion) linea("Instalación", TD.fmt.pesos(estado.instalacion));
+    const general = total + (estado.despacho || 0) + (estado.instalacion || 0);
+    linea("Total", general ? TD.fmt.pesos(general) : "—", "cifra--total");
+    if (hayBacklight) {
+      const d = document.createElement("div");
+      d.className = "aviso aviso--aviso";
+      d.textContent = "Los productos backlight todavía no llevan precio: no suman al total.";
+      cifras.appendChild(d);
+    }
+  }
+
+  /* ── Guardado ─────────────────────────────────────────────────────────── */
+
+  async function guardarProgreso() {
+    const r = (await TD.api.guardar_progreso(estado)) || {};
+    if (r.id) estado.id = r.id;
+    if (r.guardado_en) $("[data-guardado]").textContent = "Guardado " + r.guardado_en;
+    const hechos = estado.productos.filter(completo).length;
+    TD.aviso(`Progreso guardado — ${hechos} de ${estado.productos.length} productos completos.`, "info");
+  }
+
+  async function guardarCotizacion(abrir) {
+    if (guardando) return;
+    const faltan = estado.productos.filter((p) => !completo(p)).length;
+    if (faltan) {
+      TD.aviso(`Falta completar ${faltan} producto${faltan > 1 ? "s" : ""}.`, "error");
+      return;
+    }
+    if (!/^\d{4}$/.test(estado.cliente.numero)) {
+      TD.aviso("El N° de cotización tiene que tener 4 dígitos.", "error");
+      irAZona(0); $("#numero").focus();
+      return;
+    }
+    if (!estado.cliente.empresa.trim()) {
+      TD.aviso("Falta la empresa.", "error");
+      irAZona(0); $("#empresa").focus();
+      return;
+    }
+    guardando = true;
+    const r = (await TD.api.guardar_cotizacion(estado, !!abrir)) || {};
+    guardando = false;
+    if (r.error) { TD.aviso(r.error, "error", 8000); return; }
+    TD.aviso(`Cotización ${r.numero || ""} guardada.`, "info");
+  }
+
+  /* ── Zona 0: cableado ─────────────────────────────────────────────────── */
+
+  function soloDigitos(v) { return v.replace(/\D/g, ""); }
+
+  /* Formato chileno del RUT mientras se escribe. La versión canónica es
+     core.repositorio.formatear_rut — esta es la misma regla del lado del
+     navegador para no cruzar el puente en cada tecla. Si allá cambia, hay
+     que cambiarla acá también (está anotado en el contrato). */
+  function formatearRut(raw) {
+    const s = raw.replace(/[^\dkK]/g, "").toUpperCase();
+    if (!s) return "";
+    const cuerpo = s.slice(0, -1), dv = s.slice(-1);
+    if (!cuerpo) return dv;
+    return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
+  }
+
+  function revisarDatos() {
+    const ok = estado.nombre_trabajo.trim() !== "" && estado.productos.length > 0;
+    $("[data-accion='bajar']").disabled = !ok;
+    /* Antes acá quedaba `= ok` a secas y la nota mostraba literalmente
+       "false" abajo a la izquierda. Dice qué falta, y se calla cuando no
+       falta nada. */
+    $("[data-nota-datos]").textContent = ok
+      ? ""
+      : "Falta el nombre del trabajo y al menos un producto.";
+    $("[data-titulo]").textContent = estado.nombre_trabajo.trim() || "Nueva cotización";
+  }
+
+  function sincronizarCantidad() {
+    const n = Math.max(1, parseInt($("#cantidad").value, 10) || 1);
+    while (estado.productos.length < n) estado.productos.push(productoVacio(
+      estado.productos.length ? estado.productos[estado.productos.length - 1].tipo : "estandar"));
+    while (estado.productos.length > n) estado.productos.pop();
+    construirCarril();
+    revisarDatos();
+  }
+
+  function cablearZona0() {
+    $("#nombre").addEventListener("input", (e) => { estado.nombre_trabajo = e.target.value; revisarDatos(); });
+
+    const cantidad = $("#cantidad");
+    cantidad.addEventListener("input", () => {
+      const limpio = soloDigitos(cantidad.value);
+      if (limpio !== cantidad.value) cantidad.value = limpio;
+      sincronizarCantidad();
+    });
+    $$("[data-paso]").forEach((b) => b.addEventListener("click", () => {
+      cantidad.value = String(Math.max(1, (parseInt(cantidad.value, 10) || 0) + Number(b.dataset.paso)));
+      sincronizarCantidad();
+    }));
+
+    [["despacho", "despacho-monto"], ["instalacion", "instalacion-monto"]].forEach(([sw, monto]) => {
+      const chk = $("#" + sw), inp = $("#" + monto);
+      const leer = () => { estado[sw] = chk.checked ? (parseFloat(soloDigitos(inp.value)) || 0) : null; };
+      chk.addEventListener("change", () => { leer(); if (chk.checked) inp.focus(); });
+      inp.addEventListener("input", leer);
+    });
+
+    const campos = {
+      empresa: "empresa", rut: "rut", razon: "razon_social", contacto: "contacto",
+      email: "email", descuento: "descuento", condicion: "condicion",
+      fecha: "fecha", numero: "numero", descripcion: "descripcion",
+    };
+    Object.entries(campos).forEach(([id, clave]) => {
+      const el = $("#" + id);
+      el.addEventListener("input", () => {
+        if (id === "rut") { const pos = el.value.length; el.value = formatearRut(el.value); void pos; }
+        if (id === "numero") el.value = soloDigitos(el.value).slice(0, 4);
+        estado.cliente[clave] = el.value;
+      });
+    });
+
+    /* Elegir una empresa/contacto conocido rellena lo demás, igual que el
+       autocompletado de hoy (_autocompletar_cliente / _autocompletar_contacto). */
+    $("#empresa").addEventListener("change", () => {
+      const c = (CAT.clientes || []).find((x) => x.empresa === $("#empresa").value);
+      if (!c) return;
+      $("#rut").value = c.rut || ""; estado.cliente.rut = c.rut || "";
+      $("#razon").value = c.razon_social || ""; estado.cliente.razon_social = c.razon_social || "";
+    });
+    $("#contacto").addEventListener("change", () => {
+      const c = (CAT.contactos || []).find((x) => x.contacto === $("#contacto").value);
+      if (!c) return;
+      $("#email").value = c.email || ""; estado.cliente.email = c.email || "";
+      $("#descuento").value = c.descuento || "0"; estado.cliente.descuento = c.descuento || "0";
+      $("#condicion").value = c.condicion || ""; estado.cliente.condicion = c.condicion || "";
+    });
+
+    $("[data-accion='guardar-cliente']").addEventListener("click", async () => {
+      if (!estado.cliente.empresa.trim()) { TD.aviso("El campo Empresa es obligatorio para guardar.", "error"); return; }
+      await TD.api.guardar_cliente(estado.cliente.empresa, estado.cliente.rut, estado.cliente.razon_social);
+      TD.aviso("Cliente guardado.", "info");
+    });
+    $("[data-accion='guardar-contacto']").addEventListener("click", async () => {
+      if (!estado.cliente.contacto.trim()) { TD.aviso("Escribí un contacto antes de guardarlo.", "error"); return; }
+      await TD.api.guardar_contacto(estado.cliente.contacto, estado.cliente.email,
+                                    estado.cliente.descuento, estado.cliente.condicion);
+      TD.aviso("Contacto guardado.", "info");
+    });
+
+    $("[data-accion='bajar']").addEventListener("click", () => irAZona(1));
+  }
+
+  /* ── Catálogos ────────────────────────────────────────────────────────── */
+
+  function llenarDatalist(id, valores) {
+    const dl = $("#" + id);
+    dl.textContent = "";
+    (valores || []).forEach((v) => {
+      const o = document.createElement("option");
+      o.value = v;
+      dl.appendChild(o);
+    });
+  }
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  /* Desde los productos, "Volver" sube a la zona de datos — no sale de la
+     pantalla. El estado vive en `estado`, así que no se pierde nada. Recién
+     desde la zona de datos vuelve al menú. */
+  function volver() {
+    if (pizarra.dataset.zona === "1") irAZona(0);
+    else TD.api.volver();
+  }
+  $("[data-accion='salir']").addEventListener("click", volver);
+  $("[data-accion='guardar-progreso']").addEventListener("click", guardarProgreso);
+
+  TD.atajo("mod+s", guardarProgreso);
+  TD.atajo("enter", () => {
+    if (pizarra.dataset.zona === "0") { if (!$("[data-accion='bajar']").disabled) irAZona(1); return; }
+    if (estado.actual === "resumen") return;
+    if (estado.actual < estado.productos.length - 1) irA(estado.actual + 1);
+    else irA("resumen");
+  });
+  TD.atajo("escape", volver);
+  /* Con Ctrl, no a secas: las flechas solas tienen que seguir moviendo el
+     cursor dentro de los campos de texto. */
+  TD.atajo("mod+arrowright", () => {
+    if (pizarra.dataset.zona !== "1" || estado.actual === "resumen") return;
+    irA(estado.actual < estado.productos.length - 1 ? estado.actual + 1 : "resumen");
+  });
+  TD.atajo("mod+arrowleft", () => {
+    if (pizarra.dataset.zona !== "1") return;
+    if (estado.actual === "resumen") irA(estado.productos.length - 1);
+    else if (estado.actual > 0) irA(estado.actual - 1);
+    else irAZona(0);
+  });
+
+  TD.iniciar(async (ctx) => {
+    CAT = (await TD.api.obtener_catalogos()) || {};
+    llenarDatalist("lista-productos", CAT.productos);
+    llenarDatalist("lista-textiles", CAT.textiles);
+    llenarDatalist("lista-estructuras", CAT.estructuras);
+    llenarDatalist("lista-terminaciones", CAT.terminaciones);
+    llenarDatalist("lista-empresas", (CAT.clientes || []).map((c) => c.empresa));
+    llenarDatalist("lista-contactos", (CAT.contactos || []).map((c) => c.contacto));
+
+    cablearZona0();
+
+    /* Retomar una pendiente: Python manda el estado guardado tal cual. */
+    if (ctx.estado) {
+      Object.assign(estado, ctx.estado);
+      $("#nombre").value = estado.nombre_trabajo || "";
+      $("#cantidad").value = String(estado.productos.length || 1);
+      Object.entries(estado.cliente || {}).forEach(([k, v]) => {
+        const id = { razon_social: "razon" }[k] || k;
+        const el = $("#" + id);
+        if (el) el.value = v;
+      });
+      if (estado.despacho != null) { $("#despacho").checked = true; $("#despacho-monto").value = estado.despacho; }
+      if (estado.instalacion != null) { $("#instalacion").checked = true; $("#instalacion-monto").value = estado.instalacion; }
+    }
+
+    if (!estado.productos.length) estado.productos.push(productoVacio("estandar"));
+    if (!estado.cliente.numero && ctx.numero_sugerido) {
+      estado.cliente.numero = ctx.numero_sugerido;
+      $("#numero").value = ctx.numero_sugerido;
+    }
+    if (!estado.cliente.fecha && ctx.fecha_iso) {
+      estado.cliente.fecha = ctx.fecha_iso;
+      $("#fecha").value = ctx.fecha_iso;
+    }
+
+    construirCarril();
+    revisarDatos();
+    $("#nombre").focus();
+  });
+})();
+</script>
+
+<script src="demo.js"></script>
+</body>
+</html>

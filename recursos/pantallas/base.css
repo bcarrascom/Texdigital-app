@@ -1,0 +1,809 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   base.css — Sistema de diseño de Sistema de Gestión (TexDigital)
+   v2 · minimal, claro y animado
+
+   Un solo archivo, cargado por TODAS las pantallas. Se copia tal cual a
+   Texdigital-app/recursos/ui/base.css (ver sync-ui.ps1).
+
+   REGLA DE ORO: ninguna pantalla define colores, tamaños de fuente, radios ni
+   duraciones a mano. Todo sale de los tokens de :root. Si hace falta un valor
+   nuevo, se agrega acá como token — no como estilo suelto en el HTML.
+
+   ── El problema de las resoluciones ────────────────────────────────────────
+   Tkinter posiciona en px absolutos y por eso core/escala.py tiene que adivinar
+   un factor global. Acá no hace falta:
+     1. WebView2/WKWebView ya respetan el escalado de Windows/macOS.
+     2. --ui-base ajusta la tipografía al ancho de la ventana (clamp).
+     3. --ui-escala es la palanca del usuario (A− / A+), guardada en Python.
+   Nada mide en px fijos: todo en rem, ch, %, fr, vw y clamp().
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Neutros ───────────────────────────────────────────────────────────── */
+  --c-lienzo:       #FCFCFB;   /* fondo base, casi blanco */
+  --c-superficie:   #FFFFFF;
+  --c-superficie-2: #F6F5F2;
+  --c-borde:        #EAE7E0;
+  --c-borde-fuerte: #D5D0C6;
+
+  --c-texto:        #16161A;
+  --c-texto-suave:  #5E5C58;
+  --c-texto-tenue:  #A5A29B;
+  --c-texto-inv:    #FFFFFF;
+
+  /* ── Módulo Cotizaciones · naranjo pastel ──────────────────────────────── */
+  --c-cot-relleno:  #FFF2E4;
+  --c-cot-relleno-2:#FFE8D2;   /* estado hover del relleno */
+  --c-cot-borde:    #F2A961;
+  --c-cot-fuerte:   #B85C15;
+  --c-cot-tinta:    #6B3406;
+
+  /* ── Módulo OPs · azul pastel ──────────────────────────────────────────── */
+  --c-op-relleno:   #E9F2FC;
+  --c-op-relleno-2: #D9E9FA;
+  --c-op-borde:     #7AB2EA;
+  --c-op-fuerte:    #1B5C9E;
+  --c-op-tinta:     #0D3560;
+
+  /* Tema activo — lo escribe [data-tema] más abajo. Las pantallas internas
+     usan SIEMPRE estas cuatro variables, nunca las de un módulo puntual: así
+     la misma pantalla sirve en el flujo naranjo y en el azul. */
+  --c-tema-relleno: var(--c-superficie-2);
+  --c-tema-borde:   var(--c-borde-fuerte);
+  --c-tema-fuerte:  var(--c-texto);
+  --c-tema-tinta:   var(--c-texto);
+
+  /* ── Semánticos ────────────────────────────────────────────────────────── */
+  --c-ok:          #1E7A4C;  --c-ok-suave:    #E4F2EA;
+  --c-aviso:       #A66A00;  --c-aviso-suave: #FBF0DC;
+  --c-error:       #C0392B;  --c-error-suave: #FBEAE8;
+  --c-foco:        #2F7FD6;
+
+  /* ── Tipografía ────────────────────────────────────────────────────────── */
+  --f-ui: "Segoe UI Variable Display", "Segoe UI", -apple-system,
+          BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --f-mono: ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono",
+            "Roboto Mono", Consolas, monospace;
+
+  --ui-escala: 1;
+  --ui-base: clamp(15px, 0.5vw + 11.6px, 19px);
+
+  --t-xs:  0.75rem;   --t-sm:  0.875rem;  --t-md:  1rem;
+  --t-lg:  1.1875rem; --t-xl:  1.5rem;    --t-2xl: 2rem;
+  --t-3xl: 2.75rem;   --t-4xl: 3.75rem;
+
+  --peso-normal: 400; --peso-medio: 550; --peso-fuerte: 700;
+
+  /* ── Espaciado ─────────────────────────────────────────────────────────── */
+  --e-1: .25rem; --e-2: .5rem;  --e-3: .75rem; --e-4: 1rem;
+  --e-5: 1.5rem; --e-6: 2rem;   --e-7: 3rem;   --e-8: 4.5rem;
+
+  /* ── Formas ────────────────────────────────────────────────────────────── */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-xl: 26px; --r-full: 999px;
+
+  --s-1: 0 1px 2px rgba(22,22,26,.05);
+  --s-2: 0 2px 6px rgba(22,22,26,.05), 0 10px 24px rgba(22,22,26,.05);
+  --s-3: 0 10px 24px rgba(22,22,26,.07), 0 30px 60px rgba(22,22,26,.09);
+
+  /* ── Movimiento ────────────────────────────────────────────────────────────
+     Todas las duraciones salen de acá: se afinan en un solo lugar. */
+  --m-rapida:  160ms;
+  --m-media:   280ms;
+  --m-lenta:   560ms;
+  --m-escalon:  38ms;   /* retardo entre tarjeta y tarjeta (stagger) */
+  /* La expansión del módulo al entrar tiene su propio número: es la animación
+     que más se nota y la que más se afina. */
+  --m-expansion: 390ms;
+  /* Los dos movimientos de la pizarra de "Nueva cotización": bajar de la zona
+     de datos a la de productos, y pasar de un producto al de al lado. */
+  --m-bajada:  520ms;
+  --m-lateral: 380ms;
+
+  --ease-salida:  cubic-bezier(.22, 1, .36, 1);      /* entra y frena suave */
+  --ease-entrada: cubic-bezier(.65, 0, .35, 1);      /* simétrica */
+  /* La expansión del color: acelera al principio y frena al final, pero sin
+     exagerar ninguno de los dos extremos — con un easing muy marcado el color
+     "aparece" de golpe en vez de leerse como algo que crece desde el módulo. */
+  --ease-expandir:cubic-bezier(.5, 0, .2, 1);
+
+  --alto-cabecera: 3.5rem;
+}
+
+/* Temas: los aplica <html data-tema="..."> o <body data-tema="..."> */
+[data-tema="cotizaciones"] {
+  --c-tema-relleno: var(--c-cot-relleno);
+  --c-tema-borde:   var(--c-cot-borde);
+  --c-tema-fuerte:  var(--c-cot-fuerte);
+  --c-tema-tinta:   var(--c-cot-tinta);
+}
+[data-tema="ops"] {
+  --c-tema-relleno: var(--c-op-relleno);
+  --c-tema-borde:   var(--c-op-borde);
+  --c-tema-fuerte:  var(--c-op-fuerte);
+  --c-tema-tinta:   var(--c-op-tinta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --m-rapida: 1ms; --m-media: 1ms; --m-lenta: 1ms; --m-escalon: 0ms;
+           --m-expansion: 1ms; --m-bajada: 1ms; --m-lateral: 1ms; }
+  *, *::before, *::after { animation-duration: 1ms !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Reset
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: calc(var(--ui-base) * var(--ui-escala));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--f-ui);
+  font-size: var(--t-md);
+  line-height: 1.5;
+  color: var(--c-texto);
+  background: var(--c-lienzo);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  /* La expansión del color al hacer click se sale de la ventana a propósito. */
+  overflow: hidden;
+  transition: background var(--m-lenta) var(--ease-expandir);
+}
+
+/* Continuidad de la transición: la pantalla a la que se llega desde un módulo
+   arranca con el color de ese módulo ya de fondo. */
+html[data-tema] body { background: var(--c-tema-relleno); }
+
+input, textarea, select, [data-seleccionable] { -webkit-user-select: text; user-select: text; }
+
+h1, h2, h3, p { margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; }
+
+/* El atributo `hidden` tiene que ganarle a cualquier `display` del autor: sin
+   esto, un `.grupo { display: grid }` deja visible un bloque marcado hidden y
+   el HTML miente sobre lo que se está mostrando. */
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 3px; border-radius: var(--r-sm); }
+::selection { background: var(--c-tema-relleno); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--c-borde-fuerte) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--c-borde-fuerte); border-radius: var(--r-full);
+  border: 3px solid transparent; background-clip: content-box;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Estructura de pantalla
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.app {
+  display: grid;
+  /* La columna DEBE ser minmax(0, 1fr): sin esto la pista se estira al
+     min-content de la fila más ancha —normalmente la cabecera, que es un flex
+     sin wrap— la ventana se pasa de ancho por la derecha y, peor, las
+     container queries de las pantallas nunca se cumplen porque el contenedor
+     mide más que la ventana. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.contenido { padding: var(--e-6) var(--e-5); min-height: 0; overflow-y: auto; }
+/* `safe center` centra mientras entra y alinea arriba cuando no — si no, al
+   agrandar el texto la tarjeta se recorta por arriba y no hay cómo llegar. */
+.contenido--centrado { display: flex; justify-content: center; align-items: safe center; }
+
+.limite     { width: min(100%, 68rem); margin-inline: auto; }
+.limite--sm { width: min(100%, 44rem); margin-inline: auto; }
+.limite--lg { width: min(100%, 96rem); margin-inline: auto; }
+
+/* ── Cabecera (pantallas internas; el menú principal no la usa) ─────────── */
+.cabecera {
+  display: flex; align-items: center; gap: var(--e-3) var(--e-4);
+  flex-wrap: wrap;
+  padding: var(--e-2) var(--e-5); min-height: var(--alto-cabecera);
+  background: transparent;
+  color: var(--c-tema-tinta);
+}
+.cabecera__logo { height: 1.5rem; width: auto; display: block; }
+.cabecera__titulo {
+  font-size: var(--t-md); font-weight: var(--peso-fuerte); letter-spacing: -.01em;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cabecera__sep { flex: 1; }
+.cabecera__version { font-size: var(--t-xs); color: currentColor; opacity: .55; font-variant-numeric: tabular-nums; }
+
+.cab-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--e-2);
+  min-height: 2rem; padding: 0 var(--e-3);
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: var(--r-full);
+  color: inherit; font-size: var(--t-sm); font-weight: var(--peso-medio);
+  cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.cab-btn:hover { background: color-mix(in srgb, currentColor 10%, transparent);
+                 border-color: color-mix(in srgb, currentColor 45%, transparent); }
+.cab-btn:active { transform: scale(.96); }
+.cab-btn:disabled { opacity: .35; cursor: not-allowed; }
+.cab-btn--fantasma { border-color: transparent; }
+.cab-btn--fantasma:hover { border-color: color-mix(in srgb, currentColor 25%, transparent); }
+.cab-btn--icono { padding: 0; width: 2rem; }
+
+.ctrl-texto {
+  display: inline-flex; align-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: var(--r-full); overflow: hidden;
+}
+.ctrl-texto .cab-btn { border: 0; border-radius: 0; width: 2rem; padding: 0; }
+.ctrl-texto__valor {
+  font-size: var(--t-xs); padding: 0 var(--e-2); opacity: .6;
+  font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center;
+}
+
+.barra-acciones {
+  display: flex; align-items: center; gap: var(--e-3);
+  padding: var(--e-4) var(--e-5);
+}
+.barra-acciones__sep { flex: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tarjetas y títulos
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tarjeta {
+  background: var(--c-superficie);
+  border: 1px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+  padding: var(--e-6);
+}
+.tarjeta--plana { box-shadow: none; }
+.tarjeta__cab { margin-bottom: var(--e-5); }
+
+.antetitulo {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--c-tema-fuerte);
+}
+.titulo { font-size: var(--t-2xl); font-weight: var(--peso-fuerte); line-height: 1.1;
+          letter-spacing: -.03em; margin-top: var(--e-1); }
+.subtitulo { font-size: var(--t-md); color: var(--c-texto-suave); margin-top: var(--e-2); }
+.seccion-titulo {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); color: var(--c-texto-tenue);
+  text-transform: uppercase; letter-spacing: .1em; margin-bottom: var(--e-3);
+}
+.separador { height: 1px; background: var(--c-borde); border: 0; margin: var(--e-5) 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Formularios
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.campos { display: grid; gap: var(--e-5); }
+.campos--2 { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.campos--3 { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+
+.campo {
+  display: grid; gap: var(--e-2); min-width: 0;
+  /* `start` es clave: en una fila de campos, si uno lleva texto de ayuda
+     abajo y el otro no, el corto se estira al alto del largo y — sin esto —
+     reparte ese sobrante entre sus propias filas, con lo que su input queda
+     más abajo que el del vecino. Con `start` el sobrante queda al final. */
+  align-content: start;
+}
+.campo__etiqueta { font-size: var(--t-sm); font-weight: var(--peso-medio); color: var(--c-texto-suave); }
+.campo__etiqueta[data-requerido]::after { content: " *"; color: var(--c-error); }
+.campo__ayuda { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+.campo__error { font-size: var(--t-xs); color: var(--c-error); display: none; }
+.campo[data-invalido] .campo__error { display: block; }
+.campo[data-invalido] .entrada { border-color: var(--c-error); animation: sacudir 320ms var(--ease-entrada); }
+
+@keyframes sacudir {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); } 40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(3px); }
+}
+
+.entrada {
+  width: 100%; min-height: 3rem;
+  padding: var(--e-2) var(--e-4);
+  font: inherit; font-size: var(--t-md); color: var(--c-texto);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde-fuerte);
+  border-radius: var(--r-md);
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.entrada:hover:not(:disabled):not(:focus) { border-color: var(--c-tema-borde); }
+.entrada:focus {
+  outline: 0;
+  border-color: var(--c-tema-fuerte);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-tema-borde) 30%, transparent);
+  transform: translateY(-1px);
+}
+.entrada:disabled { background: var(--c-superficie-2); color: var(--c-texto-tenue); cursor: not-allowed; }
+.entrada::placeholder { color: var(--c-texto-tenue); }
+
+.entrada--num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.entrada--num::-webkit-outer-spin-button,
+.entrada--num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.entrada--num { -moz-appearance: textfield; }
+
+.stepper { display: flex; align-items: stretch; gap: var(--e-2); }
+.stepper .entrada { text-align: center; }
+.stepper__btn {
+  flex: 0 0 auto; width: 3rem; min-height: 3rem;
+  border: 1.5px solid var(--c-borde-fuerte); border-radius: var(--r-md);
+  background: var(--c-superficie); color: var(--c-texto-suave);
+  font-size: var(--t-lg); line-height: 1; cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.stepper__btn:hover:not(:disabled) {
+  background: var(--c-tema-relleno); border-color: var(--c-tema-borde);
+  color: var(--c-tema-fuerte); transform: translateY(-1px);
+}
+.stepper__btn:active:not(:disabled) { transform: scale(.92); }
+.stepper__btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Casilla como chip ─────────────────────────────────────────────────────
+   Reemplaza el checkbox dibujado a mano de ui/pantalla_inicio.py (Frame de
+   28×28 px + una ✓ encima). Acá es un <input type=checkbox> real: accesible
+   con teclado, escala solo, sin píxeles fijos. */
+.chip-casilla {
+  display: inline-flex; align-items: center; gap: var(--e-3);
+  padding: var(--e-3) var(--e-4); min-height: 3rem;
+  border: 1.5px solid var(--c-borde-fuerte); border-radius: var(--r-md);
+  background: var(--c-superficie); cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.chip-casilla:hover { border-color: var(--c-tema-borde); transform: translateY(-1px); }
+.chip-casilla:has(input:checked) {
+  border-color: var(--c-tema-fuerte);
+  background: var(--c-tema-relleno);
+}
+.chip-casilla:has(input:focus-visible) { outline: 3px solid var(--c-foco); outline-offset: 3px; }
+.chip-casilla input {
+  appearance: none; margin: 0; flex: 0 0 auto;
+  width: 1.375rem; height: 1.375rem;
+  border: 2px solid var(--c-borde-fuerte); border-radius: var(--r-sm);
+  background: var(--c-superficie); display: grid; place-content: center; cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida);
+}
+.chip-casilla input::after {
+  content: ""; width: .7rem; height: .38rem;
+  border-left: 2.5px solid var(--c-texto-inv); border-bottom: 2.5px solid var(--c-texto-inv);
+  transform: rotate(-45deg) translate(1px, -1px) scale(0);
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.chip-casilla input:checked { background: var(--c-tema-fuerte); border-color: var(--c-tema-fuerte); }
+.chip-casilla input:checked::after { transform: rotate(-45deg) translate(1px, -1px) scale(1); }
+.chip-casilla__texto { font-size: var(--t-md); font-weight: var(--peso-medio); }
+
+/* Suelta: la misma casilla, sin la caja alrededor. Para cuando ya hay un
+   contenedor que agrupa y el borde solo suma ruido. */
+.chip-casilla--suelta {
+  padding: 0; min-height: 0;
+  border-color: transparent; background: transparent;
+}
+.chip-casilla--suelta:hover,
+.chip-casilla--suelta:has(input:checked) {
+  border-color: transparent; background: transparent; transform: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Botones
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--e-2);
+  min-height: 3rem; padding: 0 var(--e-5);
+  border: 1.5px solid transparent; border-radius: var(--r-full);
+  font-size: var(--t-md); font-weight: var(--peso-medio);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-media) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--s-2); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.btn:disabled { cursor: not-allowed; }
+
+/* Brillo que barre el botón al pasar el mouse */
+.btn::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 35%,
+              rgba(255,255,255,.35) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform var(--m-lenta) var(--ease-salida);
+}
+.btn:hover:not(:disabled)::after { transform: translateX(120%); }
+
+.btn--primario { background: var(--c-tema-fuerte); color: var(--c-texto-inv); box-shadow: var(--s-1); }
+.btn--primario:hover:not(:disabled) { background: var(--c-tema-tinta); }
+.btn--primario:disabled { background: var(--c-borde-fuerte); color: #FFF; box-shadow: none; }
+
+.btn--secundario { background: var(--c-superficie); color: var(--c-tema-fuerte); border-color: var(--c-borde-fuerte); }
+.btn--secundario:hover:not(:disabled) { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+.btn--secundario:disabled { color: var(--c-texto-tenue); }
+
+.btn--fantasma { color: var(--c-texto-suave); }
+.btn--fantasma:hover:not(:disabled) { background: color-mix(in srgb, currentColor 8%, transparent); color: var(--c-texto); }
+
+.btn--peligro { background: var(--c-error); color: var(--c-texto-inv); }
+.btn--peligro:hover:not(:disabled) { background: #9E2C20; }
+
+.btn--grande { min-height: 3.5rem; font-size: var(--t-lg); padding: 0 var(--e-6); }
+/* 35 % más chico que el botón normal: para barras de acciones donde el botón
+   no tiene que competir con el contenido. */
+.btn--chico { min-height: 1.95rem; font-size: var(--t-sm); padding: 0 var(--e-4); }
+.btn--bloque { width: 100%; }
+.btn__atajo { font-size: var(--t-xs); opacity: .7; border: 1px solid currentColor;
+              border-radius: var(--r-sm); padding: 0 var(--e-1); line-height: 1.4; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Switch segmentado
+   Reemplaza los switches de dos tk.Label que hay hoy en varias pantallas
+   (Impresión, TerminacionesCaja, tipo de producto). Son <input type=radio>
+   de verdad: se manejan con las flechas del teclado y son accesibles.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.segmento {
+  position: relative;
+  display: inline-flex; padding: 3px; gap: 2px;
+  background: var(--c-superficie-2);
+  border: 1.5px solid var(--c-borde-fuerte);
+  border-radius: var(--r-full);
+}
+.segmento input {
+  position: absolute; top: 0; left: 0;
+  width: 1px; height: 1px; margin: 0; padding: 0;
+  opacity: 0; pointer-events: none; appearance: none; -moz-appearance: none;
+}
+/* Una sola pastilla física, no dos ::before independientes: se desliza de una
+   opción a la otra con transform, en vez de apagar una y encender la otra. */
+.segmento::before {
+  content: ""; position: absolute; z-index: 0;
+  top: 3px; left: 3px; right: 50%;
+  bottom: 3px; margin-right: 1px;
+  border-radius: var(--r-full);
+  background: var(--c-tema-fuerte);
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.segmento:has(input:nth-of-type(2):checked)::before { transform: translateX(calc(100% + 2px)); }
+.segmento label {
+  position: relative; z-index: 1;
+  padding: .35rem var(--e-4); border-radius: var(--r-full);
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+  color: var(--c-texto-suave); cursor: pointer; white-space: nowrap;
+  transition: color var(--m-media) var(--ease-salida);
+}
+.segmento label:hover { color: var(--c-texto); }
+.segmento input:checked + label { color: var(--c-texto-inv); }
+.segmento input:focus-visible + label { outline: 3px solid var(--c-foco); outline-offset: 2px; }
+.segmento--bloque { display: flex; }
+.segmento--bloque label { flex: 1; text-align: center; }
+
+/* Variante vertical: misma pastilla, mismas reglas, pero se desliza de
+   arriba hacia abajo en vez de lado a lado — para switches con dos textos
+   de largo muy distinto, donde uno horizontal deja una opción angosta y
+   la otra estirada sin necesidad.
+   El radio pleno (--r-full) que usa la horizontal solo funciona porque ahí
+   la pastilla es casi tan alta como el contenedor entero: acá, apilada, la
+   pastilla mide la mitad de alto que el contenedor, así que con el mismo
+   radio su curva es más cerrada que la de afuera y la esquina sobresale.
+   Con un radio fijo y moderado ambas curvas quedan concéntricas. */
+.segmento--vertical { flex-direction: column; border-radius: var(--r-lg); }
+.segmento--vertical::before {
+  left: 3px; right: 3px; top: 3px; bottom: 50%;
+  margin-right: 0; margin-bottom: 1px;
+  border-radius: var(--r-md);
+}
+.segmento--vertical:has(input:nth-of-type(2):checked)::before {
+  transform: translateY(calc(100% + 2px));
+}
+.segmento--vertical label { border-radius: var(--r-md); text-align: center; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lista aditiva (Estructuras, Terminaciones)
+   Equivale a _ListaAditiva de ui/cotizacion.py: 0..N ítems de un catálogo,
+   sin duplicados, sin cantidades, y con la opción de escribir un monto suelto
+   en vez de un nombre (ver core.precios.parsear_valor_manual).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.aditiva { display: grid; gap: var(--e-2); }
+.aditiva__alta { display: flex; gap: var(--e-2); }
+.aditiva__alta .entrada { flex: 1; min-width: 0; }
+.aditiva__items { display: grid; gap: var(--e-1); }
+.aditiva__items:empty { display: none; }
+
+.pastilla {
+  display: flex; align-items: center; gap: var(--e-2);
+  padding: var(--e-1) var(--e-1) var(--e-1) var(--e-3);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+  animation: aparecer var(--m-media) var(--ease-salida) both;
+}
+.pastilla__nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pastilla__monto {
+  margin-left: auto; padding-left: var(--e-2);
+  font-family: var(--f-mono); font-size: var(--t-xs);
+  color: var(--c-texto-suave); font-variant-numeric: tabular-nums;
+}
+.pastilla__quitar {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 1.5rem; height: 1.5rem; border-radius: var(--r-sm);
+  color: var(--c-texto-tenue); cursor: pointer; line-height: 1;
+  transition: background var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida);
+}
+.pastilla__quitar:hover { background: var(--c-error-suave); color: var(--c-error); }
+/* Un monto escrito a mano no es un material del catálogo: se distingue. */
+.pastilla--manual { border-style: dashed; }
+.pastilla--manual .pastilla__nombre { font-family: var(--f-mono); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tarjetas de registro (cotizaciones / OPs) — el hover del menú y, más
+   adelante, las pantallas de listado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.reg {
+  position: relative;              /* ancla de .reg__barra */
+  display: grid; gap: 0; align-content: center;
+  /* Interlineado y padding apretados a propósito: la tarjeta del menú tiene
+     un alto atado al ratio del módulo, y el aire de más era justo lo que
+     hacía que el texto no entrara. Se ganó espacio ahí, no achicando la
+     tipografía. */
+  padding: var(--e-1) var(--e-3);
+  min-width: 0; overflow: hidden;  /* la barra se recorta contra las esquinas */
+  text-align: left;
+  background: var(--c-superficie);
+  border: 1.5px solid color-mix(in srgb, var(--c-tema-borde) 55%, transparent);
+  border-radius: var(--r-md);
+  box-shadow: var(--s-1);
+  cursor: pointer;
+  transition: transform var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              background var(--m-rapida) var(--ease-salida);
+}
+.reg:hover { transform: translateY(-3px); box-shadow: var(--s-2);
+             border-color: var(--c-tema-fuerte); background: var(--c-superficie); }
+.reg:active { transform: translateY(-1px) scale(.985); }
+
+.reg__num {
+  font-family: var(--f-mono);
+  font-size: var(--t-lg);
+  font-weight: var(--peso-fuerte);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+  line-height: 1.05;
+  color: var(--c-tema-tinta);
+}
+.reg__sub {
+  font-size: var(--t-xs);
+  line-height: 1.25;
+  color: var(--c-texto-suave);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reg__pie { font-size: var(--t-xs); line-height: 1.25; color: var(--c-texto-tenue); font-variant-numeric: tabular-nums; }
+
+/* Incompletas: sin número, se muestra "3/7". Van primero y se distinguen. */
+.reg--incompleta { border-style: dashed; background: color-mix(in srgb, var(--c-tema-relleno) 55%, #fff); }
+.reg--incompleta .reg__num { font-size: var(--t-md); color: var(--c-tema-fuerte); }
+
+/* ── La barra vive en el CANTO de la tarjeta, no dentro ────────────────────
+   Hace dos trabajos con un solo elemento:
+     · tarjeta desplegada → barra de progreso ("3 de 7 productos")
+     · tarjeta escondida detrás del módulo → esa línea de color es lo único
+       que asoma, y es el aviso de que hay cotizaciones a medio hacer, sin
+       necesidad de pasar el mouse por encima.
+   Por eso va pegada abajo y del alto de un borde grueso: es un "ribbon", no
+   una barra flotando dentro del contenido. */
+.reg__barra {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 4px;
+  background: color-mix(in srgb, var(--c-tema-borde) 30%, transparent);
+}
+.reg__barra > i {
+  display: block; height: 100%;
+  background: var(--c-tema-fuerte);
+  transition: width var(--m-lenta) var(--ease-salida);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tabla de datos
+   La caja es lo que hace que los números se lean como una tabla y no como
+   cifras sueltas sobre el fondo: superficie propia, cabecera con relleno,
+   filas alternadas y una fila de totales que se despega del resto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tabla-caja {
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-1);
+  overflow: auto;
+  max-height: 100%;
+}
+.tabla { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+
+.tabla thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--c-superficie);
+  color: var(--c-tema-tinta);
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte);
+  letter-spacing: .06em; text-transform: uppercase;
+  text-align: left; white-space: nowrap;
+  padding: var(--e-3) var(--e-3);
+  border-bottom: 1.5px solid var(--c-tema-borde);
+}
+.tabla tbody td {
+  padding: var(--e-2) var(--e-3);
+  border-top: 1px solid var(--c-borde);
+  vertical-align: middle;
+}
+.tabla tbody tr:first-child td { border-top: 0; }
+.tabla tbody tr:nth-child(even) { background: var(--c-superficie-2); }
+.tabla tbody tr:hover { background: var(--c-tema-relleno); }
+
+/* Los números en monoespaciada y alineados a la derecha: así las columnas de
+   plata y de medidas se pueden comparar de un vistazo, dígito contra dígito. */
+.tabla .num {
+  text-align: right;
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tabla thead .num { text-align: right; }
+
+.tabla tr[data-total] td {
+  background: var(--c-superficie) !important;
+  border-top: 1.5px solid var(--c-tema-borde);
+  font-weight: var(--peso-fuerte);
+  color: var(--c-tema-tinta);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Etiquetas y avisos
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.etiqueta {
+  display: inline-flex; align-items: center; gap: var(--e-1);
+  padding: .1rem var(--e-2); border-radius: var(--r-full);
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+}
+.etiqueta--ok     { background: var(--c-ok-suave);     color: var(--c-ok); }
+.etiqueta--aviso  { background: var(--c-aviso-suave);  color: var(--c-aviso); }
+.etiqueta--error  { background: var(--c-error-suave);  color: var(--c-error); }
+.etiqueta--neutra { background: var(--c-superficie-2); color: var(--c-texto-suave); border: 1px solid var(--c-borde); }
+.etiqueta--tema   { background: var(--c-tema-relleno); color: var(--c-tema-fuerte); }
+
+.aviso {
+  display: flex; gap: var(--e-3);
+  padding: var(--e-3) var(--e-4); border-radius: var(--r-md);
+  font-size: var(--t-sm); border: 1px solid;
+}
+.aviso--info  { background: var(--c-tema-relleno); border-color: var(--c-tema-borde); color: var(--c-tema-tinta); }
+.aviso--aviso { background: var(--c-aviso-suave);  border-color: #EBD5A8; color: var(--c-aviso); }
+.aviso--error { background: var(--c-error-suave);  border-color: #EFC4BF; color: var(--c-error); }
+
+.pila-avisos {
+  position: fixed; right: var(--e-5); bottom: var(--e-5);
+  display: grid; gap: var(--e-2); z-index: 200; pointer-events: none;
+}
+.pila-avisos .aviso {
+  background: var(--c-superficie); border-color: var(--c-borde);
+  box-shadow: var(--s-3); animation: entrar-abajo var(--m-media) var(--ease-salida);
+}
+@keyframes entrar-abajo { from { opacity: 0; transform: translateY(10px); } }
+
+.marca-mock {
+  position: fixed; left: var(--e-3); bottom: var(--e-3); z-index: 200;
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+  padding: var(--e-1) var(--e-3); border-radius: var(--r-full);
+  background: #16161A; color: #FFF; opacity: .5; pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Flechas de navegación lateral — entre módulos (menu.html, con un panel
+   expandido) y entre registros (ver-cotizacion.html/ver-op.html). Fijas a
+   los bordes de la ventana, no del contenido, para no competir por ancho
+   con el layout de cada pantalla.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.flecha-nav {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  z-index: 50;
+  width: 3rem; height: 3rem;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-full);
+  background: var(--c-superficie);
+  box-shadow: var(--s-2);
+  color: var(--c-tema-fuerte);
+  cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.flecha-nav:hover  { border-color: var(--c-tema-fuerte); transform: translateY(-50%) scale(1.06); }
+.flecha-nav:active { transform: translateY(-50%) scale(.94); }
+.flecha-nav--izq { left: var(--e-5); }
+.flecha-nav--der { right: var(--e-5); }
+
+/* Ícono elegido por Bruno — dos bordes en escuadra, rotados a 45°, forman
+   la punta de la flecha. Sin fuente de íconos ni SVG externo. */
+.icon-chevron-right, .icon-chevron-left {
+  display: inline-block;
+  border-style: solid; border-color: currentColor;
+  border-width: 0 .16em .16em 0;
+  padding: .3em;
+}
+.icon-chevron-right { transform: rotate(-45deg); margin-left: -.15em; }
+.icon-chevron-left  { transform: rotate(135deg); margin-right: -.15em; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utilidades de animación reutilizables
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Aparece con un escalón por hijo: poner --i en cada hijo (lo hace app.js). */
+.aparecer > * {
+  animation: aparecer var(--m-media) var(--ease-salida) both;
+  animation-delay: calc(var(--i, 0) * var(--m-escalon));
+}
+@keyframes aparecer { from { opacity: 0; transform: translateY(10px); } }
+
+.oculto { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Cargando — tres puntos en onda, mientras se espera la respuesta de Python.
+   El color sale de --c-tema-fuerte: en la pantalla de una OP salen azules,
+   en la de una cotización salen del tema de cotizaciones, sin tocar nada acá.
+   `both` en la animación es lo que hace que el punto arranque ya achicado
+   (en el 0%) en vez de saltar a tamaño completo recién al primer frame.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* `fixed` + `inset:0`, no relativo a donde cae en el documento: así queda
+   centrada en la ventana entera pase lo que pase alrededor —da igual si el
+   contenido real tiene scroll, cabecera más alta u otro layout— en vez de
+   centrada solo en el ancho de .contenido y pegada arriba, debajo de la
+   cabecera. */
+.cargando {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--e-2);
+  pointer-events: none;
+}
+.cargando span {
+  width: .55rem; height: .55rem; border-radius: var(--r-full);
+  background: var(--c-tema-fuerte);
+  animation: cargando-onda 1.1s var(--ease-entrada) infinite both;
+}
+.cargando span:nth-child(2) { animation-delay: .15s; }
+.cargando span:nth-child(3) { animation-delay: .3s; }
+@keyframes cargando-onda {
+  0%, 60%, 100% { transform: translateY(0); opacity: .35; }
+  30% { transform: translateY(-.4rem); opacity: 1; }
+}
+/* Con prefers-reduced-motion, la regla global de arriba (línea ~129) ya deja
+   la animación en 1ms — los puntos quedan quietos en vez de rebotando, sin
+   necesidad de una segunda regla acá. */

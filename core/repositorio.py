@@ -29,8 +29,14 @@ from core.rutas import CONF as _CONF_DIR, DATOS as _DATOS_DIR, RECURSOS as _RECU
 
 SEP = "|"  # separador del viejo formato clientes.txt/contactos.txt (solo para migrar)
 
-CLIENTES_PATH  = _CONF_DIR / "clientes.json"
-CONTACTOS_PATH = _CONF_DIR / "contactos.json"
+CLIENTES_PATH     = _CONF_DIR / "clientes.json"
+CONTACTOS_PATH    = _CONF_DIR / "contactos.json"
+# Preferencias de interfaz (ej. escala_ui, la A-/A+ de las pantallas HTML
+# nuevas): en DATOS (local por máquina), NO en CONF — es una preferencia
+# personal de quien usa esta instalación, no un dato de negocio compartido
+# por Dropbox (si viviera en Conf, alguien agrandando su letra se la
+# agrandaría a todo el mundo).
+PREFERENCIAS_PATH = _DATOS_DIR / "preferencias.json"
 
 
 def _parsear_pipe(texto: str, campos: list[str]) -> list[dict]:
@@ -164,6 +170,34 @@ def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
             return  # ya existe, no duplicar
     contactos.append({"contacto": contacto, "email": email, "descuento": descuento, "condicion": condicion})
     _escribir_json(CONTACTOS_PATH, contactos)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Preferencias de interfaz — local por máquina, ver PREFERENCIAS_PATH.
+# Formato libre {clave: valor} (no una lista, a diferencia de clientes/
+# contactos) — hoy solo guarda "escala_ui", pero cualquier pantalla nueva
+# puede sumar una clave propia sin tocar este módulo.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_preferencias() -> dict:
+    """Lee preferencias.json. {} si no existe o está corrupto (nunca
+    revienta el arranque de una pantalla por esto)."""
+    if not PREFERENCIAS_PATH.exists():
+        return {}
+    try:
+        datos = json.loads(PREFERENCIAS_PATH.read_text(encoding="utf-8"))
+        return datos if isinstance(datos, dict) else {}
+    except Exception:
+        return {}
+
+
+def guardar_preferencia(clave: str, valor) -> None:
+    """Escribe una preferencia, preservando las demás ya guardadas."""
+    preferencias = cargar_preferencias()
+    preferencias[clave] = valor
+    PREFERENCIAS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PREFERENCIAS_PATH.write_text(
+        json.dumps(preferencias, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
