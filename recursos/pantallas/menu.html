@@ -32,7 +32,11 @@
      resolver. Se eligieron escalones de la escala tipográfica, con piso. */
   --menu-escala: .5;
   --logo-ancho:  calc(32rem * var(--menu-escala));
-  --modulos-ancho: calc(62rem * var(--menu-escala));
+  /* Ancho para 3 módulos EN UNA FILA, cada uno del mismo tamaño que tenían
+     los 2 originales (Cotizaciones/OPs) — 94rem en vez de 62rem para que
+     el módulo nuevo (Despachos) se sume a la derecha sin encoger a los
+     demás. Ver .menu__modulos más abajo. */
+  --modulos-ancho: calc(94rem * var(--menu-escala));
   --modulo-min:  calc(19rem * var(--menu-escala));
 
   /* ── Tarjetas ───────────────────────────────────────────────────────────
@@ -89,9 +93,15 @@ body[data-fase="panel"] .flecha-nav[data-flecha-modulo] { display: grid; }
 .menu__modulos {
   grid-row: 3;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--modulo-min), 1fr));
+  /* Fijas en 3 columnas, no auto-fit: con auto-fit, cada módulo nuevo
+     sumaba una columna y encogía a TODOS (efecto no buscado). Con 3
+     columnas fijas y --modulos-ancho ajustado (ver arriba), los 3 módulos
+     quedan en una sola fila, todos del mismo tamaño, y la fila entera
+     centrada en la pantalla — así el módulo del medio (OPs) cae
+     naturalmente en el centro horizontal. */
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--e-4);
-  /* stretch, no start: los dos módulos quedan del mismo alto aunque un título
+  /* stretch, no start: los módulos quedan del mismo alto aunque un título
      use dos líneas, y así los mazos de tarjetas arrancan a la misma altura. */
   align-items: stretch;
   width: min(100%, var(--modulos-ancho));
@@ -104,6 +114,15 @@ body[data-fase="panel"] .flecha-nav[data-flecha-modulo] { display: grid; }
   animation-delay: calc(var(--i) * 90ms + 120ms);
 }
 .modulo:hover, .modulo:focus-within { z-index: 3; }
+
+/* TEMPORAL — módulo a medio construir, oculto del release (Bruno pidió
+   revertir esto apenas se publique). pointer-events:none en la SECCIÓN
+   entera (no solo en la caja) es lo que corta el :hover/:focus-within que
+   despliega el mazo de tarjetas — un disabled en el <button> interno no
+   alcanza, porque ese selector reacciona a que el mouse esté dentro de la
+   sección, no del botón. Ver también irAModuloAdyacente (menu.html) y el
+   guard en cargar(), que no pisa el "Próximamente" con la cuenta real. */
+.modulo[data-deshabilitado] { pointer-events: none; opacity: .5; filter: grayscale(.6); }
 
 /* ── La caja: la pieza visual ────────────────────────────────────────────── */
 .modulo__caja {
@@ -268,6 +287,16 @@ body[data-fase="volviendo"] .expansion { opacity: 1; }
 }
 body[data-fase="panel"] .panel[data-abierto] { display: flex; }
 
+/* Deslizamiento entre módulos (flechas del costado o ←/→ del teclado, ver
+   irAModuloAdyacente) — display:flex igual que [data-abierto] (ninguno de
+   los dos paneles lo tiene puesto todavía mientras cruzan), más una
+   transición de transform que [data-abierto] no necesita (su cambio es
+   instantáneo, el salto lo tapa la expansión de color). Los dos paneles
+   viajan la MISMA distancia en la MISMA dirección — quedan pegados borde
+   con borde todo el trayecto, nunca se superponen ni dejan hueco. */
+body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
+.panel[data-deslizando] { transition: transform var(--m-deslizar-modulo) var(--ease-salida); }
+
 .panel__cab { display: flex; align-items: center; gap: var(--e-4); }
 .panel__cab .cabecera__sep { flex: 1; }
 
@@ -348,6 +377,74 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
   gap: var(--e-3); align-content: start;
 }
 .incompletas-sueltas .reg { height: auto; }
+
+/* ── Despachos: sección "Con dirección asignada" ──────────────────────────
+   Acá las tarjetas NO navegan al click (a diferencia de todas las demás de
+   este menú) — seleccionan, para poder actuar sobre una o varias con los
+   botones Entregado/Eliminar. Doble click sigue abriendo la OP (generar
+   guías), como cualquier otra tarjeta. */
+.seccion-cab { display: flex; align-items: center; gap: var(--e-3); margin-bottom: var(--e-2); }
+.seccion-cab > .seccion-titulo { margin: 0; }
+.seccion-acciones { display: flex; gap: var(--e-2); margin-left: auto; }
+
+.panel__rejilla[data-lista-panel="despachos-asignados"] .reg { cursor: pointer; }
+.panel__rejilla[data-lista-panel="despachos-asignados"] .reg[data-seleccionado] {
+  border-color: var(--c-tema-fuerte);
+  box-shadow: var(--s-2), 0 0 0 3px color-mix(in srgb, var(--c-tema-fuerte) 25%, transparent);
+  background: var(--c-tema-relleno);
+}
+/* Se esfuma en paralelo a la animación de la caja de envío (ver
+   animarEnvio() en el script) — así su salida de la grilla no se siente
+   como un salto brusco cuando cargar() refresca la lista. */
+.panel__rejilla[data-lista-panel="despachos-asignados"] .reg.reg--saliendo {
+  opacity: 0; transform: scale(.92);
+  pointer-events: none;
+  transition: opacity var(--m-lenta) var(--ease-salida), transform var(--m-lenta) var(--ease-salida);
+}
+
+/* ── Caja de envío — animación de "Entregado" ─────────────────────────────
+   Fija en el borde derecho de la ventana. Entra (fade), el ícono cruza de
+   caja abierta a cerrada (mismo truco de crossfade que el pin/check de
+   asignar-despacho.html), y recién ahí se desliza fuera de la pantalla
+   hacia la derecha, simbolizando el envío — ver entregarSeleccionado() en
+   el script. */
+.caja-envio {
+  position: fixed; top: 50%; right: 2.5rem; z-index: 80;
+  width: 4.5rem; height: 4.5rem;
+  display: grid; place-items: center;
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-tema-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-3);
+  color: var(--c-tema-fuerte);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--m-media) var(--ease-salida),
+              transform var(--m-lenta) var(--ease-entrada);
+}
+.caja-envio[data-mostrar] { opacity: 1; }
+.caja-envio[data-salir] { opacity: 0; transform: translateY(-50%) translateX(8rem); }
+
+.caja-envio__icono { position: relative; width: 2.25rem; height: 2.25rem; }
+.caja-envio__icono .icon-box-open, .caja-envio__icono .icon-box-closed {
+  position: absolute; inset: 0;
+  transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+}
+.caja-envio__icono .icon-box-closed { opacity: 0; transform: scale(.7) rotate(-8deg); }
+.caja-envio[data-cerrada] .icon-box-open { opacity: 0; transform: scale(.7) rotate(8deg); }
+.caja-envio[data-cerrada] .icon-box-closed { opacity: 1; transform: scale(1) rotate(0deg); }
+
+/* ── Diálogo de confirmación (Eliminar) ──────────────────────────────────── */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
 </style>
 </head>
 
@@ -385,6 +482,21 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
       </button>
       <div class="modulo__lista">
         <div class="modulo__rejilla" data-lista="ops"></div>
+      </div>
+    </section>
+
+    <!-- TEMPORAL: data-deshabilitado + disabled sacan este módulo de
+         circulación para el release (ver el comentario junto a
+         .modulo[data-deshabilitado] arriba). Revertir apenas se publique:
+         sacar ambos atributos y devolver el <span> a data-meta="despachos". -->
+    <section class="modulo" data-tema="despachos" data-modulo="despachos" style="--i:2" data-deshabilitado>
+      <button class="modulo__caja" type="button" disabled>
+        <span class="modulo__titulo">Despachos</span>
+        <span class="modulo__meta" data-meta="despachos">Próximamente</span>
+        <span class="modulo__flecha" aria-hidden="true">→</span>
+      </button>
+      <div class="modulo__lista">
+        <div class="modulo__rejilla" data-lista="despachos"></div>
       </div>
     </section>
 
@@ -454,6 +566,53 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     </section>
   </div>
 </div>
+
+<div class="panel" data-panel="despachos" data-tema="despachos">
+  <div class="panel__cab">
+    <button class="cab-btn cab-btn--fantasma" data-cerrar>← Volver</button>
+    <span class="cabecera__sep"></span>
+    <span class="cabecera__version" data-version></span>
+  </div>
+  <div class="panel__cuerpo">
+    <div>
+      <h1 class="panel__titulo">Despachos</h1>
+    </div>
+
+    <section class="panel__seccion">
+      <h2 class="seccion-titulo">Pendientes de asignar dirección</h2>
+      <div class="panel__rejilla" data-lista-panel="despachos"></div>
+    </section>
+
+    <section class="panel__seccion">
+      <div class="seccion-cab">
+        <h2 class="seccion-titulo">Con dirección asignada</h2>
+        <div class="seccion-acciones" data-acciones-asignados hidden>
+          <button class="btn btn--secundario btn--chico" type="button" data-accion="eliminar-despacho">Eliminar</button>
+          <button class="btn btn--primario btn--chico" type="button" data-accion="entregar-despacho">Entregado</button>
+        </div>
+      </div>
+      <div class="panel__rejilla" data-lista-panel="despachos-asignados"></div>
+    </section>
+  </div>
+</div>
+
+<!-- Caja de envío — animación del botón "Entregado" (ver entregarSeleccionado
+     en el script). Vive fija en la esquina derecha, oculta hasta que se usa. -->
+<div class="caja-envio" data-caja-envio hidden>
+  <div class="caja-envio__icono">
+    <div class="icon-box-open"></div>
+    <div class="icon-box-closed"></div>
+  </div>
+</div>
+
+<dialog id="dlg-eliminar-despacho">
+  <h2 class="dlg__titulo" data-dlg-eliminar-titulo>¿Eliminar despacho?</h2>
+  <p class="dlg__texto" data-dlg-eliminar-texto></p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-eliminar">Cancelar</button>
+    <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-eliminar">Eliminar</button>
+  </div>
+</dialog>
 
 <!-- Navegación entre módulos — click o teclado (←/→, ver TD.atajo más abajo).
      Solo visibles con un panel expandido (ver
@@ -561,6 +720,146 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     return b;
   }
 
+  /* El menú solo lista OPs de Despachos/OPs/NoAsignadas — las que
+     necesitan acción (asignarles dirección a sus productos). Calcada de
+     tarjetaPendiente (cotizaciones incompletas): "asignados/total" en vez
+     de un número de OP, con la misma barra de progreso — la dirección es
+     POR PRODUCTO, no por OP (ver core/repositorio_despachos.py), así que
+     acá no hay una sola comuna que mostrar, tiene más sentido mostrar
+     cuánto le falta, igual que a una cotización a medio llenar. */
+  function tarjetaDespacho(d) {
+    const b = document.createElement("button");
+    b.className = "reg reg--incompleta";
+    b.dataset.abrir = "despacho";
+    b.dataset.numero = d.numero;
+    const pct = d.total ? Math.round((d.asignados / d.total) * 100) : 0;
+    b.title = `OP ${d.numero} · ${d.asignados} de ${d.total} productos con dirección · ${d.nombre || ""}`;
+    b.innerHTML =
+      `<span class="reg__num">${d.asignados}/${d.total}</span>` +
+      `<span class="reg__sub">${esc(d.nombre || "OP " + d.numero)}</span>` +
+      `<span class="reg__barra"><i style="width:${pct}%"></i></span>`;
+    return b;
+  }
+
+  const ESTADOS_DESPACHO = { pendiente: "Pendiente", parcial: "Parcial", despachado: "Despachado" };
+
+  /* Distinta a todas las demás tarjetas del menú: acá el click NO navega,
+     SELECCIONA (única salvo Shift, que suma a una selección múltiple) —
+     los botones Entregado/Eliminar actúan sobre lo seleccionado. Doble
+     click sigue abriendo la OP (generar guías), como antes. */
+  function tarjetaDespachoAsignado(o) {
+    const b = document.createElement("button");
+    b.className = "reg";
+    b.dataset.numero = o.numero;
+    const estado = ESTADOS_DESPACHO[o.estado_despacho] || o.estado_despacho || "";
+    b.title = `OP ${o.numero} · ${o.empresa || ""} · ${estado}`;
+    b.innerHTML =
+      `<span class="reg__num">${String(o.numero).padStart(4, "0")}</span>` +
+      `<span class="reg__sub">${esc(o.empresa || "—")}</span>` +
+      `<span class="reg__pie">${esc(estado)}</span>`;
+    b.addEventListener("click", (e) => toggleSeleccionDespacho(o.numero, b, e.shiftKey));
+    b.addEventListener("dblclick", () => TD.api.abrir_despacho(o.numero));
+    return b;
+  }
+
+  /* ── Selección de despachos asignados (Entregado / Eliminar) ─────────── */
+
+  const seleccionadosDespacho = new Set();
+
+  function toggleSeleccionDespacho(numero, tarjeta, conShift) {
+    if (conShift) {
+      if (seleccionadosDespacho.has(numero)) {
+        seleccionadosDespacho.delete(numero);
+        tarjeta.removeAttribute("data-seleccionado");
+      } else {
+        seleccionadosDespacho.add(numero);
+        tarjeta.setAttribute("data-seleccionado", "");
+      }
+    } else {
+      // Click simple sin Shift: selección única — clickear la única ya
+      // seleccionada la deselecciona, cualquier otro caso reemplaza toda
+      // la selección por esta sola tarjeta.
+      const eraLaUnica = seleccionadosDespacho.size === 1 && seleccionadosDespacho.has(numero);
+      $$(".panel__rejilla[data-lista-panel='despachos-asignados'] .reg[data-seleccionado]")
+        .forEach((t) => t.removeAttribute("data-seleccionado"));
+      seleccionadosDespacho.clear();
+      if (!eraLaUnica) {
+        seleccionadosDespacho.add(numero);
+        tarjeta.setAttribute("data-seleccionado", "");
+      }
+    }
+    actualizarAccionesDespacho();
+  }
+
+  function actualizarAccionesDespacho() {
+    $("[data-acciones-asignados]").hidden = seleccionadosDespacho.size === 0;
+    $("[data-accion='entregar-despacho']").disabled = seleccionadosDespacho.size !== 1;
+  }
+
+  /* ── Eliminar (con confirmación) ──────────────────────────────────────── */
+
+  const dlgEliminarDespacho = $("#dlg-eliminar-despacho");
+
+  $("[data-accion='eliminar-despacho']").addEventListener("click", () => {
+    if (!seleccionadosDespacho.size) return;
+    const n = seleccionadosDespacho.size;
+    $("[data-dlg-eliminar-titulo]").textContent = n === 1 ? "¿Eliminar despacho?" : `¿Eliminar ${n} despachos?`;
+    $("[data-dlg-eliminar-texto]").textContent = "Esta acción no se puede deshacer.";
+    dlgEliminarDespacho.showModal();
+  });
+  $("[data-accion='cancelar-eliminar']").addEventListener("click", () => dlgEliminarDespacho.close());
+  $("[data-accion='confirmar-eliminar']").addEventListener("click", async () => {
+    dlgEliminarDespacho.close();
+    const numeros = Array.from(seleccionadosDespacho);
+    seleccionadosDespacho.clear();
+    await TD.api.eliminar_despachos(numeros);
+    await cargar();
+    TD.aviso(numeros.length === 1 ? "Despacho eliminado." : `${numeros.length} despachos eliminados.`, "info");
+  });
+
+  /* ── Entregado (con animación de la caja) ─────────────────────────────── */
+
+  /* Caja abierta -> cerrada -> se desliza fuera de la ventana por la
+     derecha. La tarjeta misma se esfuma en paralelo (no hace falta que
+     "entre" a la caja de verdad — ver charla con Bruno) para que su
+     salida de la grilla, cuando cargar() refresque la lista, no se sienta
+     como un salto brusco. */
+  function animarEnvio(tarjeta) {
+    return new Promise((resolve) => {
+      if (tarjeta) tarjeta.classList.add("reg--saliendo");
+
+      const caja = $("[data-caja-envio]");
+      caja.removeAttribute("data-cerrada");
+      caja.removeAttribute("data-salir");
+      caja.hidden = false;
+      void caja.getBoundingClientRect();   // fuerza el reflow antes de animar
+      requestAnimationFrame(() => caja.setAttribute("data-mostrar", ""));
+
+      setTimeout(() => caja.setAttribute("data-cerrada", ""), 550);
+      setTimeout(() => caja.setAttribute("data-salir", ""), 950);
+      setTimeout(() => {
+        caja.hidden = true;
+        caja.removeAttribute("data-mostrar");
+        caja.removeAttribute("data-cerrada");
+        caja.removeAttribute("data-salir");
+        resolve();
+      }, 1550);
+    });
+  }
+
+  $("[data-accion='entregar-despacho']").addEventListener("click", async () => {
+    if (seleccionadosDespacho.size !== 1) return;
+    const numero = Array.from(seleccionadosDespacho)[0];
+    const tarjeta = $(`.panel__rejilla[data-lista-panel="despachos-asignados"] .reg[data-numero="${numero}"]`);
+    $("[data-accion='entregar-despacho']").disabled = true;
+
+    const [, ok] = await Promise.all([animarEnvio(tarjeta), TD.api.marcar_despacho_entregado(numero)]);
+
+    seleccionadosDespacho.clear();
+    await cargar();
+    TD.aviso(ok ? "Despacho marcado como entregado." : "No se pudo marcar como entregado.", ok ? "info" : "error");
+  });
+
   /* --i ordena el escalonado y el z-index del mazo; --fila, la posición de
      reposo (cuánto hay que subir cada tarjeta para esconderla). */
   function indexar(nodos) {
@@ -607,6 +906,8 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     const pendientes   = r.pendientes   || [];
     const cotizaciones = r.cotizaciones || [];
     const ops          = r.ops          || [];
+    const despachos     = r.despachos    || [];
+    const despachosAsignados = r.despachos_asignados || [];
 
     /* Las incompletas van primero: son las que hay que terminar, y así su
        canto de color queda en la fila que más asoma. */
@@ -620,11 +921,23 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     const mazoOps = indexar(ops.slice(0, MAX_TARJETAS).map((o) => tarjetaOp(o, false)));
     pintar($("[data-lista='ops']"), mazoOps, "No hay OPs activas.");
 
+    const mazoDespachos = indexar(despachos.slice(0, MAX_TARJETAS).map(tarjetaDespacho));
+    pintar($("[data-lista='despachos']"), mazoDespachos, "No hay despachos pendientes.");
+
     /* El panel de cotizaciones ahora es "todo lo que no está incompleto": las
        incompletas se movieron sueltas, junto a "Nueva cotización". */
     pintar($("[data-lista-panel='cotizaciones']"), cotizaciones.map(tarjetaCotizacion),
            "Todavía no hay cotizaciones.");
     pintar($("[data-lista-panel='ops']"), ops.map((o) => tarjetaOp(o, true)), "No hay OPs activas.");
+    pintar($("[data-lista-panel='despachos']"), despachos.map(tarjetaDespacho),
+           "No hay despachos pendientes.");
+    pintar($("[data-lista-panel='despachos-asignados']"), despachosAsignados.map(tarjetaDespachoAsignado),
+           "No hay despachos con dirección asignada.");
+
+    // Cada recarga vuelve a partir de cero: no tiene sentido arrastrar una
+    // selección contra tarjetas que se acaban de recrear.
+    seleccionadosDespacho.clear();
+    actualizarAccionesDespacho();
 
     /* Sueltas junto al botón de "Nueva cotización": sin título ni caja vacía
        cuando no hay ninguna, por eso no pasa por pintar(). */
@@ -641,6 +954,12 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     $("[data-meta='cotizaciones']").textContent = partes.join(" · ");
     $("[data-meta='ops']").textContent =
       ops.length ? plural(ops.length, "activa", "activas") : "";
+    // TEMPORAL: módulo deshabilitado para el release — no pisar el
+    // "Próximamente" del HTML con la cuenta real (ver data-deshabilitado).
+    if (!$(".modulo[data-modulo='despachos']").hasAttribute("data-deshabilitado")) {
+      $("[data-meta='despachos']").textContent =
+        despachos.length ? plural(despachos.length, "pendiente", "pendientes") : "";
+    }
 
     ajustarRatioTarjetas();
   }
@@ -714,11 +1033,15 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
       $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
       const panel = $(`.panel[data-panel='${nombre}']`);
       panel.setAttribute("data-abierto", "");
-      /* Reinicia la animación escalonada de las acciones cada vez que se abre. */
+      /* Reinicia la animación escalonada de las acciones cada vez que se abre
+         — no todos los paneles tienen ".acciones" (Despachos ya no, desde que
+         el listado se mudó adentro del panel mismo). */
       const acc = $(".acciones", panel);
-      acc.classList.remove("aparecer");
-      void acc.offsetWidth;
-      acc.classList.add("aparecer");
+      if (acc) {
+        acc.classList.remove("aparecer");
+        void acc.offsetWidth;
+        acc.classList.add("aparecer");
+      }
       $(".cab-btn", panel).focus({ preventScroll: true });
     }, duracion("--m-expansion"));
   }
@@ -730,7 +1053,8 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
   function abrirModuloDirecto(nombre) {
     const modulo = $(`.modulo[data-modulo='${nombre}']`);
     const panel = $(`.panel[data-panel='${nombre}']`);
-    if (!modulo || !panel) return;
+    // TEMPORAL — ver data-deshabilitado más arriba.
+    if (!modulo || !panel || modulo.hasAttribute("data-deshabilitado")) return;
     moduloActivo = modulo;
     TD.api.notificar_panel(nombre);
 
@@ -766,9 +1090,24 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
      sin este repintado, cambiar de módulo con las flechas dejaba el
      título/contenido del panel nuevo correcto pero el fondo con el color
      del módulo anterior. */
+  /* Cancela la limpieza (setTimeout) de una transición en curso, si hay
+     una — se llama al arrancar una nueva antes de que la anterior
+     termine, así un flechazo encadenado no tiene que esperar a que el
+     anterior complete su ciclo entero para surtir efecto: el panel que
+     estaba a mitad de camino sigue viaje, ahora como "el que se va" de
+     esta transición nueva (la propia transición CSS retoma sola desde
+     donde esté, sin salto — es una transición normal a la que se le
+     cambia el destino). Sin esto, el timeout viejo terminaba pisando el
+     estado de la transición nueva más tarde (transform="" a mitad de
+     camino, o marcando data-abierto en el panel equivocado). */
+  let cancelarDeslizarPendiente = null;
+
   function irAModuloAdyacente(direccion) {
     if (!moduloActivo) return;
-    const modulos = $$(".modulo[data-modulo]");
+    // ":not([data-deshabilitado])" es TEMPORAL — ver data-deshabilitado
+    // más arriba: sin esto, ←/→ igual podían llegar al módulo apagado
+    // saltando entre los otros dos.
+    const modulos = $$(".modulo[data-modulo]:not([data-deshabilitado])");
     const i = modulos.indexOf(moduloActivo);
     if (i === -1) return;
     const paso = direccion === "siguiente" ? 1 : -1;
@@ -776,8 +1115,11 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     if (destino === moduloActivo) return;
 
     const nombre = destino.dataset.modulo;
-    const panel = $(`.panel[data-panel='${nombre}']`);
-    if (!panel) return;
+    const panelDestino = $(`.panel[data-panel='${nombre}']`);
+    const panelActual = $(`.panel[data-panel='${moduloActivo.dataset.modulo}']`);
+    if (!panelDestino || !panelActual) return;
+
+    if (cancelarDeslizarPendiente) cancelarDeslizarPendiente();
 
     moduloActivo = destino;
     TD.api.notificar_panel(nombre);
@@ -785,13 +1127,37 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
     const est = getComputedStyle($(".modulo__caja", destino));
     expansion.style.background = est.backgroundColor;
     expansion.style.borderColor = est.borderTopColor;
-    $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
-    panel.setAttribute("data-abierto", "");
-    const acc = $(".acciones", panel);
-    acc.classList.remove("aparecer");
-    void acc.offsetWidth;
-    acc.classList.add("aparecer");
-    $(".cab-btn", panel).focus({ preventScroll: true });
+
+    // "Siguiente" entra desde la derecha y el actual sale por la
+    // izquierda; "anterior" al revés — mismo sentido que la flecha que
+    // se apretó.
+    panelDestino.setAttribute("data-deslizando", "");
+    panelActual.setAttribute("data-deslizando", "");
+    sinTransicion(panelDestino, () => { panelDestino.style.transform = `translateX(${paso * 100}%)`; });
+
+    requestAnimationFrame(() => {
+      panelActual.style.transform = `translateX(${paso * -100}%)`;
+      panelDestino.style.transform = "translateX(0)";
+    });
+
+    const temporizador = setTimeout(() => {
+      cancelarDeslizarPendiente = null;
+      $$(".panel").forEach((p) => p.removeAttribute("data-abierto"));
+      [panelActual, panelDestino].forEach((p) => {
+        p.removeAttribute("data-deslizando");
+        p.style.transform = "";
+      });
+      panelDestino.setAttribute("data-abierto", "");
+
+      const acc = $(".acciones", panelDestino);
+      if (acc) {
+        acc.classList.remove("aparecer");
+        void acc.offsetWidth;
+        acc.classList.add("aparecer");
+      }
+      $(".cab-btn", panelDestino).focus({ preventScroll: true });
+    }, duracion("--m-deslizar-modulo"));
+    cancelarDeslizarPendiente = () => clearTimeout(temporizador);
   }
 
   /* Se resuelve ACÁ, sincrónico, no adentro de TD.iniciar: ese callback es
@@ -814,6 +1180,11 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
 
   function cerrarModulo() {
     if (!moduloActivo) return;
+    // Por si se cierra el módulo (Escape/Volver) con una transición de
+    // deslizamiento todavía en el aire (flecha recién apretada) — sin
+    // esto, esa limpieza pendiente terminaba marcando data-abierto en un
+    // panel después de haber vuelto al menú.
+    if (cancelarDeslizarPendiente) cancelarDeslizarPendiente();
     const modulo = moduloActivo;
     moduloActivo = null;
     TD.api.notificar_panel(null);
@@ -858,6 +1229,7 @@ body[data-fase="panel"] .panel[data-abierto] { display: flex; }
       if (tipo === "cotizacion")  TD.api.abrir_cotizacion(Number(reg.dataset.numero));
       if (tipo === "op")          TD.api.abrir_op(Number(reg.dataset.numero));
       if (tipo === "pendiente")   TD.api.abrir_pendiente(reg.dataset.id);
+      if (tipo === "despacho")    TD.api.abrir_asignar_despacho(Number(reg.dataset.numero));
       return;
     }
     const accion = e.target.closest("[data-ir]");
