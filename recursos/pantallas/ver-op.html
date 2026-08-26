@@ -271,6 +271,20 @@
 .ficha-prod__etiquetas { display: flex; flex-wrap: wrap; gap: var(--e-1); min-width: 0; }
 .ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .ficha-prod__tipo { align-self: flex-start; }
+
+/* ── Recotizar: confirmación con profundidad 3D ─────────────────────────
+   Mismo <dialog> nativo que #dlg-eliminar-despacho (menu.html) — así
+   hereda gratis el manejo de Escape/backdrop y el guard de app.js que
+   apaga los atajos de la pantalla (Volver, ←/→) mientras un <dialog> está
+   abierto (ver "dialog[open]" en app.js::comboDe). Lo único propio acá es
+   el backdrop-filter: el resto de la ventana se DESENFOCA en vez de solo
+   oscurecerse (el dialog::backdrop de base.css ya pone el tinte oscuro) —
+   es el efecto de profundidad 3D pedido, el panel queda nítido y todo lo
+   demás retrocede fuera de foco. */
+#dlg-recotizar::backdrop {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
 </style>
 </head>
 
@@ -281,6 +295,7 @@
     <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
     <span class="cabecera__titulo" data-titulo>OP</span>
     <span class="cabecera__sep"></span>
+    <button class="cab-btn" data-accion="recotizar" hidden>Recotizar</button>
     <button class="cab-btn" data-accion="imprimir">Imprimir</button>
     <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
       <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
@@ -350,6 +365,18 @@
     </div>
   </main>
 </div>
+
+<dialog id="dlg-recotizar">
+  <h2 class="dlg__titulo">¿Recotizar esta OP?</h2>
+  <p class="dlg__texto">
+    Vuelve a la carpeta de Cotizaciones para editarla y aprobarla de nuevo —
+    esta orden de producción deja de estar activa.
+  </p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-recotizar">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="confirmar-recotizar">Recotizar</button>
+  </div>
+</dialog>
 
 <script src="api.js"></script>
 <script src="app.js"></script>
@@ -658,6 +685,18 @@
 
   $("[data-accion='imprimir']").addEventListener("click", () => TD.api.imprimir_op(op.numero));
 
+  /* Recotizar: solo tiene sentido para una OP activa (el botón se oculta
+     en el arranque si no lo es, ver TD.iniciar más abajo) — confirmación
+     en el <dialog> #dlg-recotizar (ver estilos, con el backdrop
+     desenfocado en vez de solo oscurecido). */
+  const dlgRecotizar = $("#dlg-recotizar");
+  $("[data-accion='recotizar']").addEventListener("click", () => dlgRecotizar.showModal());
+  $("[data-accion='cancelar-recotizar']").addEventListener("click", () => dlgRecotizar.close());
+  $("[data-accion='confirmar-recotizar']").addEventListener("click", () => {
+    dlgRecotizar.close();
+    TD.api.recotizar_op(op.numero);
+  });
+
   /* ←/→ pasan a la OP siguiente/anterior (más nueva -> más antigua, con
      vuelta, entre TODAS las OPs — ver ApiApp.paginar/ApiVerOp.
      numero_adyacente). Sin flechas en pantalla a propósito: se probaron y
@@ -679,6 +718,11 @@
     pintarProductos();
     mostrar(0, false);
     arrancarCiclo();
+
+    // Recotizar solo tiene sentido en una OP activa (JSON/) — el cliente
+    // pidió esto solo para OPs activas, y core.repositorio_ops.retirar_activa
+    // rechaza cualquier otra igual, esto solo evita ofrecer el botón en vano.
+    $("[data-accion='recotizar']").hidden = op.estado !== "activa";
   });
 })();
 </script>
