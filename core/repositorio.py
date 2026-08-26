@@ -31,6 +31,11 @@ SEP = "|"  # separador del viejo formato clientes.txt/contactos.txt (solo para m
 
 CLIENTES_PATH     = _CONF_DIR / "clientes.json"
 CONTACTOS_PATH    = _CONF_DIR / "contactos.json"
+# Direcciones de despacho — archivo APARTE de clientes.json: un cliente
+# puede tener varias direcciones (bodega, casa matriz, obra, ...), así que
+# cada una es su propia entrada acá, ligada al cliente por RUT (ver
+# módulo Despachos, core/repositorio_despachos.py).
+DIRECCIONES_PATH  = _CONF_DIR / "direcciones.json"
 # Preferencias de interfaz (ej. escala_ui, la A-/A+ de las pantallas HTML
 # nuevas): en DATOS (local por máquina), NO en CONF — es una preferencia
 # personal de quien usa esta instalación, no un dato de negocio compartido
@@ -96,6 +101,7 @@ def _migrar_datos_antiguos():
     # docstring del módulo, no necesitan copiarse a Conf).
     _migrar_a_conf("clientes", ["empresa", "rut", "razon_social"])
     _migrar_a_conf("contactos", ["contacto", "email", "fuente", "condicion"])
+    _migrar_a_conf("direcciones")  # archivo nuevo, sin formato .txt legado
 
 
 _migrar_datos_antiguos()
@@ -173,6 +179,52 @@ def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Gestión de direcciones.json — lista de direcciones de despacho, ligadas a
+# un cliente por RUT (un cliente puede tener varias). Ningún campo de la
+# dirección en sí (calle, número, comuna, región) es obligatorio — solo el
+# RUT importa para poder encontrarlas de nuevo (ver core/repositorio_despachos.py).
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_direcciones() -> list[dict]:
+    """Lee direcciones.json: lista de
+    {rut, empresa, alias, calle, numero, comuna, region, referencia}."""
+    return _leer_json(DIRECCIONES_PATH)
+
+
+def direcciones_de_cliente(rut: str) -> list[dict]:
+    """Direcciones guardadas para un RUT puntual (normalizado con
+    formatear_rut, para que no importe cómo se haya escrito antes)."""
+    rut_fmt = formatear_rut(rut or "")
+    return [d for d in cargar_direcciones() if formatear_rut(d.get("rut", "")) == rut_fmt]
+
+
+def guardar_direccion(
+    rut: str, empresa: str, alias: str = "", calle: str = "", numero: str = "",
+    comuna: str = "", region: str = "", codigo_postal: str = "", referencia: str = "",
+):
+    """Agrega una dirección nueva a direcciones.json si no existe ya (dedup
+    por rut+calle+numero, en minúsculas — mismo criterio que guardar_cliente).
+    calle/numero/comuna/region son los únicos campos obligatorios en la
+    pantalla (ver ui/api_asignar_despacho.py); código postal y referencia
+    quedan opcionales incluso a nivel de datos."""
+    direcciones = cargar_direcciones()
+    rut_fmt = formatear_rut(rut or "")
+    for d in direcciones:
+        if (
+            formatear_rut(d.get("rut", "")) == rut_fmt
+            and d.get("calle", "").strip().lower() == calle.strip().lower()
+            and d.get("numero", "").strip().lower() == numero.strip().lower()
+        ):
+            return  # ya existe, no duplicar
+    direcciones.append({
+        "rut": rut_fmt, "empresa": empresa, "alias": alias,
+        "calle": calle, "numero": numero, "comuna": comuna,
+        "region": region, "codigo_postal": codigo_postal, "referencia": referencia,
+    })
+    _escribir_json(DIRECCIONES_PATH, direcciones)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Preferencias de interfaz — local por máquina, ver PREFERENCIAS_PATH.
 # Formato libre {clave: valor} (no una lista, a diferencia de clientes/
 # contactos) — hoy solo guarda "escala_ui", pero cualquier pantalla nueva
@@ -208,6 +260,14 @@ def guardar_preferencia(clave: str, valor) -> None:
 def cargar_productos() -> list[str]:
     """Lee productos.json: lista de nombres de producto."""
     return _leer_json(_RECURSOS_DIR / "productos.json")
+
+
+def cargar_regiones() -> list[str]:
+    """Lee regiones.json: las 16 regiones de Chile, para el selector de
+    región del módulo Despachos. "Región Metropolitana" (el nombre exacto)
+    es el que se compara para decidir si una dirección es de RM o no —
+    ver ui/api_menu.py y la tarjeta del menú en recursos/pantallas/menu.html."""
+    return _leer_json(_RECURSOS_DIR / "regiones.json")
 
 
 def cargar_textiles() -> tuple[list[str], dict[str, float], dict[str, float]]:

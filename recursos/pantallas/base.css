@@ -45,6 +45,13 @@
   --c-op-fuerte:    #1B5C9E;
   --c-op-tinta:     #0D3560;
 
+  /* ── Módulo Despachos · morado pastel ────────────────────────────────────── */
+  --c-desp-relleno:   #F1E9FB;
+  --c-desp-relleno-2: #E6D8F7;
+  --c-desp-borde:     #B98CE0;
+  --c-desp-fuerte:    #7A3FB0;
+  --c-desp-tinta:     #472268;
+
   /* Tema activo — lo escribe [data-tema] más abajo. Las pantallas internas
      usan SIEMPRE estas cuatro variables, nunca las de un módulo puntual: así
      la misma pantalla sirve en el flujo naranjo y en el azul. */
@@ -98,6 +105,12 @@
      de datos a la de productos, y pasar de un producto al de al lado. */
   --m-bajada:  520ms;
   --m-lateral: 380ms;
+  /* Deslizamiento entre módulos con las flechas del costado o ←/→ del
+     teclado (menu.html::irAModuloAdyacente) — 20% más rápido que --m-lenta
+     a pedido de Bruno (560ms → 448ms): con --m-lenta se sentía un delay
+     incómodo antes de poder seguir navegando o usar el módulo recién
+     abierto. */
+  --m-deslizar-modulo: 448ms;
 
   --ease-salida:  cubic-bezier(.22, 1, .36, 1);      /* entra y frena suave */
   --ease-entrada: cubic-bezier(.65, 0, .35, 1);      /* simétrica */
@@ -122,10 +135,16 @@
   --c-tema-fuerte:  var(--c-op-fuerte);
   --c-tema-tinta:   var(--c-op-tinta);
 }
+[data-tema="despachos"] {
+  --c-tema-relleno: var(--c-desp-relleno);
+  --c-tema-borde:   var(--c-desp-borde);
+  --c-tema-fuerte:  var(--c-desp-fuerte);
+  --c-tema-tinta:   var(--c-desp-tinta);
+}
 
 @media (prefers-reduced-motion: reduce) {
   :root { --m-rapida: 1ms; --m-media: 1ms; --m-lenta: 1ms; --m-escalon: 0ms;
-           --m-expansion: 1ms; --m-bajada: 1ms; --m-lateral: 1ms; }
+           --m-expansion: 1ms; --m-bajada: 1ms; --m-lateral: 1ms; --m-deslizar-modulo: 1ms; }
   *, *::before, *::after { animation-duration: 1ms !important; }
 }
 
@@ -761,6 +780,56 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 }
 .icon-chevron-right { transform: rotate(-45deg); margin-left: -.15em; }
 .icon-chevron-left  { transform: rotate(135deg); margin-right: -.15em; }
+
+/* Íconos del módulo Despachos — SVG de Lucide (lucide.dev) embebidos
+   DIRECTO en este CSS como data URI, con stroke="currentColor" para que
+   hereden el color del texto igual que .icon-chevron-*. Sigue sin
+   depender de red ni de una fuente instalada — el SVG queda autocontenido
+   acá mismo, no se descarga de ningún lado en tiempo de ejecución.
+   icon-x todavía no tiene su SVG de Lucide (queda con la aproximación en
+   CSS puro, bordes rotados) — reemplazar acá mismo cuando llegue. */
+.icon-plus, .icon-x, .icon-check, .icon-arrow-down, .icon-map-pin-house,
+.icon-box-open, .icon-box-closed {
+  display: inline-block; width: 1em; height: 1em; flex: 0 0 auto; position: relative;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+}
+
+.icon-plus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='M12 5v14'/%3E%3C/svg%3E");
+}
+
+/* SIN SVG todavía — aproximación en CSS puro (dos bordes cruzados). */
+.icon-x::before, .icon-x::after {
+  content: ""; position: absolute; top: 46%; left: 6%; right: 6%; height: 12%;
+  background: currentColor; border-radius: 1px;
+}
+.icon-x::before { transform: rotate(45deg); }
+.icon-x::after  { transform: rotate(-45deg); }
+
+.icon-check {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+.icon-arrow-down {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14'/%3E%3Cpath d='m19 12-7 7-7-7'/%3E%3C/svg%3E");
+}
+
+.icon-map-pin-house {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 22a1 1 0 0 1-1-1v-4a1 1 0 0 1 .445-.832l3-2a1 1 0 0 1 1.11 0l3 2A1 1 0 0 1 22 17v4a1 1 0 0 1-1 1z'/%3E%3Cpath d='M18 10a8 8 0 0 0-16 0c0 4.993 5.539 10.193 7.399 11.799a1 1 0 0 0 .601.2'/%3E%3Cpath d='M18 22v-3'/%3E%3Ccircle cx='10' cy='10' r='3'/%3E%3C/svg%3E");
+}
+
+/* Caja de despacho (abierta/cerrada) — animación de "Entregado" en el
+   panel de Despachos (menu.html). Hechas a mano, geometría simple
+   (mismo criterio que los demás íconos: SVG embebido, sin fuente ni
+   archivo externo) — si Bruno tiene un ícono de referencia igual de
+   preciso que los que pasó para plus/check/arrow-down/map-pin-house,
+   reemplazar acá mismo. */
+.icon-box-closed {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 9h18'/%3E%3Cpath d='M12 9v12'/%3E%3C/svg%3E");
+}
+.icon-box-open {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M3 7l4-4'/%3E%3Cpath d='M21 7l-4-4'/%3E%3Cpath d='M12 9v10'/%3E%3C/svg%3E");
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Utilidades de animación reutilizables

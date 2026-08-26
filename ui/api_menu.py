@@ -10,6 +10,10 @@ ApiApp.ir()/abrir_cotizacion()/abrir_pendiente()/abrir_op()).
 from core.repositorio_cotizaciones import listar_cotizaciones
 from core.repositorio_pendientes import listar_pendientes
 from core.repositorio_ops import listar_todas_las_ops, ESTADO_ACTIVA
+from core.repositorio_despachos import (
+    listar_ops_despacho, ESTADO_ASIGNACION_ASIGNADA,
+    marcar_entregado, eliminar_despacho,
+)
 
 
 def _completos_pendiente(p: dict) -> tuple[int, int]:
@@ -47,6 +51,47 @@ def _ops_activas() -> list[dict]:
     return activas
 
 
+def _despachos_pendientes() -> list[dict]:
+    """OPs en Despachos/OPs/NoAsignadas — todavía les falta dirección a
+    algún producto (la dirección es POR PRODUCTO, no por OP, ver
+    core/repositorio_despachos.py). Mismo shape que _completos_pendiente
+    (completos/total) para que la tarjeta del menú se vea y se comporte
+    igual que las cotizaciones incompletas (ver tarjetaDespacho en
+    menu.html, calcada de tarjetaPendiente)."""
+    pendientes = []
+    for datos in listar_ops_despacho():
+        if datos.get("EstadoAsignacion") == ESTADO_ASIGNACION_ASIGNADA:
+            continue
+        productos = datos.get("productos", [])
+        asignados = sum(1 for p in productos if p.get("Direccion"))
+        pendientes.append({
+            "numero": datos.get("Cotizacion"),
+            "nombre": datos.get("Nombre", ""),
+            "asignados": asignados,
+            "total": len(productos),
+        })
+    pendientes.sort(key=lambda d: d["numero"], reverse=True)
+    return pendientes
+
+
+def _despachos_asignados() -> list[dict]:
+    """OPs en Despachos/OPs/Asignadas — ya tienen dirección en todos sus
+    productos, listas para seleccionar en el panel y marcar Entregadas o
+    eliminar (ver ApiMenu.marcar_despacho_entregado/eliminar_despachos)."""
+    asignados = [
+        {
+            "numero":          datos.get("Cotizacion"),
+            "nombre":          datos.get("Nombre", ""),
+            "empresa":         datos.get("Empresa", "—"),
+            "estado_despacho": datos.get("EstadoDespacho", ""),
+        }
+        for datos in listar_ops_despacho()
+        if datos.get("EstadoAsignacion") == ESTADO_ASIGNACION_ASIGNADA
+    ]
+    asignados.sort(key=lambda d: d["numero"], reverse=True)
+    return asignados
+
+
 class ApiMenu:
 
     def obtener_resumen(self) -> dict:
@@ -60,7 +105,17 @@ class ApiMenu:
                 "total": total,
             })
         return {
-            "pendientes":   pendientes,
-            "cotizaciones": listar_cotizaciones(),
-            "ops":          _ops_activas(),
+            "pendientes":          pendientes,
+            "cotizaciones":        listar_cotizaciones(),
+            "ops":                 _ops_activas(),
+            "despachos":           _despachos_pendientes(),
+            "despachos_asignados": _despachos_asignados(),
         }
+
+    def marcar_despacho_entregado(self, numero) -> bool:
+        return marcar_entregado(numero)
+
+    def eliminar_despachos(self, numeros: list) -> int:
+        """Elimina varios despachos de una (selección múltiple con Shift,
+        ver menu.html) — devuelve cuántos encontró y borró de verdad."""
+        return sum(1 for n in numeros if eliminar_despacho(n))

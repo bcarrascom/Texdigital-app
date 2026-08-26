@@ -21,6 +21,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_ops as repo_ops
+import core.repositorio_despachos as repo_desp
 
 
 def _op(numero, fecha_ingreso, fecha_entrega="01/01/2026"):
@@ -131,6 +132,40 @@ class TestMoverEntreCarpetas(_ConRutaTemporal):
         repo_ops.mover_a_completadas(2005)
         repo_ops.envejecer_completadas(dias=14)
         self.assertTrue((self._base / "Completadas" / "2005.json").exists())
+
+
+class TestMoverADespachos(_ConRutaTemporal):
+    """mover_a_despachos (ver ui/panel_produccion.py::completar_op) es la
+    otra salida de una OP completada, para las que tienen Despacho y/o
+    Instalacion — va a Despachos/OPs/ (core.repositorio_despachos) en vez
+    de OPs/Completadas/."""
+
+    def setUp(self):
+        super().setUp()
+        self._base_desp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self._base_desp, ignore_errors=True))
+        self._parche_desp = mock.patch.object(repo_desp, "_ruta_base", lambda: self._base_desp)
+        self._parche_desp.start()
+        self.addCleanup(self._parche_desp.stop)
+
+    def test_mover_a_despachos_sale_de_json_y_llega_a_no_asignadas(self):
+        op = _op(8001, "20/08/2026")
+        op["Despacho"] = 15000
+        repo_ops.guardar_op(op)
+        repo_ops.mover_a_despachos(8001)
+        self.assertFalse((self._base / "JSON" / "8001.json").exists())
+        self.assertTrue((self._base_desp / "OPs" / "NoAsignadas" / "8001.json").exists())
+
+    def test_mover_a_despachos_deja_estado_despacho_pendiente(self):
+        op = _op(8002, "20/08/2026")
+        op["Instalacion"] = 30000
+        repo_ops.guardar_op(op)
+        repo_ops.mover_a_despachos(8002)
+        datos = repo_desp.cargar_op_despacho(8002)
+        self.assertEqual(datos["EstadoDespacho"], repo_desp.ESTADO_DESPACHO_PENDIENTE)
+
+    def test_mover_a_despachos_de_op_inexistente_no_revienta(self):
+        repo_ops.mover_a_despachos(424242)
 
 
 class TestEstadoOp(_ConRutaTemporal):
