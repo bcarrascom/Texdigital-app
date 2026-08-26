@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="ver-despacho" data-tema="despachos">
+<head>
+<meta charset="utf-8">
+<title>Despacho · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Detalle de una OP ya asignada (Despachos/OPs/Asignadas) — obtener_despacho
+   (numero). La dirección de cada producto ya se puso en la pantalla de
+   asignación (asignar-despacho.html) — acá solo se genera la guía de
+   despacho, posiblemente parcial (ver core/repositorio_despachos.py). Como
+   la dirección es por producto, una guía solo puede incluir productos que
+   compartan la MISMA dirección — se valida acá antes de llamar al backend
+   (que también lo valida, por las dudas). Las guías ya emitidas quedan
+   listadas abajo, cada una reimprimible.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista-despacho {
+  width: min(100%, 68rem); margin-inline: auto;
+  display: grid; gap: var(--e-4);
+}
+
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+.hoja__cab { display: flex; align-items: baseline; gap: var(--e-3); flex-wrap: wrap; }
+.hoja__num {
+  font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+}
+.hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+.hoja__badges { display: flex; gap: var(--e-2); margin-left: auto; }
+
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+.dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.dato__et {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+
+.tabla-productos input[type="number"] { width: 6rem; text-align: right; }
+.tabla-productos .direccion-celda { font-size: var(--t-xs); color: var(--c-texto-suave); }
+/* Filas cuyos productos NO comparten la dirección del resto quedan atenuadas
+   y con su checkbox de "incluir en esta guía" — la selección de qué grupo de
+   dirección se despacha ahora se hace ahí, no con las cantidades solas. */
+.tabla-productos tr[data-fuera-de-grupo] { opacity: .45; }
+
+.guias { display: grid; gap: var(--e-2); list-style: none; padding: 0; margin: 0; }
+.guia-item {
+  display: flex; align-items: center; gap: var(--e-3);
+  padding: var(--e-3); border: 1px solid var(--c-borde); border-radius: var(--r-md);
+  background: var(--c-superficie);
+}
+.guia-item__n { font-family: var(--f-mono); font-weight: var(--peso-fuerte); color: var(--c-tema-fuerte); }
+.guia-item__resumen { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--c-texto-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guias-vacio { font-size: var(--t-sm); color: var(--c-texto-tenue); }
+
+.generar { display: grid; gap: var(--e-3); }
+.generar__acciones { display: flex; justify-content: flex-end; gap: var(--e-2); }
+.completo-aviso {
+  display: flex; align-items: center; gap: var(--e-2);
+  padding: var(--e-4); border-radius: var(--r-md);
+  background: var(--c-ok-suave); color: var(--c-ok); font-weight: var(--peso-medio);
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>Despacho</span>
+    <span class="cabecera__sep"></span>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista-despacho" data-tras-carga hidden>
+
+      <section class="hoja">
+        <div class="hoja__cab">
+          <span class="hoja__num" data-numero>—</span>
+          <span class="hoja__nombre" data-nombre></span>
+          <div class="hoja__badges" data-badges></div>
+        </div>
+        <div class="datos" data-datos></div>
+      </section>
+
+      <section class="hoja">
+        <h2 class="seccion-titulo">Productos</h2>
+        <p class="direccion-celda">
+          Cada producto va a la dirección que se le asignó. Para generar una
+          guía, indicá cantidades solo en productos de UNA misma dirección —
+          los de otra quedan atenuados en la tabla mientras tanto.
+        </p>
+        <div class="tabla-caja">
+          <table class="tabla tabla-productos" data-tabla-productos>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Tema</th>
+                <th>Dirección</th>
+                <th class="num">Cantidad</th>
+                <th class="num">Despachado</th>
+                <th class="num">Pendiente</th>
+                <th class="num">A despachar ahora</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+
+        <div class="generar" data-seccion-generar>
+          <div class="campo">
+            <label class="campo__etiqueta" for="observaciones">Observaciones (opcional)</label>
+            <textarea class="entrada" id="observaciones" rows="2" data-observaciones></textarea>
+          </div>
+          <div class="generar__acciones">
+            <button class="btn btn--primario" data-accion="generar-guia">Generar guía de despacho</button>
+          </div>
+        </div>
+        <div class="completo-aviso" data-completo hidden>✓ Esta OP ya fue despachada por completo.</div>
+      </section>
+
+      <section class="hoja">
+        <h2 class="seccion-titulo">Guías generadas</h2>
+        <ul class="guias" data-guias></ul>
+        <p class="guias-vacio" data-guias-vacio hidden>Todavía no se generó ninguna guía para esta OP.</p>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s) => String(s == null ? "" : s);
+
+  const ESTADOS = {
+    pendiente:  { texto: "Pendiente",  clase: "etiqueta--tema" },
+    parcial:    { texto: "Parcial",    clase: "etiqueta--aviso" },
+    despachado: { texto: "Despachado", clase: "etiqueta--ok" },
+  };
+
+  let op = null;
+
+  /* ── Cabecera / datos ─────────────────────────────────────────────────── */
+
+  function dato(et, val) {
+    if (!val && val !== 0) return null;
+    const d = document.createElement("div");
+    d.className = "dato";
+    d.innerHTML = `<span class="dato__et"></span><span class="dato__val"></span>`;
+    $(".dato__et", d).textContent = et;
+    $(".dato__val", d).textContent = esc(val);
+    return d;
+  }
+
+  function badge(texto, clase) {
+    const s = document.createElement("span");
+    s.className = "etiqueta " + clase;
+    s.textContent = texto;
+    return s;
+  }
+
+  function pintarCabecera() {
+    $("[data-numero]").textContent = String(op.numero).padStart(4, "0");
+    $("[data-nombre]").textContent = op.nombre || "";
+    $("[data-titulo]").textContent = `Despacho OP ${String(op.numero).padStart(4, "0")}`;
+
+    const badges = $("[data-badges]");
+    badges.textContent = "";
+    const est = ESTADOS[op.estado_despacho] || { texto: op.estado_despacho || "—", clase: "etiqueta--neutra" };
+    badges.appendChild(badge(est.texto, est.clase));
+    if (op.instalacion) badges.appendChild(badge("Incluye instalación", "etiqueta--neutra"));
+
+    const cont = $("[data-datos]");
+    cont.textContent = "";
+    [
+      dato("Empresa", op.empresa),
+      dato("RUT", op.rut),
+      dato("Contacto", op.contacto),
+      dato("Email", op.email),
+      dato("Fecha completada", op.fecha_completada),
+    ].filter(Boolean).forEach((d) => cont.appendChild(d));
+  }
+
+  /* ── Productos y generación de guía ──────────────────────────────────── */
+
+  /* Clave estable para comparar si dos productos van a la MISMA dirección
+     (no alcanza con comparar objetos por referencia — vienen de JSON
+     distinto cada vez que se recarga). */
+  function claveDireccion(d) {
+    if (!d) return "";
+    return [d.calle, d.numero, d.comuna, d.region].map((x) => (x || "").trim().toLowerCase()).join("|");
+  }
+
+  function direccionTexto(d) {
+    if (!d) return "—";
+    const linea1 = [d.calle, d.numero].filter(Boolean).join(" ");
+    return [linea1, d.comuna].filter(Boolean).join(", ") || "—";
+  }
+
+  /* La "dirección activa" es la del primer producto con algo cargado en su
+     input — mientras no haya nada escrito, no hay grupo que resaltar. */
+  function direccionActivaClave() {
+    for (const tr of $$("[data-tabla-productos] tbody tr")) {
+      const input = $("[data-input-cantidad]", tr);
+      if (input && parseFloat(input.value) > 0) return tr.dataset.claveDireccion;
+    }
+    return null;
+  }
+
+  function actualizarGrupoVisual() {
+    const clave = direccionActivaClave();
+    $$("[data-tabla-productos] tbody tr").forEach((tr) => {
+      tr.toggleAttribute("data-fuera-de-grupo", !!clave && tr.dataset.claveDireccion !== clave);
+    });
+  }
+
+  function filaProducto(p, i) {
+    const tr = document.createElement("tr");
+    tr.dataset.indice = i;
+    tr.dataset.claveDireccion = claveDireccion(p.direccion);
+    tr.innerHTML = `
+      <td></td>
+      <td></td>
+      <td class="direccion-celda"></td>
+      <td class="num"></td>
+      <td class="num"></td>
+      <td class="num"></td>
+      <td class="num"></td>`;
+    const celdas = $$("td", tr);
+    celdas[0].textContent = p.nombre || "—";
+    celdas[1].textContent = p.tema || "—";
+    celdas[2].textContent = direccionTexto(p.direccion);
+    celdas[3].textContent = TD.fmt.cantidad(p.cantidad);
+    celdas[4].textContent = TD.fmt.cantidad(p.cantidad_despachada);
+    celdas[5].textContent = TD.fmt.cantidad(p.pendiente);
+    if (p.pendiente > 0) {
+      const input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.max = String(p.pendiente);
+      input.step = "any"; input.value = "0";
+      input.dataset.inputCantidad = "";
+      input.addEventListener("input", actualizarGrupoVisual);
+      celdas[6].appendChild(input);
+    } else {
+      celdas[6].textContent = "—";
+    }
+    return tr;
+  }
+
+  function pintarProductos() {
+    const tabla = $("[data-tabla-productos]");
+    $$("tbody", tabla).forEach((tb) => tb.remove());
+    const tbody = document.createElement("tbody");
+    op.productos.forEach((p, i) => tbody.appendChild(filaProducto(p, i)));
+    tabla.appendChild(tbody);
+
+    const completo = op.estado_despacho === "despachado";
+    $("[data-seccion-generar]").hidden = completo;
+    $("[data-completo]").hidden = !completo;
+  }
+
+  function itemsAGenerar() {
+    const items = [];
+    let claves = new Set();
+    $$("[data-tabla-productos] tbody tr").forEach((tr) => {
+      const input = $("[data-input-cantidad]", tr);
+      if (!input) return;
+      const cantidad = parseFloat(input.value);
+      if (cantidad > 0) {
+        items.push({ indice_producto: Number(tr.dataset.indice), cantidad });
+        claves.add(tr.dataset.claveDireccion);
+      }
+    });
+    return { items, mismaDireccion: claves.size <= 1 };
+  }
+
+  $("[data-accion='generar-guia']").addEventListener("click", async () => {
+    const { items, mismaDireccion } = itemsAGenerar();
+    if (!items.length) {
+      TD.aviso("Indicá alguna cantidad a despachar.", "aviso");
+      return;
+    }
+    if (!mismaDireccion) {
+      TD.aviso("Los productos de una misma guía tienen que compartir la misma dirección.", "aviso");
+      return;
+    }
+    const observaciones = $("[data-observaciones]").value.trim();
+    const guia = await TD.api.generar_guia_despacho(op.numero, items, observaciones);
+    if (!guia) {
+      TD.aviso("No se pudo generar la guía de despacho.", "error");
+      return;
+    }
+    TD.aviso(`Guía ${guia.numero_guia} generada.`, "info");
+    $("[data-observaciones]").value = "";
+    await recargar();
+  });
+
+  /* ── Guías ya generadas ───────────────────────────────────────────────── */
+
+  function filaGuia(g) {
+    const li = document.createElement("li");
+    li.className = "guia-item";
+    const resumen = (g.items || []).map((i) => `${i.producto} ×${TD.fmt.cantidad(i.cantidad)}`).join(" · ");
+    li.innerHTML = `
+      <span class="guia-item__n"></span>
+      <span class="guia-item__resumen"></span>
+      <button class="btn btn--secundario btn--chico" type="button">Reimprimir</button>`;
+    $(".guia-item__n", li).textContent = `N° ${g.numero_guia}`;
+    $(".guia-item__resumen", li).textContent = `${g.fecha} · ${resumen || "—"}`;
+    $("button", li).addEventListener("click", () => TD.api.reimprimir_guia(g.numero_guia));
+    return li;
+  }
+
+  function pintarGuias() {
+    const cont = $("[data-guias]");
+    cont.textContent = "";
+    const guias = op.guias || [];
+    guias.forEach((g) => cont.appendChild(filaGuia(g)));
+    $("[data-guias-vacio]").hidden = !!guias.length;
+  }
+
+  /* ── Arranque / recarga ───────────────────────────────────────────────── */
+
+  function pintarTodo() {
+    pintarCabecera();
+    pintarProductos();
+    pintarGuias();
+  }
+
+  async function recargar() {
+    op = (await TD.api.obtener_despacho(op.numero)) || op;
+    op.productos = op.productos || [];
+    op.guias = op.guias || [];
+    pintarTodo();
+  }
+
+  TD.iniciar(async (ctx) => {
+    op = (await TD.api.obtener_despacho(ctx.numero)) || null;
+    if (!op) { TD.aviso("No se pudo cargar el despacho.", "error", 8000); return; }
+    op.productos = op.productos || [];
+    op.guias = op.guias || [];
+    pintarTodo();
+  });
+})();
+</script>
+
+</body>
+</html>

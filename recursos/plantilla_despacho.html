@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Guía de despacho N° {{numero_guia}} · TEXDIGITAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --morado:#7A3FB0; --tinta:#1A2230; --gris:#5B6470; --linea:#D8DEE6;
+    --fondo-suave:#F4F6F9; --fondo-morado:#F1E9FB;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Inter',system-ui,sans-serif; color:var(--tinta); background:#E9ECF1; }
+  .hoja{ max-width:216mm; min-height:279mm; margin:24px auto; background:#fff;
+    padding:18mm 16mm; box-shadow:0 2px 18px #0002; display:flex; flex-direction:column; }
+
+  header{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:3px solid var(--morado); padding-bottom:6mm; }
+  .marca{ font-family:'Barlow Condensed'; font-size:22px; font-weight:700; color:var(--tinta);
+    letter-spacing:.04em; }
+  .doc-box{ text-align:right; }
+  .doc-box .titulo{ font-size:13px; letter-spacing:.14em; color:var(--gris); font-weight:600; }
+  .doc-box .numero{ font-family:'Barlow Condensed'; font-size:34px; font-weight:700; color:var(--morado); line-height:1; }
+  .doc-box .fechas{ font-size:12.5px; color:var(--gris); margin-top:3px; }
+  .doc-box .fechas b{ color:var(--tinta); font-weight:600; }
+
+  .op-ref{ font-family:'Barlow Condensed'; font-size:19px; font-weight:700;
+    color:var(--tinta); margin-top:6mm; }
+
+  .datos{ display:flex; gap:8mm; margin:3mm 0 6mm; flex-wrap:wrap; }
+  .dato{ flex:1; min-width:60mm; background:var(--fondo-suave); border-radius:8px; padding:4mm 5mm; }
+  .dato.direccion{ background:var(--fondo-morado); }
+  .dato .k{ font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--gris); font-weight:600; }
+  .dato .v{ font-size:14px; font-weight:600; margin-top:1.5mm; }
+  .dato .v2{ font-size:12.5px; color:var(--gris); margin-top:.6mm; }
+
+  .etiqueta-instalacion{
+    display:inline-block; margin-top:4mm; padding:1.6mm 3mm; border-radius:6px;
+    background:var(--fondo-morado); color:var(--morado); font-size:11.5px; font-weight:600;
+  }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:4mm; }
+  thead th{ background:var(--tinta); color:#fff; text-align:left; padding:3mm 3.5mm;
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; }
+  thead th.num, td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tbody td{ padding:3mm 3.5mm; border-bottom:1px solid var(--linea); vertical-align:top; }
+  tbody tr:nth-child(even){ background:#FAFBFD; }
+
+  .observaciones{ font-size:13px; color:var(--tinta); margin-top:6mm; }
+  .observaciones b{ color:var(--gris); font-weight:600; text-transform:uppercase; font-size:10.5px;
+    letter-spacing:.12em; display:block; margin-bottom:1.2mm; }
+
+  .firma{ margin-top:auto; padding-top:16mm; display:flex; gap:12mm; }
+  .firma__linea{ flex:1; border-top:1px solid var(--tinta); padding-top:2mm; font-size:11px; color:var(--gris); }
+
+  .btn-imprimir{ position:fixed; right:22px; bottom:22px; background:var(--morado); color:#fff;
+    border:none; border-radius:10px; padding:12px 20px; font-family:'Inter'; font-size:14px;
+    font-weight:600; cursor:pointer; box-shadow:0 4px 14px #0004; }
+  .btn-imprimir:hover{ filter:brightness(1.08); }
+
+  @media print{
+    body{ background:#fff; }
+    .hoja{ margin:0; box-shadow:none; max-width:none; min-height:auto; padding:12mm 14mm; }
+    .btn-imprimir{ display:none; }
+  }
+  @page{ size:letter; margin:0; }
+</style>
+</head>
+<body>
+<div class="hoja">
+  <header>
+    <div class="marca">TEXDIGITAL</div>
+    <div class="doc-box">
+      <div class="titulo">GUÍA DE DESPACHO</div>
+      <div class="numero">N° {{numero_guia}}</div>
+      <div class="fechas">Fecha: <b>{{fecha}}</b></div>
+    </div>
+  </header>
+
+  <div class="op-ref">OP N° {{numero_op}}</div>
+
+  <div class="datos">
+    <div class="dato">
+      <div class="k">Cliente</div>
+      <div class="v">{{empresa}}</div>
+      <div class="v2">{{rut}} · {{contacto}}</div>
+    </div>
+    <div class="dato direccion">
+      <div class="k">Dirección de entrega</div>
+      <div class="v">{{direccion_linea}}</div>
+      <div class="v2">{{comuna}}, {{region}}</div>
+    </div>
+  </div>
+  {{referencia_bloque}}
+  {{instalacion_bloque}}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50%">Producto</th>
+        <th style="width:30%">Tema</th>
+        <th class="num" style="width:20%">Cantidad</th>
+      </tr>
+    </thead>
+    <tbody>
+{{filas_items}}
+    </tbody>
+  </table>
+
+  {{observaciones_bloque}}
+
+  <div class="firma">
+    <div class="firma__linea">Nombre y firma de quien despacha</div>
+    <div class="firma__linea">Nombre y firma de quien recibe</div>
+  </div>
+</div>
+
+<button class="btn-imprimir" onclick="window.print()">🖨 Guardar como PDF</button>
+</body>
+</html>

@@ -70,6 +70,7 @@ from core.repositorio_ops import (
     carpeta_pendiente,
     cargar_op,
     mover_a_completadas,
+    mover_a_despachos,
     mover_a_pendiente,
     reactivar_desde_pendiente,
     actualizar_fecha_entrega,
@@ -146,8 +147,16 @@ class _ApiPanelProduccion:
         return TEXTILES_ANCHOS
 
     def completar_op(self, numero):
-        """Mueve el JSON de la OP de OPs/JSON/ a OPs/Completadas/."""
-        mover_a_completadas(int(numero))
+        """Mueve el JSON de la OP de OPs/JSON/ a OPs/Completadas/ — salvo
+        que la OP tenga Despacho y/o Instalacion, en cuyo caso pasa al
+        módulo Despachos (Despachos/OPs/) en vez de archivarse sin más
+        (ver core.repositorio_ops.mover_a_despachos)."""
+        numero = int(numero)
+        datos = cargar_op(numero)
+        if datos and (datos.get("Despacho") is not None or datos.get("Instalacion") is not None):
+            mover_a_despachos(numero)
+        else:
+            mover_a_completadas(numero)
 
     def marcar_pendiente(self, numero):
         """Mueve el JSON de la OP de OPs/JSON/ a OPs/Pendiente/."""

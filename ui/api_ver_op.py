@@ -12,6 +12,7 @@ from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml
 from core.repositorio import TEXTILES_ANCHOS
 from core.presentar_op import generar_html
+from ui.dialogo_recotizar import recotizar_op as _recotizar_op
 
 
 def _metros_producto(p_interno: dict) -> tuple[float | None, float | None]:
@@ -107,3 +108,6 @@ class ApiVerOp:
             return
         ruta_html = generar_html(datos)
         webbrowser.open(ruta_html.as_uri())
+
+    def recotizar_op(self, numero) -> bool:
+        return _recotizar_op(numero)

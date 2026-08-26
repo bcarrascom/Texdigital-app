@@ -82,6 +82,8 @@ from ui.api_ver_cotizacion import ApiVerCotizacion
 from ui.api_ver_op import ApiVerOp
 from ui.api_historial_ops import ApiHistorialOps
 from ui.api_cotizacion import ApiCotizacion
+from ui.api_ver_despacho import ApiVerDespacho
+from ui.api_asignar_despacho import ApiAsignarDespacho
 
 RUTA_PANTALLAS = RECURSOS / "pantallas"
 
@@ -91,6 +93,8 @@ _TITULOS = {
     "ver-op":           "Orden de producción",
     "historial-ops":    "Historial de OPs",
     "nueva-cotizacion": "Nueva cotización",
+    "ver-despacho":     "Despacho",
+    "asignar-despacho": "Asignar dirección",
 }
 
 _ARCHIVOS = {
@@ -99,6 +103,8 @@ _ARCHIVOS = {
     "ver-op":           "ver-op.html",
     "historial-ops":    "historial-ops.html",
     "nueva-cotizacion": "nueva-cotizacion.html",
+    "ver-despacho":     "ver-despacho.html",
+    "asignar-despacho": "asignar-despacho.html",
 }
 
 # Ver _cargar()/_recargando.html: paso intermedio para forzar una recarga
@@ -140,6 +146,8 @@ class ApiApp:
         self._ver_op = ApiVerOp()
         self._historial_ops = ApiHistorialOps()
         self._cotizacion = ApiCotizacion()
+        self._ver_despacho = ApiVerDespacho()
+        self._asignar_despacho = ApiAsignarDespacho()
 
     # ── Arranque / navegación ────────────────────────────────────────────────
 
@@ -278,6 +286,10 @@ class ApiApp:
             ctx.update(self._historial_ops.contexto_extra())
         elif pantalla == "nueva-cotizacion":
             ctx.update(self._cotizacion.contexto_extra(args.get("editar"), args.get("pendiente")))
+        elif pantalla == "ver-despacho":
+            ctx.update(self._ver_despacho.contexto_extra(args.get("numero")))
+        elif pantalla == "asignar-despacho":
+            ctx.update(self._asignar_despacho.contexto_extra(args.get("numero")))
         return ctx
 
     def guardar_preferencia(self, clave: str, valor) -> bool:
@@ -392,6 +404,12 @@ class ApiApp:
     def imprimir_op(self, numero) -> None:
         self._ver_op.imprimir_op(numero)
 
+    def recotizar_op(self, numero) -> None:
+        if self._ver_op.recotizar_op(numero):
+            self._ir("menu", panel="cotizaciones")
+        else:
+            self._aviso("No se pudo recotizar: la OP ya no está activa.", "error")
+
     # ── Historial de OPs ─────────────────────────────────────────────────────
 
     def obtener_historial(self, anio, mes) -> list[dict]:
@@ -419,3 +437,53 @@ class ApiApp:
 
     def guardar_contacto(self, contacto, email, descuento, condicion) -> None:
         self._cotizacion.guardar_contacto(contacto, email, descuento, condicion)
+
+    # ── Despachos (panel de menu.html — ya no hay pantalla de listado aparte) ─
+
+    def abrir_despacho(self, numero) -> None:
+        self._ir("ver-despacho", numero=numero)
+
+    def abrir_asignar_despacho(self, numero) -> None:
+        self._ir("asignar-despacho", numero=numero)
+
+    def marcar_despacho_entregado(self, numero) -> bool:
+        return self._menu.marcar_despacho_entregado(numero)
+
+    def eliminar_despachos(self, numeros: list) -> int:
+        return self._menu.eliminar_despachos(numeros)
+
+    # ── Direcciones (compartido por asignar-despacho y ver-despacho) ──────────
+
+    def cargar_todas_direcciones(self) -> list[dict]:
+        return self._asignar_despacho.cargar_todas_direcciones()
+
+    def cargar_regiones(self) -> list[str]:
+        return self._asignar_despacho.cargar_regiones()
+
+    # ── Asignar despacho ─────────────────────────────────────────────────────
+
+    def obtener_asignacion_despacho(self, numero) -> dict | None:
+        return self._asignar_despacho.obtener(numero)
+
+    def cargar_clientes_direccion(self) -> list[dict]:
+        return self._asignar_despacho.cargar_clientes()
+
+    def guardar_direccion_nueva(self, direccion: dict) -> dict:
+        return self._asignar_despacho.guardar_direccion_nueva(direccion)
+
+    def asignar_direccion_productos(self, numero_op, indices: list, direccion: dict) -> None:
+        self._asignar_despacho.asignar_a_productos(numero_op, indices, direccion)
+
+    def quitar_direccion_productos(self, numero_op, indices: list) -> None:
+        self._asignar_despacho.quitar_de_productos(numero_op, indices)
+
+    # ── Ver despacho ─────────────────────────────────────────────────────────
+
+    def obtener_despacho(self, numero) -> dict | None:
+        return self._ver_despacho.obtener(numero)
+
+    def generar_guia_despacho(self, numero_op, items: list, observaciones: str = "") -> dict | None:
+        return self._ver_despacho.generar_guia(numero_op, items, observaciones)
+
+    def reimprimir_guia(self, numero_guia) -> bool:
+        return self._ver_despacho.reimprimir_guia(numero_guia)

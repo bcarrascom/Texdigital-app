@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="asignar-despacho" data-tema="despachos">
+<head>
+<meta charset="utf-8">
+<title>Asignar dirección · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Asignación de dirección por producto — obtener_asignacion_despacho(numero)
+
+   Una OP recién llegada a Despachos no tiene dirección: acá se la ponemos,
+   PRODUCTO POR PRODUCTO (una misma OP puede repartirse a varios lugares).
+   Flujo: elegir una dirección del selector (o crear una nueva con el botón
+   +), seleccionar las tarjetas de producto que van ahí, apretar el botón
+   de aceptar (flecha) — esos productos pasan de ícono de pin a un check
+   verde. "Completar" mueve la OP a Asignadas/ una vez que TODOS los
+   productos tienen dirección.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista-asignar {
+  width: min(100%, 68rem); margin-inline: auto;
+  display: grid; gap: var(--e-4);
+}
+
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+.hoja__cab { display: flex; align-items: baseline; gap: var(--e-3); flex-wrap: wrap; }
+.hoja__num {
+  font-family: var(--f-mono); font-size: var(--t-2xl); font-weight: var(--peso-fuerte);
+  line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+}
+.hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+.hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); margin-left: auto; }
+
+/* ── Selector de dirección: [aceptar] [select] [+] [quitar] ─────────────── */
+.selector-direccion { display: flex; align-items: center; gap: var(--e-2); }
+.selector-direccion select { flex: 1 1 auto; min-width: 0; min-height: 2.75rem; }
+
+.btn-icono {
+  flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: var(--r-full);
+  display: grid; place-items: center;
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-tema-fuerte); cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
+}
+.btn-icono:hover:not(:disabled) { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); transform: translateY(-1px); }
+.btn-icono:active:not(:disabled) { transform: translateY(0) scale(.95); }
+.btn-icono:disabled { opacity: .4; cursor: not-allowed; }
+.btn-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+.btn-icono--peligro:hover:not(:disabled) { background: var(--c-error-suave); border-color: var(--c-error); }
+
+/* ── El panel de dirección nueva: el botón + se DEFORMA hasta ser el panel
+   ───────────────────────────────────────────────────────────────────────
+   Nada de transform/scale acá — eso animaba el tamaño VISUAL pero dejaba
+   la caja de layout (y por lo tanto getBoundingClientRect) del tamaño
+   final todo el tiempo, así que el cálculo de "desde dónde nace" salía
+   mal (terminaba pareciendo que aparecía de cualquier lado). Acá se
+   anima top/left/width/height/border-radius de verdad — JS arranca el
+   diálogo con el mismo top/left/width/height que el botón +, círculo
+   (border-radius 999px), y en el frame siguiente lo empuja a su tamaño
+   final: es el botón literalmente estirándose hasta ser el panel. Cerrar
+   hace el camino inverso antes de soltar el <dialog> (ver
+   cerrarPanelDireccion en el script). */
+dialog.panel-direccion {
+  position: fixed; margin: 0;
+  padding: var(--e-5); overflow: hidden;
+  border: 1.5px solid var(--c-borde);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+  transition: top var(--m-expansion) var(--ease-salida),
+              left var(--m-expansion) var(--ease-salida),
+              width var(--m-expansion) var(--ease-salida),
+              height var(--m-expansion) var(--ease-salida),
+              border-radius var(--m-expansion) var(--ease-salida);
+}
+/* Esquinas redondeadas iguales a las de cualquier otro panel/diálogo de
+   la interfaz (var(--r-xl), mismo token que usan historial-ops.html,
+   ver-op.html, etc.) — faltaba esta regla: como el radio se pisaba por
+   estilo inline (círculo mientras el panel es chico, ver JS), sin esto
+   quedaba en 0 (esquinas cuadradas) apenas se sacaba el inline. */
+dialog.panel-direccion[data-abierto] { border-radius: var(--r-xl); }
+
+/* Oscurece apenas, SIN desenfocar el resto de la pantalla — ease-in-out
+   (var(--ease-entrada), la curva simétrica del proyecto) tanto al
+   aparecer como al desvanecerse. Como ::backdrop no existe en el DOM
+   hasta que el <dialog> abre, la transición sale de animar el color
+   entre el estado base (transparente) y el de [data-abierto] (oscuro),
+   no de un "before/after" clásico. */
+dialog.panel-direccion::backdrop {
+  background: rgba(22, 22, 26, 0);
+  transition: background var(--m-expansion) var(--ease-entrada);
+}
+dialog.panel-direccion[data-abierto]::backdrop {
+  background: rgba(22, 22, 26, .35);
+}
+
+/* El contenido queda invisible mientras el panel todavía es chico (si no,
+   se ve el formulario aplastado adentro de un círculo) — y no empieza a
+   aparecer hasta que el panel YA TERMINÓ de crecer del todo (transition-
+   delay = el 100% de --m-expansion, no antes). Antes el fade-in arrancaba
+   a la mitad del crecimiento: en esa ventana el alto real del <dialog>
+   todavía era menor que max-height:100% del contenido, así que el
+   overflow-y:auto (red de seguridad, ver altoContenido() en el script) se
+   activaba DE VERDAD y se alcanzaba a ver la barra de scroll durante el
+   fade-in — nunca en el estado final, pero sí durante la animación. */
+.panel-direccion__contenido {
+  opacity: 0;
+  max-height: 100%; overflow-y: auto;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+dialog.panel-direccion[data-abierto] .panel-direccion__contenido {
+  opacity: 1;
+  transition-delay: var(--m-expansion);
+}
+
+.panel-direccion__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.panel-direccion__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+/* Código postal vive acá, no arriba con el resto de los campos — a la
+   misma altura que Guardar, a la izquierda. margin-right:auto en su
+   campo es lo que empuja a Cancelar/Guardar hacia la derecha. */
+.panel-direccion__acciones { display: flex; align-items: flex-end; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+.panel-direccion__acciones .campo--cp { flex: 0 0 9rem; margin-right: auto; }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+
+/* ── Tarjetas de producto ─────────────────────────────────────────────── */
+.productos-cab { display: flex; align-items: center; gap: var(--e-3); }
+.productos-cab .seccion-titulo { margin: 0; }
+.productos-cab .btn { margin-left: auto; }
+
+.tarjetas-productos {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-4);
+}
+@container vista (max-width: 46rem) { .tarjetas-productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container vista (max-width: 28rem) { .tarjetas-productos { grid-template-columns: 1fr; } }
+.contenido { container: vista / inline-size; min-width: 0; }
+
+.tarjeta-producto {
+  position: relative;
+  display: flex; flex-direction: column; gap: var(--e-2);
+  min-width: 0; padding: var(--e-4) var(--e-4) var(--e-3);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-2);
+  cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              box-shadow var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.tarjeta-producto:hover { transform: translateY(-2px); box-shadow: var(--s-3); }
+.tarjeta-producto[data-seleccionado] {
+  border-color: var(--c-tema-fuerte);
+  box-shadow: var(--s-3), 0 0 0 3px color-mix(in srgb, var(--c-tema-fuerte) 22%, transparent);
+}
+
+/* Círculo BLANCO, no morado — el ícono es el que lleva el color (morado en
+   reposo, verde una vez asignado, ver [data-asignado] abajo): así el
+   contraste ícono/fondo queda alto en los dos estados, en vez del morado
+   sobre morado que tenía antes. El borde sutil (mismo tono que el ícono,
+   bien transparentado) es lo que separa el círculo del fondo blanco de la
+   tarjeta cuando se solapan. */
+.tarjeta-producto__badge {
+  position: absolute; top: -.65rem; left: -.65rem; z-index: 2;
+  width: 2.1rem; height: 2.1rem; border-radius: var(--r-full);
+  background: var(--c-superficie); color: var(--c-tema-fuerte);
+  border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent);
+  display: grid; place-items: center;
+  box-shadow: var(--s-2);
+  transition: background var(--m-media) var(--ease-salida), color var(--m-media) var(--ease-salida),
+              border-color var(--m-media) var(--ease-salida);
+}
+.tarjeta-producto__badge[data-asignado] { background: var(--c-ok-suave); color: var(--c-ok); }
+/* Centradas con top/left 50% + translate(-50%,-50%) FIJO en la base del
+   transform: el morph (scale/rotate) se agrega DESPUÉS de ese translate en
+   la misma declaración — si viviera en un transform aparte se pisarían
+   entre sí (un elemento solo puede tener un `transform` a la vez). Los dos
+   SVG de Lucide ya vienen bien orientados solos (a diferencia de la
+   aproximación en CSS puro de antes, que necesitaba un rotate(40deg) fijo
+   para que el check pareciera un tilde) — acá el rotate es solo un
+   adorno del cruce, no hace falta para que se vean bien. */
+.tarjeta-producto__badge .icon-map-pin-house {
+  position: absolute; top: 50%; left: 50%; font-size: 1.05rem;
+  transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+}
+.tarjeta-producto__badge .icon-check {
+  position: absolute; top: 50%; left: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.4) rotate(-40deg);
+  transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+}
+.tarjeta-producto__badge[data-asignado] .icon-map-pin-house {
+  opacity: 0; transform: translate(-50%, -50%) scale(.4) rotate(40deg);
+}
+.tarjeta-producto__badge[data-asignado] .icon-check {
+  opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg);
+}
+
+.tarjeta-producto__nombre { font-weight: var(--peso-medio); margin-top: var(--e-1); }
+.tarjeta-producto__linea {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.tarjeta-producto__linea b { margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto); }
+
+.tarjeta-producto__direccion {
+  min-height: 2.4rem; margin-top: var(--e-1); padding-top: var(--e-2);
+  border-top: 1px dashed var(--c-borde);
+  font-size: var(--t-xs); color: var(--c-texto-suave);
+}
+.tarjeta-producto__direccion[data-vacia] { color: var(--c-texto-tenue); font-style: italic; }
+
+/* ── Estado de asignación ─────────────────────────────────────────────── */
+/* Sin botón "Completar": apenas el último producto queda con dirección,
+   la OP pasa sola a Asignadas/ (ver core.repositorio_despachos.
+   _sincronizar_carpeta) — esto es solo un indicador pasivo, no gatilla
+   nada; el usuario sigue de largo con "Volver" cuando termina. */
+.estado-asignacion {
+  display: flex; align-items: center; gap: var(--e-2);
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.estado-asignacion[data-completo] { color: var(--c-ok); font-weight: var(--peso-medio); }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>Asignar dirección</span>
+    <span class="cabecera__sep"></span>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista-asignar" data-tras-carga hidden>
+
+      <section class="hoja">
+        <div class="hoja__cab">
+          <span class="hoja__num" data-numero>—</span>
+          <span class="hoja__nombre" data-nombre></span>
+          <span class="hoja__meta" data-meta></span>
+        </div>
+
+        <div class="selector-direccion">
+          <select class="entrada" data-select-direccion>
+            <option value="">— Elegí una dirección —</option>
+          </select>
+          <button class="btn-icono" data-accion="aceptar-direccion" type="button"
+                  title="Asignar la dirección elegida a los productos seleccionados" disabled>
+            <div class="icon-arrow-down"></div>
+          </button>
+          <button class="btn-icono" data-accion="abrir-panel-direccion" type="button" title="Agregar dirección nueva">
+            <div class="icon-plus"></div>
+          </button>
+          <button class="btn-icono btn-icono--peligro" data-accion="quitar-direccion" type="button"
+                  title="Quitar dirección de los productos seleccionados" hidden>
+            <div class="icon-x"></div>
+          </button>
+        </div>
+      </section>
+
+      <section class="hoja">
+        <div class="productos-cab">
+          <h2 class="seccion-titulo">Productos</h2>
+          <span class="estado-asignacion" data-estado-asignacion></span>
+          <button class="btn btn--secundario btn--chico" data-accion="seleccionar-todos" type="button">Seleccionar todos</button>
+        </div>
+        <div class="tarjetas-productos" data-tarjetas></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<dialog class="panel-direccion" id="panel-direccion">
+  <div class="panel-direccion__contenido">
+    <h2 class="panel-direccion__titulo">Dirección nueva</h2>
+    <div class="panel-direccion__campos">
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="pd-cliente">Cliente</label>
+        <input class="entrada" id="pd-cliente" type="text" list="lista-clientes-direccion" autocomplete="off"
+               placeholder="Nombre de empresa o RUT…">
+        <datalist id="lista-clientes-direccion"></datalist>
+        <span class="campo__error">Elegí un cliente de la lista</span>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="pd-calle">Nombre de calle</label>
+        <input class="entrada" id="pd-calle" type="text">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="fila">
+        <div class="campo">
+          <label class="campo__etiqueta" data-requerido for="pd-numero">Número</label>
+          <input class="entrada" id="pd-numero" type="text">
+          <span class="campo__error">Obligatorio</span>
+        </div>
+        <div class="campo">
+          <label class="campo__etiqueta" data-requerido for="pd-comuna">Comuna</label>
+          <input class="entrada" id="pd-comuna" type="text">
+          <span class="campo__error">Obligatorio</span>
+        </div>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="pd-region">Región</label>
+        <select class="entrada" id="pd-region"></select>
+        <span class="campo__error">Obligatorio</span>
+      </div>
+    </div>
+    <div class="panel-direccion__acciones">
+      <div class="campo campo--cp">
+        <label class="campo__etiqueta" for="pd-cp">Código postal</label>
+        <input class="entrada" id="pd-cp" type="text">
+      </div>
+      <button class="btn btn--primario btn--chico" data-accion="guardar-direccion-nueva" type="button">Guardar</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s) => String(s == null ? "" : s);
+
+  const REGION_DEFECTO = "Región Metropolitana";
+
+  let op = null;
+  let direccionesDisponibles = [];
+  let etiquetaClientePorClave = new Map();   // "empresa — rut" -> {empresa, rut}
+  const seleccionados = new Set();
+
+  const clave = (s) => String(s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+  const btnAceptar = $("[data-accion='aceptar-direccion']");
+  const btnQuitar  = $("[data-accion='quitar-direccion']");
+  const btnTodos   = $("[data-accion='seleccionar-todos']");
+  const selDireccion = $("[data-select-direccion]");
+  const panel = $("#panel-direccion");
+  const btnAgregar = $("[data-accion='abrir-panel-direccion']");
+
+  /* ── Cabecera ─────────────────────────────────────────────────────────── */
+
+  function pintarCabecera() {
+    $("[data-numero]").textContent = String(op.numero).padStart(4, "0");
+    $("[data-nombre]").textContent = op.nombre || "";
+    $("[data-titulo]").textContent = `Asignar dirección · OP ${String(op.numero).padStart(4, "0")}`;
+    $("[data-meta]").textContent = [op.empresa, op.contacto].filter(Boolean).join(" · ");
+  }
+
+  /* ── Direcciones (selector + panel de dirección nueva) ───────────────── */
+
+  function direccionTexto(d) {
+    const linea1 = [d.calle, d.numero].filter(Boolean).join(" ");
+    return [linea1, d.comuna].filter(Boolean).join(", ") || "—";
+  }
+
+  /* TODAS las direcciones guardadas (de cualquier cliente) — agrupadas en
+     dos <optgroup>: primero las del cliente de esta OP, después el resto,
+     bien diferenciadas por rótulo. El índice que va en cada <option> es
+     la posición dentro de `direccionesDisponibles` (el array plano, SIN
+     agrupar) — así aceptar-dirección no necesita saber en qué grupo cayó
+     cada una. */
+  async function cargarDirecciones(seleccionarClave) {
+    direccionesDisponibles = (await TD.api.cargar_todas_direcciones()) || [];
+    const claveOp = clave(op.rut);
+    const deEsteCliente = [];
+    const otras = [];
+    direccionesDisponibles.forEach((d, i) => {
+      (clave(d.rut) === claveOp ? deEsteCliente : otras).push(i);
+    });
+
+    const opcion = (i) => {
+      const d = direccionesDisponibles[i];
+      const etiqueta = d.alias || direccionTexto(d);
+      return `<option value="${i}">${esc(etiqueta)} · ${esc(d.comuna || "—")}</option>`;
+    };
+    const grupo = (etiqueta, indices) => indices.length
+      ? `<optgroup label="${esc(etiqueta)}">${indices.map(opcion).join("")}</optgroup>` : "";
+
+    selDireccion.innerHTML = '<option value="">— Elegí una dirección —</option>' +
+      grupo(`Direcciones de ${op.empresa || "este cliente"}`, deEsteCliente) +
+      grupo("Otras direcciones", otras);
+
+    if (seleccionarClave) {
+      const i = direccionesDisponibles.findIndex((d) =>
+        (d.calle || "").toLowerCase() === seleccionarClave.calle.toLowerCase() &&
+        (d.numero || "").toLowerCase() === seleccionarClave.numero.toLowerCase());
+      if (i >= 0) selDireccion.value = String(i);
+    }
+    actualizarEstadoBotones();
+  }
+
+  /* ── Cliente (selector con autocompletado del panel "dirección nueva") ──
+     Mismo mecanismo que ya usa nueva-cotizacion.html (input + <datalist>,
+     navegable con las flechas del teclado — viene integrado en el HTML,
+     no hace falta JS para filtrar). Acá el texto visible combina empresa
+     Y RUT en una sola cadena para que el filtro nativo del navegador
+     busque por cualquiera de los dos ("nada más", como pidió Bruno). */
+  function etiquetaCliente(c) {
+    return [c.empresa, c.rut].filter(Boolean).join(" — ");
+  }
+
+  async function cargarClientesDatalist() {
+    const clientes = (await TD.api.cargar_clientes_direccion()) || [];
+    etiquetaClientePorClave = new Map(clientes.map((c) => [etiquetaCliente(c), c]));
+    $("#lista-clientes-direccion").innerHTML = clientes
+      .map((c) => `<option value="${esc(etiquetaCliente(c))}"></option>`)
+      .join("");
+  }
+
+  /* ── Panel de dirección nueva: el botón + se deforma hasta ser el panel ──
+     Nada de transform/scale (ver comentario en el CSS) — acá se anima
+     top/left/width/height/border-radius de verdad, arrancando en el
+     rectángulo EXACTO del botón + y terminando en el tamaño final del
+     panel. Cerrar hace el mismo camino al revés antes de soltar el
+     <dialog> de verdad (cerrarPanelDireccion). */
+
+  function limpiarPanel() {
+    // Precargado con el cliente de la OP (el caso común: la dirección es
+    // para quien pidió el trabajo) — sigue siendo editable/buscable por
+    // si hay que mandarla a otro cliente asociado.
+    $("#pd-cliente").value = etiquetaCliente({ empresa: op.empresa, rut: op.rut });
+    $("#pd-calle").value = "";
+    $("#pd-numero").value = "";
+    $("#pd-comuna").value = "";
+    $("#pd-region").value = REGION_DEFECTO;
+    $("#pd-cp").value = "";
+    $$(".campo", panel).forEach((c) => c.removeAttribute("data-invalido"));
+  }
+
+  /* px por rem de ESTE momento (respeta la escala de texto A−/A+, ver
+     app.js::escala) — así el tamaño final del panel no queda fijo en
+     píxeles de pantalla, escala con el resto de la interfaz. */
+  function pxPorRem() {
+    return parseFloat(getComputedStyle(document.documentElement).fontSize);
+  }
+
+  /* Alto real del contenido del panel a un ancho dado — clonando
+     .panel-direccion__contenido en un medidor invisible FUERA del
+     <dialog> (nada de abrir/cerrar el diálogo solo para medir). Antes
+     esto era un número fijo adivinado a mano: cualquier cambio en los
+     campos (como mover Código Postal a la fila de acciones) lo dejaba
+     desactualizado, y como el <dialog> tiene overflow:hidden, el
+     contenido de más quedaba tapado en vez de mostrarse con scroll —
+     por eso el título se veía cortado. Midiendo de verdad, el panel
+     siempre sale del tamaño que el contenido necesita. */
+  function altoContenido(ancho) {
+    const cs = getComputedStyle(panel);
+    // El medidor tiene que copiar la caja COMPLETA del <dialog> real —
+    // padding Y borde, con el mismo box-sizing — si no, el alto medido
+    // sale unos px de menos (faltaba el borde acá) y el panel terminaba
+    // con overflow-y:auto activo de verdad, con esos pocos px de scroll
+    // fantasma que se veían como "se puede scrollear 5px".
+    const medidor = document.createElement("div");
+    medidor.style.cssText =
+      `position:fixed; left:-9999px; top:0; visibility:hidden; ` +
+      `width:${ancho}px; padding:${cs.padding}; border:${cs.borderWidth} solid transparent; ` +
+      `box-sizing:border-box;`;
+    medidor.innerHTML = $(".panel-direccion__contenido", panel).innerHTML;
+    document.body.appendChild(medidor);
+    // +1px de colchón contra redondeo de subpíxel entre la medición y el
+    // layout real — sin esto, a veces sobraba una fracción de píxel y
+    // igual activaba el overflow-y:auto por una diferencia invisible.
+    const alto = medidor.getBoundingClientRect().height + 1;
+    medidor.remove();
+    return alto;
+  }
+
+  /* Rectángulo final del panel, centrado sobre el botón + pero sin
+     salirse de la ventana (clamp contra los 4 bordes, con un margen
+     mínimo de 12px). */
+  function rectFinalPanel(rectBoton) {
+    const rem = pxPorRem();
+    const ancho = Math.min(window.innerWidth * 0.9, 28 * rem);
+    const alto = Math.min(window.innerHeight * 0.85, altoContenido(ancho));
+    const margen = 12;
+    const left = Math.min(
+      Math.max(rectBoton.left + rectBoton.width / 2 - ancho / 2, margen),
+      window.innerWidth - ancho - margen,
+    );
+    const top = Math.min(
+      Math.max(rectBoton.top + rectBoton.height / 2 - alto / 2, margen),
+      window.innerHeight - alto - margen,
+    );
+    return { top, left, ancho, alto };
+  }
+
+  function aplicarRect(top, left, ancho, alto, radio) {
+    panel.style.top = top + "px";
+    panel.style.left = left + "px";
+    panel.style.width = ancho + "px";
+    panel.style.height = alto + "px";
+    panel.style.borderRadius = radio;
+  }
+
+  function abrirPanelDireccion() {
+    limpiarPanel();
+    const r = btnAgregar.getBoundingClientRect();
+
+    // Estado inicial: EXACTAMENTE el botón + (mismo lugar, mismo tamaño,
+    // círculo) — el <dialog> abre siendo, literalmente, ese botón.
+    panel.removeAttribute("data-abierto");
+    aplicarRect(r.top, r.left, r.width, r.height, "999px");
+    panel.showModal();
+
+    // Fuerza el reflow para que el navegador registre ESTE estado antes
+    // de animar al final — si no, puede fusionar los dos en un solo
+    // frame y la transición no se ve.
+    void panel.getBoundingClientRect();
+
+    const destino = rectFinalPanel(r);
+    requestAnimationFrame(() => {
+      aplicarRect(destino.top, destino.left, destino.ancho, destino.alto, "");
+      panel.setAttribute("data-abierto", "");
+    });
+  }
+
+  /* Camino inverso: encoge de vuelta al rectángulo del botón + y RECIÉN
+     ahí llama a panel.close() de verdad — si cerráramos antes, el
+     <dialog> desaparece de golpe sin dejar ver el encogimiento. */
+  function cerrarPanelDireccion() {
+    if (!panel.open) return;
+    const r = btnAgregar.getBoundingClientRect();
+    panel.removeAttribute("data-abierto");   // esconde el contenido ya
+    aplicarRect(r.top, r.left, r.width, r.height, "999px");
+    const terminar = (e) => {
+      if (e.target !== panel || e.propertyName !== "width") return;
+      panel.removeEventListener("transitionend", terminar);
+      panel.close();
+    };
+    panel.addEventListener("transitionend", terminar);
+  }
+
+  // ESC dispara "cancel" ANTES de cerrar de golpe — lo interceptamos para
+  // que también haga el morph de vuelta en vez de desaparecer sin más.
+  panel.addEventListener("cancel", (e) => { e.preventDefault(); cerrarPanelDireccion(); });
+  btnAgregar.addEventListener("click", abrirPanelDireccion);
+
+  // Clic afuera del panel = cancelar (sin botón X aparte). Clickear el
+  // backdrop (el fondo oscurecido) hace que el propio <dialog> sea el
+  // target del evento — un clic DENTRO del contenido siempre golpea a
+  // algún hijo suyo primero, nunca al <dialog> mismo.
+  panel.addEventListener("click", (e) => { if (e.target === panel) cerrarPanelDireccion(); });
+
+  /* Resuelve el texto del selector de cliente a {empresa, rut} — el caso
+     más común (el usuario no tocó el campo, se queda con el cliente de la
+     OP precargado por limpiarPanel) SIEMPRE resuelve, exista o no ese
+     cliente ya guardado en clientes.json con el mismo formato exacto.
+     Cualquier otro texto tiene que calzar EXACTO con una opción de la
+     lista (obliga a elegir de ahí, no a escribir cualquier cosa). */
+  function resolverCliente(texto) {
+    if (texto === etiquetaCliente({ empresa: op.empresa, rut: op.rut })) {
+      return { empresa: op.empresa, rut: op.rut };
+    }
+    return etiquetaClientePorClave.get(texto) || null;
+  }
+
+  $("[data-accion='guardar-direccion-nueva']").addEventListener("click", async () => {
+    const campoCliente = $("#pd-cliente");
+    const cliente = resolverCliente(campoCliente.value.trim());
+    campoCliente.closest(".campo").toggleAttribute("data-invalido", !cliente);
+
+    const campos = {
+      calle: $("#pd-calle"), numero: $("#pd-numero"),
+      comuna: $("#pd-comuna"), region: $("#pd-region"),
+    };
+    let valido = !!cliente;
+    Object.values(campos).forEach((input) => {
+      const vacio = !input.value.trim();
+      input.closest(".campo").toggleAttribute("data-invalido", vacio);
+      if (vacio) valido = false;
+    });
+    if (!valido) return;
+
+    const direccion = {
+      rut: cliente.rut, empresa: cliente.empresa,
+      calle: campos.calle.value.trim(),
+      numero: campos.numero.value.trim(),
+      comuna: campos.comuna.value.trim(),
+      region: campos.region.value,
+      codigo_postal: $("#pd-cp").value.trim(),
+    };
+    await TD.api.guardar_direccion_nueva(direccion);
+    cerrarPanelDireccion();
+    await cargarDirecciones({ calle: direccion.calle, numero: direccion.numero });
+    TD.aviso("Dirección guardada.", "info");
+  });
+
+  /* ── Tarjetas de producto ─────────────────────────────────────────────── */
+
+  function toggleSeleccion(indice, tarjeta) {
+    if (seleccionados.has(indice)) {
+      seleccionados.delete(indice);
+      tarjeta.removeAttribute("data-seleccionado");
+    } else {
+      seleccionados.add(indice);
+      tarjeta.setAttribute("data-seleccionado", "");
+    }
+    actualizarEstadoBotones();
+  }
+
+  function tarjetaProducto(p, i) {
+    const el = document.createElement("article");
+    el.className = "tarjeta-producto";
+    el.dataset.indice = i;
+    el.innerHTML = `
+      <div class="tarjeta-producto__badge">
+        <div class="icon-map-pin-house"></div>
+        <div class="icon-check"></div>
+      </div>
+      <div class="tarjeta-producto__nombre"></div>
+      <div class="tarjeta-producto__linea"><span>Tema</span><b></b></div>
+      <div class="tarjeta-producto__linea"><span>Cantidad</span><b></b></div>
+      <div class="tarjeta-producto__direccion"></div>`;
+    $(".tarjeta-producto__nombre", el).textContent = p.nombre || "—";
+    $$(".tarjeta-producto__linea b", el)[0].textContent = p.tema || "—";
+    $$(".tarjeta-producto__linea b", el)[1].textContent = String(p.cantidad ?? "—");
+
+    const badge = $(".tarjeta-producto__badge", el);
+    badge.toggleAttribute("data-asignado", !!p.direccion);
+
+    const dirEl = $(".tarjeta-producto__direccion", el);
+    if (p.direccion) {
+      dirEl.removeAttribute("data-vacia");
+      dirEl.textContent = direccionTexto(p.direccion);
+    } else {
+      dirEl.setAttribute("data-vacia", "");
+      dirEl.textContent = "Sin dirección asignada";
+    }
+
+    el.addEventListener("click", () => toggleSeleccion(i, el));
+    return el;
+  }
+
+  /* Actualiza SOLO el badge/dirección de una tarjeta ya en pantalla, sin
+     recrear el nodo — recrearlo (como hacía antes, llamando a
+     pintarProductos() después de asignar/quitar) nace ya con el atributo
+     puesto, así que el navegador nunca ve el CAMBIO que dispara la
+     transición del morph: solo lo ve un elemento nuevo que ya nació en su
+     estado final. Tocar el atributo sobre el MISMO elemento es lo que
+     hace que la transición se vea. */
+  function actualizarTarjetaVisual(i) {
+    const tarjeta = $(`.tarjeta-producto[data-indice="${i}"]`, $("[data-tarjetas]"));
+    if (!tarjeta) return;
+    const p = op.productos[i];
+
+    $(".tarjeta-producto__badge", tarjeta).toggleAttribute("data-asignado", !!p.direccion);
+
+    const dirEl = $(".tarjeta-producto__direccion", tarjeta);
+    if (p.direccion) {
+      dirEl.removeAttribute("data-vacia");
+      dirEl.textContent = direccionTexto(p.direccion);
+    } else {
+      dirEl.setAttribute("data-vacia", "");
+      dirEl.textContent = "Sin dirección asignada";
+    }
+
+    tarjeta.removeAttribute("data-seleccionado");
+  }
+
+  function pintarProductos() {
+    const cont = $("[data-tarjetas]");
+    cont.textContent = "";
+    op.productos.forEach((p, i) => cont.appendChild(tarjetaProducto(p, i)));
+  }
+
+  btnTodos.addEventListener("click", () => {
+    const todosSeleccionados = seleccionados.size === op.productos.length;
+    seleccionados.clear();
+    $$(".tarjeta-producto", $("[data-tarjetas]")).forEach((t) => {
+      if (!todosSeleccionados) {
+        seleccionados.add(Number(t.dataset.indice));
+        t.setAttribute("data-seleccionado", "");
+      } else {
+        t.removeAttribute("data-seleccionado");
+      }
+    });
+    actualizarEstadoBotones();
+  });
+
+  /* ── Aceptar / quitar dirección ───────────────────────────────────────── */
+
+  btnAceptar.addEventListener("click", async () => {
+    const direccion = direccionesDisponibles[Number(selDireccion.value)];
+    if (!direccion || !seleccionados.size) return;
+    const indices = Array.from(seleccionados);
+    await TD.api.asignar_direccion_productos(op.numero, indices, direccion);
+    indices.forEach((i) => { op.productos[i].direccion = direccion; });
+    seleccionados.clear();
+    indices.forEach(actualizarTarjetaVisual);
+    actualizarEstadoBotones();
+    TD.aviso(
+      indices.length === 1 ? "Dirección asignada a 1 producto." : `Dirección asignada a ${indices.length} productos.`,
+      "info",
+    );
+  });
+
+  btnQuitar.addEventListener("click", async () => {
+    const indices = Array.from(seleccionados).filter((i) => op.productos[i].direccion);
+    if (!indices.length) return;
+    await TD.api.quitar_direccion_productos(op.numero, indices);
+    indices.forEach((i) => { delete op.productos[i].direccion; });
+    seleccionados.clear();
+    indices.forEach(actualizarTarjetaVisual);
+    actualizarEstadoBotones();
+    TD.aviso("Dirección quitada.", "info");
+  });
+
+  /* ── Estado de los botones / indicador de asignación ─────────────────── */
+
+  // No hay botón "Completar" que gatillar — esto solo avisa la primera vez
+  // que se cubre el último producto (la OP ya pasó sola a Asignadas/ del
+  // lado del backend, ver core.repositorio_despachos._sincronizar_carpeta).
+  let avisoCompletoMostrado = false;
+
+  function actualizarEstadoBotones() {
+    const hayDireccionElegida = selDireccion.value !== "";
+    btnAceptar.disabled = !(hayDireccionElegida && seleccionados.size > 0);
+
+    const algunoConDireccion = Array.from(seleccionados).some((i) => op.productos[i] && op.productos[i].direccion);
+    btnQuitar.hidden = !algunoConDireccion;
+
+    btnTodos.textContent = seleccionados.size === op.productos.length && op.productos.length
+      ? "Deseleccionar todos" : "Seleccionar todos";
+
+    const total = op.productos.length;
+    const asignados = op.productos.filter((p) => p.direccion).length;
+    const completo = total > 0 && asignados === total;
+
+    const estado = $("[data-estado-asignacion]");
+    estado.toggleAttribute("data-completo", completo);
+    estado.textContent = completo
+      ? "✓ Todos los productos tienen dirección"
+      : `${asignados}/${total} productos con dirección`;
+
+    if (completo && !avisoCompletoMostrado) {
+      avisoCompletoMostrado = true;
+      TD.aviso("Todos los productos tienen dirección — ya podés volver.", "info");
+    } else if (!completo) {
+      avisoCompletoMostrado = false;
+    }
+  }
+
+  selDireccion.addEventListener("change", actualizarEstadoBotones);
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  TD.iniciar(async (ctx) => {
+    op = (await TD.api.obtener_asignacion_despacho(ctx.numero)) || null;
+    if (!op) { TD.aviso("No se pudo cargar la OP.", "error", 8000); return; }
+    op.productos = op.productos || [];
+
+    const regiones = (await TD.api.cargar_regiones()) || [];
+    const selRegion = $("#pd-region");
+    selRegion.innerHTML = regiones.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+    selRegion.value = REGION_DEFECTO;
+
+    pintarCabecera();
+    pintarProductos();
+    await Promise.all([cargarDirecciones(), cargarClientesDatalist()]);
+  });
+})();
+</script>
+
+</body>
+</html>

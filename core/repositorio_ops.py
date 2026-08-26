@@ -187,6 +187,44 @@ def mover_a_completadas(numero: int) -> None:
     origen.unlink()
 
 
+def mover_a_despachos(numero: int) -> None:
+    """Mueve el JSON de la OP completada de JSON/ a Despachos/OPs/ (módulo
+    Despachos, ver core/repositorio_despachos.py) en vez de a Completadas/
+    — para OPs que tienen Despacho y/o Instalacion (ver
+    ui/panel_produccion.py::completar_op, que decide cuál de las dos
+    llamar). Graba Fecha_completada/Estado igual que mover_a_completadas
+    (mismo criterio: entregada/entregada_atrasada según Fecha_completada
+    vs Fecha_entrega), pero el destino y el resto del ciclo de vida
+    (EstadoDespacho, guías) los maneja core.repositorio_despachos —
+    importado acá adentro (no arriba del archivo) para que este módulo
+    "base" no dependa en el import-time de uno más específico que vive
+    encima suyo."""
+    from core import repositorio_despachos
+
+    origen = carpeta_json() / f"{numero}.json"
+    if not origen.exists():
+        return
+    datos = json.loads(origen.read_text(encoding="utf-8"))
+    datos["Fecha_completada"] = _hoy_dma()
+    datos["Estado"] = estado_op(datos)
+    repositorio_despachos.recibir_op(datos)
+    origen.unlink()
+
+
+def retirar_activa(numero: int) -> dict | None:
+    """Saca una OP de JSON/ (activa) de circulación y devuelve su JSON
+    crudo, o None sin tocar nada si `numero` no está ahí. Para "Recotizar"
+    (ui/dialogo_recotizar.py, inversa de ui/dialogo_aprobar.py::
+    promover_a_op): solo actúa sobre OPs activas a propósito — una OP ya
+    completada/pendiente/en historial no se puede recotizar."""
+    origen = carpeta_json() / f"{numero}.json"
+    if not origen.exists():
+        return None
+    datos = json.loads(origen.read_text(encoding="utf-8"))
+    origen.unlink()
+    return datos
+
+
 def cancelar_op(numero: int) -> None:
     """Marca una OP como cancelada y la saca de circulación activa — busca
     el JSON en JSON/ o Pendiente/ (las dos carpetas "activas"), le graba
