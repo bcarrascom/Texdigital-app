@@ -24,6 +24,7 @@ archivo empaquetado con el instalador.
 
 import json
 import shutil
+import uuid
 
 from core.rutas import CONF as _CONF_DIR, DATOS as _DATOS_DIR, RECURSOS as _RECURSOS_DIR
 
@@ -147,14 +148,28 @@ def cargar_clientes() -> list[dict]:
     return _leer_json(CLIENTES_PATH)
 
 
-def guardar_cliente(empresa: str, rut: str, razon_social: str):
-    """Agrega un cliente nuevo a clientes.json si no existe ya."""
+def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool:
+    """Agrega un cliente nuevo a clientes.json si no existe ya (dedup por
+    empresa). El RUT es el identificador interno real de un cliente — dos
+    empresas no pueden compartir uno (ver grupo "Direcciones de <cliente>"
+    en asignar-despacho.html, que agrupa las direcciones justamente por
+    RUT: si dos clientes lo compartieran, cada uno vería las direcciones
+    del otro mezcladas ahí). Devuelve False sin guardar nada si el RUT ya
+    está registrado a nombre de OTRA empresa — nueva-cotizacion.html le
+    avisa al usuario en ese caso. Si el cliente ya existe tal cual (mismo
+    nombre de empresa — el caso común de volver a guardar una cotización
+    de un cliente ya guardado) no hace nada pero devuelve True: no es un
+    conflicto, es un no-op esperado."""
     clientes = cargar_clientes()
     for c in clientes:
         if c["empresa"].lower() == empresa.lower():
-            return  # ya existe, no duplicar
+            return True  # ya existe, no duplicar — no es un error
+    rut_fmt = formatear_rut(rut or "")
+    if rut_fmt and any(formatear_rut(c.get("rut", "")) == rut_fmt for c in clientes):
+        return False  # RUT ya usado por otra empresa
     clientes.append({"empresa": empresa, "rut": rut, "razon_social": razon_social})
     _escribir_json(CLIENTES_PATH, clientes)
+    return True
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -187,8 +202,20 @@ def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
 
 def cargar_direcciones() -> list[dict]:
     """Lee direcciones.json: lista de
-    {rut, empresa, alias, calle, numero, comuna, region, referencia}."""
-    return _leer_json(DIRECCIONES_PATH)
+    {id, rut, empresa, alias, calle, numero, comuna, region, referencia}.
+    Las direcciones guardadas antes de que existiera "id" (ver
+    editar_direccion/eliminar_direccion, que lo necesitan para saber cuál es
+    cuál) lo reciben acá mismo, la primera vez que se leen — así no hace
+    falta una migración aparte."""
+    direcciones = _leer_json(DIRECCIONES_PATH)
+    faltan_ids = False
+    for d in direcciones:
+        if not d.get("id"):
+            d["id"] = uuid.uuid4().hex
+            faltan_ids = True
+    if faltan_ids:
+        _escribir_json(DIRECCIONES_PATH, direcciones)
+    return direcciones
 
 
 def direcciones_de_cliente(rut: str) -> list[dict]:
@@ -201,12 +228,13 @@ def direcciones_de_cliente(rut: str) -> list[dict]:
 def guardar_direccion(
     rut: str, empresa: str, alias: str = "", calle: str = "", numero: str = "",
     comuna: str = "", region: str = "", codigo_postal: str = "", referencia: str = "",
-):
+) -> dict:
     """Agrega una dirección nueva a direcciones.json si no existe ya (dedup
     por rut+calle+numero, en minúsculas — mismo criterio que guardar_cliente).
     calle/numero/comuna/region son los únicos campos obligatorios en la
     pantalla (ver ui/api_asignar_despacho.py); código postal y referencia
-    quedan opcionales incluso a nivel de datos."""
+    quedan opcionales incluso a nivel de datos. Devuelve la dirección ya
+    guardada (o la existente, si era un duplicado) con su "id"."""
     direcciones = cargar_direcciones()
     rut_fmt = formatear_rut(rut or "")
     for d in direcciones:
@@ -215,13 +243,47 @@ def guardar_direccion(
             and d.get("calle", "").strip().lower() == calle.strip().lower()
             and d.get("numero", "").strip().lower() == numero.strip().lower()
         ):
-            return  # ya existe, no duplicar
-    direcciones.append({
+            return d  # ya existe, no duplicar
+    nueva = {
+        "id": uuid.uuid4().hex,
         "rut": rut_fmt, "empresa": empresa, "alias": alias,
         "calle": calle, "numero": numero, "comuna": comuna,
         "region": region, "codigo_postal": codigo_postal, "referencia": referencia,
-    })
+    }
+    direcciones.append(nueva)
     _escribir_json(DIRECCIONES_PATH, direcciones)
+    return nueva
+
+
+def editar_direccion(id_: str, **campos) -> dict | None:
+    """Sobreescribe los campos de la dirección `id_` (cliente/gestión de
+    direcciones, ver ui/api_gestionar_direcciones.py) — NO toca las OPs de
+    Despachos que ya tengan esta dirección asignada a algún producto: ahí
+    queda una COPIA hecha en el momento de asignar (ver
+    core.repositorio_despachos.asignar_direccion_productos), no una
+    referencia viva. Devuelve la dirección actualizada, o None si `id_` no
+    existe."""
+    direcciones = cargar_direcciones()
+    for d in direcciones:
+        if d.get("id") == id_:
+            if "rut" in campos:
+                campos["rut"] = formatear_rut(campos["rut"] or "")
+            d.update(campos)
+            _escribir_json(DIRECCIONES_PATH, direcciones)
+            return d
+    return None
+
+
+def eliminar_direccion(id_: str) -> bool:
+    """Borra la dirección `id_` de direcciones.json — mismo criterio que
+    editar_direccion sobre las OPs que ya la tengan asignada: no se tocan,
+    quedan con su copia. Devuelve True si encontró y borró algo."""
+    direcciones = cargar_direcciones()
+    nuevas = [d for d in direcciones if d.get("id") != id_]
+    if len(nuevas) == len(direcciones):
+        return False
+    _escribir_json(DIRECCIONES_PATH, nuevas)
+    return True
 
 
 # ══════════════════════════════════════════════════════════════════════════════

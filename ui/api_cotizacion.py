@@ -450,8 +450,8 @@ class ApiCotizacion:
 
         return {"numero": numero}
 
-    def guardar_cliente(self, empresa, rut, razon_social) -> None:
-        guardar_cliente(empresa, rut, razon_social)
+    def guardar_cliente(self, empresa, rut, razon_social) -> bool:
+        return guardar_cliente(empresa, rut, razon_social)
 
     def guardar_contacto(self, contacto, email, descuento, condicion) -> None:
         guardar_contacto(contacto, email, descuento, condicion)

@@ -77,7 +77,7 @@ class ApiAsignarDespacho:
             numero=direccion.get("numero", ""),
             comuna=direccion.get("comuna", ""),
             region=direccion.get("region", ""),
-            codigo_postal=direccion.get("codigo_postal", ""),
+            referencia=direccion.get("referencia", ""),
         )
         return direccion
 

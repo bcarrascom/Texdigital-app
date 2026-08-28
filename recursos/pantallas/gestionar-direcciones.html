@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="gestionar-direcciones" data-tema="despachos">
+<head>
+<meta charset="utf-8">
+<title>Gestionar direcciones · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Gestionar direcciones — submódulo de Despachos (ver botón en el panel
+   Despachos de menu.html). Agregar/editar/eliminar direcciones de
+   direcciones.json y ver a qué cliente está asociada cada una — primera
+   versión, se va a ir refinando (ver core/repositorio.py: cargar_direcciones/
+   guardar_direccion/editar_direccion/eliminar_direccion).
+
+   Editar o eliminar acá NO afecta a las OPs de Despachos que ya tengan
+   alguna de estas direcciones puesta en un producto: esa asignación es una
+   COPIA hecha en el momento (core.repositorio_despachos.
+   asignar_direccion_productos), no una referencia viva.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vista-direcciones {
+  width: min(100%, 68rem); margin-inline: auto;
+  display: grid; gap: var(--e-4);
+}
+
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+
+.barra-direcciones { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; }
+.barra-direcciones .seccion-titulo { margin: 0; }
+.barra-direcciones .entrada { flex: 1 1 16rem; min-width: 0; }
+.barra-direcciones .btn { flex: 0 0 auto; margin-left: auto; }
+
+.tabla .btn-fila-icono {
+  display: inline-grid; place-items: center;
+  width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-tema-fuerte); cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
+}
+.tabla .btn-fila-icono:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+.tabla .btn-fila-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+.tabla .btn-fila-icono--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+.tabla td.acciones { display: flex; gap: var(--e-2); white-space: nowrap; }
+
+.tabla td.vacio-cliente,
+.tabla td.vacio-referencia { color: var(--c-texto-tenue); font-style: italic; }
+
+.estado-vacio {
+  padding: var(--e-6); text-align: center; color: var(--c-texto-suave);
+}
+
+/* ── Diálogo de dirección (agregar/editar) ────────────────────────────── */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); width: min(90vw, 30rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+.dlg-direccion__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>Gestionar direcciones</span>
+    <span class="cabecera__sep"></span>
+    <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
+      <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
+      <span class="ctrl-texto__valor" data-escala-valor>100%</span>
+      <button class="cab-btn" data-escala="+" aria-label="Agrandar texto">A+</button>
+    </div>
+    <button class="cab-btn cab-btn--icono" data-accion="manual" title="Manual de uso">?</button>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="vista-direcciones" data-tras-carga hidden>
+
+      <section class="hoja">
+        <div class="barra-direcciones">
+          <h1 class="seccion-titulo">Direcciones guardadas</h1>
+          <input class="entrada" type="search" data-buscar placeholder="Buscar por cliente, calle o comuna…">
+          <button class="btn btn--primario btn--chico" type="button" data-accion="nueva-direccion">+ Nueva dirección</button>
+        </div>
+
+        <div class="tabla-caja">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Dirección</th>
+                <th>Comuna</th>
+                <th>Región</th>
+                <th>Depto / Edificio / Otro</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody data-filas></tbody>
+          </table>
+          <p class="estado-vacio" data-estado-vacio hidden>No hay direcciones guardadas todavía.</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<dialog id="dlg-direccion">
+  <h2 class="dlg__titulo" data-dlg-direccion-titulo>Dirección nueva</h2>
+  <div class="dlg-direccion__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dd-cliente">Cliente</label>
+      <input class="entrada" id="dd-cliente" type="text" list="lista-clientes-gestion" autocomplete="off"
+             placeholder="Nombre de empresa o RUT…">
+      <datalist id="lista-clientes-gestion"></datalist>
+      <span class="campo__error">Elegí un cliente de la lista</span>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" for="dd-alias">Alias</label>
+      <input class="entrada" id="dd-alias" type="text" placeholder="Bodega, casa matriz, obra… (opcional)">
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dd-calle">Nombre de calle</label>
+      <input class="entrada" id="dd-calle" type="text">
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="dd-numero">Número</label>
+        <input class="entrada" id="dd-numero" type="text">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="dd-comuna">Comuna</label>
+        <input class="entrada" id="dd-comuna" type="text">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dd-region">Región</label>
+      <select class="entrada" id="dd-region"></select>
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" for="dd-referencia">Depto / Edificio / Otro</label>
+      <input class="entrada" id="dd-referencia" type="text" placeholder="N° depto, edificio, letra de casa…">
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-direccion">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-direccion">Guardar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-eliminar-direccion">
+  <h2 class="dlg__titulo">¿Eliminar esta dirección?</h2>
+  <p class="dlg__texto" data-dlg-eliminar-texto></p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-eliminar-direccion">Cancelar</button>
+    <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-eliminar-direccion">Eliminar</button>
+  </div>
+</dialog>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s) => String(s == null ? "" : s);
+
+  const REGION_DEFECTO = "Región Metropolitana";
+
+  let direcciones = [];
+  let clientes = [];
+  let etiquetaClientePorClave = new Map();   // "empresa — rut" -> {empresa, rut}
+  let idEnEdicion = null;                    // null = alta nueva
+
+  const dlgDireccion = $("#dlg-direccion");
+  const dlgEliminar = $("#dlg-eliminar-direccion");
+
+  /* ── Cliente (input + datalist, mismo mecanismo que asignar-despacho.html) ─ */
+
+  function etiquetaCliente(c) {
+    return [c.empresa, c.rut].filter(Boolean).join(" — ");
+  }
+
+  async function cargarClientesDatalist() {
+    clientes = (await TD.api.cargar_clientes_gestion()) || [];
+    etiquetaClientePorClave = new Map(clientes.map((c) => [etiquetaCliente(c), c]));
+    $("#lista-clientes-gestion").innerHTML = clientes
+      .map((c) => `<option value="${esc(etiquetaCliente(c))}"></option>`)
+      .join("");
+  }
+
+  function resolverCliente(texto) {
+    if (idEnEdicion) {
+      const actual = direcciones.find((d) => d.id === idEnEdicion);
+      if (actual && texto === etiquetaCliente(actual)) return { empresa: actual.empresa, rut: actual.rut };
+    }
+    return etiquetaClientePorClave.get(texto) || null;
+  }
+
+  /* ── Tabla ─────────────────────────────────────────────────────────────── */
+
+  function direccionTexto(d) {
+    const linea1 = [d.calle, d.numero].filter(Boolean).join(" ");
+    return d.alias ? `${d.alias} · ${linea1}` : (linea1 || "—");
+  }
+
+  function filaDireccion(d) {
+    const tr = document.createElement("tr");
+    tr.dataset.id = d.id;
+    tr.innerHTML = `
+      <td>${esc(d.empresa) || '<span class="vacio-cliente">—</span>'}</td>
+      <td>${esc(direccionTexto(d))}</td>
+      <td>${esc(d.comuna) || "—"}</td>
+      <td>${esc(d.region) || "—"}</td>
+      <td>${esc(d.referencia) || '<span class="vacio-referencia">—</span>'}</td>
+      <td class="acciones">
+        <button class="btn-fila-icono" type="button" data-accion="editar-direccion" title="Editar">
+          <div class="icon-pencil"></div>
+        </button>
+        <button class="btn-fila-icono btn-fila-icono--peligro" type="button" data-accion="eliminar-direccion" title="Eliminar">
+          <div class="icon-trash"></div>
+        </button>
+      </td>`;
+    $("[data-accion='editar-direccion']", tr).addEventListener("click", () => abrirDialogoDireccion(d));
+    $("[data-accion='eliminar-direccion']", tr).addEventListener("click", () => abrirConfirmarEliminar(d));
+    return tr;
+  }
+
+  function pintarTabla() {
+    const filtro = $("[data-buscar]").value.trim().toLowerCase();
+    const filtradas = !filtro ? direcciones : direcciones.filter((d) => [
+      d.empresa, d.rut, d.alias, d.calle, d.numero, d.comuna, d.region, d.referencia,
+    ].some((v) => String(v || "").toLowerCase().includes(filtro)));
+
+    filtradas.sort((a, b) => (a.empresa || "").localeCompare(b.empresa || "", "es"));
+
+    const cuerpo = $("[data-filas]");
+    cuerpo.textContent = "";
+    filtradas.forEach((d) => cuerpo.appendChild(filaDireccion(d)));
+
+    $("[data-estado-vacio]").hidden = filtradas.length > 0;
+  }
+
+  async function recargarDirecciones() {
+    direcciones = (await TD.api.listar_direcciones_gestion()) || [];
+    pintarTabla();
+  }
+
+  $("[data-buscar]").addEventListener("input", pintarTabla);
+
+  /* ── Diálogo agregar/editar ───────────────────────────────────────────── */
+
+  function limpiarErrores() {
+    $$(".campo", dlgDireccion).forEach((c) => c.removeAttribute("data-invalido"));
+  }
+
+  function abrirDialogoDireccion(direccion) {
+    idEnEdicion = direccion ? direccion.id : null;
+    $("[data-dlg-direccion-titulo]").textContent = direccion ? "Editar dirección" : "Dirección nueva";
+    limpiarErrores();
+
+    $("#dd-cliente").value = direccion ? etiquetaCliente(direccion) : "";
+    $("#dd-alias").value = direccion?.alias || "";
+    $("#dd-calle").value = direccion?.calle || "";
+    $("#dd-numero").value = direccion?.numero || "";
+    $("#dd-comuna").value = direccion?.comuna || "";
+    $("#dd-region").value = direccion?.region || REGION_DEFECTO;
+    $("#dd-referencia").value = direccion?.referencia || "";
+
+    dlgDireccion.showModal();
+  }
+
+  $("[data-accion='nueva-direccion']").addEventListener("click", () => abrirDialogoDireccion(null));
+  $("[data-accion='cancelar-direccion']").addEventListener("click", () => dlgDireccion.close());
+  dlgDireccion.addEventListener("click", (e) => { if (e.target === dlgDireccion) dlgDireccion.close(); });
+
+  $("[data-accion='guardar-direccion']").addEventListener("click", async () => {
+    const campoCliente = $("#dd-cliente");
+    const cliente = resolverCliente(campoCliente.value.trim());
+    campoCliente.closest(".campo").toggleAttribute("data-invalido", !cliente);
+
+    const campos = {
+      calle: $("#dd-calle"), numero: $("#dd-numero"),
+      comuna: $("#dd-comuna"), region: $("#dd-region"),
+    };
+    let valido = !!cliente;
+    Object.values(campos).forEach((input) => {
+      const vacio = !input.value.trim();
+      input.closest(".campo").toggleAttribute("data-invalido", vacio);
+      if (vacio) valido = false;
+    });
+    if (!valido) return;
+
+    const direccion = {
+      id: idEnEdicion || undefined,
+      rut: cliente.rut, empresa: cliente.empresa,
+      alias: $("#dd-alias").value.trim(),
+      calle: campos.calle.value.trim(),
+      numero: campos.numero.value.trim(),
+      comuna: campos.comuna.value.trim(),
+      region: campos.region.value,
+      referencia: $("#dd-referencia").value.trim(),
+    };
+    await TD.api.guardar_direccion_gestion(direccion);
+    dlgDireccion.close();
+    await recargarDirecciones();
+    TD.aviso(idEnEdicion ? "Dirección actualizada." : "Dirección guardada.", "info");
+  });
+
+  /* ── Confirmar eliminar ───────────────────────────────────────────────── */
+
+  let idAEliminar = null;
+
+  function abrirConfirmarEliminar(direccion) {
+    idAEliminar = direccion.id;
+    $("[data-dlg-eliminar-texto]").textContent =
+      `${direccionTexto(direccion)}${direccion.comuna ? ", " + direccion.comuna : ""} — ${direccion.empresa || "sin cliente"}.`;
+    dlgEliminar.showModal();
+  }
+
+  $("[data-accion='cancelar-eliminar-direccion']").addEventListener("click", () => dlgEliminar.close());
+  dlgEliminar.addEventListener("click", (e) => { if (e.target === dlgEliminar) dlgEliminar.close(); });
+
+  $("[data-accion='confirmar-eliminar-direccion']").addEventListener("click", async () => {
+    if (!idAEliminar) return;
+    dlgEliminar.close();
+    await TD.api.eliminar_direccion_gestion(idAEliminar);
+    idAEliminar = null;
+    await recargarDirecciones();
+    TD.aviso("Dirección eliminada.", "info");
+  });
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+
+  TD.iniciar(async () => {
+    const regiones = (await TD.api.cargar_regiones()) || [];
+    const selRegion = $("#dd-region");
+    selRegion.innerHTML = regiones.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+    selRegion.value = REGION_DEFECTO;
+
+    await Promise.all([recargarDirecciones(), cargarClientesDatalist()]);
+  });
+})();
+</script>
+
+</body>
+</html>

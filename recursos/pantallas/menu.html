@@ -71,12 +71,6 @@ body[data-fase="saliendo"] .menu {
   opacity: 0; transform: scale(.97); filter: blur(3px); pointer-events: none;
 }
 
-/* Las flechas de módulo solo tienen sentido con un panel abierto — mismo
-   instante en que aparece el panel (ver "body[data-fase='panel']
-   .panel[data-abierto]" más abajo), nunca sobre el mazo de tarjetas. */
-.flecha-nav[data-flecha-modulo] { display: none; }
-body[data-fase="panel"] .flecha-nav[data-flecha-modulo] { display: grid; }
-
 .menu__marca {
   grid-row: 2;
   display: grid; justify-items: center; gap: var(--e-2);
@@ -115,13 +109,13 @@ body[data-fase="panel"] .flecha-nav[data-flecha-modulo] { display: grid; }
 }
 .modulo:hover, .modulo:focus-within { z-index: 3; }
 
-/* TEMPORAL — módulo a medio construir, oculto del release (Bruno pidió
-   revertir esto apenas se publique). pointer-events:none en la SECCIÓN
-   entera (no solo en la caja) es lo que corta el :hover/:focus-within que
-   despliega el mazo de tarjetas — un disabled en el <button> interno no
-   alcanza, porque ese selector reacciona a que el mouse esté dentro de la
-   sección, no del botón. Ver también irAModuloAdyacente (menu.html) y el
-   guard en cargar(), que no pisa el "Próximamente" con la cuenta real. */
+/* Módulo pausado por core/config.py::MODULOS_HABILITADOS (ver
+   aplicarModulosHabilitados más abajo) — visible pero inutilizable: gris,
+   subtítulo "Próximamente", sin click ni atajo. pointer-events:none va en
+   la SECCIÓN entera, no en la caja: ese selector reacciona a que el mouse
+   esté dentro de la sección completa, no solo del botón — un disabled en
+   el botón interno solo no alcanza para cortar el :hover/:focus-within
+   que despliega el mazo de tarjetas por detrás. */
 .modulo[data-deshabilitado] { pointer-events: none; opacity: .5; filter: grayscale(.6); }
 
 /* ── La caja: la pieza visual ────────────────────────────────────────────── */
@@ -287,8 +281,8 @@ body[data-fase="volviendo"] .expansion { opacity: 1; }
 }
 body[data-fase="panel"] .panel[data-abierto] { display: flex; }
 
-/* Deslizamiento entre módulos (flechas del costado o ←/→ del teclado, ver
-   irAModuloAdyacente) — display:flex igual que [data-abierto] (ninguno de
+/* Deslizamiento entre módulos (←/→ del teclado, ver irAModuloAdyacente) —
+   display:flex igual que [data-abierto] (ninguno de
    los dos paneles lo tiene puesto todavía mientras cruzan), más una
    transición de transform que [data-abierto] no necesita (su cambio es
    instantáneo, el salto lo tapa la expansión de color). Los dos paneles
@@ -378,16 +372,25 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
 }
 .incompletas-sueltas .reg { height: auto; }
 
+/* Despacho: tarjetas un 33% más anchas que el resto del panel — mismo
+   motivo que las de OPs (ver arriba): la comuna/región que rota en el pie
+   (ver rotarUbicaciones en el script) no cabía en el ancho angosto. */
+.panel__rejilla[data-lista-panel="despachos"],
+.panel__rejilla[data-lista-panel="despachos-asignados"] {
+  grid-template-columns: repeat(auto-fill, minmax(calc(9.5rem * 1.33), 1fr));
+}
+
 /* ── Despachos: sección "Con dirección asignada" ──────────────────────────
    Acá las tarjetas NO navegan al click (a diferencia de todas las demás de
    este menú) — seleccionan, para poder actuar sobre una o varias con los
-   botones Entregado/Eliminar. Doble click sigue abriendo la OP (generar
-   guías), como cualquier otra tarjeta. */
-.seccion-cab { display: flex; align-items: center; gap: var(--e-3); margin-bottom: var(--e-2); }
-.seccion-cab > .seccion-titulo { margin: 0; }
-.seccion-acciones { display: flex; gap: var(--e-2); margin-left: auto; }
-
+   botones Eliminar/Generar guía/Entregado de panel__cab (siempre visibles
+   arriba, deshabilitados sin selección — ver actualizarAccionesDespacho).
+   Doble click sigue abriendo la OP (generar guías), como cualquier otra
+   tarjeta. */
 .panel__rejilla[data-lista-panel="despachos-asignados"] .reg { cursor: pointer; }
+.panel__rejilla[data-lista-panel="despachos-asignados"] .reg__pie {
+  transition: opacity var(--m-media) var(--ease-salida);
+}
 .panel__rejilla[data-lista-panel="despachos-asignados"] .reg[data-seleccionado] {
   border-color: var(--c-tema-fuerte);
   box-shadow: var(--s-2), 0 0 0 3px color-mix(in srgb, var(--c-tema-fuerte) 25%, transparent);
@@ -403,11 +406,13 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
 }
 
 /* ── Caja de envío — animación de "Entregado" ─────────────────────────────
-   Fija en el borde derecho de la ventana. Entra (fade), el ícono cruza de
-   caja abierta a cerrada (mismo truco de crossfade que el pin/check de
-   asignar-despacho.html), y recién ahí se desliza fuera de la pantalla
-   hacia la derecha, simbolizando el envío — ver entregarSeleccionado() en
-   el script. */
+   Fija en el borde derecho de la ventana. Aparece ya abierta, se cierra
+   (crossfade a la caja cerrada, ver más abajo) y, 300ms después de que
+   termina ese crossfade, se desliza — entera, sin desvanecerse — hacia la
+   derecha con ease-in (acelera todo el trayecto, sin frenar) hasta salir
+   de la ventana. translateX(100vw) asegura que escape completo sin
+   importar el ancho de la ventana. Ver entregarSeleccionado() en el
+   script para el timing exacto. */
 .caja-envio {
   position: fixed; top: 50%; right: 2.5rem; z-index: 80;
   width: 4.5rem; height: 4.5rem;
@@ -420,19 +425,30 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
   opacity: 0;
   transform: translateY(-50%);
   transition: opacity var(--m-media) var(--ease-salida),
-              transform var(--m-lenta) var(--ease-entrada);
+              transform var(--m-lenta) var(--ease-acelerar);
 }
 .caja-envio[data-mostrar] { opacity: 1; }
-.caja-envio[data-salir] { opacity: 0; transform: translateY(-50%) translateX(8rem); }
+.caja-envio[data-salir] { transform: translateY(-50%) translateX(100vw); }
 
 .caja-envio__icono { position: relative; width: 2.25rem; height: 2.25rem; }
-.caja-envio__icono .icon-box-open, .caja-envio__icono .icon-box-closed {
-  position: absolute; inset: 0;
+
+/* Dos SVG completos (Lucide package-open / package) superpuestos, en
+   crossfade — no un morph: los dos íconos no tienen la misma cantidad de
+   paths ni geometría correlacionada (son dos composiciones distintas, no
+   el mismo objeto visto abierto/cerrado), así que interpolar el "d" no es
+   viable sin una librería (GSAP MorphSVG, Rive), overkill para este caso
+   (probamos un morph con líneas propias como experimento y no quedó tan
+   bien como este crossfade — volvimos acá). Empieza mostrando el abierto;
+   al llegar data-cerrada se cruzan, y recién ahí la caja completa se
+   desliza fuera de pantalla (ver .caja-envio[data-salir] más arriba y
+   entregarSeleccionado() en el script). */
+.caja-envio__icono .icono-caja {
+  position: absolute; inset: 0; width: 100%; height: 100%;
   transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
 }
-.caja-envio__icono .icon-box-closed { opacity: 0; transform: scale(.7) rotate(-8deg); }
-.caja-envio[data-cerrada] .icon-box-open { opacity: 0; transform: scale(.7) rotate(8deg); }
-.caja-envio[data-cerrada] .icon-box-closed { opacity: 1; transform: scale(1) rotate(0deg); }
+.icono-caja--cerrada { opacity: 0; transform: scale(.85); }
+.caja-envio[data-cerrada] .icono-caja--abierta { opacity: 0; transform: scale(.85); }
+.caja-envio[data-cerrada] .icono-caja--cerrada { opacity: 1; transform: scale(1); }
 
 /* ── Diálogo de confirmación (Eliminar) ──────────────────────────────────── */
 dialog {
@@ -485,14 +501,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       </div>
     </section>
 
-    <!-- TEMPORAL: data-deshabilitado + disabled sacan este módulo de
-         circulación para el release (ver el comentario junto a
-         .modulo[data-deshabilitado] arriba). Revertir apenas se publique:
-         sacar ambos atributos y devolver el <span> a data-meta="despachos". -->
-    <section class="modulo" data-tema="despachos" data-modulo="despachos" style="--i:2" data-deshabilitado>
-      <button class="modulo__caja" type="button" disabled>
+    <section class="modulo" data-tema="despachos" data-modulo="despachos" style="--i:2">
+      <button class="modulo__caja" type="button">
         <span class="modulo__titulo">Despachos</span>
-        <span class="modulo__meta" data-meta="despachos">Próximamente</span>
+        <span class="modulo__meta" data-meta="despachos">—</span>
         <span class="modulo__flecha" aria-hidden="true">→</span>
       </button>
       <div class="modulo__lista">
@@ -571,6 +583,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   <div class="panel__cab">
     <button class="cab-btn cab-btn--fantasma" data-cerrar>← Volver</button>
     <span class="cabecera__sep"></span>
+    <button class="cab-btn" type="button" data-accion="eliminar-despacho" disabled>Eliminar</button>
+    <button class="cab-btn" type="button" data-accion="generar-guia-despacho" disabled>Generar guía</button>
+    <button class="cab-btn" type="button" data-accion="entregar-despacho" disabled>Entregado</button>
+    <button class="cab-btn cab-btn--fantasma" type="button" data-accion="gestionar-direcciones">Gestionar direcciones</button>
     <span class="cabecera__version" data-version></span>
   </div>
   <div class="panel__cuerpo">
@@ -584,13 +600,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     </section>
 
     <section class="panel__seccion">
-      <div class="seccion-cab">
-        <h2 class="seccion-titulo">Con dirección asignada</h2>
-        <div class="seccion-acciones" data-acciones-asignados hidden>
-          <button class="btn btn--secundario btn--chico" type="button" data-accion="eliminar-despacho">Eliminar</button>
-          <button class="btn btn--primario btn--chico" type="button" data-accion="entregar-despacho">Entregado</button>
-        </div>
-      </div>
+      <h2 class="seccion-titulo">Con dirección asignada</h2>
       <div class="panel__rejilla" data-lista-panel="despachos-asignados"></div>
     </section>
   </div>
@@ -600,8 +610,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
      en el script). Vive fija en la esquina derecha, oculta hasta que se usa. -->
 <div class="caja-envio" data-caja-envio hidden>
   <div class="caja-envio__icono">
-    <div class="icon-box-open"></div>
-    <div class="icon-box-closed"></div>
+    <svg class="icono-caja icono-caja--abierta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 22v-9"/>
+      <path d="M15.17 2.21a1.67 1.67 0 0 1 1.63 0L21 4.57a1.93 1.93 0 0 1 0 3.36L8.82 14.79a1.655 1.655 0 0 1-1.64 0L3 12.43a1.93 1.93 0 0 1 0-3.36z"/>
+      <path d="M20 13v3.87a2.06 2.06 0 0 1-1.11 1.83l-6 3.08a1.93 1.93 0 0 1-1.78 0l-6-3.08A2.06 2.06 0 0 1 4 16.87V13"/>
+      <path d="M21 12.43a1.93 1.93 0 0 0 0-3.36L8.83 2.2a1.64 1.64 0 0 0-1.63 0L3 4.57a1.93 1.93 0 0 0 0 3.36l12.18 6.86a1.636 1.636 0 0 0 1.63 0z"/>
+    </svg>
+    <svg class="icono-caja icono-caja--cerrada" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>
+      <path d="M12 22V12"/>
+      <polyline points="3.29 7 12 12 20.71 7"/>
+      <path d="m7.5 4.27 9 5.15"/>
+    </svg>
   </div>
 </div>
 
@@ -613,20 +633,6 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-eliminar">Eliminar</button>
   </div>
 </dialog>
-
-<!-- Navegación entre módulos — click o teclado (←/→, ver TD.atajo más abajo).
-     Solo visibles con un panel expandido (ver
-     "body[data-fase='panel'] .flecha-nav[data-flecha-modulo]" arriba, en el
-     <style> de esta misma pantalla). Recorren .modulo[data-modulo] en el
-     mismo orden en que aparecen en el menú, así que un módulo nuevo entra
-     solo con agregar su <section class="modulo"> — no hace falta tocar
-     este JS. -->
-<button class="flecha-nav flecha-nav--izq" data-flecha-modulo="anterior" aria-label="Módulo anterior">
-  <div class="icon-chevron-left"></div>
-</button>
-<button class="flecha-nav flecha-nav--der" data-flecha-modulo="siguiente" aria-label="Módulo siguiente">
-  <div class="icon-chevron-right"></div>
-</button>
 
 <script src="api.js"></script>
 <script src="app.js"></script>
@@ -746,21 +752,50 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   /* Distinta a todas las demás tarjetas del menú: acá el click NO navega,
      SELECCIONA (única salvo Shift, que suma a una selección múltiple) —
      los botones Entregado/Eliminar actúan sobre lo seleccionado. Doble
-     click sigue abriendo la OP (generar guías), como antes. */
+     click sigue abriendo la OP (generar guías), como antes.
+
+     El pie ya no muestra el estado ("Pendiente" en casi todas — no
+     distingue una tarjeta de otra): rota entre las comunas (o regiones,
+     si el producto no es de la Región Metropolitana) de los productos de
+     la OP, calculadas en ui/api_menu.py::_ubicaciones. Ver rotarUbicaciones
+     más abajo, que las va turnando en todas las tarjetas a la vez. */
   function tarjetaDespachoAsignado(o) {
     const b = document.createElement("button");
     b.className = "reg";
     b.dataset.numero = o.numero;
     const estado = ESTADOS_DESPACHO[o.estado_despacho] || o.estado_despacho || "";
+    const ubicaciones = o.ubicaciones || [];
     b.title = `OP ${o.numero} · ${o.empresa || ""} · ${estado}`;
+    if (ubicaciones.length) b.dataset.ubicaciones = JSON.stringify(ubicaciones);
     b.innerHTML =
       `<span class="reg__num">${String(o.numero).padStart(4, "0")}</span>` +
       `<span class="reg__sub">${esc(o.empresa || "—")}</span>` +
-      `<span class="reg__pie">${esc(estado)}</span>`;
+      `<span class="reg__pie">${esc(ubicaciones[0] || estado)}</span>`;
     b.addEventListener("click", (e) => toggleSeleccionDespacho(o.numero, b, e.shiftKey));
     b.addEventListener("dblclick", () => TD.api.abrir_despacho(o.numero));
     return b;
   }
+
+  /* Un solo intervalo para todas las tarjetas (en vez de uno por tarjeta):
+     pintar() las reemplaza enteras cada vez que cargar() refresca la
+     lista, así que un timer por tarjeta quedaría huérfano, apuntando a un
+     nodo ya desprendido del DOM. Leyendo el DOM en cada tick no hace falta
+     limpiar nada al repintar. */
+  let tickUbicacion = 0;
+  function rotarUbicaciones() {
+    tickUbicacion++;
+    $$('.panel__rejilla[data-lista-panel="despachos-asignados"] .reg[data-ubicaciones]').forEach((b) => {
+      const lista = JSON.parse(b.dataset.ubicaciones);
+      if (lista.length < 2) return;
+      const pie = $(".reg__pie", b);
+      pie.style.opacity = 0;
+      setTimeout(() => {
+        pie.textContent = lista[tickUbicacion % lista.length];
+        pie.style.opacity = 1;
+      }, 160);
+    });
+  }
+  setInterval(rotarUbicaciones, 2600);
 
   /* ── Selección de despachos asignados (Entregado / Eliminar) ─────────── */
 
@@ -792,9 +827,21 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   }
 
   function actualizarAccionesDespacho() {
-    $("[data-acciones-asignados]").hidden = seleccionadosDespacho.size === 0;
+    $("[data-accion='eliminar-despacho']").disabled = seleccionadosDespacho.size === 0;
+    $("[data-accion='generar-guia-despacho']").disabled = seleccionadosDespacho.size !== 1;
     $("[data-accion='entregar-despacho']").disabled = seleccionadosDespacho.size !== 1;
   }
+
+  /* ── Generar guía (pendiente — ver ApiMenu.generar_guia_despacho) ──────── */
+
+  $("[data-accion='gestionar-direcciones']").addEventListener("click", () => {
+    TD.api.ir("gestionar_direcciones");
+  });
+
+  $("[data-accion='generar-guia-despacho']").addEventListener("click", () => {
+    if (seleccionadosDespacho.size !== 1) return;
+    TD.api.generar_guia_despacho(Array.from(seleccionadosDespacho)[0]);
+  });
 
   /* ── Eliminar (con confirmación) ──────────────────────────────────────── */
 
@@ -835,15 +882,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       void caja.getBoundingClientRect();   // fuerza el reflow antes de animar
       requestAnimationFrame(() => caja.setAttribute("data-mostrar", ""));
 
+      // 550ms: arranca el crossfade (dura --m-media, 280ms → termina en 830ms).
+      // +300ms de pausa antes de deslizar (a pedido de Bruno) → 1130ms.
+      // La salida dura --m-lenta (560ms) → termina en 1690ms.
       setTimeout(() => caja.setAttribute("data-cerrada", ""), 550);
-      setTimeout(() => caja.setAttribute("data-salir", ""), 950);
+      setTimeout(() => caja.setAttribute("data-salir", ""), 1130);
       setTimeout(() => {
         caja.hidden = true;
         caja.removeAttribute("data-mostrar");
         caja.removeAttribute("data-cerrada");
         caja.removeAttribute("data-salir");
         resolve();
-      }, 1550);
+      }, 1690);
     });
   }
 
@@ -899,6 +949,35 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     });
   }
 
+  /* ── Módulos pausados (core/config.py::MODULOS_HABILITADOS) ─────────────
+     Se aplica UNA vez al arrancar, con el contexto (ver TD.iniciar más
+     abajo) — antes de la primera cargar(), para que un módulo pausado
+     nunca llegue a mostrarse clickeable ni con su contador real, ni
+     siquiera por un instante. `mapa` puede venir undefined/vacío (falla
+     de red, versión vieja del backend) — en ese caso todo queda
+     habilitado por default, nunca al revés (un módulo real no debe
+     apagarse por un dato que no llegó). */
+  function aplicarModulosHabilitados(mapa) {
+    $$(".modulo[data-modulo]").forEach((modulo) => {
+      const habilitado = !mapa || mapa[modulo.dataset.modulo] !== false;
+      modulo.toggleAttribute("data-deshabilitado", !habilitado);
+      $(".modulo__caja", modulo).disabled = !habilitado;
+      if (!habilitado) {
+        const meta = $(`[data-meta='${modulo.dataset.modulo}']`);
+        if (meta) meta.textContent = "Próximamente";
+      }
+    });
+  }
+
+  /* Wrapper de escritura para [data-meta='...']: si el módulo está
+     pausado, cargar() no debe pisarle el "Próximamente" con la cuenta
+     real en cada refresco. */
+  function actualizarMeta(nombre, texto) {
+    if ($(`.modulo[data-modulo='${nombre}']`).hasAttribute("data-deshabilitado")) return;
+    const meta = $(`[data-meta='${nombre}']`);
+    if (meta) meta.textContent = texto;
+  }
+
   /* ── Carga de datos ───────────────────────────────────────────────────── */
 
   async function cargar() {
@@ -951,15 +1030,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     const partes = [];
     if (cotizaciones.length) partes.push(plural(cotizaciones.length, "guardada", "guardadas"));
     if (pendientes.length)   partes.push(plural(pendientes.length, "incompleta", "incompletas"));
-    $("[data-meta='cotizaciones']").textContent = partes.join(" · ");
-    $("[data-meta='ops']").textContent =
-      ops.length ? plural(ops.length, "activa", "activas") : "";
-    // TEMPORAL: módulo deshabilitado para el release — no pisar el
-    // "Próximamente" del HTML con la cuenta real (ver data-deshabilitado).
-    if (!$(".modulo[data-modulo='despachos']").hasAttribute("data-deshabilitado")) {
-      $("[data-meta='despachos']").textContent =
-        despachos.length ? plural(despachos.length, "pendiente", "pendientes") : "";
-    }
+    actualizarMeta("cotizaciones", partes.join(" · "));
+    actualizarMeta("ops", ops.length ? plural(ops.length, "activa", "activas") : "");
+    actualizarMeta("despachos", despachos.length ? plural(despachos.length, "pendiente", "pendientes") : "");
 
     ajustarRatioTarjetas();
   }
@@ -1008,6 +1081,16 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
        ui/api_app.py::notificar_panel). */
     TD.api.notificar_panel(nombre);
 
+    /* menu.html es una sola carga de página que puede quedar abierta un
+       buen rato: si algo cambió por otro lado mientras tanto (p. ej. una OP
+       marcada completa desde el panel de producción, que es OTRA ventana
+       y escribe directo a disco sin avisarle a esta), los datos en memoria
+       quedan viejos hasta que esta pantalla se recargue de verdad. Abrir un
+       módulo a mano es el momento justo para ponerse al día — no hace
+       falta esperar la animación, entra en paralelo mientras el panel
+       todavía está expandiéndose. */
+    cargar();
+
     /* El punto de partida se fija CON LAS TRANSICIONES APAGADAS: si no, ese
        primer salto (0 → rectángulo de la caja) también se anima, cada
        propiedad arranca en un momento distinto y la expansión sale
@@ -1053,7 +1136,8 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   function abrirModuloDirecto(nombre) {
     const modulo = $(`.modulo[data-modulo='${nombre}']`);
     const panel = $(`.panel[data-panel='${nombre}']`);
-    // TEMPORAL — ver data-deshabilitado más arriba.
+    // Un módulo pausado (MODULOS_HABILITADOS) no se abre ni por acá —
+    // aunque llegue un ?panel=... apuntándole desde Python.
     if (!modulo || !panel || modulo.hasAttribute("data-deshabilitado")) return;
     moduloActivo = modulo;
     TD.api.notificar_panel(nombre);
@@ -1104,9 +1188,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
   function irAModuloAdyacente(direccion) {
     if (!moduloActivo) return;
-    // ":not([data-deshabilitado])" es TEMPORAL — ver data-deshabilitado
-    // más arriba: sin esto, ←/→ igual podían llegar al módulo apagado
-    // saltando entre los otros dos.
+    // ":not([data-deshabilitado])" — ←/→ nunca aterrizan en un módulo
+    // pausado (MODULOS_HABILITADOS), saltan directo al siguiente que sí
+    // esté habilitado.
     const modulos = $$(".modulo[data-modulo]:not([data-deshabilitado])");
     const i = modulos.indexOf(moduloActivo);
     if (i === -1) return;
@@ -1123,6 +1207,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
     moduloActivo = destino;
     TD.api.notificar_panel(nombre);
+    cargar();
     cuerpo.dataset.tema = nombre;
     const est = getComputedStyle($(".modulo__caja", destino));
     expansion.style.background = est.backgroundColor;
@@ -1236,14 +1321,16 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     if (accion) TD.api.ir(accion.dataset.ir);
     const cerrar = e.target.closest("[data-cerrar]");
     if (cerrar) cerrarModulo();
-    const flecha = e.target.closest("[data-flecha-modulo]");
-    if (flecha) irAModuloAdyacente(flecha.dataset.flechaModulo);
   });
 
   $("[data-accion='actualizar']").addEventListener("click", () => TD.api.buscar_actualizacion());
 
   TD.atajo("escape", () => cerrarModulo());
   TD.atajo("f5", () => cargar());
+  /* ←/→ pasan al módulo anterior/siguiente con un panel ya abierto (ver
+     irAModuloAdyacente) — sin flechas en pantalla a propósito, mismo
+     criterio que ver-cotizacion.html/ver-op.html: solo el atajo de
+     teclado. */
   TD.atajo("arrowleft",  () => irAModuloAdyacente("anterior"));
   TD.atajo("arrowright", () => irAModuloAdyacente("siguiente"));
 
@@ -1265,10 +1352,29 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     });
   });
 
+  /* Recarga automática de fondo: además del refresco al abrir/cambiar de
+     módulo (abrirModulo/irAModuloAdyacente), esta pantalla puede quedar
+     abierta un buen rato sin que el usuario toque nada — y mientras tanto
+     el panel de producción (otra ventana) puede completar OPs sin avisarle.
+     Se salta el refresco si hay una selección de despachos en curso o el
+     diálogo de "eliminar despacho" está abierto (cargar() los borra/
+     repinta, y perder eso a mitad de una acción sería peor que los datos
+     viejos), o si la ventana no tiene foco (no vale la pena repintar algo
+     que nadie está mirando). */
+  setInterval(() => {
+    if (seleccionadosDespacho.size > 0) return;
+    if (dlgEliminarDespacho.open) return;
+    if (document.hidden || !document.hasFocus()) return;
+    cargar();
+  }, 60000);
+
   TD.iniciar(async (ctx) => {
     $$("[data-version]").forEach((n) => { if (ctx.version) n.textContent = "v" + ctx.version; });
     const f = $("[data-fecha]");
     if (f) f.textContent = ctx.fecha || "";
+    // Antes de cargar(): un módulo pausado no debe mostrarse clickeable ni
+    // con su contador real ni por un instante.
+    aplicarModulosHabilitados(ctx.modulos_habilitados);
     await cargar();
   });
 })();

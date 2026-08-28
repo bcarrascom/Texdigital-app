@@ -74,6 +74,27 @@ def _despachos_pendientes() -> list[dict]:
     return pendientes
 
 
+REGION_METROPOLITANA = "Región Metropolitana"
+
+
+def _ubicaciones(datos: dict) -> list[str]:
+    """Comuna (o región, si el producto no es de la Región Metropolitana) de
+    cada producto de la OP, sin repetidos y en orden de aparición — la
+    dirección es POR PRODUCTO (ver core/repositorio_despachos.py), así que
+    una OP puede tener varios destinos distintos. Se usa para la tarjeta del
+    panel "Con dirección asignada" (ver tarjetaDespachoAsignado en
+    menu.html), que rota entre estos en vez de mostrar un estado que es
+    "Pendiente" en casi todas."""
+    ubicaciones = []
+    for p in datos.get("productos", []):
+        direccion = p.get("Direccion") or {}
+        region = direccion.get("region", "")
+        lugar = direccion.get("comuna", "") if region == REGION_METROPOLITANA else region
+        if lugar and lugar not in ubicaciones:
+            ubicaciones.append(lugar)
+    return ubicaciones
+
+
 def _despachos_asignados() -> list[dict]:
     """OPs en Despachos/OPs/Asignadas — ya tienen dirección en todos sus
     productos, listas para seleccionar en el panel y marcar Entregadas o
@@ -84,6 +105,7 @@ def _despachos_asignados() -> list[dict]:
             "nombre":          datos.get("Nombre", ""),
             "empresa":         datos.get("Empresa", "—"),
             "estado_despacho": datos.get("EstadoDespacho", ""),
+            "ubicaciones":     _ubicaciones(datos),
         }
         for datos in listar_ops_despacho()
         if datos.get("EstadoAsignacion") == ESTADO_ASIGNACION_ASIGNADA
@@ -119,3 +141,7 @@ class ApiMenu:
         """Elimina varios despachos de una (selección múltiple con Shift,
         ver menu.html) — devuelve cuántos encontró y borró de verdad."""
         return sum(1 for n in numeros if eliminar_despacho(n))
+
+    def generar_guia_despacho(self, numero) -> None:
+        """Botón 'Generar guía' del panel de Despachos — todavía sin
+        implementar, Bruno la completa en una sesión aparte."""
