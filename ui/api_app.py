@@ -73,6 +73,7 @@ import threading
 from datetime import datetime
 from urllib.parse import urlencode
 
+from core.config import MODULOS_HABILITADOS
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.rutas import RECURSOS, DOCS as _DOCS
 from core.version import VERSION
@@ -84,6 +85,7 @@ from ui.api_historial_ops import ApiHistorialOps
 from ui.api_cotizacion import ApiCotizacion
 from ui.api_ver_despacho import ApiVerDespacho
 from ui.api_asignar_despacho import ApiAsignarDespacho
+from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 
 RUTA_PANTALLAS = RECURSOS / "pantallas"
 
@@ -95,6 +97,7 @@ _TITULOS = {
     "nueva-cotizacion": "Nueva cotización",
     "ver-despacho":     "Despacho",
     "asignar-despacho": "Asignar dirección",
+    "gestionar-direcciones": "Gestionar direcciones",
 }
 
 _ARCHIVOS = {
@@ -105,6 +108,7 @@ _ARCHIVOS = {
     "nueva-cotizacion": "nueva-cotizacion.html",
     "ver-despacho":     "ver-despacho.html",
     "asignar-despacho": "asignar-despacho.html",
+    "gestionar-direcciones": "gestionar-direcciones.html",
 }
 
 # Ver _cargar()/_recargando.html: paso intermedio para forzar una recarga
@@ -148,6 +152,7 @@ class ApiApp:
         self._cotizacion = ApiCotizacion()
         self._ver_despacho = ApiVerDespacho()
         self._asignar_despacho = ApiAsignarDespacho()
+        self._gestionar_direcciones = ApiGestionarDirecciones()
 
     # ── Arranque / navegación ────────────────────────────────────────────────
 
@@ -272,10 +277,11 @@ class ApiApp:
         preferencias = cargar_preferencias()
         hoy = datetime.now()
         ctx = {
-            "version":   VERSION,
-            "escala_ui": preferencias.get("escala_ui", 1),
-            "hoy_iso":   hoy.strftime("%Y-%m-%d"),
-            "fecha":     hoy.strftime("%d-%m-%Y"),
+            "version":             VERSION,
+            "escala_ui":           preferencias.get("escala_ui", 1),
+            "hoy_iso":             hoy.strftime("%Y-%m-%d"),
+            "fecha":               hoy.strftime("%d-%m-%Y"),
+            "modulos_habilitados": MODULOS_HABILITADOS,
         }
         pantalla, args = self._pantalla_actual, self._args_actuales
         if pantalla == "ver-cotizacion":
@@ -290,6 +296,8 @@ class ApiApp:
             ctx.update(self._ver_despacho.contexto_extra(args.get("numero")))
         elif pantalla == "asignar-despacho":
             ctx.update(self._asignar_despacho.contexto_extra(args.get("numero")))
+        elif pantalla == "gestionar-direcciones":
+            ctx.update(self._gestionar_direcciones.contexto_extra())
         return ctx
 
     def guardar_preferencia(self, clave: str, valor) -> bool:
@@ -351,6 +359,8 @@ class ApiApp:
             self._ir("nueva-cotizacion")
         elif destino == "historial_ops":
             self._ir("historial-ops")
+        elif destino == "gestionar_direcciones":
+            self._ir("gestionar-direcciones")
         elif destino == "panel_produccion":
             if sys.platform == "darwin":
                 from ui.panel_produccion import mostrar_panel_mac
@@ -430,10 +440,13 @@ class ApiApp:
         return self._cotizacion.guardar_progreso(estado)
 
     def guardar_cotizacion(self, estado: dict, abrir: bool = False) -> dict:
-        return self._cotizacion.guardar_cotizacion(estado, abrir)
+        r = self._cotizacion.guardar_cotizacion(estado, abrir)
+        if not r.get("error"):
+            self._ir("menu", panel="cotizaciones")
+        return r
 
-    def guardar_cliente(self, empresa, rut, razon_social) -> None:
-        self._cotizacion.guardar_cliente(empresa, rut, razon_social)
+    def guardar_cliente(self, empresa, rut, razon_social) -> bool:
+        return self._cotizacion.guardar_cliente(empresa, rut, razon_social)
 
     def guardar_contacto(self, contacto, email, descuento, condicion) -> None:
         self._cotizacion.guardar_contacto(contacto, email, descuento, condicion)
@@ -451,6 +464,9 @@ class ApiApp:
 
     def eliminar_despachos(self, numeros: list) -> int:
         return self._menu.eliminar_despachos(numeros)
+
+    def generar_guia_despacho(self, numero) -> None:
+        return self._menu.generar_guia_despacho(numero)
 
     # ── Direcciones (compartido por asignar-despacho y ver-despacho) ──────────
 
@@ -487,3 +503,17 @@ class ApiApp:
 
     def reimprimir_guia(self, numero_guia) -> bool:
         return self._ver_despacho.reimprimir_guia(numero_guia)
+
+    # ── Gestionar direcciones (submódulo de Despachos) ────────────────────────
+
+    def listar_direcciones_gestion(self) -> list[dict]:
+        return self._gestionar_direcciones.listar_direcciones()
+
+    def cargar_clientes_gestion(self) -> list[dict]:
+        return self._gestionar_direcciones.cargar_clientes()
+
+    def guardar_direccion_gestion(self, direccion: dict) -> dict:
+        return self._gestionar_direcciones.guardar_direccion(direccion)
+
+    def eliminar_direccion_gestion(self, id_) -> bool:
+        return self._gestionar_direcciones.eliminar_direccion(id_)

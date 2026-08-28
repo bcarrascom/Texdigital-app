@@ -603,6 +603,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
         <span class="barra__sep"></span>
         <button class="cab-btn" type="button" data-accion="duplicar">Duplicar</button>
         <button class="cab-btn" type="button" data-accion="quitar">Eliminar</button>
+        <button class="btn btn--primario btn--chico" type="button" data-accion="siguiente">Siguiente →</button>
       </header>
 
       <div class="prod__cuerpo">
@@ -1040,6 +1041,9 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     // ── Cabecera ──────────────────────────────────────────────────────────
     $("[data-accion='quitar']", raiz).addEventListener("click", () => quitarProducto(i));
     $("[data-accion='duplicar']", raiz).addEventListener("click", () => duplicarProducto(i));
+    $("[data-accion='siguiente']", raiz).addEventListener("click", () => {
+      irA(i + 1 < estado.productos.length ? i + 1 : "resumen");
+    });
 
     aplicarTipo(raiz, p);
     recalcular(p, raiz);
@@ -1369,7 +1373,9 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     const r = (await TD.api.guardar_cotizacion(estado, !!abrir)) || {};
     guardando = false;
     if (r.error) { TD.aviso(r.error, "error", 8000); return; }
-    TD.aviso(`Cotización ${r.numero || ""} guardada.`, "info");
+    // Éxito: guardar_cotizacion ya navegó de vuelta al menú (módulo
+    // Cotizaciones) del lado de Python — no hay pantalla en la que mostrar
+    // un aviso acá.
   }
 
   /* ── Zona 0: cableado ─────────────────────────────────────────────────── */
@@ -1462,8 +1468,12 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
 
     $("[data-accion='guardar-cliente']").addEventListener("click", async () => {
       if (!estado.cliente.empresa.trim()) { TD.aviso("El campo Empresa es obligatorio para guardar.", "error"); return; }
-      await TD.api.guardar_cliente(estado.cliente.empresa, estado.cliente.rut, estado.cliente.razon_social);
-      TD.aviso("Cliente guardado.", "info");
+      const ok = await TD.api.guardar_cliente(estado.cliente.empresa, estado.cliente.rut, estado.cliente.razon_social);
+      if (ok) {
+        TD.aviso("Cliente guardado.", "info");
+      } else {
+        TD.aviso("Ese RUT ya está registrado a nombre de otra empresa — revisá el RUT.", "error", 6000);
+      }
     });
     $("[data-accion='guardar-contacto']").addEventListener("click", async () => {
       if (!estado.cliente.contacto.trim()) { TD.aviso("Escribí un contacto antes de guardarlo.", "error"); return; }

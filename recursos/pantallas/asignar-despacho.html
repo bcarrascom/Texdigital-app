@@ -122,11 +122,12 @@ dialog.panel-direccion[data-abierto] .panel-direccion__contenido {
 
 .panel-direccion__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
 .panel-direccion__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
-/* Código postal vive acá, no arriba con el resto de los campos — a la
-   misma altura que Guardar, a la izquierda. margin-right:auto en su
-   campo es lo que empuja a Cancelar/Guardar hacia la derecha. */
+/* La referencia (depto, edificio, letra de casa, etc.) vive acá, no arriba
+   con el resto de los campos — a la misma altura que Guardar, a la
+   izquierda. margin-right:auto en su campo es lo que empuja a
+   Cancelar/Guardar hacia la derecha. */
 .panel-direccion__acciones { display: flex; align-items: flex-end; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
-.panel-direccion__acciones .campo--cp { flex: 0 0 9rem; margin-right: auto; }
+.panel-direccion__acciones .campo--referencia { flex: 1 1 14rem; margin-right: auto; }
 .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
 
 /* ── Tarjetas de producto ─────────────────────────────────────────────── */
@@ -323,9 +324,9 @@ dialog.panel-direccion[data-abierto] .panel-direccion__contenido {
       </div>
     </div>
     <div class="panel-direccion__acciones">
-      <div class="campo campo--cp">
-        <label class="campo__etiqueta" for="pd-cp">Código postal</label>
-        <input class="entrada" id="pd-cp" type="text">
+      <div class="campo campo--referencia">
+        <label class="campo__etiqueta" for="pd-referencia">Depto / Edificio / Otro</label>
+        <input class="entrada" id="pd-referencia" type="text" placeholder="N° depto, edificio, letra de casa…">
       </div>
       <button class="btn btn--primario btn--chico" data-accion="guardar-direccion-nueva" type="button">Guardar</button>
     </div>
@@ -444,7 +445,7 @@ dialog.panel-direccion[data-abierto] .panel-direccion__contenido {
     $("#pd-numero").value = "";
     $("#pd-comuna").value = "";
     $("#pd-region").value = REGION_DEFECTO;
-    $("#pd-cp").value = "";
+    $("#pd-referencia").value = "";
     $$(".campo", panel).forEach((c) => c.removeAttribute("data-invalido"));
   }
 
@@ -598,7 +599,7 @@ dialog.panel-direccion[data-abierto] .panel-direccion__contenido {
       numero: campos.numero.value.trim(),
       comuna: campos.comuna.value.trim(),
       region: campos.region.value,
-      codigo_postal: $("#pd-cp").value.trim(),
+      referencia: $("#pd-referencia").value.trim(),
     };
     await TD.api.guardar_direccion_nueva(direccion);
     cerrarPanelDireccion();
