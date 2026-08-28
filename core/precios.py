@@ -75,6 +75,19 @@ Piso mínimo de facturación (ML_MINIMO_POR_PRODUCTO / M2_MINIMO_POR_PRODUCTO):
   de un producto suelto), costo_producto() aplica el piso a esa única línea
   como si fuera su propio grupo — mismo resultado que antes de este cambio.
 
+  Piso mínimo y descuentos (confirmado con el usuario): cuando un grupo de
+  textil/tela cobra el mínimo, ese cobro no es tela real — es el costo fijo
+  de cortar el rollo — así que NO se le aplica ningún descuento, ni el %
+  manual del contacto ni el descuento-textil automático (ver
+  descuento_textil/costo_cotizacion). La exclusión es por GRUPO (mismo
+  agrupamiento que el piso, ver en_piso_minimo_por_producto): si el grupo
+  entero queda bajo el piso, el costo_impresion de TODAS sus líneas queda
+  fuera de la base de ambos descuentos; un grupo que ya supera el piso por
+  sí mismo sigue elegible para descuento normal, aunque alguna línea
+  individual del grupo sea chica. Las estructuras/terminaciones de esas
+  líneas no se ven afectadas (el piso solo toca costo_impresion, igual que
+  el descuento-textil ya hacía).
+
 Descuento-textil (ver descuento_textil/costo_cotizacion, confirmado con el
   usuario): descuento adicional por volumen de tela impresa, aparte del %
   manual "Descuento" del contacto — se calcula siempre, pero de los dos
@@ -470,6 +483,40 @@ def ml_o_area_facturable_por_producto(productos: list[dict], **kwargs) -> list[f
     return facturables
 
 
+def en_piso_minimo_por_producto(productos: list[dict], **kwargs) -> list[bool]:
+    """True para cada producto cuyo grupo de textil/tela (ver
+    _clave_grupo_textil, mismo agrupamiento que usa
+    ml_o_area_facturable_por_producto) está cobrando el piso mínimo (ver
+    docstring del módulo, "Piso mínimo y descuentos") — el ML/M² real
+    sumado de TODO el grupo quedó bajo ML_MINIMO_POR_PRODUCTO/
+    M2_MINIMO_POR_PRODUCTO y se le subió al mínimo. Alineado 1:1 con
+    `productos` (mismo orden que ml_o_area_facturable_por_producto).
+
+    Un grupo cuya suma real ya iguala o supera el piso NO cuenta como "en
+    mínimo" para ninguna de sus líneas, aunque una línea individual sea
+    chica (ver _distribuir_piso: ahí cada una factura su valor real, sin
+    ajuste). Un grupo con suma real 0 (medidas incompletas) tampoco cuenta
+    — no hay ningún cobro que excluir de descuento.
+
+    kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
+    ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
+    sin piso, de cada producto individual)."""
+    reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
+
+    grupos: dict[tuple[str, str], list[int]] = {}
+    for i, p in enumerate(productos):
+        grupos.setdefault(_clave_grupo_textil(p), []).append(i)
+
+    en_minimo = [False] * len(productos)
+    for (tipo, _textil), indices in grupos.items():
+        piso = M2_MINIMO_POR_PRODUCTO if tipo == "backlight" else ML_MINIMO_POR_PRODUCTO
+        total_real = sum(reales[i] for i in indices)
+        if 0 < total_real < piso:
+            for i in indices:
+                en_minimo[i] = True
+    return en_minimo
+
+
 def descuento_textil(productos: list[dict], **kwargs) -> dict:
     """
     Descuento adicional por volumen de tela impresa — independiente del %
@@ -491,6 +538,14 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
       _clave_grupo_descuento_textil) — una cotización MIXTA (backlight +
       no-backlight a la vez) calcula el grupo backlight global y cada grupo
       de textil no-backlight de forma completamente independiente.
+    - Piso mínimo (ver docstring del módulo, "Piso mínimo y descuentos" y
+      en_piso_minimo_por_producto): el costo_impresion de las líneas cuyo
+      grupo de textil/tela está cobrando el mínimo queda EXCLUIDO del monto
+      descontado — ese cobro es el costo fijo de cortar el rollo, no tela
+      real, así que no se reduce por volumen. El % del tramo (pct_grupo)
+      sigue calculándose sobre el m² real de TODO el grupo del descuento
+      (incluidas esas líneas) — es volumen de tela físicamente impresa, no
+      cambia por cómo se factura.
 
     Devuelve {"monto": $ total descontado, "neto": $ neto de los productos
     (sin despacho/instalación — no son tela), "pct_visual": monto/neto×100}.
@@ -506,22 +561,25 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
     # módulo) — el costo_impresion/total de cada línea debe reflejar el
     # piso YA repartido por grupo, no el piso de un solo producto.
     facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
+    en_minimo = en_piso_minimo_por_producto(productos, **kwargs)
 
     def _costo(p, f):
         return costo_producto(p, ml_o_area_facturable=f, **kwargs)
 
     neto = sum(_costo(p, f)["total"] for p, f in zip(productos, facturables))
 
-    grupos: dict[tuple[str, str | None], list[tuple[dict, float]]] = {}
-    for p, f in zip(productos, facturables):
-        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append((p, f))
+    grupos: dict[tuple[str, str | None], list[tuple[dict, float, bool]]] = {}
+    for p, f, m in zip(productos, facturables, en_minimo):
+        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append((p, f, m))
 
     monto = 0.0
     for grupo in grupos.values():
-        pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _ in grupo))
+        pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _, _ in grupo))
         if not pct_grupo:
             continue
-        costo_impresion_grupo = sum(_costo(p, f)["costo_impresion"] for p, f in grupo)
+        costo_impresion_grupo = sum(
+            _costo(p, f)["costo_impresion"] for p, f, en_min in grupo if not en_min
+        )
         monto += costo_impresion_grupo * pct_grupo / 100
 
     pct_visual = (monto / neto * 100) if neto else 0.0
@@ -546,6 +604,13 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
     descuento-textil (no son tela), pero si gana el % normal, sí quedan
     descontados igual que antes (comportamiento sin cambios).
 
+    Piso mínimo (ver docstring del módulo, "Piso mínimo y descuentos" y
+    en_piso_minimo_por_producto): el % manual tampoco se aplica sobre el
+    costo_impresion de las líneas cuyo grupo de textil/tela está cobrando
+    el mínimo — se descuenta ese monto de la base antes de calcular
+    monto_normal. El despacho/instalación no se ven afectados (no son
+    tela).
+
     Devuelve {neto, descuento, descuento_textil_pct, fuente_descuento,
     neto_total, iva, total}. `descuento_textil_pct` es el % (derivado,
     "visual") del descuento-textil calculado para esta cotización, se
@@ -556,13 +621,18 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
     # Piso mínimo de facturación por grupo de textil/tela (ver docstring
     # del módulo y ml_o_area_facturable_por_producto).
     facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
-    neto_productos = sum(
-        costo_producto(p, ml_o_area_facturable=f, **kwargs)["total"]
+    en_minimo = en_piso_minimo_por_producto(productos, **kwargs)
+    costos_productos = [
+        costo_producto(p, ml_o_area_facturable=f, **kwargs)
         for p, f in zip(productos, facturables)
-    )
+    ]
+    neto_productos = sum(c["total"] for c in costos_productos)
     neto = neto_productos + (despacho or 0.0) + (instalacion or 0.0)
 
-    monto_normal = neto * descuento_pct / 100
+    costo_impresion_en_minimo = sum(
+        c["costo_impresion"] for c, m in zip(costos_productos, en_minimo) if m
+    )
+    monto_normal = (neto - costo_impresion_en_minimo) * descuento_pct / 100
     dtextil = descuento_textil(productos, **kwargs)
 
     if dtextil["monto"] > monto_normal:

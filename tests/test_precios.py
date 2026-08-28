@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.precios import (
     calcular_ml, cantidad_efectiva, costo_producto, costo_cotizacion,
     descuento_textil, tramo_descuento_textil, ml_o_area_facturable_por_producto,
+    en_piso_minimo_por_producto,
 )
 
 TEXTILES_ANCHOS = {"TelaTest": 1.2, "Popelina Test": 1.53}
@@ -555,6 +556,82 @@ class TestPisoMinimoPorGrupoDeTextil(unittest.TestCase):
         facturables = ml_o_area_facturable_por_producto(
             [d], textiles_anchos=TEXTILES_ANCHOS, textiles_valores=textiles_valores)
         self.assertAlmostEqual(facturables[0], 2.0)
+
+
+class TestDescuentosNoAplicanSobrePisoMinimo(unittest.TestCase):
+    """Cuando un grupo de textil/tela cobra el piso mínimo, ese cobro no es
+    tela real (es el costo fijo de cortar el rollo) y no debe verse reducido
+    por ningún descuento — ni el % manual del contacto ni el
+    descuento-textil automático (confirmado con el usuario, ver
+    core/precios.py, docstring "Piso mínimo y descuentos")."""
+
+    def test_en_piso_minimo_marca_el_grupo_completo(self):
+        textiles_valores = {"TelaTest": 10000.0}
+        bajo_el_piso_1 = _producto(alto=0.2, ancho=1.2, cantidad=1)   # TelaTest, ml real 0.2
+        bajo_el_piso_2 = _producto(alto=0.3, ancho=1.2, cantidad=1)   # TelaTest, ml real 0.3
+        sobre_el_piso = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=1)  # ml real 5
+        en_minimo = en_piso_minimo_por_producto(
+            [bajo_el_piso_1, bajo_el_piso_2, sobre_el_piso],
+            textiles_anchos=TEXTILES_ANCHOS, textiles_valores=textiles_valores)
+        # Los dos primeros comparten grupo "TelaTest" y entre ambos suman
+        # 0.5 ML, bajo el piso de 2 -> todo el grupo cobra mínimo. El
+        # tercero (otro textil, ml real 5) no cobra mínimo.
+        self.assertEqual(en_minimo, [True, True, False])
+
+    def test_grupo_que_ya_supera_el_piso_no_cuenta_como_minimo(self):
+        textiles_valores = {"TelaTest": 10000.0}
+        p1 = _producto(alto=1.5, ancho=1.2, cantidad=1)  # ml real 1.5
+        p2 = _producto(alto=1.0, ancho=1.2, cantidad=1)  # ml real 1.0, juntos 2.5 >= piso
+        en_minimo = en_piso_minimo_por_producto(
+            [p1, p2], textiles_anchos=TEXTILES_ANCHOS, textiles_valores=textiles_valores)
+        self.assertEqual(en_minimo, [False, False])
+
+    def test_descuento_textil_excluye_el_grupo_backlight_que_cobra_minimo(self):
+        # p1: tela "TelaTest", 1 m² (bajo su propio piso de 2 m² -> cobra
+        # mínimo); p2: tela "Popelina Test", 30 m² (muy sobre el piso). El
+        # descuento-textil de backlight es UN SOLO grupo global (todas las
+        # telas juntas) — el tramo se calcula sobre el área real total
+        # (31 m² -> 20%), pero el monto NO debe incluir el costo_impresion
+        # de p1 (cobra mínimo).
+        textiles_valores = {"TelaTest": 1000.0, "Popelina Test": 1000.0}
+        p1 = {"tela": "TelaTest", "caja": "Sin caja", "alto": 1.0, "ancho": 1.0, "cantidad": 1}
+        p2 = {"tela": "Popelina Test", "caja": "Sin caja", "alto": 5.0, "ancho": 6.0, "cantidad": 1}
+        en_minimo = en_piso_minimo_por_producto([p1, p2], textiles_valores=textiles_valores)
+        self.assertEqual(en_minimo, [True, False])
+
+        res = descuento_textil([p1, p2], textiles_valores=textiles_valores)
+        # área total 1+30=31 -> tramo 10% (20-50 m2); solo p2 aporta al
+        # monto: 30 m2 * 1000 = 30000 de costo_impresion * 10% = 3000 (no
+        # 3200, que sería incluir también el piso ya inflado de p1:
+        # 2*1000=2000).
+        self.assertAlmostEqual(res["monto"], 3000.0)
+
+    def test_costo_cotizacion_no_aplica_descuento_manual_al_grupo_en_minimo(self):
+        textiles_valores = {"TelaTest": 10000.0, "Popelina Test": 1000.0}
+        en_minimo_producto = _producto(alto=0.5, ancho=1.2, cantidad=1)  # ml real 0.5, cobra el piso (2.0)
+        sobre_piso_producto = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)  # ml real 15
+
+        en_minimo = en_piso_minimo_por_producto(
+            [en_minimo_producto, sobre_piso_producto],
+            textiles_anchos=TEXTILES_ANCHOS, textiles_valores=textiles_valores)
+        self.assertEqual(en_minimo, [True, False])
+
+        totales = costo_cotizacion(
+            [en_minimo_producto, sobre_piso_producto], descuento_pct=10,
+            despacho=5000, textiles_anchos=TEXTILES_ANCHOS,
+            textiles_valores=textiles_valores, modelo="aditivo",
+            estructuras_valores={}, terminaciones_valores={})
+
+        # costo_impresion: en_minimo_producto = 2.0*10000=20000 (piso),
+        # sobre_piso_producto = 15*1000=15000. neto = 20000+15000+5000=40000.
+        # Descuento-textil: en_minimo_producto área 0.6 m2 -> tramo 0%;
+        # sobre_piso_producto área 22.95 m2 -> tramo 10% -> monto textil =
+        # 15000*10%=1500. Descuento manual: se excluye el costo_impresion
+        # en mínimo (20000) de la base -> (40000-20000)*10%=2000, no 4000
+        # (que sería descontar también el cobro de piso). Gana el normal.
+        self.assertAlmostEqual(totales["neto"], 40000.0)
+        self.assertEqual(totales["fuente_descuento"], "normal")
+        self.assertAlmostEqual(totales["descuento"], 2000.0)
 
 
 if __name__ == "__main__":
