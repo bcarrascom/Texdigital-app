@@ -17,6 +17,7 @@ from core.repositorio_cotizaciones import (
 )
 from core.precios import costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto
 from core.presentar_cotizacion import generar_html
+from core.repositorio_inventario import calcular_faltantes, consumir_para_op
 from ui.dialogo_aprobar import promover_a_op
 
 
@@ -149,9 +150,52 @@ class ApiVerCotizacion:
         ruta_html = generar_html(datos)
         webbrowser.open(ruta_html.as_uri())
 
-    def aprobar_cotizacion(self, numero, ingreso, entrega) -> bool:
+    def verificar_materiales(self, numero) -> list[dict]:
+        """Chequeo previo al botón "Aprobar →" de la cabecera — ANTES de
+        abrir el diálogo de fechas, para avisar "no se puede aprobar" al
+        toque (mismo espíritu que el aviso de nueva-cotizacion.html), en
+        vez de dejar que el usuario elija fechas y recién ahí enterarse.
+        Mismo cálculo que usa aprobar_cotizacion() para el bloqueo real —
+        ver _faltantes_de()."""
+        return self._faltantes_de(numero)
+
+    def _faltantes_de(self, numero) -> list[dict]:
         datos = cargar_cotizacion(int(numero))
         if datos is None:
-            return False
+            return []
+        productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
+        return calcular_faltantes(productos_internos)
+
+    def aprobar_cotizacion(self, numero, ingreso, entrega) -> dict:
+        """Único punto real de "aprobación" del sistema (no existe un
+        estado de OP pendiente-de-aprobar aparte, ver ui/dialogo_aprobar.py)
+        — por eso es acá, y no antes, donde se bloquea si faltan
+        materiales y donde el consumo se da por real (ver
+        core/repositorio_inventario.py::consumir_para_op). Devuelve
+        {"ok": True} si aprobó, o {"ok": False, "faltantes": [...]} si
+        frenó por stock insuficiente. ver-cotizacion.html ya chequeó esto
+        ANTES de llegar acá (ver verificar_materiales/botón "Aprobar →" de
+        la cabecera) — este bloqueo es la red de seguridad real por si el
+        stock cambió mientras el diálogo de fechas estaba abierto (más de
+        una instalación puede estar mirando el mismo Dropbox)."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return {"ok": False, "faltantes": []}
+
+        faltantes = self._faltantes_de(numero)
+        if faltantes:
+            return {"ok": False, "faltantes": faltantes}
+
+        productos_json = datos.get("productos", [])
+        productos_internos = [producto_desde_json(p) for p in productos_json]
+        asignaciones = consumir_para_op(productos_internos, int(numero), datos.get("Empresa", ""))
+        # Se graba en el producto ANTES de crear la OP (promover_a_op copia
+        # `datos` tal cual) — así el panel de producción (display_op.html)
+        # sabe de qué rollo(s) sacar la tela de cada producto sin tener que
+        # recalcular nada: la decisión ya se tomó acá, una sola vez.
+        for producto_json, rollos_usados in zip(productos_json, asignaciones):
+            if rollos_usados:
+                producto_json["RollosUsados"] = rollos_usados
+
         promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
-        return True
+        return {"ok": True}

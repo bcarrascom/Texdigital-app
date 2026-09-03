@@ -103,6 +103,26 @@ def siguiente_numero() -> int:
     return max(numeros) + 1 if numeros else 1000
 
 
+def numero_en_uso(numero: int, excluir: int | None = None) -> bool:
+    """True si `numero` ya pertenece a una cotización (activa o en
+    Historial) o a una OP (activa o en Historial) — mismo universo que
+    evita siguiente_numero(), pero para consultar uno puntual (ver
+    ui/api_cotizacion.py — validación en vivo del N° de cotización antes
+    de dejar avanzar a cargar productos). `excluir` es el número que la
+    pantalla ya tenía asignado al entrar (editando una cotización
+    existente): ese no cuenta como choque contra sí mismo."""
+    if excluir is not None and numero == excluir:
+        return False
+
+    from core import repositorio_ops
+
+    for carpeta in (carpeta_json(), carpeta_historial(),
+                     repositorio_ops.carpeta_json(), repositorio_ops.carpeta_historial()):
+        if cm.buscar(carpeta, numero) is not None:
+            return True
+    return False
+
+
 def listar_cotizaciones() -> list[dict]:
     """Lista todas las cotizaciones activas (JSON/, con sus subcarpetas
     AAAA/MM) — {numero, empresa, fecha} por cada una, más nuevas primero.

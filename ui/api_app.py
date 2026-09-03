@@ -86,6 +86,7 @@ from ui.api_cotizacion import ApiCotizacion
 from ui.api_ver_despacho import ApiVerDespacho
 from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
+from ui.api_inventario import ApiInventario
 
 RUTA_PANTALLAS = RECURSOS / "pantallas"
 
@@ -153,6 +154,7 @@ class ApiApp:
         self._ver_despacho = ApiVerDespacho()
         self._asignar_despacho = ApiAsignarDespacho()
         self._gestionar_direcciones = ApiGestionarDirecciones()
+        self._inventario = ApiInventario()
 
     # ── Arranque / navegación ────────────────────────────────────────────────
 
@@ -402,9 +404,14 @@ class ApiApp:
     def imprimir_cotizacion(self, numero) -> None:
         self._ver_cotizacion.imprimir_cotizacion(numero)
 
-    def aprobar_cotizacion(self, numero, ingreso, entrega) -> None:
-        if self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega):
+    def verificar_materiales_cotizacion(self, numero) -> list[dict]:
+        return self._ver_cotizacion.verificar_materiales(numero)
+
+    def aprobar_cotizacion(self, numero, ingreso, entrega) -> dict:
+        resultado = self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega)
+        if resultado.get("ok"):
             self._ir("menu", panel="ops")
+        return resultado
 
     # ── Ver OP ───────────────────────────────────────────────────────────────
 
@@ -419,6 +426,12 @@ class ApiApp:
             self._ir("menu", panel="cotizaciones")
         else:
             self._aviso("No se pudo recotizar: la OP ya no está activa.", "error")
+
+    def completar_op(self, numero) -> None:
+        if self._ver_op.completar_op(numero):
+            self._ir("menu", panel="ops")
+        else:
+            self._aviso("No se pudo completar: la OP ya no está activa.", "error")
 
     # ── Historial de OPs ─────────────────────────────────────────────────────
 
@@ -438,6 +451,12 @@ class ApiApp:
 
     def guardar_progreso(self, estado: dict) -> dict:
         return self._cotizacion.guardar_progreso(estado)
+
+    def numero_disponible(self, numero, propio=None) -> bool:
+        return self._cotizacion.numero_disponible(numero, propio)
+
+    def verificar_materiales(self, productos: list) -> list[dict]:
+        return self._cotizacion.verificar_materiales(productos)
 
     def guardar_cotizacion(self, estado: dict, abrir: bool = False) -> dict:
         r = self._cotizacion.guardar_cotizacion(estado, abrir)
@@ -517,3 +536,44 @@ class ApiApp:
 
     def eliminar_direccion_gestion(self, id_) -> bool:
         return self._gestionar_direcciones.eliminar_direccion(id_)
+
+    # ── Inventario ──────────────────────────────────────────────────────────
+    # La tabla de rollos vive directo en el panel de Inventario de menu.html
+    # (ya no es una pantalla aparte) — por eso no hay un "abrir_rollo" acá:
+    # saltar a un rollo puntual desde su tarjeta del mazo es 100% del lado
+    # del cliente (ver irARollo en menu.html), sin pasar por Python.
+
+    def listar_rollos(self) -> list[dict]:
+        return self._inventario.listar_rollos()
+
+    def cargar_textiles_inventario(self) -> list[str]:
+        return self._inventario.cargar_textiles()
+
+    def crear_rollo(self, nombre_textil, ancho, metros_restantes, metros_iniciales=None) -> dict:
+        return self._inventario.crear_rollo(nombre_textil, ancho, metros_restantes, metros_iniciales)
+
+    def editar_rollo(self, id_, nombre_textil, ancho) -> dict | None:
+        return self._inventario.editar_rollo(id_, nombre_textil, ancho)
+
+    def decomisionar_rollo(self, id_) -> bool:
+        return self._inventario.decomisionar_rollo(id_)
+
+    def ajustar_restante_rollo(self, id_, nuevo_restante, descripcion: str = "") -> dict | None:
+        return self._inventario.ajustar_restante_rollo(id_, nuevo_restante, descripcion)
+
+    def eliminar_ajuste_rollo(self, id_rollo, id_ajuste) -> dict | None:
+        return self._inventario.eliminar_ajuste_rollo(id_rollo, id_ajuste)
+
+    def abrir_inventario_nuevo_rollo(self, textil, pendiente_id=None) -> None:
+        """Atajo "+ Nuevo rollo" del aviso de materiales insuficientes
+        (nueva-cotizacion.html): si veníamos de una cotización en
+        progreso, actualiza el registro de "de dónde se viene" con el id
+        de pendiente recién guardado (guardarProgreso ya corrió del lado
+        JS antes de esta llamada) — así "Volver" desde el panel de
+        Inventario reabre ESE borrador puntual, no una pantalla de
+        cotización nueva y vacía (ver volverAlCerrarPanel en menu.html,
+        que por eso mismo usa TD.api.volver() en vez de solo colapsar el
+        panel)."""
+        if pendiente_id and self._pantalla_actual == "nueva-cotizacion":
+            self._args_actuales = {"pendiente": pendiente_id}
+        self._ir("menu", panel="inventario", nuevo_textil=textil)

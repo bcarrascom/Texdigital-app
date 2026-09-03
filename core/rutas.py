@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+from core.version import VERSION
+
 
 def _base_recursos() -> Path:
     """
@@ -50,9 +52,42 @@ def _base_datos() -> Path:
     return base
 
 
+def _es_dev() -> bool:
+    """True cuando se corre desde el checkout de código fuente, sin
+    versión de release (ver core.version.VERSION) — el workflow de
+    release (.github/workflows/release.yml) siempre sobreescribe VERSION
+    con el tag de git antes de empaquetar con PyInstaller, así que una
+    instalación descargada de un release de GitHub nunca cae acá."""
+    return VERSION == "0.0.0-dev"
+
+
+def _carpeta_dropbox_dev() -> Path:
+    """Carpeta que emula la raíz de Dropbox (con la misma estructura
+    SGTD/... que arman los callers de _detectar_dropbox()) para la
+    versión de desarrollador (ver _es_dev). Así, corriendo desde el
+    código fuente, la app nunca lee ni escribe la Dropbox real de la
+    empresa — sirve para pruebas y como fuente de archivos de ejemplo.
+    Vive junto a los datos locales de esta máquina (ver _base_datos()),
+    separada de DATOS/ mismo (ese es el fallback de "no hay Dropbox
+    instalado", con su propia estructura sin SGTD/ — ver
+    core/repositorio_ops.py::_ruta_base y análogos)."""
+    p = _base_datos() / "DropboxDev"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def _detectar_dropbox() -> Path | None:
     """Devuelve la carpeta raíz de Dropbox leyendo su info.json, o None si
-    Dropbox Desktop no está instalado en esta máquina."""
+    Dropbox Desktop no está instalado en esta máquina.
+
+    En la versión de desarrollador (ver _es_dev) devuelve en cambio
+    _carpeta_dropbox_dev(), una carpeta local separada que emula la
+    Dropbox real — para que corriendo desde el código fuente nunca se
+    toque la Dropbox real de la empresa, ni siquiera si esta máquina la
+    tiene instalada y sincronizada."""
+    if _es_dev():
+        return _carpeta_dropbox_dev()
+
     if sys.platform == "win32":
         local = os.environ.get("LOCALAPPDATA", "")
         info = Path(local) / "Dropbox" / "info.json"

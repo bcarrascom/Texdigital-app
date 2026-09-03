@@ -20,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_cotizaciones as repo_cot
+import core.repositorio_ops as repo_ops
 
 
 def _cotizacion(numero, fecha):
@@ -204,6 +205,46 @@ class TestBuscarEnUltimosMeses(_ConRutaTemporal):
 
     def test_no_encontrada_da_none(self):
         self.assertIsNone(repo_cot.buscar_en_ultimos_meses(424242, 2026, 8))
+
+
+class TestNumeroEnUso(_ConRutaTemporal):
+    """numero_en_uso() — validación en vivo del N° de cotización en
+    nueva-cotizacion.html (ver ui/api_cotizacion.py::numero_disponible),
+    que gatea el botón "bajar a productos" ANTES de dejar cargar productos
+    con un número que ya no sirve. Revisa cotizaciones Y OPs, así que acá
+    también hace falta aislar el almacenamiento de OPs (no solo el de
+    cotizaciones, que ya mockea _ConRutaTemporal)."""
+
+    def setUp(self):
+        super().setUp()
+        self._base_ops = Path(self._tmp.name) / "ops"
+        self._parche_ops = mock.patch.object(repo_ops, "_ruta_base", lambda: self._base_ops)
+        self._parche_ops.start()
+        self.addCleanup(self._parche_ops.stop)
+
+    def test_numero_libre_no_esta_en_uso(self):
+        self.assertFalse(repo_cot.numero_en_uso(5001))
+
+    def test_numero_de_cotizacion_activa_esta_en_uso(self):
+        repo_cot.guardar_cotizacion(_cotizacion(5002, "20/08/2026"))
+        self.assertTrue(repo_cot.numero_en_uso(5002))
+
+    def test_numero_de_cotizacion_en_historial_esta_en_uso(self):
+        repo_cot.guardar_cotizacion(_cotizacion(5003, "20/08/2026"))
+        repo_cot.mover_a_historial(5003)
+        self.assertTrue(repo_cot.numero_en_uso(5003))
+
+    def test_numero_de_op_activa_esta_en_uso(self):
+        repo_ops.guardar_op({"Cotizacion": 5004, "Fecha_ingreso": "20/08/2026", "Fecha_entrega": "30/08/2026"})
+        self.assertTrue(repo_cot.numero_en_uso(5004))
+
+    def test_excluir_no_cuenta_como_choque_contra_si_mismo(self):
+        repo_cot.guardar_cotizacion(_cotizacion(5005, "20/08/2026"))
+        self.assertFalse(repo_cot.numero_en_uso(5005, excluir=5005))
+
+    def test_excluir_no_perdona_un_numero_ajeno(self):
+        repo_cot.guardar_cotizacion(_cotizacion(5006, "20/08/2026"))
+        self.assertTrue(repo_cot.numero_en_uso(5006, excluir=9999))
 
 
 if __name__ == "__main__":

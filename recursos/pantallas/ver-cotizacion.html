@@ -278,6 +278,45 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
 .dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
 .dlg__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
 .dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* Bloqueo por stock insuficiente (ver TD.api.aprobar_cotizacion) — red de
+   seguridad por si el stock cambió mientras el diálogo de fechas estaba
+   abierto: no se cierra el diálogo, se muestra qué falta debajo de las
+   fechas. El chequeo real de entrada es #dlg-materiales-bloqueado, más
+   abajo, que corre ANTES de llegar a elegir fechas. */
+.dlg-faltantes {
+  display: grid; gap: var(--e-2); margin-top: var(--e-4);
+  padding: var(--e-3); border-radius: var(--r-md);
+  background: var(--c-aviso-suave); color: var(--c-aviso);
+}
+.dlg-faltantes__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+.dlg-faltantes__item { font-size: var(--t-xs); }
+
+/* ── Materiales insuficientes: aviso al apretar "Aprobar →" ──────────────
+   Mismo tratamiento que #dlg-materiales de nueva-cotizacion.html (dropshadow
+   marcado + fondo desenfocado, efecto "3D") — acá es un bloqueo de verdad
+   (no hay forma de "aprobar igual" desde este diálogo), así que solo tiene
+   un botón de salida y los atajos por textil. */
+.aviso-materiales__icono {
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  width: 1.2rem; height: 1.2rem; border-radius: var(--r-full);
+  background: var(--c-aviso); color: var(--c-texto-inv);
+  font-size: .75rem; font-weight: var(--peso-fuerte);
+}
+#dlg-materiales-bloqueado {
+  max-width: min(92vw, 34rem);
+  box-shadow: 0 20px 50px rgba(22, 22, 26, .25), 0 4px 12px rgba(22, 22, 26, .12);
+}
+#dlg-materiales-bloqueado::backdrop { background: rgba(22, 22, 26, .45); backdrop-filter: blur(6px); }
+.materiales-faltantes { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+.material-falta {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e-3);
+  padding: var(--e-3); border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+}
+.material-falta__info { display: grid; gap: .15rem; }
+.material-falta__info strong { font-size: var(--t-sm); }
+.material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
+.material-falta__btn { flex: 0 0 auto; }
 </style>
 </head>
 
@@ -364,6 +403,21 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
   </div>
 </dialog>
 
+<!-- Chequeo al apretar "Aprobar →" de la cabecera, ANTES de elegir fechas
+     — ver mostrarDialogoMaterialesBloqueado(). Bloqueo de verdad: no hay
+     forma de aprobar igual desde acá, solo cerrar o ir a cargar rollos. -->
+<dialog id="dlg-materiales-bloqueado">
+  <h2 class="hoja__titulo" style="font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em;">
+    <span class="aviso-materiales__icono" aria-hidden="true" style="margin-right:.4em">!</span>
+    No se puede aprobar
+  </h2>
+  <p class="dlg__texto">Falta stock de estos textiles para cubrir la cotización:</p>
+  <div class="materiales-faltantes" data-materiales-lista></div>
+  <div class="dlg__acciones">
+    <button class="btn btn--primario btn--chico" type="button" data-mat-cerrar>Entendido</button>
+  </div>
+</dialog>
+
 <dialog id="dlg-aprobar">
   <h2 class="dlg__titulo" data-dlg-aprobar-titulo>¿Aprobar la cotización?</h2>
   <p class="dlg__texto">Aprobar una cotización la vuelve una OP: sale del listado y pasa al historial.</p>
@@ -378,6 +432,10 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
       <input class="entrada" id="fecha-entrega" type="date">
       <span class="campo__error">Poné una fecha de entrega.</span>
     </div>
+  </div>
+  <div class="dlg-faltantes" data-dlg-faltantes hidden>
+    <div class="dlg-faltantes__titulo">No se puede aprobar: faltan materiales</div>
+    <div data-dlg-faltantes-lista></div>
   </div>
   <div class="dlg__acciones">
     <button class="btn btn--fantasma btn--chico" data-cerrar-dlg>Cancelar</button>
@@ -666,7 +724,40 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
   $("[data-accion='editar']").addEventListener("click", () => TD.api.editar_cotizacion(cot.numero));
   $("[data-accion='imprimir']").addEventListener("click", () => TD.api.imprimir_cotizacion(cot.numero));
 
-  $("[data-accion='aprobar']").addEventListener("click", () => {
+  /* Bloqueo de verdad, sin forma de "aprobar igual" desde acá — a
+     diferencia del aviso de nueva-cotizacion.html (que deja guardar de
+     todos modos), acá SÍ hay que resolver el faltante antes de poder
+     aprobar. El atajo "+ Nuevo rollo" navega a Inventario con el textil
+     ya elegido; "Volver" desde ahí reaparece en esta misma pantalla
+     (no hace falta el truco de guardar progreso que usa nueva-cotizacion,
+     una cotización ya guardada no tiene nada que perder). */
+  function mostrarDialogoMaterialesBloqueado(faltantes) {
+    const dlg = $("#dlg-materiales-bloqueado");
+    const lista = $("[data-materiales-lista]", dlg);
+    lista.textContent = "";
+    faltantes.forEach((f) => {
+      const fila = document.createElement("div");
+      fila.className = "material-falta";
+      fila.innerHTML = `
+        <div class="material-falta__info">
+          <strong>${esc(f.textil)}</strong>
+          <span>Faltan ${f.faltante} m — necesita ${f.necesario} m, hay ${f.disponible} m</span>
+        </div>
+        <button class="btn btn--secundario btn--chico material-falta__btn" type="button">+ Nuevo rollo</button>`;
+      $("button", fila).addEventListener("click", () => {
+        dlg.close();
+        TD.api.abrir_inventario_nuevo_rollo(f.textil);
+      });
+      lista.appendChild(fila);
+    });
+    abrirDialogo(dlg);
+    $("[data-mat-cerrar]", dlg).onclick = () => dlg.close();
+  }
+
+  $("[data-accion='aprobar']").addEventListener("click", async () => {
+    const faltantes = (await TD.api.verificar_materiales_cotizacion(cot.numero)) || [];
+    if (faltantes.length) { mostrarDialogoMaterialesBloqueado(faltantes); return; }
+
     const dlg = $("#dlg-aprobar");
     $("[data-dlg-aprobar-titulo]", dlg).textContent =
       `¿Aprobar la cotización ${String(cot.numero).padStart(4, "0")}?`;
@@ -679,6 +770,7 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
     ingreso.value = hoyISO;
     entrega.value = "";
     $("#campo-entrega").removeAttribute("data-invalido");
+    $("[data-dlg-faltantes]", dlg).hidden = true;
 
     const revisar = () => { btnOk.disabled = !(entrega.value && ingreso.value); };
     revisar();
@@ -693,8 +785,24 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
     $("[data-dlg-editar]", dlg).onclick = () => { dlg.close(); TD.api.editar_cotizacion(cot.numero); };
     btnOk.onclick = async () => {
       if (!entrega.value) { $("#campo-entrega").setAttribute("data-invalido", ""); entrega.focus(); return; }
-      dlg.close();
-      await TD.api.aprobar_cotizacion(cot.numero, ingreso.value, entrega.value);
+      btnOk.disabled = true;
+      const r = (await TD.api.aprobar_cotizacion(cot.numero, ingreso.value, entrega.value)) || {};
+      btnOk.disabled = false;
+      if (r.ok) { dlg.close(); return; }
+
+      // Stock insuficiente (o la cotización ya no existe): NO se cierra el
+      // diálogo — se muestra qué falta, para que el usuario pueda ir a
+      // cargar rollos y volver a intentar sin perder las fechas cargadas.
+      const bloque = $("[data-dlg-faltantes]", dlg);
+      const lista = $("[data-dlg-faltantes-lista]", dlg);
+      lista.textContent = "";
+      (r.faltantes || []).forEach((f) => {
+        const p = document.createElement("p");
+        p.className = "dlg-faltantes__item";
+        p.textContent = `${f.textil} — faltan ${f.faltante} m (necesita ${f.necesario} m, hay ${f.disponible} m)`;
+        lista.appendChild(p);
+      });
+      bloque.hidden = false;
     };
   });
 

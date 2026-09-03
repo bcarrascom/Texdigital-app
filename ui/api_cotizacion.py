@@ -34,11 +34,12 @@ from core.calculo_cajas import calcular_caja
 from core.precios import costo_producto, costo_cotizacion
 from core.repositorio_cotizaciones import (
     cargar_cotizacion, guardar_cotizacion as _guardar_cotizacion_repo,
-    mapear_producto, producto_desde_json, siguiente_numero,
+    mapear_producto, producto_desde_json, siguiente_numero, numero_en_uso,
 )
 from core.repositorio_pendientes import (
     guardar_pendiente, cargar_pendiente, eliminar_pendiente, nuevo_id,
 )
+from core.repositorio_inventario import calcular_faltantes
 from core.presentar_cotizacion import generar_html
 
 SIN_CAJA = "Sin caja"
@@ -231,6 +232,7 @@ class ApiCotizacion:
         ctx = {
             "fecha_iso": datetime.now().strftime("%Y-%m-%d"),
             "numero_sugerido": str(siguiente_numero()),
+            "numero_editando": None,
             "estado": None,
         }
 
@@ -239,6 +241,9 @@ class ApiCotizacion:
             if datos is not None:
                 ctx["estado"] = self._estado_desde_json(datos)
                 ctx["numero_sugerido"] = str(datos.get("Cotizacion", ""))
+                # El propio número de la cotización que se está editando no
+                # cuenta como choque contra sí mismo — ver numero_disponible.
+                ctx["numero_editando"] = ctx["numero_sugerido"]
         elif pendiente is not None:
             datos = cargar_pendiente(pendiente)
             if datos is not None:
@@ -385,6 +390,32 @@ class ApiCotizacion:
             "ancho_max": ancho_max,
             "error": error,
         }
+
+    def numero_disponible(self, numero, propio=None) -> bool:
+        """Chequeo en vivo del campo N° de cotización (nueva-cotizacion.html
+        — gatea el botón "bajar a productos", ver revisarDatos()): False si
+        ya pertenece a otra cotización u OP. `propio` es el número con el
+        que esta pantalla arrancó (editando una cotización existente,
+        ctx.numero_editando) — no cuenta como choque contra sí mismo."""
+        try:
+            numero = int(numero)
+        except (TypeError, ValueError):
+            return False
+        propio = int(propio) if propio not in (None, "") else None
+        return not numero_en_uso(numero, excluir=propio)
+
+    def verificar_materiales(self, productos: list) -> list[dict]:
+        """Aviso "Materiales insuficientes" del resumen y diálogo previo a
+        Guardar/Guardar y abrir (ver nueva-cotizacion.html) — solo mira
+        productos con medidas/cantidad ya cargadas (los vacíos no piden
+        tela todavía). No bloquea nada acá: guardar una cotización con
+        stock insuficiente sigue permitido, el único bloqueo real es al
+        aprobarla (ver ApiVerCotizacion.aprobar_cotizacion)."""
+        productos_internos = [
+            _producto_a_interno(p) for p in productos
+            if _num(p.get("ancho")) > 0 and _num(p.get("alto")) > 0 and _ent(p.get("cantidad")) > 0
+        ]
+        return calcular_faltantes(productos_internos)
 
     # ── Guardado ──────────────────────────────────────────────────────────────
 

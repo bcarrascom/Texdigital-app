@@ -498,6 +498,21 @@ function render(){
             <div class="v">${it.v}</div>
           </div>`).join("")}
         </div>` : "";
+    // Rollo(s) de tela a usar — decidido por Python al aprobar la
+    // cotización (core.repositorio_inventario.consumir_para_op, prioriza
+    // el rollo con MENOS metros restantes: así se terminan los rollos
+    // flacos en vez de acumularse). Nunca se recalcula acá, solo se
+    // muestra lo que ya quedó grabado en el producto.
+    const rollos = Array.isArray(p.RollosUsados) ? p.RollosUsados : [];
+    const rollosHTML = rollos.length ? `
+        <div class="caja-detalle">
+          ${rollos.map(r=>`
+          <div class="caja-item">
+            <div class="k">Rollo</div>
+            <div class="v">N° ${r.id}</div>
+            <div class="n num">${fmt(r.metros)} m</div>
+          </div>`).join("")}
+        </div>` : "";
     return `
       <div class="card ${isListo?'listo':''} ${tieneDetalleCaja?'con-caja':''}" data-i="${i}">
         <div class="check">✓</div>
@@ -515,6 +530,7 @@ function render(){
         ${corteHTML}
         ${cajaHTML}
         ${extraHTML}
+        ${rollosHTML}
         ${obsHTML}
         <div class="card-bottom">
           <div class="tema"><b>Tema:</b> ${p.Tema||"—"}</div>

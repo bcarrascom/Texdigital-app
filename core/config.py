@@ -18,6 +18,7 @@ queda inalcanzable desde el menú).
 """
 
 MODULOS_HABILITADOS = {
+    "inventario":   True,
     "cotizaciones": True,
     "ops":          True,
     "despachos":    False,
