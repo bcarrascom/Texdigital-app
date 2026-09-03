@@ -1,25 +1,26 @@
 """
 tests/test_repositorio_inventario.py
 Verifica core/repositorio_inventario.py: alta/edición/decomiso de rollos
-con ID autogenerado (secuencial, 4 dígitos) y fecha de creación
-(backfill para rollos guardados antes de que existiera el campo),
-metros_iniciales opcional al crear, ajustar_restante (corrección manual
-absoluta, siempre logueada) y su deshacer (solo la entrada más reciente —
-ver eliminar_ajuste), el cálculo de metros necesarios/faltantes contra una
-cotización (conversión de área a metros lineales para backlight, vía
-core/precios.py), y el consumo automático al aprobar una cotización
-(consumir_para_op) — que prioriza el rollo con MENOS metros restantes de
-cada textil (no el más viejo): pedido de Bruno para forzar a terminar los
-rollos flacos que se acumulan en la oficina en vez de siempre abrir uno
-nuevo.
+con ID autogenerado (secuencial, 4 dígitos, sin reusar IDs decomisionados)
+y fecha de creación (backfill para rollos guardados antes de que existiera
+el campo), metros_iniciales opcional al crear, ajustar_restante
+(corrección manual absoluta, siempre logueada) y su deshacer (solo la
+entrada más reciente — ver eliminar_ajuste), el cálculo de metros
+necesarios/faltantes contra una cotización (conversión de área a metros
+lineales para backlight, vía core/precios.py), y el consumo automático al
+aprobar una cotización (consumir_para_op) — que prioriza el rollo con
+MENOS metros restantes de cada textil (no el más viejo): pedido de Bruno
+para forzar a terminar los rollos flacos que se acumulan en la oficina en
+vez de siempre abrir uno nuevo.
 
-Usa un archivo temporal (mock de ROLLOS_PATH/HISTORIAL_PATH) — no toca
-Dropbox/AppData reales. TEXTILES_ANCHOS también se mockea: core/precios.py
-lo importa por nombre ("from core.repositorio import TEXTILES_ANCHOS"),
-pero es el MISMO objeto dict que core.repositorio.TEXTILES_ANCHOS
-(confirmado en vivo), así que un solo mock.patch.dict sobre ese alcanza
-para los dos módulos — así los metros necesarios no dependen del
-contenido real de recursos/textiles.json.
+Cada rollo es su propio archivo JSON (Activos/<id>.json,
+Decomisionados/AAAA/MM/<id>.json — ver docstring del módulo). Usa una
+carpeta temporal (mock de _ruta_base) — no toca Dropbox/AppData reales.
+TEXTILES_ANCHOS también se mockea: core/precios.py lo importa por nombre
+("from core.repositorio import TEXTILES_ANCHOS"), pero es el MISMO objeto
+dict que core.repositorio.TEXTILES_ANCHOS (confirmado en vivo), así que un
+solo mock.patch.dict sobre ese alcanza para los dos módulos — así los
+metros necesarios no dependen del contenido real de recursos/textiles.json.
 
 Correr con:  python -m unittest tests.test_repositorio_inventario -v
 """
@@ -27,6 +28,7 @@ Correr con:  python -m unittest tests.test_repositorio_inventario -v
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -57,13 +59,10 @@ class _ConRutaTemporalYCatalogo(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self._parche_ruta = mock.patch.object(repo_inv, "ROLLOS_PATH", Path(self._tmp.name) / "rollos_tela.json")
+        base = Path(self._tmp.name) / "Inventario"
+        self._parche_ruta = mock.patch.object(repo_inv, "_ruta_base", lambda: base)
         self._parche_ruta.start()
         self.addCleanup(self._parche_ruta.stop)
-        self._parche_historial = mock.patch.object(
-            repo_inv, "HISTORIAL_PATH", Path(self._tmp.name) / "rollos_tela_historial.json")
-        self._parche_historial.start()
-        self.addCleanup(self._parche_historial.stop)
 
         self._parche_anchos = mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", _ANCHOS, clear=True)
         self._parche_anchos.start()
@@ -105,14 +104,14 @@ class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
     def test_leer_hace_backfill_de_fecha_para_rollos_viejos(self):
         # Simula un rollo guardado antes de que existiera el campo "fecha"
         # (escribe directo el JSON, sin pasar por crear_rollo).
-        repo_inv._escribir([{
+        repo_inv._escribir_rollo(repo_inv.carpeta_activos(), {
             "id": "0001", "nombre_textil": "TelaTest", "ancho": 1.5,
             "metros_iniciales": 10.0, "metros_restantes": 10.0, "usos": [],
-        }])
+        })
         rollos = repo_inv.listar_rollos()
         self.assertEqual(rollos[0]["fecha"], repo_inv._hoy_dma())
         # El backfill se guarda de verdad, no solo en la lectura en memoria.
-        self.assertEqual(repo_inv._leer_json(repo_inv.ROLLOS_PATH)[0]["fecha"], repo_inv._hoy_dma())
+        self.assertEqual(repo_inv.obtener_rollo("0001")["fecha"], repo_inv._hoy_dma())
 
 
 class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
@@ -130,13 +129,18 @@ class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
         repo_inv.ajustar_restante(r["id"], 40, "Se usó a mano")
         repo_inv.decomisionar_rollo(r["id"])
 
-        historial = repo_inv._leer_json(repo_inv.HISTORIAL_PATH)
-        self.assertEqual(len(historial), 1)
-        archivado = historial[0]
+        archivos = list(repo_inv.carpeta_decomisionados().rglob("*.json"))
+        self.assertEqual(len(archivos), 1)
+        archivado = repo_inv._leer_rollo(archivos[0])
         self.assertEqual(archivado["id"], r["id"])
         self.assertEqual(archivado["metros_restantes"], 40.0)
         self.assertEqual(len(archivado["usos"]), 1)   # el historial de ajustes no se pierde
         self.assertEqual(archivado["fecha_decomiso"], repo_inv._hoy_dma())
+
+        hoy = datetime.now()
+        ruta_esperada = (repo_inv.carpeta_decomisionados()
+                          / f"{hoy.year:04d}" / f"{hoy.month:02d}" / f"{r['id']}.json")
+        self.assertEqual(archivos[0], ruta_esperada)
 
     def test_decomisionar_no_afecta_otros_rollos(self):
         r1 = repo_inv.crear_rollo("TelaTest", 1.5, 80)
@@ -144,6 +148,12 @@ class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
         repo_inv.decomisionar_rollo(r1["id"])
         self.assertIsNotNone(repo_inv.obtener_rollo(r2["id"]))
         self.assertEqual(len(repo_inv.listar_rollos()), 1)
+
+    def test_id_de_rollo_decomisionado_no_se_reusa(self):
+        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        repo_inv.decomisionar_rollo(r1["id"])
+        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 40)
+        self.assertNotEqual(r2["id"], r1["id"])
 
 
 class TestAjustarRestante(_ConRutaTemporalYCatalogo):
@@ -335,6 +345,66 @@ class TestStockPorTextil(_ConRutaTemporalYCatalogo):
         stock = repo_inv.stock_por_textil()
         self.assertEqual(stock["TelaTest"], 15.0)
         self.assertEqual(stock["Backlight Test"], 20.0)
+
+
+class TestMigrarFormatoViejo(_ConRutaTemporalYCatalogo):
+    """Migración de rollos_tela.json/rollos_tela_historial.json (formato
+    de antes, una lista JSON única) al formato actual (un archivo por
+    rollo). No usa _ConRutaTemporalYCatalogo.setUp para ROLLOS_PATH_VIEJO/
+    HISTORIAL_PATH_VIEJO — esos se mockean acá, por test, para no
+    depender de _CONF_DIR real."""
+
+    def setUp(self):
+        super().setUp()
+        self._viejo_rollos = Path(self._tmp.name) / "rollos_tela.json"
+        self._viejo_historial = Path(self._tmp.name) / "rollos_tela_historial.json"
+        self._parche_viejo_rollos = mock.patch.object(repo_inv, "ROLLOS_PATH_VIEJO", self._viejo_rollos)
+        self._parche_viejo_rollos.start()
+        self.addCleanup(self._parche_viejo_rollos.stop)
+        self._parche_viejo_historial = mock.patch.object(repo_inv, "HISTORIAL_PATH_VIEJO", self._viejo_historial)
+        self._parche_viejo_historial.start()
+        self.addCleanup(self._parche_viejo_historial.stop)
+
+    def test_migra_rollos_activos_a_un_archivo_por_rollo(self):
+        self._viejo_rollos.write_text(
+            '[{"id": "0001", "nombre_textil": "TelaTest", "ancho": 1.5, '
+            '"metros_iniciales": 10.0, "metros_restantes": 10.0, "fecha": "01/01/2026", "usos": []}]',
+            encoding="utf-8",
+        )
+        repo_inv.migrar_formato_viejo()
+
+        rollo = repo_inv.obtener_rollo("0001")
+        self.assertIsNotNone(rollo)
+        self.assertEqual(rollo["nombre_textil"], "TelaTest")
+        self.assertFalse(self._viejo_rollos.exists())
+        self.assertTrue(self._viejo_rollos.with_name("rollos_tela.json.migrado").exists())
+
+    def test_migra_historial_a_decomisionados_por_mes(self):
+        self._viejo_historial.write_text(
+            '[{"id": "0002", "nombre_textil": "TelaTest", "ancho": 1.5, '
+            '"metros_iniciales": 10.0, "metros_restantes": 0.0, "fecha": "01/01/2026", '
+            '"usos": [], "fecha_decomiso": "15/03/2026"}]',
+            encoding="utf-8",
+        )
+        repo_inv.migrar_formato_viejo()
+
+        destino = repo_inv.carpeta_decomisionados() / "2026" / "03" / "0002.json"
+        self.assertTrue(destino.exists())
+        self.assertFalse(self._viejo_historial.exists())
+
+    def test_migrar_sin_archivos_viejos_no_hace_nada(self):
+        repo_inv.migrar_formato_viejo()  # no debe reventar
+        self.assertEqual(repo_inv.listar_rollos(), [])
+
+    def test_migrar_es_idempotente(self):
+        self._viejo_rollos.write_text(
+            '[{"id": "0001", "nombre_textil": "TelaTest", "ancho": 1.5, '
+            '"metros_iniciales": 10.0, "metros_restantes": 10.0, "fecha": "01/01/2026", "usos": []}]',
+            encoding="utf-8",
+        )
+        repo_inv.migrar_formato_viejo()
+        repo_inv.migrar_formato_viejo()  # no debe reventar ni duplicar
+        self.assertEqual(len(repo_inv.listar_rollos()), 1)
 
 
 if __name__ == "__main__":

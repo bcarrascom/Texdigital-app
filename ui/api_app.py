@@ -75,6 +75,7 @@ from urllib.parse import urlencode
 
 from core.config import MODULOS_HABILITADOS
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
+from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
 from core.rutas import RECURSOS, DOCS as _DOCS
 from core.version import VERSION
 
@@ -155,6 +156,7 @@ class ApiApp:
         self._asignar_despacho = ApiAsignarDespacho()
         self._gestionar_direcciones = ApiGestionarDirecciones()
         self._inventario = ApiInventario()
+        _migrar_inventario_formato_viejo()
 
     # ── Arranque / navegación ────────────────────────────────────────────────
 
