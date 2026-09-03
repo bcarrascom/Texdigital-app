@@ -139,6 +139,17 @@
 
     TD.atajo("mod++", function () { escala.mover(1); });
     TD.atajo("mod+-", function () { escala.mover(-1); });
+
+    /* Ctrl+R / Cmd+R recarga la pantalla actual desde el archivo .html en
+       disco — pywebview no expone un reload nativo (no hay barra de
+       navegador de por medio), así que sin esto Ctrl+R no hacía nada. Un
+       reload de verdad (no solo re-pedir datos, como el F5 de menu.html)
+       vuelve a levantar HTML/CSS/JS tal como estén guardados: útil para
+       ver cambios sin reiniciar toda la app. TD.api.obtener_contexto()
+       responde con el mismo estado de navegación de siempre (Python no se
+       entera de este reload), así que la pantalla vuelve a quedar
+       mostrando lo mismo que tenía, con el código fresco. */
+    TD.atajo("mod+r", function () { location.reload(); });
   }
 
   /* ── Arranque ────────────────────────────────────────────────────────────

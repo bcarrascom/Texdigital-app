@@ -7,7 +7,10 @@ Lógica de ver-op.html — instanciada una sola vez por ui.api_app.ApiApp
 
 import webbrowser
 
-from core.repositorio_ops import cargar_op, estado_op, listar_todas_las_ops
+from core.repositorio_ops import (
+    cargar_op, estado_op, listar_todas_las_ops, ESTADO_ACTIVA,
+    completar_op as _completar_op,
+)
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml
 from core.repositorio import TEXTILES_ANCHOS
@@ -111,3 +114,16 @@ class ApiVerOp:
 
     def recotizar_op(self, numero) -> bool:
         return _recotizar_op(numero)
+
+    def completar_op(self, numero) -> bool:
+        """Botón "Completar" de ver-op.html — hasta ahora esto solo se
+        podía hacer desde el panel de producción (ver ui/panel_produccion.py,
+        que usa el mismo core.repositorio_ops.completar_op). Solo tiene
+        sentido para una OP activa; ver-op.html ya oculta el botón si no lo
+        es (ver TD.iniciar ahí), esto es la red de seguridad — devuelve
+        False sin hacer nada si la OP ya no está activa."""
+        datos = cargar_op(int(numero))
+        if datos is None or estado_op(datos) != ESTADO_ACTIVA:
+            return False
+        _completar_op(numero)
+        return True

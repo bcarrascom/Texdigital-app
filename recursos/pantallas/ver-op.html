@@ -285,6 +285,11 @@
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+/* Mismo tratamiento para "Completar OP" — ver el comentario de arriba. */
+#dlg-completar::backdrop {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
 </style>
 </head>
 
@@ -297,6 +302,7 @@
     <span class="cabecera__sep"></span>
     <button class="cab-btn" data-accion="recotizar" hidden>Recotizar</button>
     <button class="cab-btn" data-accion="imprimir">Imprimir</button>
+    <button class="btn btn--primario btn--chico" data-accion="completar" hidden>Completar OP</button>
     <div class="ctrl-texto" title="Tamaño del texto (Ctrl + / Ctrl −)">
       <button class="cab-btn" data-escala="-" aria-label="Achicar texto">A−</button>
       <span class="ctrl-texto__valor" data-escala-valor>100%</span>
@@ -375,6 +381,18 @@
   <div class="dlg__acciones">
     <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-recotizar">Cancelar</button>
     <button class="btn btn--primario btn--chico" type="button" data-accion="confirmar-recotizar">Recotizar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-completar">
+  <h2 class="dlg__titulo">¿Completar esta OP?</h2>
+  <p class="dlg__texto">
+    Sale de las OPs activas — si tiene despacho y/o instalación pasa al
+    módulo Despachos, si no, queda archivada como completada.
+  </p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-completar">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="confirmar-completar">Completar</button>
   </div>
 </dialog>
 
@@ -697,6 +715,18 @@
     TD.api.recotizar_op(op.numero);
   });
 
+  /* Completar: hasta ahora solo se podía hacer desde el panel de
+     producción (ventana aparte) — mismo botón/lógica que ahí (ver
+     core.repositorio_ops.completar_op), disponible acá también. Solo
+     tiene sentido para una OP activa, igual que Recotizar. */
+  const dlgCompletar = $("#dlg-completar");
+  $("[data-accion='completar']").addEventListener("click", () => dlgCompletar.showModal());
+  $("[data-accion='cancelar-completar']").addEventListener("click", () => dlgCompletar.close());
+  $("[data-accion='confirmar-completar']").addEventListener("click", () => {
+    dlgCompletar.close();
+    TD.api.completar_op(op.numero);
+  });
+
   /* ←/→ pasan a la OP siguiente/anterior (más nueva -> más antigua, con
      vuelta, entre TODAS las OPs — ver ApiApp.paginar/ApiVerOp.
      numero_adyacente). Sin flechas en pantalla a propósito: se probaron y
@@ -719,10 +749,13 @@
     mostrar(0, false);
     arrancarCiclo();
 
-    // Recotizar solo tiene sentido en una OP activa (JSON/) — el cliente
-    // pidió esto solo para OPs activas, y core.repositorio_ops.retirar_activa
-    // rechaza cualquier otra igual, esto solo evita ofrecer el botón en vano.
+    // Recotizar/Completar solo tienen sentido en una OP activa (JSON/) —
+    // el cliente pidió Recotizar solo para OPs activas, y
+    // core.repositorio_ops.retirar_activa rechaza cualquier otra igual;
+    // Completar tiene la misma restricción del lado de Python (ver
+    // ApiVerOp.completar_op) — esto solo evita ofrecer los botones en vano.
     $("[data-accion='recotizar']").hidden = op.estado !== "activa";
+    $("[data-accion='completar']").hidden = op.estado !== "activa";
   });
 })();
 </script>

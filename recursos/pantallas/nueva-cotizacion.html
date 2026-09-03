@@ -3,17 +3,6 @@
 <head>
 <meta charset="utf-8">
 <title>Nueva cotización · Sistema de Gestión</title>
-<script>
-  /* `pagereveal` dispara ANTES del primer paint de esta página — a tiempo
-     para marcar si esta llegada viene de una transición entre documentos
-     (view-transition) o de una carga normal (F5, escribir la URL). El CSS
-     usa esa marca para no correr a la vez la entrada normal de las hojas
-     (.hoja{animation:aparecer}) y la coreografía de la transición: dos
-     animaciones sobre lo mismo se pisan y se nota. */
-  window.addEventListener("pagereveal", (e) => {
-    if (e.viewTransition) document.documentElement.setAttribute("data-vt", "");
-  });
-</script>
 <link rel="stylesheet" href="base.css">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -36,8 +25,6 @@
    Los dos movimientos son el mismo truco: un contenedor más grande que su
    marco, corrido con translate. Vertical = --zona, horizontal = --p.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-@view-transition { navigation: auto; }
 
 .pizarra {
   display: grid;
@@ -164,45 +151,6 @@
 .hoja--venta   { animation-delay: 60ms; }
 .hoja--doc     { animation-delay: 110ms; }
 .hoja--cliente { animation-delay: 160ms; }
-
-/* ── Transición entre documentos: llegando desde menu.html ─────────────────
-   "Trabajo" lleva el mismo nombre que el botón de Nueva cotización en el
-   menú: el navegador la anima como una transformación de tamaño y
-   posición, no como una aparición nueva — por eso acá no le tocamos su
-   animación, ya viene puesta desde el otro lado.
-   Documento y Empresa no tienen con qué morphear (no existían en la
-   página de origen): entran con su propia animación, un poco más tarde y
-   desde más abajo, como si se hubieran desprendido del mismo botón. Los
-   cuatro controles de la barra bajan desde arriba, en cadena. */
-.hoja--venta   { view-transition-name: nc-morph; }
-.hoja--doc     { view-transition-name: nc-doc; }
-.hoja--cliente { view-transition-name: nc-cliente; }
-.barra__titulo               { view-transition-name: nc-titulo; }
-[data-accion="guardar-progreso"] { view-transition-name: nc-guardar; }
-.ctrl-texto                  { view-transition-name: nc-escala; }
-[data-accion="manual"]       { view-transition-name: nc-manual; }
-
-/* Con la transición activa, la entrada normal de las tres hojas se apaga:
-   la coreografía de acá abajo la reemplaza — sin esto, las dos animaciones
-   corren juntas y se pisan. */
-html[data-vt] .hoja--venta,
-html[data-vt] .hoja--doc,
-html[data-vt] .hoja--cliente { animation: none; }
-
-@keyframes nc-desprender {
-  from { opacity: 0; transform: translateY(14px) scale(.94); }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes nc-bajar {
-  from { opacity: 0; transform: translateY(-20px); }
-  to   { opacity: 1; transform: none; }
-}
-::view-transition-new(nc-doc)     { animation: 420ms var(--ease-salida) 90ms  both nc-desprender; }
-::view-transition-new(nc-cliente) { animation: 420ms var(--ease-salida) 150ms both nc-desprender; }
-::view-transition-new(nc-titulo)  { animation: 340ms var(--ease-salida) 0ms   both nc-bajar; }
-::view-transition-new(nc-guardar) { animation: 340ms var(--ease-salida) 40ms  both nc-bajar; }
-::view-transition-new(nc-escala)  { animation: 340ms var(--ease-salida) 80ms  both nc-bajar; }
-::view-transition-new(nc-manual)  { animation: 340ms var(--ease-salida) 120ms both nc-bajar; }
 
 /* La bajada: las hojas de ARRIBA se van hacia arriba y dejan ver lo de abajo.
    Ojo con el alcance: los paneles de producto también usan .hoja, así que la
@@ -427,6 +375,42 @@ dialog {
 dialog::backdrop { background: rgba(22, 22, 26, .35); backdrop-filter: blur(2px); }
 dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(--t-sm); }
 .dialogo__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* ── Materiales insuficientes ────────────────────────────────────────────
+   El aviso chico arriba de la tabla del resumen (ver actualizarAvisoMateriales)
+   y el diálogo previo a Guardar/Guardar y abrir (ver mostrarDialogoMateriales)
+   comparten el mismo ícono "!" — acá el diálogo además necesita más ancho
+   y un dropshadow/desenfoque más marcado que el genérico de arriba, para
+   que se note como una interrupción real, no un confirm más. */
+.aviso-materiales {
+  display: flex; align-items: center; gap: var(--e-2);
+  padding: var(--e-2) var(--e-3);
+  background: var(--c-aviso-suave); color: var(--c-aviso);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm); font-weight: var(--peso-medio);
+}
+.aviso-materiales__icono {
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  width: 1.2rem; height: 1.2rem; border-radius: var(--r-full);
+  background: var(--c-aviso); color: var(--c-texto-inv);
+  font-size: .75rem; font-weight: var(--peso-fuerte);
+}
+
+#dlg-materiales {
+  max-width: min(92vw, 34rem);
+  box-shadow: 0 20px 50px rgba(22, 22, 26, .25), 0 4px 12px rgba(22, 22, 26, .12);
+}
+#dlg-materiales::backdrop { background: rgba(22, 22, 26, .45); backdrop-filter: blur(6px); }
+.materiales-faltantes { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+.material-falta {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e-3);
+  padding: var(--e-3); border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+}
+.material-falta__info { display: grid; gap: .15rem; }
+.material-falta__info strong { font-size: var(--t-sm); }
+.material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
+.material-falta__btn { flex: 0 0 auto; }
+.dialogo__acciones--materiales { flex-wrap: wrap; }
 </style>
 </head>
 
@@ -527,7 +511,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
             <div class="grupo">
               <span class="grupo__titulo">Empresa</span>
               <div class="fila fila--2">
-                <div class="campo">
+                <div class="campo" id="campo-empresa">
                   <label class="campo__etiqueta" for="empresa" data-requerido>Empresa</label>
                   <input class="entrada" id="empresa" type="text" list="lista-empresas" autocomplete="off">
                   <datalist id="lista-empresas"></datalist>
@@ -756,6 +740,26 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
   </div>
 </dialog>
 
+<!-- Aviso antes de Guardar/Guardar y abrir con stock insuficiente — ver
+     mostrarDialogoMateriales(). No bloquea: guardar/abrir desde acá mismo
+     sigue permitido, solo avisa (el único bloqueo real es al aprobar,
+     ver ver-cotizacion.html). Cada atajo "+ Nuevo rollo" guarda el
+     progreso y navega a Inventario con ese textil ya elegido. -->
+<dialog id="dlg-materiales">
+  <h2 class="hoja__titulo">
+    <span class="aviso-materiales__icono" aria-hidden="true" style="margin-right:.4em">!</span>
+    Materiales insuficientes
+  </h2>
+  <p>No hay stock suficiente de estos textiles para cubrir la cotización:</p>
+  <div class="materiales-faltantes" data-materiales-lista></div>
+  <div class="dialogo__acciones dialogo__acciones--materiales">
+    <button class="btn btn--fantasma" type="button" data-mat-cancelar>Cancelar</button>
+    <button class="btn btn--secundario" type="button" data-mat-progreso>Guardar progreso</button>
+    <button class="btn btn--secundario" type="button" data-mat-guardar>Guardar</button>
+    <button class="btn btn--primario" type="button" data-mat-guardar-abrir>Guardar y abrir →</button>
+  </div>
+</dialog>
+
 <script src="api.js"></script>
 <script src="app.js"></script>
 <script>
@@ -770,6 +774,16 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
 
   let CAT = {};                 // catálogos, los manda Python
   let guardando = false;
+
+  /* ── N° de cotización: disponibilidad en vivo ─────────────────────────────
+     null = todavía no se confirmó contra Python (recién tipeado, o mientras
+     se espera la respuesta) — cuenta como "no ok" para no habilitar el botón
+     de más abajo con un resultado viejo. true/false = último resultado
+     confirmado. numeroEditando es el propio número con el que arrancó esta
+     pantalla (editando una cotización existente) — no cuenta como choque. */
+  let numeroDisponible = null;
+  let numeroEditando = null;
+  let numeroTimer = null;
 
   /* ── Estado ───────────────────────────────────────────────────────────────
      Un solo objeto. Es exactamente lo que se manda a Python en
@@ -798,6 +812,21 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       ancho: "", alto: "", cantidad: "1", tema: "", obs: "", forzar: false,
       calc: null,               // lo que devuelve Python: costos, ml/m2, error…
     };
+  }
+
+  /* "Sin tocar" = ningún campo se movió del default de productoVacio() —
+     el tipo no cuenta (es justo lo que se le va a pisar) ni calc (lo
+     calcula Python solo). Se usa para propagar el tipo backlight/estándar
+     a los productos siguientes (ver el handler de [data-tipo] más abajo):
+     las cotizaciones mixtas existen pero son la excepción, así que un
+     producto que todavía no se llenó hereda el tipo del anterior en vez
+     de obligar a elegirlo de nuevo. */
+  function esVacio(p) {
+    const limpio = productoVacio(p.tipo);
+    return Object.keys(limpio).every((clave) => {
+      if (clave === "tipo" || clave === "calc") return true;
+      return JSON.stringify(p[clave]) === JSON.stringify(limpio[clave]);
+    });
   }
 
   /* Un producto está completo cuando su pantalla dejaría avanzar. Mismas
@@ -947,6 +976,23 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
         p.tipo = r.dataset.tipo;
         aplicarTipo(raiz, p);
         recalcular(p, raiz);
+
+        /* Cotizaciones mixtas existen pero son la excepción, no la regla:
+           si los productos que siguen a este todavía están sin tocar (ver
+           esVacio), lo más probable es que el usuario los quiera del mismo
+           tipo que el que recién eligió — se lo ahorramos en vez de
+           obligarlo a tocar cada uno. Se corta apenas aparece uno que ya
+           tiene algo cargado: ese (y los que vengan después) quedan como
+           el usuario los haya dejado. Solo se reconstruyen los paneles que
+           de verdad cambiaron — el de acá (raiz) ya se actualizó arriba. */
+        for (let j = i + 1; j < estado.productos.length; j++) {
+          const siguiente = estado.productos[j];
+          if (!esVacio(siguiente)) break;
+          siguiente.tipo = p.tipo;
+          const nodoViejo = carril.children[j];
+          if (nodoViejo) carril.replaceChild(panelProducto(siguiente, j), nodoViejo);
+        }
+
         pintarMapa();
       });
     });
@@ -1235,6 +1281,11 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
           <button class="btn btn--secundario btn--chico" type="button" data-accion="agregar">+ Agregar producto</button>
         </header>
 
+        <p class="aviso-materiales" data-aviso-materiales hidden>
+          <span class="aviso-materiales__icono" aria-hidden="true">!</span>
+          Materiales insuficientes
+        </p>
+
         <div class="tabla-caja">
           <table class="tabla">
             <thead><tr>
@@ -1340,6 +1391,62 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     if (estado.instalacion) linea("Instalación", TD.fmt.pesos(estado.instalacion));
     const general = total + (estado.despacho || 0) + (estado.instalacion || 0);
     linea("Total", general ? TD.fmt.pesos(general) : "—", "cifra--total");
+
+    actualizarAvisoMateriales();
+  }
+
+  /* ── Materiales insuficientes ─────────────────────────────────────────── */
+
+  const esc = (s) => String(s == null ? "" : s);
+
+  /* Chequea contra el stock de Inventario cada vez que se pinta el
+     resumen (al llegar a esa zona, o al volver de editar un producto) —
+     async y sin bloquear el pintado: el aviso aparece/desaparece un
+     instante después, no hace falta esperarlo para ver la tabla. */
+  async function actualizarAvisoMateriales() {
+    const aviso = $("[data-aviso-materiales]");
+    if (!aviso) return;
+    const faltantes = (await TD.api.verificar_materiales(estado.productos)) || [];
+    aviso.hidden = faltantes.length === 0;
+  }
+
+  /* Diálogo previo a Guardar/Guardar y abrir cuando falta stock — NO
+     bloquea: es un aviso con salida propia, cualquiera de los 4 botones
+     decide qué pasa (ver guardarCotizacion). El atajo "+ Nuevo rollo" de
+     cada fila guarda el progreso y navega a Inventario con ese textil ya
+     elegido (ver ApiApp.abrir_inventario_nuevo_rollo) — la cotización en
+     curso queda intacta, "Volver" desde ahí reabre este mismo borrador. */
+  function mostrarDialogoMateriales(faltantes) {
+    return new Promise((resolve) => {
+      const dlg = $("#dlg-materiales");
+      const lista = $("[data-materiales-lista]", dlg);
+      lista.textContent = "";
+
+      faltantes.forEach((f) => {
+        const fila = document.createElement("div");
+        fila.className = "material-falta";
+        fila.innerHTML = `
+          <div class="material-falta__info">
+            <strong>${esc(f.textil)}</strong>
+            <span>Faltan ${TD.fmt.cantidad(f.faltante)} m — necesita ${TD.fmt.cantidad(f.necesario)} m, hay ${TD.fmt.cantidad(f.disponible)} m</span>
+          </div>
+          <button class="btn btn--secundario btn--chico material-falta__btn" type="button">+ Nuevo rollo</button>`;
+        $("button", fila).addEventListener("click", async () => {
+          await guardarProgreso();
+          dlg.close();
+          TD.api.abrir_inventario_nuevo_rollo(f.textil, estado.id);
+        });
+        lista.appendChild(fila);
+      });
+
+      let decision = "cancelar";
+      $("[data-mat-cancelar]", dlg).onclick = () => { decision = "cancelar"; dlg.close(); };
+      $("[data-mat-progreso]", dlg).onclick = () => { decision = "progreso"; dlg.close(); };
+      $("[data-mat-guardar]", dlg).onclick = () => { decision = "guardar"; dlg.close(); };
+      $("[data-mat-guardar-abrir]", dlg).onclick = () => { decision = "guardar-abrir"; dlg.close(); };
+      dlg.addEventListener("close", () => resolve(decision), { once: true });
+      dlg.showModal();
+    });
   }
 
   /* ── Guardado ─────────────────────────────────────────────────────────── */
@@ -1369,6 +1476,19 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       irAZona(0); $("#empresa").focus();
       return;
     }
+
+    // Stock insuficiente no bloquea guardar — solo avisa, con salida
+    // propia (ver mostrarDialogoMateriales): "guardar"/"guardar-abrir"
+    // desde ADENTRO del diálogo definen el `abrir` final, pisando el que
+    // trajo el botón que se apretó primero.
+    const faltantes = (await TD.api.verificar_materiales(estado.productos)) || [];
+    if (faltantes.length) {
+      const decision = await mostrarDialogoMateriales(faltantes);
+      if (decision === "cancelar") return;
+      if (decision === "progreso") { await guardarProgreso(); return; }
+      abrir = decision === "guardar-abrir";
+    }
+
     guardando = true;
     const r = (await TD.api.guardar_cotizacion(estado, !!abrir)) || {};
     guardando = false;
@@ -1394,16 +1514,67 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
   }
 
+  /* N° de cotización y Empresa se suman acá a lo que ya gateaba este botón
+     (nombre + al menos un producto) — antes se revisaban recién al apretar
+     Guardar, en el resumen: si estaban mal, el usuario ya había cargado
+     TODOS los productos para nada y volvía con las manos vacías. Chequear
+     esto ANTES de dejarlo avanzar a productos es el mismo ahorro de tiempo
+     que el aviso de materiales insuficientes al aprobar (ver
+     ver-cotizacion.html) — la app ya sabe que va a fallar, así que avisa
+     antes de la parte cara, no después. */
   function revisarDatos() {
-    const ok = estado.nombre_trabajo.trim() !== "" && estado.productos.length > 0;
+    const numeroCompleto = /^\d{4}$/.test(estado.cliente.numero || "");
+    const numeroOk = numeroCompleto && numeroDisponible === true;
+    const empresaOk = (estado.cliente.empresa || "").trim() !== "";
+    const ok = estado.nombre_trabajo.trim() !== "" && estado.productos.length > 0 && numeroOk && empresaOk;
     $("[data-accion='bajar']").disabled = !ok;
+
     /* Antes acá quedaba `= ok` a secas y la nota mostraba literalmente
        "false" abajo a la izquierda. Dice qué falta, y se calla cuando no
        falta nada. */
-    $("[data-nota-datos]").textContent = ok
-      ? ""
-      : "Falta el nombre del trabajo y al menos un producto.";
+    const faltantes = [];
+    if (!estado.nombre_trabajo.trim()) faltantes.push("el nombre del trabajo");
+    if (!numeroCompleto) faltantes.push("el N° de cotización");
+    else if (numeroDisponible !== true) faltantes.push("un N° de cotización disponible");
+    if (!empresaOk) faltantes.push("la empresa");
+    if (!estado.productos.length) faltantes.push("al menos un producto");
+    $("[data-nota-datos]").textContent = faltantes.length ? `Falta ${faltantes.join(", ")}.` : "";
+
     $("[data-titulo]").textContent = estado.nombre_trabajo.trim() || "Nueva cotización";
+  }
+
+  /* Único mensaje de error inline que usa este campo (ver .campo__error en
+     el CSS) — solo se enciende cuando el N° YA tiene 4 dígitos pero está
+     tomado: mientras se está tipeando (menos de 4 dígitos) no es un error,
+     es simplemente todavía-no-terminado, y esa falta ya se explica en la
+     nota calma de revisarDatos(), sin el rojo/sacudida de data-invalido. */
+  function pintarErrorNumero(mensaje) {
+    const campo = $("#campo-numero");
+    campo.toggleAttribute("data-invalido", !!mensaje);
+    if (mensaje) $(".campo__error", campo).textContent = mensaje;
+  }
+
+  async function chequearNumero() {
+    const valor = estado.cliente.numero || "";
+    if (!/^\d{4}$/.test(valor)) {
+      numeroDisponible = null;
+      pintarErrorNumero("");
+      revisarDatos();
+      return;
+    }
+    if (valor === numeroEditando) {
+      numeroDisponible = true;
+      pintarErrorNumero("");
+      revisarDatos();
+      return;
+    }
+    const disponible = await TD.api.numero_disponible(valor, numeroEditando);
+    // Si el usuario ya siguió tipeando mientras esperábamos la respuesta,
+    // este resultado quedó viejo — no lo apliques.
+    if ((estado.cliente.numero || "") !== valor) return;
+    numeroDisponible = disponible;
+    pintarErrorNumero(disponible ? "" : "Ese N° de cotización ya está en uso.");
+    revisarDatos();
   }
 
   function sincronizarCantidad() {
@@ -1447,6 +1618,18 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
         if (id === "rut") { const pos = el.value.length; el.value = formatearRut(el.value); void pos; }
         if (id === "numero") el.value = soloDigitos(el.value).slice(0, 4);
         estado.cliente[clave] = el.value;
+
+        if (id === "numero") {
+          // Formato se revisa al toque; la disponibilidad (contra Python)
+          // se debounce — no hace falta consultar en cada dígito tipeado.
+          numeroDisponible = null;
+          pintarErrorNumero("");
+          revisarDatos();
+          clearTimeout(numeroTimer);
+          numeroTimer = setTimeout(chequearNumero, 250);
+        } else if (id === "empresa") {
+          revisarDatos();
+        }
       });
     });
 
@@ -1564,6 +1747,9 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       estado.cliente.fecha = ctx.fecha_iso;
       $("#fecha").value = ctx.fecha_iso;
     }
+
+    numeroEditando = ctx.numero_editando || null;
+    chequearNumero();   // confirma contra Python el número ya cargado (sugerido, o de la cotización/pendiente retomada)
 
     construirCarril();
     revisarDatos();

@@ -211,6 +211,21 @@ def mover_a_despachos(numero: int) -> None:
     origen.unlink()
 
 
+def completar_op(numero: int) -> None:
+    """Completa una OP activa — decide sola entre mover_a_completadas y
+    mover_a_despachos según si tiene Despacho y/o Instalacion (ver
+    docstring de mover_a_despachos). Punto único de esta decisión: la usan
+    tanto el panel de producción (ui/panel_produccion.py, el único lugar
+    donde esto se podía hacer hasta ahora) como el botón "Completar" de
+    ver-op.html, en la ventana principal."""
+    numero = int(numero)
+    datos = cargar_op(numero)
+    if datos and (datos.get("Despacho") is not None or datos.get("Instalacion") is not None):
+        mover_a_despachos(numero)
+    else:
+        mover_a_completadas(numero)
+
+
 def retirar_activa(numero: int) -> dict | None:
     """Saca una OP de JSON/ (activa) de circulación y devuelve su JSON
     crudo, o None sin tocar nada si `numero` no está ahí. Para "Recotizar"

@@ -52,6 +52,13 @@
   --c-desp-fuerte:    #7A3FB0;
   --c-desp-tinta:     #472268;
 
+  /* ── Módulo Inventario · verde pastel ────────────────────────────────────── */
+  --c-inv-relleno:   #E7F5EA;
+  --c-inv-relleno-2: #D7EEDC;
+  --c-inv-borde:     #7FC493;
+  --c-inv-fuerte:    #1F7A42;
+  --c-inv-tinta:     #124726;
+
   /* Tema activo — lo escribe [data-tema] más abajo. Las pantallas internas
      usan SIEMPRE estas cuatro variables, nunca las de un módulo puntual: así
      la misma pantalla sirve en el flujo naranjo y en el azul. */
@@ -141,6 +148,12 @@
   --c-tema-borde:   var(--c-desp-borde);
   --c-tema-fuerte:  var(--c-desp-fuerte);
   --c-tema-tinta:   var(--c-desp-tinta);
+}
+[data-tema="inventario"] {
+  --c-tema-relleno: var(--c-inv-relleno);
+  --c-tema-borde:   var(--c-inv-borde);
+  --c-tema-fuerte:  var(--c-inv-fuerte);
+  --c-tema-tinta:   var(--c-inv-tinta);
 }
 
 @media (prefers-reduced-motion: reduce) {

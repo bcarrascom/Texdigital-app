@@ -32,11 +32,11 @@
      resolver. Se eligieron escalones de la escala tipográfica, con piso. */
   --menu-escala: .5;
   --logo-ancho:  calc(32rem * var(--menu-escala));
-  /* Ancho para 3 módulos EN UNA FILA, cada uno del mismo tamaño que tenían
-     los 2 originales (Cotizaciones/OPs) — 94rem en vez de 62rem para que
-     el módulo nuevo (Despachos) se sume a la derecha sin encoger a los
+  /* Ancho para 4 módulos EN UNA FILA, cada uno del mismo tamaño que tenían
+     los 3 anteriores (Cotizaciones/OPs/Despachos) — 125.7rem en vez de
+     94rem para que el módulo nuevo (Inventario) se sume sin encoger a los
      demás. Ver .menu__modulos más abajo. */
-  --modulos-ancho: calc(94rem * var(--menu-escala));
+  --modulos-ancho: calc(125.7rem * var(--menu-escala));
   --modulo-min:  calc(19rem * var(--menu-escala));
 
   /* ── Tarjetas ───────────────────────────────────────────────────────────
@@ -87,13 +87,13 @@ body[data-fase="saliendo"] .menu {
 .menu__modulos {
   grid-row: 3;
   display: grid;
-  /* Fijas en 3 columnas, no auto-fit: con auto-fit, cada módulo nuevo
-     sumaba una columna y encogía a TODOS (efecto no buscado). Con 3
-     columnas fijas y --modulos-ancho ajustado (ver arriba), los 3 módulos
+  /* Fijas en 4 columnas, no auto-fit: con auto-fit, cada módulo nuevo
+     sumaba una columna y encogía a TODOS (efecto no buscado). Con 4
+     columnas fijas y --modulos-ancho ajustado (ver arriba), los 4 módulos
      quedan en una sola fila, todos del mismo tamaño, y la fila entera
-     centrada en la pantalla — así el módulo del medio (OPs) cae
-     naturalmente en el centro horizontal. */
-  grid-template-columns: repeat(3, 1fr);
+     centrada en la pantalla (con 4 módulos ninguno cae justo al centro —
+     Cotizaciones y OPs, los del medio, empatan a los lados del centro). */
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--e-4);
   /* stretch, no start: los módulos quedan del mismo alto aunque un título
      use dos líneas, y así los mazos de tarjetas arrancan a la misma altura. */
@@ -306,18 +306,6 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
 
 .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
 
-/* ── Transición entre documentos: menú → nueva cotización ──────────────────
-   Cross-Document View Transitions: navegar a otra página con esto prendido
-   ya anima la salida sola (todo lo que no tenga nombre se desvanece). Acá
-   solo hace falta nombrar la pieza que va a "viajar": el botón de Nueva
-   cotización, que en la otra punta (nueva-cotizacion.html) tiene el mismo
-   nombre puesto en la hoja "Trabajo" — por eso el botón termina
-   transformándose en ese panel en vez de solo desvanecerse.
-   Nada de esto rompe nada si el navegador no soporta la API: sin ella la
-   navegación es la de siempre, sin animar. */
-@view-transition { navigation: auto; }
-.accion[data-ir="nueva_cotizacion"] { view-transition-name: nc-morph; }
-
 .accion {
   display: grid; gap: var(--e-1); align-content: start;
   padding: var(--e-5); text-align: left; cursor: pointer;
@@ -461,6 +449,115 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
 .dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
 .dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* ── Inventario: tabla de rollos, movida acá adentro del panel (ya no es
+   un submódulo aparte — ver panel[data-panel="inventario"]). Estilos
+   propios de esta tabla/diálogos, calcados de la vieja inventario.html;
+   .tabla/.tabla-caja/.campo ya son de base.css. */
+.barra-inventario { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; margin-bottom: var(--e-4); }
+.barra-inventario .entrada { flex: 1 1 16rem; min-width: 0; }
+.barra-inventario .btn { flex: 0 0 auto; margin-left: auto; }
+
+.tabla .btn-fila-icono {
+  display: inline-grid; place-items: center;
+  width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-tema-fuerte); cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
+}
+.tabla .btn-fila-icono:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+.tabla .btn-fila-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+.tabla .btn-fila-icono--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+.tabla td.acciones { display: flex; gap: var(--e-2); white-space: nowrap; }
+
+.tabla th[data-ordenar] { cursor: pointer; user-select: none; transition: color var(--m-rapida) var(--ease-salida); }
+.tabla th[data-ordenar]:hover { color: var(--c-tema-fuerte); }
+.tabla th[data-ordenar] .flecha-orden { display: inline-block; margin-left: .3em; opacity: 0; }
+.tabla th[data-ordenar][data-activo] { color: var(--c-tema-fuerte); }
+.tabla th[data-ordenar][data-activo] .flecha-orden { opacity: 1; }
+
+/* Fila resaltada — llegando desde una tarjeta de rollo del mazo (ver
+   irARollo). Se apaga sola a los pocos segundos. */
+tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
+@keyframes resaltar-fila {
+  0%, 100% { background: transparent; }
+  15%      { background: var(--c-tema-relleno); }
+}
+
+.stock { display: grid; gap: .2rem; min-width: 8rem; }
+.stock__texto { font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.stock__barra {
+  height: .3rem; border-radius: var(--r-full); overflow: hidden;
+  background: color-mix(in srgb, var(--c-tema-borde) 30%, transparent);
+}
+.stock__barra > i { display: block; height: 100%; background: var(--c-tema-fuerte); }
+
+#dlg-rollo { width: min(90vw, 30rem); }
+.dlg-rollo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+.campo__dato {
+  font-size: var(--t-md); font-weight: var(--peso-medio); color: var(--c-tema-fuerte);
+  padding: .55em 0;
+}
+
+/* ── Diálogo de ajustar cantidad: más ancho (tabla adentro) ────────────── */
+#dlg-ajustar { width: min(90vw, 36rem); }
+.ajustar__stock { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e-3); margin-top: var(--e-2); }
+.ajustar__stock strong { color: var(--c-tema-fuerte); font-variant-numeric: tabular-nums; }
+.ajustar__tabla { max-height: 14rem; overflow: auto; margin-top: var(--e-4); }
+.ajustar__tabla table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.ajustar__tabla th { text-align: left; color: var(--c-texto-suave); font-weight: var(--peso-medio); padding: .3em .4em; }
+.ajustar__tabla td { padding: .4em; border-top: 1px solid var(--c-borde); }
+.ajustar__tabla td.descripcion { color: var(--c-texto-suave); }
+.ajustar__vacio { padding: var(--e-3) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+.ajustar__form {
+  display: grid; grid-template-columns: 9rem 1fr auto; gap: var(--e-2);
+  align-items: end; margin-top: var(--e-4); padding-top: var(--e-4);
+  border-top: 1.5px solid var(--c-borde);
+}
+.chip-tipo {
+  display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+  background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
+}
+.chip-tipo--consumo { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+
+/* ── Panel de decomisionar: el botón 🗑 de la fila se DEFORMA hasta ser
+   el panel ("boton-panel-morph", mismo mecanismo que "+ Agregar dirección
+   nueva" en asignar-despacho.html). El botón de origen no es fijo: cada
+   fila tiene el suyo, se guarda cuál fue al abrir (ver
+   abrirPanelDecomisionar) y se usa ESE para el camino de vuelta. */
+dialog.panel-decomisionar {
+  position: fixed; margin: 0;
+  padding: var(--e-5); overflow: hidden;
+  border: 1.5px solid var(--c-borde);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+  transition: top var(--m-expansion) var(--ease-salida),
+              left var(--m-expansion) var(--ease-salida),
+              width var(--m-expansion) var(--ease-salida),
+              height var(--m-expansion) var(--ease-salida),
+              border-radius var(--m-expansion) var(--ease-salida);
+}
+dialog.panel-decomisionar[data-abierto] { border-radius: var(--r-xl); }
+dialog.panel-decomisionar::backdrop {
+  background: rgba(22, 22, 26, 0);
+  transition: background var(--m-expansion) var(--ease-entrada);
+}
+dialog.panel-decomisionar[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
+
+.panel-decomisionar__contenido {
+  opacity: 0;
+  max-height: 100%; overflow-y: auto;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
+  opacity: 1;
+  transition-delay: var(--m-expansion);
+}
+.panel-decomisionar__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.panel-decomisionar__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.panel-decomisionar__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
 </style>
 </head>
 
@@ -479,7 +576,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
   <div class="menu__modulos">
 
-    <section class="modulo" data-tema="cotizaciones" data-modulo="cotizaciones" style="--i:0">
+    <section class="modulo" data-tema="inventario" data-modulo="inventario" style="--i:0">
+      <button class="modulo__caja" type="button">
+        <span class="modulo__titulo">Inventario</span>
+        <span class="modulo__meta" data-meta="inventario">—</span>
+        <span class="modulo__flecha" aria-hidden="true">→</span>
+      </button>
+      <div class="modulo__lista">
+        <div class="modulo__rejilla" data-lista="inventario"></div>
+      </div>
+    </section>
+
+    <section class="modulo" data-tema="cotizaciones" data-modulo="cotizaciones" style="--i:1">
       <button class="modulo__caja" type="button">
         <span class="modulo__titulo">Cotizaciones</span>
         <span class="modulo__meta" data-meta="cotizaciones">—</span>
@@ -490,7 +598,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       </div>
     </section>
 
-    <section class="modulo" data-tema="ops" data-modulo="ops" style="--i:1">
+    <section class="modulo" data-tema="ops" data-modulo="ops" style="--i:2">
       <button class="modulo__caja" type="button">
         <span class="modulo__titulo">Órdenes de Producción</span>
         <span class="modulo__meta" data-meta="ops">—</span>
@@ -501,7 +609,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       </div>
     </section>
 
-    <section class="modulo" data-tema="despachos" data-modulo="despachos" style="--i:2">
+    <section class="modulo" data-tema="despachos" data-modulo="despachos" style="--i:3">
       <button class="modulo__caja" type="button">
         <span class="modulo__titulo">Despachos</span>
         <span class="modulo__meta" data-meta="despachos">—</span>
@@ -528,6 +636,42 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 </div>
 
 <!-- ═══ 3 · paneles ═══════════════════════════════════════════════════════ -->
+
+<div class="panel" data-panel="inventario" data-tema="inventario">
+  <div class="panel__cab">
+    <button class="cab-btn cab-btn--fantasma" data-cerrar>← Volver</button>
+    <span class="cabecera__sep"></span>
+    <span class="cabecera__version" data-version></span>
+  </div>
+  <div class="panel__cuerpo">
+    <div>
+      <h1 class="panel__titulo">Inventario</h1>
+      <p class="panel__bajada">Rollos de tela — stock disponible.</p>
+    </div>
+    <section class="panel__seccion">
+      <div class="barra-inventario">
+        <input class="entrada" type="search" data-inv-buscar placeholder="Buscar por ID o textil…">
+        <button class="btn btn--primario btn--chico" type="button" data-accion="nuevo-rollo">+ Nuevo rollo</button>
+      </div>
+      <div class="tabla-caja">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Textil</th>
+              <th>Ancho</th>
+              <th data-ordenar="fecha">Fecha<span class="flecha-orden">↓</span></th>
+              <th data-ordenar="metros_restantes">Stock<span class="flecha-orden">↓</span></th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody data-inv-filas></tbody>
+        </table>
+        <p class="estado-vacio" data-inv-estado-vacio hidden>No hay rollos de tela guardados todavía.</p>
+      </div>
+    </section>
+  </div>
+</div>
 
 <div class="panel" data-panel="cotizaciones" data-tema="cotizaciones">
   <div class="panel__cab">
@@ -634,6 +778,89 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   </div>
 </dialog>
 
+<!-- ═══ Inventario: diálogos de la tabla de rollos (panel[data-panel="inventario"]) ═══ -->
+
+<dialog id="dlg-rollo">
+  <h2 class="dlg__titulo" data-dlg-rollo-titulo>Rollo nuevo</h2>
+  <div class="dlg-rollo__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dr-textil">Textil</label>
+      <select class="entrada" id="dr-textil"></select>
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dr-ancho">Ancho de tela (m)</label>
+      <input class="entrada" id="dr-ancho" type="number" step="0.01" min="0">
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="fila" data-campos-metros>
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="dr-restantes">Metros disponibles</label>
+        <input class="entrada" id="dr-restantes" type="number" step="0.01" min="0">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dr-iniciales">Metros iniciales</label>
+        <input class="entrada" id="dr-iniciales" type="number" step="0.01" min="0"
+               placeholder="Opcional">
+      </div>
+    </div>
+    <div class="campo" data-campo-metros-fijo hidden>
+      <span class="campo__etiqueta">Stock</span>
+      <p class="campo__dato" data-metros-fijo></p>
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-rollo">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-rollo">Guardar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-ajustar">
+  <h2 class="dlg__titulo" data-dlg-ajustar-titulo>Ajustar cantidad</h2>
+  <div class="ajustar__stock">
+    <span>Stock actual</span>
+    <strong data-ajustar-stock></strong>
+  </div>
+
+  <div class="ajustar__tabla">
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Cambio</th><th>Descripción</th><th></th></tr></thead>
+      <tbody data-ajustar-filas></tbody>
+    </table>
+    <p class="ajustar__vacio" data-ajustar-vacio hidden>Todavía no se registró ningún ajuste.</p>
+  </div>
+
+  <div class="ajustar__form">
+    <div class="campo">
+      <label class="campo__etiqueta" for="da-restante">Cantidad restante</label>
+      <input class="entrada" id="da-restante" type="number" step="0.01" min="0">
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" for="da-descripcion">Descripción</label>
+      <input class="entrada" id="da-descripcion" type="text">
+    </div>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-ajuste">Guardar</button>
+  </div>
+
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cerrar-ajustar">Cerrar</button>
+  </div>
+</dialog>
+
+<dialog class="panel-decomisionar" id="panel-decomisionar">
+  <div class="panel-decomisionar__contenido">
+    <h2 class="panel-decomisionar__titulo">¿Decomisionar rollo?</h2>
+    <p class="panel-decomisionar__texto" data-panel-decomisionar-texto>
+      Este rollo no se seleccionará para su uso en trabajos de su textil.
+    </p>
+    <div class="panel-decomisionar__acciones">
+      <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-decomisionar">Cancelar</button>
+      <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-decomisionar">Confirmar</button>
+    </div>
+  </div>
+</dialog>
+
 <script src="api.js"></script>
 <script src="app.js"></script>
 <script>
@@ -657,6 +884,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     return String(s).replace(/[&<>"]/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
+
+  /* Si no hay nada que contar, el texto no aparece — nunca "0 incompletas"
+     ni "ninguna activa": un cero no es información, es ruido. */
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
   /* fecha_entrega llega como "DD-MM-AAAA" (aFechaLarga, en demo.js). Cuenta
      días de calendario, sin horas: "hoy" no puede depender de a qué hora del
@@ -745,6 +976,403 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       `<span class="reg__sub">${esc(d.nombre || "OP " + d.numero)}</span>` +
       `<span class="reg__barra"><i style="width:${pct}%"></i></span>`;
     return b;
+  }
+
+  /* La barra reutiliza el estilo de "incompleta" (ver .reg__barra en
+     base.css), acá con otro sentido: no es "cuánto falta llenar" sino
+     "cuánta tela queda" — % de metros_restantes sobre metros_iniciales. */
+  function tarjetaRollo(r) {
+    const b = document.createElement("button");
+    b.className = "reg reg--incompleta";
+    b.dataset.abrir = "rollo";
+    b.dataset.id = r.id;
+    const pct = r.metros_iniciales ? Math.round((r.metros_restantes / r.metros_iniciales) * 100) : 0;
+    b.title = `Rollo ${r.id} · ${r.nombre_textil || ""} · ${r.metros_restantes} de ${r.metros_iniciales} m`;
+    b.innerHTML =
+      `<span class="reg__num">${esc(r.id)}</span>` +
+      `<span class="reg__sub">${esc(r.nombre_textil || "Sin nombre")}</span>` +
+      `<span class="reg__barra"><i style="width:${pct}%"></i></span>`;
+    return b;
+  }
+
+  /* ── Inventario: tabla de rollos, adentro del panel ───────────────────────
+     Antes vivía en un submódulo aparte (inventario.html) con su propia
+     navegación — ahora ES el panel de Inventario, la tabla se pinta de una
+     al abrirlo, sin pasar por ningún botón intermedio. Toda esta sección
+     (tabla + diálogos de alta/edición/ajuste/decomisionar) es la misma
+     lógica que tenía ese archivo, portada tal cual — ver
+     core/repositorio_inventario.py para el modelo de datos. */
+
+  let rollosInventario = [];
+  let idEnEdicionRollo = null;    // null = alta nueva (diálogo de rollo)
+  let idParaAjustarRollo = null;  // rollo abierto en el diálogo de ajustar cantidad
+  let idADecomisionar = null;
+  let botonOrigenDecomisionar = null;
+
+  const dlgRollo = $("#dlg-rollo");
+  const dlgAjustar = $("#dlg-ajustar");
+  const panelDecomisionar = $("#panel-decomisionar");
+
+  function celdaStock(r) {
+    const pct = r.metros_iniciales ? Math.round((r.metros_restantes / r.metros_iniciales) * 100) : 0;
+    return `
+      <div class="stock">
+        <span class="stock__texto">${esc(r.metros_restantes)} / ${esc(r.metros_iniciales)} m</span>
+        <span class="stock__barra"><i style="width:${pct}%"></i></span>
+      </div>`;
+  }
+
+  function filaRollo(r) {
+    const tr = document.createElement("tr");
+    tr.dataset.id = r.id;
+    tr.innerHTML = `
+      <td>${esc(r.id)}</td>
+      <td>${esc(r.nombre_textil) || "—"}</td>
+      <td>${esc(r.ancho)} m</td>
+      <td>${esc(r.fecha) || "—"}</td>
+      <td>${celdaStock(r)}</td>
+      <td class="acciones">
+        <button class="btn-fila-icono" type="button" data-accion="editar-rollo" title="Editar">
+          <div class="icon-pencil"></div>
+        </button>
+        <button class="btn-fila-icono" type="button" data-accion="ajustar-rollo" title="Ajustar cantidad">↻</button>
+        <button class="btn-fila-icono btn-fila-icono--peligro" type="button" data-accion="decomisionar-rollo" title="Decomisionar">
+          <div class="icon-trash"></div>
+        </button>
+      </td>`;
+    $("[data-accion='editar-rollo']", tr).addEventListener("click", () => abrirDialogoRollo(r));
+    $("[data-accion='ajustar-rollo']", tr).addEventListener("click", () => abrirDialogoAjustar(r.id));
+    $("[data-accion='decomisionar-rollo']", tr).addEventListener("click", (e) => abrirPanelDecomisionar(e.currentTarget, r));
+    return tr;
+  }
+
+  /* Orden de la tabla (Fecha / Stock) — puramente del lado del cliente, ya
+     se trae la lista completa de rollos. Sin columna activa, queda el
+     orden que ya trae listar_rollos() (ID descendente, el más nuevo
+     primero). */
+  let ordenInventario = { campo: null, dir: 1 };
+
+  function fechaAOrdenInventario(dma) {
+    const [d, m, a] = String(dma || "").split("/");
+    return d && m && a ? `${a}${m.padStart(2, "0")}${d.padStart(2, "0")}` : "";
+  }
+
+  function aplicarOrdenInventario(lista) {
+    if (!ordenInventario.campo) return lista;
+    const valor = ordenInventario.campo === "fecha"
+      ? (r) => fechaAOrdenInventario(r.fecha)
+      : (r) => r[ordenInventario.campo] ?? 0;
+    return lista.slice().sort((a, b) => {
+      const va = valor(a), vb = valor(b);
+      if (va < vb) return -1 * ordenInventario.dir;
+      if (va > vb) return 1 * ordenInventario.dir;
+      return 0;
+    });
+  }
+
+  $$("[data-panel='inventario'] [data-ordenar]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const campo = th.dataset.ordenar;
+      ordenInventario = { campo, dir: ordenInventario.campo === campo ? ordenInventario.dir * -1 : 1 };
+      $$("[data-panel='inventario'] [data-ordenar]").forEach((h) => h.removeAttribute("data-activo"));
+      th.setAttribute("data-activo", "");
+      $(".flecha-orden", th).textContent = ordenInventario.dir === 1 ? "↑" : "↓";
+      pintarTablaInventario();
+    });
+  });
+
+  function pintarTablaInventario() {
+    const filtro = $("[data-inv-buscar]").value.trim().toLowerCase();
+    let filtradas = !filtro ? rollosInventario : rollosInventario.filter((r) =>
+      [r.id, r.nombre_textil].some((v) => String(v || "").toLowerCase().includes(filtro)));
+    filtradas = aplicarOrdenInventario(filtradas);
+
+    const cuerpo = $("[data-inv-filas]");
+    cuerpo.textContent = "";
+    filtradas.forEach((r) => cuerpo.appendChild(filaRollo(r)));
+
+    $("[data-inv-estado-vacio]").hidden = filtradas.length > 0;
+  }
+
+  async function recargarRollosInventario() {
+    rollosInventario = (await TD.api.listar_rollos()) || [];
+    pintarTablaInventario();
+    const mazo = indexar(rollosInventario.slice(0, MAX_TARJETAS).map(tarjetaRollo));
+    pintar($("[data-lista='inventario']"), mazo, "Todavía no hay rollos de tela.");
+    actualizarMeta("inventario", rollosInventario.length ? plural(rollosInventario.length, "rollo", "rollos") : "");
+  }
+
+  $("[data-inv-buscar]").addEventListener("input", pintarTablaInventario);
+
+  /* ── Diálogo agregar/editar rollo ─────────────────────────────────────── */
+
+  function limpiarErroresInventario(dlg) {
+    $$(".campo", dlg).forEach((c) => c.removeAttribute("data-invalido"));
+  }
+
+  function abrirDialogoRollo(rollo) {
+    idEnEdicionRollo = rollo ? rollo.id : null;
+    $("[data-dlg-rollo-titulo]").textContent = rollo ? `Editar rollo ${rollo.id}` : "Rollo nuevo";
+    limpiarErroresInventario(dlgRollo);
+
+    $("#dr-textil").value = rollo?.nombre_textil || "";
+    $("#dr-ancho").value = rollo?.ancho ?? "";
+
+    // Metros disponibles/iniciales: editables solo al crear — una vez que
+    // el rollo existe, el remanente se corrige aparte ("Ajustar cantidad" /
+    // core/repositorio_inventario.py::ajustar_restante), así que acá no se
+    // puede pisar a mano sin perder ese historial.
+    $("[data-campos-metros]").hidden = !!rollo;
+    $("[data-campo-metros-fijo]").hidden = !rollo;
+    if (rollo) {
+      $("[data-metros-fijo]").textContent = `${rollo.metros_restantes} / ${rollo.metros_iniciales} m`;
+    } else {
+      $("#dr-restantes").value = "";
+      $("#dr-iniciales").value = "";
+    }
+
+    dlgRollo.showModal();
+  }
+
+  $("[data-accion='nuevo-rollo']").addEventListener("click", () => abrirDialogoRollo(null));
+  $("[data-accion='cancelar-rollo']").addEventListener("click", () => dlgRollo.close());
+  dlgRollo.addEventListener("click", (e) => { if (e.target === dlgRollo) dlgRollo.close(); });
+
+  $("[data-accion='guardar-rollo']").addEventListener("click", async () => {
+    const campoTextil = $("#dr-textil");
+    const campoAncho = $("#dr-ancho");
+    const textil = campoTextil.value;
+    const ancho = parseFloat(campoAncho.value);
+
+    let valido = true;
+    campoTextil.closest(".campo").toggleAttribute("data-invalido", !textil);
+    if (!textil) valido = false;
+    campoAncho.closest(".campo").toggleAttribute("data-invalido", !(ancho > 0));
+    if (!(ancho > 0)) valido = false;
+
+    // Metros iniciales es opcional (ver core/repositorio_inventario.py::
+    // crear_rollo): si se deja en blanco, el backend asume que el rollo
+    // entra completo (iniciales = disponibles).
+    let metrosRestantes = null, metrosIniciales = null;
+    if (!idEnEdicionRollo) {
+      const campoRestantes = $("#dr-restantes");
+      metrosRestantes = parseFloat(campoRestantes.value);
+      campoRestantes.closest(".campo").toggleAttribute("data-invalido", !(metrosRestantes > 0));
+      if (!(metrosRestantes > 0)) valido = false;
+
+      const campoIniciales = $("#dr-iniciales");
+      metrosIniciales = campoIniciales.value.trim() ? parseFloat(campoIniciales.value) : null;
+    }
+    if (!valido) return;
+
+    if (idEnEdicionRollo) {
+      await TD.api.editar_rollo(idEnEdicionRollo, textil, ancho);
+    } else {
+      await TD.api.crear_rollo(textil, ancho, metrosRestantes, metrosIniciales);
+    }
+    dlgRollo.close();
+    await recargarRollosInventario();
+    TD.aviso(idEnEdicionRollo ? "Rollo actualizado." : "Rollo guardado.", "info");
+  });
+
+  /* ── Diálogo de ajustar cantidad ──────────────────────────────────────────
+     El consumo real es AUTOMÁTICO al aprobar una cotización (ver
+     core/repositorio_inventario.py::consumir_para_op) — esta pantalla es
+     una herramienta de corrección manual, siempre con una descripción para
+     poder revisarla después (ajustar_restante). El "Deshacer" solo se
+     ofrece en la fila más reciente (arriba de todo): es la única que el
+     backend puede deshacer sin dejar el resto del historial apuntando a un
+     valor que ya no es real (ver eliminar_ajuste). */
+
+  const ETIQUETA_TIPO_ROLLO = { ajuste: "Ajuste", consumo: "Consumo" };
+
+  function filaAjusteRollo(rolloId, u, esLaMasReciente) {
+    const tr = document.createElement("tr");
+    const chipClase = u.tipo === "consumo" ? "chip-tipo chip-tipo--consumo" : "chip-tipo";
+    tr.innerHTML = `
+      <td>${esc(u.fecha)}</td>
+      <td><span class="${chipClase}">${esc(ETIQUETA_TIPO_ROLLO[u.tipo] || u.tipo)}</span></td>
+      <td>${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m</td>
+      <td class="descripcion">${esc(u.descripcion) || "—"}</td>
+      <td></td>`;
+    if (esLaMasReciente) {
+      const btn = document.createElement("button");
+      btn.className = "btn-fila-icono btn-fila-icono--peligro";
+      btn.type = "button";
+      btn.title = "Deshacer este ajuste";
+      btn.innerHTML = `<div class="icon-trash"></div>`;
+      btn.addEventListener("click", async () => {
+        await TD.api.eliminar_ajuste_rollo(rolloId, u.id);
+        await recargarRollosInventario();
+        pintarDialogoAjustarRollo(rolloId);
+      });
+      tr.lastElementChild.appendChild(btn);
+    }
+    return tr;
+  }
+
+  function pintarDialogoAjustarRollo(rolloId) {
+    const r = rollosInventario.find((x) => x.id === rolloId);
+    if (!r) { dlgAjustar.close(); return; }
+
+    $("[data-dlg-ajustar-titulo]").textContent = `Ajustar cantidad · rollo ${r.id} · ${r.nombre_textil || ""}`;
+    $("[data-ajustar-stock]").textContent = `${r.metros_restantes} / ${r.metros_iniciales} m`;
+    $("#da-restante").value = r.metros_restantes;
+
+    const usos = (r.usos || []).slice().reverse();   // más reciente primero
+    const cuerpo = $("[data-ajustar-filas]");
+    cuerpo.textContent = "";
+    usos.forEach((u, i) => cuerpo.appendChild(filaAjusteRollo(r.id, u, i === 0)));
+    $("[data-ajustar-vacio]").hidden = usos.length > 0;
+  }
+
+  function abrirDialogoAjustar(rolloId) {
+    idParaAjustarRollo = rolloId;
+    $("#da-descripcion").value = "";
+    pintarDialogoAjustarRollo(rolloId);
+    dlgAjustar.showModal();
+  }
+
+  $("[data-accion='cerrar-ajustar']").addEventListener("click", () => dlgAjustar.close());
+  dlgAjustar.addEventListener("click", (e) => { if (e.target === dlgAjustar) dlgAjustar.close(); });
+  dlgAjustar.addEventListener("close", () => { idParaAjustarRollo = null; });
+
+  $("[data-accion='guardar-ajuste']").addEventListener("click", async () => {
+    if (!idParaAjustarRollo) return;
+    const campoRestante = $("#da-restante");
+    const nuevoRestante = parseFloat(campoRestante.value);
+    campoRestante.closest(".campo").toggleAttribute("data-invalido", !(nuevoRestante >= 0));
+    if (!(nuevoRestante >= 0)) return;
+
+    await TD.api.ajustar_restante_rollo(idParaAjustarRollo, nuevoRestante, $("#da-descripcion").value.trim());
+    $("#da-descripcion").value = "";
+    await recargarRollosInventario();
+    pintarDialogoAjustarRollo(idParaAjustarRollo);
+    TD.aviso("Cantidad ajustada.", "info");
+  });
+
+  /* ── Panel de decomisionar (boton-panel-morph) ─────────────────────────
+     El botón 🗑 de la fila se transforma en este panel — mismo mecanismo
+     que "Agregar dirección nueva" en asignar-despacho.html, con un origen
+     dinámico (cada fila tiene su propio botón, no uno fijo). JS anima
+     top/left/width/height/border-radius de verdad, nunca transform/scale
+     — ver el CSS de dialog.panel-decomisionar para el razonamiento
+     completo. */
+
+  function pxPorRemInventario() {
+    return parseFloat(getComputedStyle(document.documentElement).fontSize);
+  }
+
+  /* Mide el alto real del contenido a un ancho dado, clonándolo en un
+     medidor invisible fuera del <dialog> — así el panel siempre sale del
+     tamaño exacto que su contenido necesita, sin números fijos adivinados
+     a mano. */
+  function altoContenidoDecomisionar(ancho) {
+    const cs = getComputedStyle(panelDecomisionar);
+    const medidor = document.createElement("div");
+    medidor.style.cssText =
+      `position:fixed; left:-9999px; top:0; visibility:hidden; ` +
+      `width:${ancho}px; padding:${cs.padding}; border:${cs.borderWidth} solid transparent; ` +
+      `box-sizing:border-box;`;
+    medidor.innerHTML = $(".panel-decomisionar__contenido", panelDecomisionar).innerHTML;
+    document.body.appendChild(medidor);
+    const alto = medidor.getBoundingClientRect().height + 1;
+    medidor.remove();
+    return alto;
+  }
+
+  function rectFinalDecomisionar(rectBoton) {
+    const rem = pxPorRemInventario();
+    const ancho = Math.min(window.innerWidth * 0.9, 24 * rem);
+    const alto = Math.min(window.innerHeight * 0.85, altoContenidoDecomisionar(ancho));
+    const margen = 12;
+    const left = Math.min(
+      Math.max(rectBoton.left + rectBoton.width / 2 - ancho / 2, margen),
+      window.innerWidth - ancho - margen,
+    );
+    const top = Math.min(
+      Math.max(rectBoton.top + rectBoton.height / 2 - alto / 2, margen),
+      window.innerHeight - alto - margen,
+    );
+    return { top, left, ancho, alto };
+  }
+
+  function aplicarRectDecomisionar(top, left, ancho, alto, radio) {
+    panelDecomisionar.style.top = top + "px";
+    panelDecomisionar.style.left = left + "px";
+    panelDecomisionar.style.width = ancho + "px";
+    panelDecomisionar.style.height = alto + "px";
+    panelDecomisionar.style.borderRadius = radio;
+  }
+
+  function abrirPanelDecomisionar(boton, rollo) {
+    idADecomisionar = rollo.id;
+    botonOrigenDecomisionar = boton;
+    $("[data-panel-decomisionar-texto]").textContent =
+      `Rollo ${rollo.id} · ${rollo.nombre_textil || "sin nombre"}: este rollo no se seleccionará para su uso en trabajos de su textil.`;
+
+    const r = boton.getBoundingClientRect();
+    panelDecomisionar.removeAttribute("data-abierto");
+    aplicarRectDecomisionar(r.top, r.left, r.width, r.height, "999px");
+    panelDecomisionar.showModal();
+    void panelDecomisionar.getBoundingClientRect();   // fuerza el reflow antes de animar
+
+    const destino = rectFinalDecomisionar(r);
+    requestAnimationFrame(() => {
+      aplicarRectDecomisionar(destino.top, destino.left, destino.ancho, destino.alto, "");
+      panelDecomisionar.setAttribute("data-abierto", "");
+    });
+  }
+
+  /* Camino inverso: encoge de vuelta al botón de origen y RECIÉN ahí
+     cierra el <dialog> de verdad (si no, desaparece de golpe). */
+  function cerrarPanelDecomisionar() {
+    if (!panelDecomisionar.open) return;
+    const boton = botonOrigenDecomisionar || panelDecomisionar;
+    const r = boton.getBoundingClientRect();
+    panelDecomisionar.removeAttribute("data-abierto");
+    aplicarRectDecomisionar(r.top, r.left, r.width, r.height, "999px");
+    const terminar = (e) => {
+      if (e.target !== panelDecomisionar || e.propertyName !== "width") return;
+      panelDecomisionar.removeEventListener("transitionend", terminar);
+      panelDecomisionar.close();
+    };
+    panelDecomisionar.addEventListener("transitionend", terminar);
+  }
+
+  panelDecomisionar.addEventListener("cancel", (e) => { e.preventDefault(); cerrarPanelDecomisionar(); });
+  panelDecomisionar.addEventListener("click", (e) => { if (e.target === panelDecomisionar) cerrarPanelDecomisionar(); });
+  $("[data-accion='cancelar-decomisionar']").addEventListener("click", () => cerrarPanelDecomisionar());
+
+  $("[data-accion='confirmar-decomisionar']").addEventListener("click", async () => {
+    if (!idADecomisionar) return;
+    const id = idADecomisionar;
+    cerrarPanelDecomisionar();
+    await TD.api.decomisionar_rollo(id);
+    idADecomisionar = null;
+    await recargarRollosInventario();
+    TD.aviso("Rollo decomisionado.", "info");
+  });
+
+  /* Tarjeta de rollo del mazo (hover, sin abrir ningún panel): abre el
+     panel de Inventario y salta directo a esa fila — mismo destino que
+     antes (inventario.html con ?resaltar=id), ahora sin navegar a otro
+     documento porque la tabla ya vive acá. */
+  async function irARollo(id) {
+    const modulo = $(".modulo[data-modulo='inventario']");
+    const yaAbierto = moduloActivo === modulo;
+    const espera = yaAbierto ? Promise.resolve() : new Promise((res) => setTimeout(res, duracion("--m-expansion")));
+    if (!yaAbierto) abrirModulo(modulo);
+    await Promise.all([cargar(), espera]);
+
+    $("[data-inv-buscar]").value = "";
+    pintarTablaInventario();
+    const fila = $(`tr[data-id="${id}"]`);
+    if (fila) {
+      fila.setAttribute("data-resaltada", "");
+      fila.scrollIntoView({ block: "center" });
+      abrirDialogoAjustar(id);
+    }
   }
 
   const ESTADOS_DESPACHO = { pendiente: "Pendiente", parcial: "Parcial", despachado: "Despachado" };
@@ -987,6 +1615,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     const ops          = r.ops          || [];
     const despachos     = r.despachos    || [];
     const despachosAsignados = r.despachos_asignados || [];
+    rollosInventario     = r.rollos       || [];
 
     /* Las incompletas van primero: son las que hay que terminar, y así su
        canto de color queda en la fila que más asoma. */
@@ -1002,6 +1631,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
     const mazoDespachos = indexar(despachos.slice(0, MAX_TARJETAS).map(tarjetaDespacho));
     pintar($("[data-lista='despachos']"), mazoDespachos, "No hay despachos pendientes.");
+
+    const mazoInventario = indexar(rollosInventario.slice(0, MAX_TARJETAS).map(tarjetaRollo));
+    pintar($("[data-lista='inventario']"), mazoInventario, "Todavía no hay rollos de tela.");
+    pintarTablaInventario();
 
     /* El panel de cotizaciones ahora es "todo lo que no está incompleto": las
        incompletas se movieron sueltas, junto a "Nueva cotización". */
@@ -1024,15 +1657,13 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     listaIncompletas.textContent = "";
     pendientes.map(tarjetaPendiente).forEach((n) => listaIncompletas.appendChild(n));
 
-    /* Si no hay nada que contar, el texto no aparece — nunca "0 incompletas"
-       ni "ninguna activa": un cero no es información, es ruido. */
-    const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     const partes = [];
     if (cotizaciones.length) partes.push(plural(cotizaciones.length, "guardada", "guardadas"));
     if (pendientes.length)   partes.push(plural(pendientes.length, "incompleta", "incompletas"));
     actualizarMeta("cotizaciones", partes.join(" · "));
     actualizarMeta("ops", ops.length ? plural(ops.length, "activa", "activas") : "");
     actualizarMeta("despachos", despachos.length ? plural(despachos.length, "pendiente", "pendientes") : "");
+    actualizarMeta("inventario", rollosInventario.length ? plural(rollosInventario.length, "rollo", "rollos") : "");
 
     ajustarRatioTarjetas();
   }
@@ -1263,6 +1894,29 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     new URLSearchParams(location.hash.slice(1)).get("panel");
   if (panelInicial) abrirModuloDirecto(panelInicial);
 
+  /* Llegando desde el aviso "Materiales insuficientes" de nueva-
+     cotizacion.html (ver TD.api.abrir_inventario_nuevo_rollo): además de
+     abrir el panel de Inventario (panelInicial, arriba), esto le dice al
+     diálogo de rollo nuevo qué textil dejar ya elegido — se resuelve más
+     abajo, después de cargar() (TD.iniciar), porque necesita que el
+     <select> de textiles ya esté poblado. */
+  const nuevoTextilInicial =
+    new URLSearchParams(location.search).get("nuevo_textil") ||
+    new URLSearchParams(location.hash.slice(1)).get("nuevo_textil");
+
+  /* Mismo motivo: haber llegado por ese atajo significa que Python apiló
+     de verdad la cotización de la que venimos (ver _ir() en
+     ui/api_app.py) — cerrar este panel tiene que volver ahí de verdad
+     (TD.api.volver(), navegación real), no solo colapsarlo de vuelta al
+     menú como hace el cierre normal de un panel (cerrarModulo(), 100%
+     del lado del cliente, sin pila de Python de por medio). */
+  let volverAlCerrarPanel = !!nuevoTextilInicial;
+
+  function salirDelPanel() {
+    if (volverAlCerrarPanel) { TD.api.volver(); return; }
+    cerrarModulo();
+  }
+
   function cerrarModulo() {
     if (!moduloActivo) return;
     // Por si se cierra el módulo (Escape/Volver) con una transición de
@@ -1315,17 +1969,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       if (tipo === "op")          TD.api.abrir_op(Number(reg.dataset.numero));
       if (tipo === "pendiente")   TD.api.abrir_pendiente(reg.dataset.id);
       if (tipo === "despacho")    TD.api.abrir_asignar_despacho(Number(reg.dataset.numero));
+      if (tipo === "rollo")       irARollo(reg.dataset.id);
       return;
     }
     const accion = e.target.closest("[data-ir]");
     if (accion) TD.api.ir(accion.dataset.ir);
     const cerrar = e.target.closest("[data-cerrar]");
-    if (cerrar) cerrarModulo();
+    if (cerrar) salirDelPanel();
   });
 
   $("[data-accion='actualizar']").addEventListener("click", () => TD.api.buscar_actualizacion());
 
-  TD.atajo("escape", () => cerrarModulo());
+  TD.atajo("escape", () => salirDelPanel());
   TD.atajo("f5", () => cargar());
   /* ←/→ pasan al módulo anterior/siguiente con un panel ya abierto (ver
      irAModuloAdyacente) — sin flechas en pantalla a propósito, mismo
@@ -1375,7 +2030,21 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     // Antes de cargar(): un módulo pausado no debe mostrarse clickeable ni
     // con su contador real ni por un instante.
     aplicarModulosHabilitados(ctx.modulos_habilitados);
+
+    // Los textiles vienen SIEMPRE del catálogo (recursos/textiles.json, ver
+    // core.repositorio.TEXTILES) — <select>, no texto libre, para que no se
+    // pueda guardar un rollo con un nombre que no está en ese catálogo.
+    const textilesInventario = (await TD.api.cargar_textiles_inventario()) || [];
+    $("#dr-textil").innerHTML =
+      '<option value="" disabled selected>Seleccionar textil…</option>' +
+      textilesInventario.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+
     await cargar();
+
+    if (nuevoTextilInicial) {
+      abrirDialogoRollo(null);
+      $("#dr-textil").value = nuevoTextilInicial;
+    }
   });
 })();
 </script>
