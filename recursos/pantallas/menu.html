@@ -458,6 +458,47 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .barra-inventario .entrada { flex: 1 1 16rem; min-width: 0; }
 .barra-inventario .btn { flex: 0 0 auto; margin-left: auto; }
 
+/* Switch de tres posiciones para el orden de la tabla de rollos (Nombre /
+   ID / Cantidad restante) — reemplaza el viejo click-en-columna. Pastilla
+   gris que "abraza" los tres círculos (padding chico, sin gap entre
+   opciones: el ancho de la pastilla termina justo en el borde de los
+   círculos de los extremos) con un thumb que se desliza por debajo del
+   ícono activo. */
+.orden-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 3px;
+  background: var(--c-superficie-2);
+  border: 1px solid var(--c-borde);
+  border-radius: var(--r-full);
+}
+.orden-switch__thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 2.25rem; height: 2.25rem;
+  border-radius: 50%;
+  background: var(--c-superficie);
+  box-shadow: var(--s-1);
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.orden-switch[data-activo="id"]              .orden-switch__thumb { transform: translateX(2.25rem); }
+.orden-switch[data-activo="metros_restantes"] .orden-switch__thumb { transform: translateX(4.5rem); }
+.orden-switch__opt {
+  position: relative;
+  z-index: 1;
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  border: none; border-radius: 50%;
+  background: transparent;
+  color: var(--c-texto-tenue);
+  cursor: pointer;
+  transition: color var(--m-rapida) var(--ease-salida);
+}
+.orden-switch__opt svg { width: 1.15rem; height: 1.15rem; }
+.orden-switch__opt:hover { color: var(--c-texto-suave); }
+.orden-switch__opt[aria-checked="true"] { color: var(--c-tema-fuerte); }
+
 .tabla .btn-fila-icono {
   display: inline-grid; place-items: center;
   width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
@@ -469,12 +510,6 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .tabla .btn-fila-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
 .tabla .btn-fila-icono--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
 .tabla td.acciones { display: flex; gap: var(--e-2); white-space: nowrap; }
-
-.tabla th[data-ordenar] { cursor: pointer; user-select: none; transition: color var(--m-rapida) var(--ease-salida); }
-.tabla th[data-ordenar]:hover { color: var(--c-tema-fuerte); }
-.tabla th[data-ordenar] .flecha-orden { display: inline-block; margin-left: .3em; opacity: 0; }
-.tabla th[data-ordenar][data-activo] { color: var(--c-tema-fuerte); }
-.tabla th[data-ordenar][data-activo] .flecha-orden { opacity: 1; }
 
 /* Fila resaltada — llegando desde una tarjeta de rollo del mazo (ver
    irARollo). Se apaga sola a los pocos segundos. */
@@ -651,6 +686,18 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     <section class="panel__seccion">
       <div class="barra-inventario">
         <input class="entrada" type="search" data-inv-buscar placeholder="Buscar por ID o textil…">
+        <div class="orden-switch" data-orden-switch data-activo="id" role="radiogroup" aria-label="Ordenar rollos por">
+          <span class="orden-switch__thumb" aria-hidden="true"></span>
+          <button class="orden-switch__opt" type="button" data-orden="nombre" role="radio" aria-checked="false" title="Ordenar por nombre de textil (A-Z)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16"/><path d="M15.697 14h5.606"/><path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"/><path d="M3.304 13h6.392"/></svg>
+          </button>
+          <button class="orden-switch__opt" type="button" data-orden="id" role="radio" aria-checked="true" title="Ordenar por ID">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><rect x="15" y="4" width="4" height="6" ry="2"/><path d="M17 20v-6h-2"/><path d="M15 20h4"/></svg>
+          </button>
+          <button class="orden-switch__opt" type="button" data-orden="metros_restantes" role="radio" aria-checked="false" title="Ordenar por cantidad restante">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v-3"/><path d="M14 15v-3"/><path d="M18 15v-3"/><path d="M2 8V4"/><path d="M22 6H2"/><path d="M22 8V4"/><path d="M6 15v-3"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>
+          </button>
+        </div>
         <button class="btn btn--primario btn--chico" type="button" data-accion="nuevo-rollo">+ Nuevo rollo</button>
       </div>
       <div class="tabla-caja">
@@ -660,8 +707,8 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
               <th>ID</th>
               <th>Textil</th>
               <th>Ancho</th>
-              <th data-ordenar="fecha">Fecha<span class="flecha-orden">↓</span></th>
-              <th data-ordenar="metros_restantes">Stock<span class="flecha-orden">↓</span></th>
+              <th>Fecha</th>
+              <th>Stock</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -1046,37 +1093,35 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     return tr;
   }
 
-  /* Orden de la tabla (Fecha / Stock) — puramente del lado del cliente, ya
-     se trae la lista completa de rollos. Sin columna activa, queda el
-     orden que ya trae listar_rollos() (ID descendente, el más nuevo
-     primero). */
-  let ordenInventario = { campo: null, dir: 1 };
-
-  function fechaAOrdenInventario(dma) {
-    const [d, m, a] = String(dma || "").split("/");
-    return d && m && a ? `${a}${m.padStart(2, "0")}${d.padStart(2, "0")}` : "";
-  }
+  /* Orden de la tabla — switch de tres posiciones en la barra (Nombre /
+     ID / Cantidad restante), puramente del lado del cliente, ya se trae
+     la lista completa de rollos. Cada campo con una sola dirección fija
+     (sin toggle asc/desc, el switch no tiene ese concepto): Nombre A-Z,
+     ID de menor a mayor, y Cantidad restante de menor a mayor — así los
+     rollos más flacos quedan arriba, empujando a terminarlos primero
+     (mismo criterio de negocio que consumir_para_op en
+     core/repositorio_inventario.py). Arranca en "id". */
+  const elSwitchOrdenInventario = $("[data-orden-switch]");
+  let campoOrdenInventario = elSwitchOrdenInventario.dataset.activo;
 
   function aplicarOrdenInventario(lista) {
-    if (!ordenInventario.campo) return lista;
-    const valor = ordenInventario.campo === "fecha"
-      ? (r) => fechaAOrdenInventario(r.fecha)
-      : (r) => r[ordenInventario.campo] ?? 0;
+    const valor = campoOrdenInventario === "nombre"
+      ? (r) => (r.nombre_textil || "").toLowerCase()
+      : (r) => r[campoOrdenInventario] ?? 0;
     return lista.slice().sort((a, b) => {
       const va = valor(a), vb = valor(b);
-      if (va < vb) return -1 * ordenInventario.dir;
-      if (va > vb) return 1 * ordenInventario.dir;
+      if (va < vb) return -1;
+      if (va > vb) return 1;
       return 0;
     });
   }
 
-  $$("[data-panel='inventario'] [data-ordenar]").forEach((th) => {
-    th.addEventListener("click", () => {
-      const campo = th.dataset.ordenar;
-      ordenInventario = { campo, dir: ordenInventario.campo === campo ? ordenInventario.dir * -1 : 1 };
-      $$("[data-panel='inventario'] [data-ordenar]").forEach((h) => h.removeAttribute("data-activo"));
-      th.setAttribute("data-activo", "");
-      $(".flecha-orden", th).textContent = ordenInventario.dir === 1 ? "↑" : "↓";
+  $$(".orden-switch__opt", elSwitchOrdenInventario).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      campoOrdenInventario = btn.dataset.orden;
+      elSwitchOrdenInventario.dataset.activo = campoOrdenInventario;
+      $$(".orden-switch__opt", elSwitchOrdenInventario).forEach((b) =>
+        b.setAttribute("aria-checked", b === btn ? "true" : "false"));
       pintarTablaInventario();
     });
   });
