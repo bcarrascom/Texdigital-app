@@ -146,6 +146,24 @@ class TestGenerarHtml(unittest.TestCase):
         html = ruta.read_text(encoding="utf-8")
         self.assertNotIn('class="trabajo"', html)
 
+    def test_obs_del_producto_aparece_bajo_el_tema(self):
+        from core.presentar_op import generar_html
+        op = _op_normal(9009)
+        op["productos"][0]["Tema"] = "Logo azul"
+        op["productos"][0]["Obs"] = "Ojales cada 50cm"
+        ruta = generar_html(op)
+        html = ruta.read_text(encoding="utf-8")
+        i_tema = html.index("Logo azul")
+        i_obs = html.index('class="prod-obs"')
+        self.assertTrue(i_tema < i_obs)  # la obs va DEBAJO del tema, en la misma celda
+        self.assertIn("Observación: Ojales cada 50cm", html)
+
+    def test_sin_obs_no_deja_el_bloque_vacio(self):
+        from core.presentar_op import generar_html
+        ruta = generar_html(_op_normal(9010))  # _op_normal trae "Obs": ""
+        html = ruta.read_text(encoding="utf-8")
+        self.assertNotIn('class="prod-obs"', html)
+
 
 if __name__ == "__main__":
     unittest.main()
