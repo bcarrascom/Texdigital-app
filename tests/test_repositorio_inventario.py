@@ -212,40 +212,46 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
 
     def test_producto_estandar_metros_es_ml_directo(self):
         # ancho tela = ancho producto = 1.5 -> UxA=1, ratio=1, ml=alto=10
+        # + 1 de MARGEN_TENSION_ML (ver core.repositorio_inventario) = 11
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         necesarios = repo_inv.metros_necesarios([p])
-        self.assertAlmostEqual(necesarios["TelaTest"], 10.0)
+        self.assertAlmostEqual(necesarios["TelaTest"], 11.0)
 
     def test_producto_backlight_convierte_area_a_metros_lineales(self):
-        # área = 2*2*60 = 240 m²; ancho catálogo 1.48 -> 240/1.48 metros lineales
+        # área = 2*2*60 = 240 m²; ancho catálogo 1.48 -> 240/1.48 metros
+        # lineales + 1 de MARGEN_TENSION_ML
         p = _producto_backlight(ancho=2.0, alto=2.0, cantidad=60)
         necesarios = repo_inv.metros_necesarios([p])
-        self.assertAlmostEqual(necesarios["Backlight Test"], 240 / 1.48, places=2)
+        self.assertAlmostEqual(necesarios["Backlight Test"], 240 / 1.48 + 1.0, places=2)
 
     def test_agrupa_por_textil_sumando_varios_productos(self):
+        # 5+1 (margen) + 3+1 (margen) = 10 — el margen es POR PRODUCTO, no
+        # una vez por textil (ver MARGEN_TENSION_ML).
         p1 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)
         p2 = _producto_estandar(ancho=1.5, alto=3.0, cantidad=1)
         necesarios = repo_inv.metros_necesarios([p1, p2])
-        self.assertAlmostEqual(necesarios["TelaTest"], 8.0)
+        self.assertAlmostEqual(necesarios["TelaTest"], 10.0)
 
     def test_producto_sin_textil_no_cuenta(self):
         p = _producto_estandar(textil="", ancho=1.5, alto=10.0, cantidad=1)
         self.assertEqual(repo_inv.metros_necesarios([p]), {})
 
     def test_calcular_faltantes_vacio_con_stock_suficiente(self):
+        # Necesita 10 + 1 de margen = 11; 100 alcanza de sobra.
         repo_inv.crear_rollo("TelaTest", 1.5, 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         self.assertEqual(repo_inv.calcular_faltantes([p]), [])
 
     def test_calcular_faltantes_reporta_textil_corto(self):
+        # Necesita 10 + 1 de margen = 11; hay 5 -> faltan 6.
         repo_inv.crear_rollo("TelaTest", 1.5, 5)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         faltantes = repo_inv.calcular_faltantes([p])
         self.assertEqual(len(faltantes), 1)
         self.assertEqual(faltantes[0]["textil"], "TelaTest")
-        self.assertAlmostEqual(faltantes[0]["necesario"], 10.0)
+        self.assertAlmostEqual(faltantes[0]["necesario"], 11.0)
         self.assertAlmostEqual(faltantes[0]["disponible"], 5.0)
-        self.assertAlmostEqual(faltantes[0]["faltante"], 5.0)
+        self.assertAlmostEqual(faltantes[0]["faltante"], 6.0)
 
     def test_calcular_faltantes_sin_stock_de_ese_textil(self):
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
@@ -255,19 +261,19 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
     def test_calcular_faltantes_suma_stock_de_varios_rollos(self):
         repo_inv.crear_rollo("TelaTest", 1.5, 6)
         repo_inv.crear_rollo("TelaTest", 1.5, 6)
-        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10
-        self.assertEqual(repo_inv.calcular_faltantes([p]), [])  # 6+6=12 >= 10
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1
+        self.assertEqual(repo_inv.calcular_faltantes([p]), [])  # 6+6=12 >= 11
 
 
 class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
 
     def test_consume_de_un_solo_rollo_si_alcanza(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1 (margen)
         asignaciones = repo_inv.consumir_para_op([p], 4210, "Cliente ABC")
 
         actualizado = repo_inv.obtener_rollo(r["id"])
-        self.assertEqual(actualizado["metros_restantes"], 90.0)
+        self.assertEqual(actualizado["metros_restantes"], 89.0)
         self.assertEqual(len(actualizado["usos"]), 1)
         entrada = actualizado["usos"][0]
         self.assertEqual(entrada["tipo"], "consumo")
@@ -276,58 +282,77 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
 
         # El retorno es lo que ui/dialogo_aprobar.py graba como
         # producto["RollosUsados"] — el panel de producción lo lee tal cual.
-        self.assertEqual(asignaciones, [[{"id": r["id"], "metros": 10.0}]])
+        self.assertEqual(asignaciones, [[{"id": r["id"], "metros": 11.0}]])
+
+    def test_un_rollo_justo_al_ml_real_no_alcanza_por_el_margen_de_tension(self):
+        # Pedido de Bruno (2026-09-03): un rollo de exactamente 7 m NO puede
+        # cubrir un producto que necesita 7 ML reales — hacen falta 8 (7 +
+        # MARGEN_TENSION_ML) para que la máquina mantenga la tensión.
+        r_justo = repo_inv.crear_rollo("TelaTest", 1.5, 7)
+        r_con_margen = repo_inv.crear_rollo("TelaTest", 1.5, 8)
+        p = _producto_estandar(ancho=1.5, alto=7.0, cantidad=1)  # necesita 7+1=8
+
+        asignaciones = repo_inv.consumir_para_op([p], 4210)
+
+        # r_justo (7m, el "más chico") no cubre solo los 8 que hacen falta,
+        # así que se reparte con r_con_margen — no se lo deja en 0 en falso.
+        self.assertEqual(repo_inv.obtener_rollo(r_justo["id"])["metros_restantes"], 0.0)
+        self.assertEqual(repo_inv.obtener_rollo(r_con_margen["id"])["metros_restantes"], 7.0)
+        self.assertEqual(asignaciones, [[
+            {"id": r_justo["id"], "metros": 7.0},
+            {"id": r_con_margen["id"], "metros": 1.0},
+        ]])
 
     def test_prioriza_el_rollo_con_menos_metros_restantes_no_el_mas_viejo(self):
         # r1 (0001, "más viejo") tiene MÁS tela que r2 (0002, más nuevo) —
         # el consumo tiene que ir al que tiene MENOS, sin importar el ID.
         r1 = repo_inv.crear_rollo("TelaTest", 1.5, 100)
         r2 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
-        p = _producto_estandar(ancho=1.5, alto=4.0, cantidad=1)  # necesita 4, r2 alcanza solo
+        p = _producto_estandar(ancho=1.5, alto=4.0, cantidad=1)  # necesita 4+1=5, r2 alcanza solo
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
 
         self.assertEqual(repo_inv.obtener_rollo(r1["id"])["metros_restantes"], 100.0)  # intacto
-        self.assertEqual(repo_inv.obtener_rollo(r2["id"])["metros_restantes"], 2.0)
-        self.assertEqual(asignaciones, [[{"id": r2["id"], "metros": 4.0}]])
+        self.assertEqual(repo_inv.obtener_rollo(r2["id"])["metros_restantes"], 1.0)
+        self.assertEqual(asignaciones, [[{"id": r2["id"], "metros": 5.0}]])
 
     def test_un_producto_se_reparte_entre_varios_rollos_si_el_mas_chico_no_alcanza(self):
         r_chico = repo_inv.crear_rollo("TelaTest", 1.5, 3)
         r_grande = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
 
         self.assertEqual(repo_inv.obtener_rollo(r_chico["id"])["metros_restantes"], 0.0)
-        self.assertEqual(repo_inv.obtener_rollo(r_grande["id"])["metros_restantes"], 93.0)
+        self.assertEqual(repo_inv.obtener_rollo(r_grande["id"])["metros_restantes"], 92.0)
         self.assertEqual(asignaciones, [[
             {"id": r_chico["id"], "metros": 3.0},
-            {"id": r_grande["id"], "metros": 7.0},
+            {"id": r_grande["id"], "metros": 8.0},
         ]])
 
     def test_dos_productos_del_mismo_textil_no_pisan_el_stock_entre_si(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10
-        p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)   # necesita 5
+        p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
+        p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)   # necesita 5+1=6
 
         asignaciones = repo_inv.consumir_para_op([p1, p2], 4210)
 
-        self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 85.0)
+        self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 83.0)
         self.assertEqual(asignaciones, [
-            [{"id": r["id"], "metros": 10.0}],
-            [{"id": r["id"], "metros": 5.0}],
+            [{"id": r["id"], "metros": 11.0}],
+            [{"id": r["id"], "metros": 6.0}],
         ])
         self.assertEqual(len(repo_inv.obtener_rollo(r["id"])["usos"]), 2)
 
     def test_producto_sin_textil_da_lista_vacia_para_ese_indice(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
         p_vacio = _producto_estandar(textil="", ancho=1.5, alto=10.0, cantidad=1)
-        p_real = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+        p_real = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
         asignaciones = repo_inv.consumir_para_op([p_vacio, p_real], 4210)
 
         self.assertEqual(asignaciones[0], [])
-        self.assertEqual(asignaciones[1], [{"id": r["id"], "metros": 10.0}])
+        self.assertEqual(asignaciones[1], [{"id": r["id"], "metros": 11.0}])
 
     def test_sin_productos_no_toca_nada(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)

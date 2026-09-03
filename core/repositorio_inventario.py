@@ -284,6 +284,18 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
 # siempre son metros LINEALES de rollo (lo que trackea un rollo), no área.
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Cada vez que la máquina de impresión imprime un producto, gasta ~1 m
+# lineal extra de tela (además del ML/M² real del producto) para mantener
+# la tensión del rollo — pedido directo de Bruno (2026-09-03): un rollo de
+# 7 m NO alcanza para un producto que necesita 7 ML reales, hacen falta 8.
+# Es POR PRODUCTO (no una vez por textil/OP): cada producto es una pasada
+# de máquina separada, aunque comparta textil con otro de la misma OP —
+# a propósito distinto del piso mínimo de facturación de core/precios.py
+# (ese sí se agrupa por textil), porque acá no se está cobrando de más,
+# se está reservando la tela que la máquina va a gastar de verdad.
+MARGEN_TENSION_ML = 1.0
+
+
 def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
     """(nombre_textil, metros lineales de rollo que consume) de un
     producto interno de cotización (ver ui/api_cotizacion.py::
@@ -293,7 +305,12 @@ def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
     del textil (recursos/textiles.json): un metro de rollo entero, a lo
     ancho. Sin ese ancho en el catálogo no hay forma de convertir —
     devuelve 0 en vez de reventar (no bloquea la aprobación por un textil
-    que ni siquiera está en el catálogo)."""
+    que ni siquiera está en el catálogo).
+
+    Incluye MARGEN_TENSION_ML (ver docstring de la constante) sobre el ML/M²
+    real del producto — pero solo si el producto de verdad va a pasar por
+    la máquina (metros > 0); un producto sin textil o sin ancho de catálogo
+    no imprime nada, así que no le suma margen a lo que ya es 0."""
     from core.precios import costo_producto
     from core.repositorio import TEXTILES_ANCHOS
 
@@ -307,13 +324,17 @@ def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
         metros = resultado["ml_o_area"] / ancho_tela if ancho_tela else 0.0
     else:
         metros = resultado["ml_o_area"]
+    if metros > 0:
+        metros += MARGEN_TENSION_ML
     return textil, metros
 
 
 def metros_necesarios(productos_internos: list[dict]) -> dict[str, float]:
     """{textil: metros lineales totales que necesita esta lista de
     productos} — agrupa por textil, sumando todos los productos que lo
-    usan."""
+    usan. Cada producto ya trae sumado su MARGEN_TENSION_ML (ver
+    _metros_lineales), así que el total por textil también lo incluye —
+    2 productos del mismo textil suman 2 márgenes, uno por cada uno."""
     necesarios: dict[str, float] = {}
     for p in productos_internos:
         textil, metros = _metros_lineales(p)
@@ -356,7 +377,9 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     """Descuenta de los rollos el material que gasta `productos_internos`
     — se llama SOLO al aprobar una cotización (ui/dialogo_aprobar.py),
     nunca antes: es el único momento en que el material se da por gastado
-    de verdad (ver docstring del módulo).
+    de verdad (ver docstring del módulo). Cada producto descuenta su ML/M²
+    real MÁS MARGEN_TENSION_ML (ver _metros_lineales) — la máquina gasta
+    esa tela igual, así que también sale de stock.
 
     De qué rollo se descuenta cada producto NO lo elige el usuario: entre
     los rollos del textil que corresponda, siempre se prioriza el que

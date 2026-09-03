@@ -6,6 +6,7 @@ cuenta: eliminar_cotizacion/aprobar_cotizacion devuelven éxito/fracaso y
 es ApiApp quien decide a dónde ir después.
 """
 
+import threading
 import webbrowser
 
 from core.repositorio_cotizaciones import (
@@ -53,6 +54,20 @@ def _producto_a_json_pantalla(p_json: dict, p_interno: dict, costo: dict) -> dic
 
 
 class ApiVerCotizacion:
+
+    def __init__(self):
+        # pywebview corre CADA llamada JS→Python en un hilo nuevo (no hay
+        # cola ni serialización de su parte) — sin este lock, dos clicks
+        # en "Aprobar" casi simultáneos (o cualquier otro doble disparo del
+        # mismo botón) corren aprobar_cotizacion() en paralelo: los dos
+        # hilos leen la cotización todavía activa, los dos pasan el chequeo
+        # de stock, y los dos descuentan de Inventario — se vio en vivo con
+        # la OP 1001 (Taslan: se descontaron 4 m en vez de 2, dos entradas
+        # de consumo idénticas en el rollo). El lock serializa las
+        # aprobaciones: la segunda espera a que la primera termine de
+        # archivar la cotización, así que la encuentra inactiva y corta
+        # sola en el chequeo de "cotización inexistente", sin tocar stock.
+        self._lock_aprobar = threading.Lock()
 
     def contexto_extra(self, numero) -> dict:
         return {"numero": int(numero) if numero is not None else None}
@@ -177,25 +192,31 @@ class ApiVerCotizacion:
         ANTES de llegar acá (ver verificar_materiales/botón "Aprobar →" de
         la cabecera) — este bloqueo es la red de seguridad real por si el
         stock cambió mientras el diálogo de fechas estaba abierto (más de
-        una instalación puede estar mirando el mismo Dropbox)."""
-        datos = cargar_cotizacion(int(numero))
-        if datos is None:
-            return {"ok": False, "faltantes": []}
+        una instalación puede estar mirando el mismo Dropbox).
 
-        faltantes = self._faltantes_de(numero)
-        if faltantes:
-            return {"ok": False, "faltantes": faltantes}
+        Todo el cuerpo corre bajo self._lock_aprobar (ver __init__): dos
+        llamadas concurrentes a esta función (pywebview corre cada llamada
+        JS→Python en su propio hilo) quedan serializadas, así la segunda
+        siempre ve el resultado de la primera antes de decidir nada."""
+        with self._lock_aprobar:
+            datos = cargar_cotizacion(int(numero))
+            if datos is None:
+                return {"ok": False, "faltantes": []}
 
-        productos_json = datos.get("productos", [])
-        productos_internos = [producto_desde_json(p) for p in productos_json]
-        asignaciones = consumir_para_op(productos_internos, int(numero), datos.get("Empresa", ""))
-        # Se graba en el producto ANTES de crear la OP (promover_a_op copia
-        # `datos` tal cual) — así el panel de producción (display_op.html)
-        # sabe de qué rollo(s) sacar la tela de cada producto sin tener que
-        # recalcular nada: la decisión ya se tomó acá, una sola vez.
-        for producto_json, rollos_usados in zip(productos_json, asignaciones):
-            if rollos_usados:
-                producto_json["RollosUsados"] = rollos_usados
+            faltantes = self._faltantes_de(numero)
+            if faltantes:
+                return {"ok": False, "faltantes": faltantes}
 
-        promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
-        return {"ok": True}
+            productos_json = datos.get("productos", [])
+            productos_internos = [producto_desde_json(p) for p in productos_json]
+            asignaciones = consumir_para_op(productos_internos, int(numero), datos.get("Empresa", ""))
+            # Se graba en el producto ANTES de crear la OP (promover_a_op copia
+            # `datos` tal cual) — así el panel de producción (display_op.html)
+            # sabe de qué rollo(s) sacar la tela de cada producto sin tener que
+            # recalcular nada: la decisión ya se tomó acá, una sola vez.
+            for producto_json, rollos_usados in zip(productos_json, asignaciones):
+                if rollos_usados:
+                    producto_json["RollosUsados"] = rollos_usados
+
+            promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
+            return {"ok": True}
