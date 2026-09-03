@@ -13,8 +13,8 @@ ui/api_ver_cotizacion.py::aprobar_cotizacion/verificar_materiales):
     borrador (productos del frontend) todavía sin guardar — el aviso de
     nueva-cotizacion.html.
 
-Usa carpetas/archivo temporales para cotizaciones, OPs e inventario (mock
-de _ruta_base / ROLLOS_PATH en cada módulo) y un catálogo de anchos de
+Usa carpetas temporales para cotizaciones, OPs e inventario (mock de
+_ruta_base en cada módulo) y un catálogo de anchos de
 textil fijo — no toca Dropbox ni AppData reales, y no depende del
 contenido real de recursos/textiles.json.
 
@@ -67,7 +67,7 @@ class _ConRutasTemporales(unittest.TestCase):
         self._parches = [
             mock.patch.object(repo_cot, "_ruta_base", lambda: base / "Cotizaciones"),
             mock.patch.object(repo_ops, "_ruta_base", lambda: base / "OPs"),
-            mock.patch.object(repo_inv, "ROLLOS_PATH", base / "rollos_tela.json"),
+            mock.patch.object(repo_inv, "_ruta_base", lambda: base / "Inventario"),
             mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", _ANCHOS, clear=True),
         ]
         for p in self._parches:

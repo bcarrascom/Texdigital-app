@@ -4,87 +4,158 @@ Persistencia del módulo Inventario: rollos de tela — el único tipo de
 material que se gestiona por ahora (ver core/config.py y el módulo
 Inventario en menu.html; "Materiales" generales queda para más adelante).
 
-Vive en rollos_tela.json, en Dropbox/SGTD/Conf (core.rutas.CONF) — mismo
-lugar que direcciones.json (core/repositorio.py): dato que el operador va
-agregando en el día a día, compartido entre todas las instalaciones (más
-de una persona puede estar mirando el mismo stock). Los rollos
-decomisionados (ver decomisionar_rollo) se sacan de ahí y quedan en
-rollos_tela_historial.json, mismo directorio — un registro aparte, no se
-borran sin dejar rastro.
+Un JSON POR ROLLO (no una lista en un solo archivo) — mismo criterio que
+OPs/Cotizaciones (core/repositorio_ops.py, core/repositorio_cotizaciones.py):
+con cientos de rollos acumulándose con los años, reescribir una lista
+entera en cada ajuste es lento y arriesga corromper TODO el inventario si
+se corta a mitad de una escritura; con un archivo por rollo, un problema
+queda acotado a ese rollo. Vive en Dropbox/SGTD/Inventario (_ruta_base),
+compartido entre todas las instalaciones — mismo patrón que
+core/repositorio_ops.py / core/repositorio_despachos.py.
+
+  Activos/                  - rollos en uso, PLANA (sin AAAA/MM): son
+                               pocos a la vez (se decomisionan apenas se
+                               acaban) y el panel de Inventario siempre
+                               los lista todos de una, así que organizar
+                               por mes no aporta nada (mismo criterio que
+                               JSON/Completadas/Pendiente en
+                               core/repositorio_ops.py).
+  Decomisionados/AAAA/MM/   - rollos decomisionados, organizados por
+                               fecha de decomiso (mismo mecanismo que
+                               Historial/ en OPs — ver
+                               core/carpetas_mensuales.py) para no tener
+                               que abrir años de archivos solo para leer
+                               el inventario activo.
+
+Migración: instalaciones de antes de este cambio tenían todo en
+rollos_tela.json / rollos_tela_historial.json (una lista JSON única) en
+Dropbox/SGTD/Conf. migrar_formato_viejo() los parte en un archivo por
+rollo la primera vez que corre esta versión, y renombra los .json viejos
+a .json.migrado en vez de borrarlos (por las dudas). No se llama sola
+desde ningún read/write de este módulo — la llama ui/api_app.py una vez
+al arrancar la app (mismo criterio que cualquier migración de formato:
+un punto de entrada explícito, no un efecto secundario escondido en una
+función de lectura).
 """
 
 import json
 import uuid
 from datetime import datetime
+from pathlib import Path
 
-from core.rutas import CONF as _CONF_DIR
+from core.rutas import DATOS, CONF as _CONF_DIR, _detectar_dropbox
+from core import carpetas_mensuales as cm
 
-ROLLOS_PATH = _CONF_DIR / "rollos_tela.json"
-HISTORIAL_PATH = _CONF_DIR / "rollos_tela_historial.json"
+_CAMPO_FECHA_DECOMISO = "fecha_decomiso"
+
+# Rutas del formato viejo (lista única) — solo las usa migrar_formato_viejo().
+ROLLOS_PATH_VIEJO    = _CONF_DIR / "rollos_tela.json"
+HISTORIAL_PATH_VIEJO = _CONF_DIR / "rollos_tela_historial.json"
 
 
 def _hoy_dma() -> str:
     return datetime.now().strftime("%d/%m/%Y")
 
 
-def _leer_json(ruta) -> list[dict]:
-    if not ruta.exists():
-        return []
+def _ruta_base() -> Path:
+    dropbox = _detectar_dropbox()
+    if dropbox:
+        return dropbox / "SGTD" / "Inventario"
+    return DATOS / "Inventario"
+
+
+def carpeta_activos() -> Path:
+    p = _ruta_base() / "Activos"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def carpeta_decomisionados() -> Path:
+    p = _ruta_base() / "Decomisionados"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _leer_rollo(ruta: Path) -> dict | None:
     try:
         return json.loads(ruta.read_text(encoding="utf-8"))
     except Exception:
-        return []
+        return None
 
 
-def _escribir_json(ruta, datos: list[dict]) -> None:
-    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+def _escribir_rollo(carpeta: Path, rollo: dict) -> Path:
+    destino = carpeta / f"{rollo['id']}.json"
+    destino.write_text(json.dumps(rollo, ensure_ascii=False, indent=2), encoding="utf-8")
+    return destino
 
 
-def _leer() -> list[dict]:
-    rollos = _leer_json(ROLLOS_PATH)
-    # Backfill de "fecha" para rollos guardados antes de que existiera el
-    # campo (mismo criterio que core.repositorio.cargar_direcciones con
-    # "id"): se completa la primera vez que se leen y se guarda, no hace
-    # falta una migración aparte. Hoy es la mejor fecha disponible para un
-    # rollo que nunca la tuvo.
-    faltan_fechas = False
-    for r in rollos:
-        if not r.get("fecha"):
-            r["fecha"] = _hoy_dma()
-            faltan_fechas = True
-    if faltan_fechas:
-        _escribir(rollos)
-    return rollos
+def migrar_formato_viejo() -> None:
+    """Parte rollos_tela.json / rollos_tela_historial.json (formato de
+    antes, ver docstring del módulo) en un archivo por rollo dentro de
+    Activos/ y Decomisionados/AAAA/MM/. Segura de llamar siempre: una vez
+    migrado, el archivo viejo queda renombrado a .json.migrado y esta
+    función no vuelve a encontrar nada que migrar."""
+    if ROLLOS_PATH_VIEJO.exists():
+        try:
+            rollos = json.loads(ROLLOS_PATH_VIEJO.read_text(encoding="utf-8"))
+        except Exception:
+            rollos = []
+        for r in rollos:
+            if r.get("id"):
+                _escribir_rollo(carpeta_activos(), r)
+        ROLLOS_PATH_VIEJO.replace(ROLLOS_PATH_VIEJO.with_name(ROLLOS_PATH_VIEJO.name + ".migrado"))
 
-
-def _escribir(rollos: list[dict]) -> None:
-    _escribir_json(ROLLOS_PATH, rollos)
+    if HISTORIAL_PATH_VIEJO.exists():
+        try:
+            historial = json.loads(HISTORIAL_PATH_VIEJO.read_text(encoding="utf-8"))
+        except Exception:
+            historial = []
+        for r in historial:
+            if r.get("id"):
+                anio, mes = cm.anio_mes(r, _CAMPO_FECHA_DECOMISO)
+                destino = cm.subcarpeta_mes(carpeta_decomisionados(), anio, mes)
+                _escribir_rollo(destino, r)
+        HISTORIAL_PATH_VIEJO.replace(HISTORIAL_PATH_VIEJO.with_name(HISTORIAL_PATH_VIEJO.name + ".migrado"))
 
 
 def listar_rollos() -> list[dict]:
-    """Todos los rollos, el más nuevo primero (mismo criterio que
+    """Todos los rollos activos, el más nuevo primero (mismo criterio que
     cotizaciones/OPs en el menú: ordenar por ID descendente)."""
-    return sorted(_leer(), key=lambda r: r.get("id", ""), reverse=True)
+    rollos = []
+    for archivo in carpeta_activos().glob("*.json"):
+        r = _leer_rollo(archivo)
+        if r is None:
+            continue
+        # Backfill de "fecha" para rollos guardados antes de que existiera
+        # el campo (mismo criterio que core.repositorio.cargar_direcciones
+        # con "id"): se completa la primera vez que se leen y se guarda,
+        # no hace falta una migración aparte. Hoy es la mejor fecha
+        # disponible para un rollo que nunca la tuvo.
+        if not r.get("fecha"):
+            r["fecha"] = _hoy_dma()
+            _escribir_rollo(carpeta_activos(), r)
+        rollos.append(r)
+    return sorted(rollos, key=lambda r: r.get("id", ""), reverse=True)
 
 
 def obtener_rollo(id_: str) -> dict | None:
-    for r in _leer():
-        if r.get("id") == id_:
-            return r
-    return None
+    return _leer_rollo(carpeta_activos() / f"{id_}.json")
 
 
-def _siguiente_id(rollos: list[dict]) -> str:
-    """4 dígitos, con ceros a la izquierda, siguiente al mayor ID existente
-    — se deriva de los datos en vez de llevar un contador aparte (mismo
-    espíritu que core.repositorio_despachos.siguiente_numero_guia).
+def _siguiente_id() -> str:
+    """4 dígitos, con ceros a la izquierda, siguiente al mayor ID que haya
+    existido — se deriva de los nombres de archivo (Activos/ Y
+    Decomisionados/, para que un ID nunca se reuse aunque el rollo
+    original ya se haya decomisionado) en vez de llevar un contador aparte
+    (mismo espíritu que core.repositorio_despachos.siguiente_numero_guia).
     Empieza en "0001"."""
     maximo = 0
-    for r in rollos:
-        try:
-            maximo = max(maximo, int(r.get("id", 0)))
-        except (TypeError, ValueError):
-            continue
+    for carpeta in (carpeta_activos(), carpeta_decomisionados()):
+        for archivo in carpeta.rglob("*.json"):
+            try:
+                maximo = max(maximo, int(archivo.stem))
+            except ValueError:
+                continue
     return f"{maximo + 1:04d}"
 
 
@@ -98,11 +169,10 @@ def crear_rollo(
     medía el rollo antes de que se le sacara nada. Si no se informa, se
     asume que el rollo entra al sistema completo (iniciales = restantes,
     o sea 100% de stock)."""
-    rollos = _leer()
     metros_restantes = float(metros_restantes)
     metros_iniciales = float(metros_iniciales) if metros_iniciales else metros_restantes
     nuevo = {
-        "id":               _siguiente_id(rollos),
+        "id":               _siguiente_id(),
         "nombre_textil":    nombre_textil.strip(),
         "ancho":            float(ancho),
         "metros_iniciales": metros_iniciales,
@@ -110,8 +180,7 @@ def crear_rollo(
         "fecha":            _hoy_dma(),
         "usos":             [],
     }
-    rollos.append(nuevo)
-    _escribir(rollos)
+    _escribir_rollo(carpeta_activos(), nuevo)
     return nuevo
 
 
@@ -119,34 +188,32 @@ def editar_rollo(id_: str, nombre_textil: str, ancho: float) -> dict | None:
     """Solo nombre_textil/ancho son editables después de creado —
     metros_iniciales/restantes se manejan aparte (ver ajustar_restante),
     para que no se pueda pisar a mano el historial de stock del rollo."""
-    rollos = _leer()
-    for r in rollos:
-        if r.get("id") == id_:
-            r["nombre_textil"] = nombre_textil.strip()
-            r["ancho"] = float(ancho)
-            _escribir(rollos)
-            return r
-    return None
+    r = obtener_rollo(id_)
+    if r is None:
+        return None
+    r["nombre_textil"] = nombre_textil.strip()
+    r["ancho"] = float(ancho)
+    _escribir_rollo(carpeta_activos(), r)
+    return r
 
 
 def decomisionar_rollo(id_: str) -> bool:
     """"Decomisionar" (botón 🗑 de la tabla de rollos, panel de Inventario
     en menu.html) — un rollo agotado o demasiado flaco para que alguien lo
-    elija a mano no se borra sin dejar rastro: sale de rollos_tela.json y
-    su registro completo (con todo su historial de usos) queda archivado
-    en HISTORIAL_PATH, con la fecha del decomiso. Devuelve True si
-    encontró y movió algo."""
-    rollos = _leer()
-    objetivo = next((r for r in rollos if r.get("id") == id_), None)
+    elija a mano no se borra sin dejar rastro: sale de Activos/ y su
+    registro completo (con todo su historial de usos) queda archivado en
+    Decomisionados/AAAA/MM/ (mes según la fecha de decomiso), con la fecha
+    del decomiso. Devuelve True si encontró y movió algo."""
+    origen = carpeta_activos() / f"{id_}.json"
+    objetivo = _leer_rollo(origen)
     if objetivo is None:
         return False
-    nuevos = [r for r in rollos if r.get("id") != id_]
-    _escribir(nuevos)
+    origen.unlink()
 
     objetivo["fecha_decomiso"] = _hoy_dma()
-    historial = _leer_json(HISTORIAL_PATH)
-    historial.append(objetivo)
-    _escribir_json(HISTORIAL_PATH, historial)
+    anio, mes = cm.anio_mes(objetivo, _CAMPO_FECHA_DECOMISO)
+    destino = cm.subcarpeta_mes(carpeta_decomisionados(), anio, mes)
+    _escribir_rollo(destino, objetivo)
     return True
 
 
@@ -178,18 +245,17 @@ def ajustar_restante(id_: str, nuevo_restante: float, descripcion: str = "") -> 
     se supo que tuvo este rollo. Queda registrado en 'usos' SIEMPRE (no
     solo si baja), para poder revisarlo después. Devuelve el rollo
     actualizado, o None si no existe."""
-    rollos = _leer()
-    for r in rollos:
-        if r.get("id") == id_:
-            anterior = r.get("metros_restantes", 0.0)
-            nuevo_restante = round(float(nuevo_restante), 3)
-            r["metros_restantes"] = nuevo_restante
-            if nuevo_restante > r.get("metros_iniciales", 0.0):
-                r["metros_iniciales"] = nuevo_restante
-            _agregar_registro(r, tipo="ajuste", anterior=anterior, nuevo=nuevo_restante, descripcion=descripcion)
-            _escribir(rollos)
-            return r
-    return None
+    r = obtener_rollo(id_)
+    if r is None:
+        return None
+    anterior = r.get("metros_restantes", 0.0)
+    nuevo_restante = round(float(nuevo_restante), 3)
+    r["metros_restantes"] = nuevo_restante
+    if nuevo_restante > r.get("metros_iniciales", 0.0):
+        r["metros_iniciales"] = nuevo_restante
+    _agregar_registro(r, tipo="ajuste", anterior=anterior, nuevo=nuevo_restante, descripcion=descripcion)
+    _escribir_rollo(carpeta_activos(), r)
+    return r
 
 
 def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
@@ -199,17 +265,16 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
     medio dejaría el resto del historial apuntando a un valor que ya no es
     real. Si `id_ajuste` no es la más reciente, no hace nada y devuelve
     None (el diálogo solo ofrece deshacer en la fila de arriba)."""
-    rollos = _leer()
-    for r in rollos:
-        if r.get("id") == id_rollo:
-            usos = r.get("usos", [])
-            if not usos or usos[-1].get("id") != id_ajuste:
-                return None
-            objetivo = usos.pop()
-            r["metros_restantes"] = objetivo.get("metros_restantes_anterior", r.get("metros_restantes", 0.0))
-            _escribir(rollos)
-            return r
-    return None
+    r = obtener_rollo(id_rollo)
+    if r is None:
+        return None
+    usos = r.get("usos", [])
+    if not usos or usos[-1].get("id") != id_ajuste:
+        return None
+    objetivo = usos.pop()
+    r["metros_restantes"] = objetivo.get("metros_restantes_anterior", r.get("metros_restantes", 0.0))
+    _escribir_rollo(carpeta_activos(), r)
+    return r
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -258,9 +323,9 @@ def metros_necesarios(productos_internos: list[dict]) -> dict[str, float]:
 
 
 def stock_por_textil() -> dict[str, float]:
-    """{textil: suma de metros_restantes de todos sus rollos}."""
+    """{textil: suma de metros_restantes de todos sus rollos activos}."""
     stock: dict[str, float] = {}
-    for r in _leer():
+    for r in listar_rollos():
         textil = r.get("nombre_textil", "")
         stock[textil] = stock.get(textil, 0.0) + r.get("metros_restantes", 0.0)
     return stock
@@ -318,9 +383,10 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     alcanza — si por alguna razón no alcanzara, un producto se queda sin
     cubrir del todo y sigue sin reventar: frenar la aprobación es
     responsabilidad de quien llama, no de esta función."""
-    rollos = _leer()
+    rollos = listar_rollos()
     descripcion = f"OP {numero_op}" + (f" · {referencia}" if referencia else "")
     asignacion_por_producto: list[list[dict]] = []
+    tocados: dict[str, dict] = {}
 
     for producto in productos_internos:
         textil, necesario = _metros_lineales(producto)
@@ -347,7 +413,9 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
             _agregar_registro(r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion)
             usados.append({"id": r["id"], "metros": round(usar, 3)})
             por_cubrir -= usar
+            tocados[r["id"]] = r
         asignacion_por_producto.append(usados)
 
-    _escribir(rollos)
+    for r in tocados.values():
+        _escribir_rollo(carpeta_activos(), r)
     return asignacion_por_producto
