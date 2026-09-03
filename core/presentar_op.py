@@ -72,6 +72,8 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
     tela, ver _corte) — se ignora para el resto."""
     cantidad = p.get("Cantidad", 0)
     tema = p.get("Tema", "").strip() or "—"
+    obs = p.get("Obs", "").strip()
+    tema_celda = f'{tema}<div class="prod-obs">Observación: {obs}</div>' if obs else tema
     medidas = f"{_fmt_medida(p.get('Ancho', 0))} × {_fmt_medida(p.get('Alto', 0))} m"
     metros, unidad = _metrica_producto(interno)
 
@@ -119,7 +121,7 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         </td>
         <td>{medidas}</td>
         <td class="num">{cantidad}</td>
-        <td>{tema}</td>{celdas_corte}
+        <td>{tema_celda}</td>{celdas_corte}
         <td class="num">{_fmt_cantidad(metros)} {unidad}</td>
       </tr>"""
     return fila, metros, unidad
