@@ -298,6 +298,14 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
   width: min(100%, 62rem); margin: auto;
   display: grid; gap: var(--e-6); padding: var(--e-6) 0;
 }
+/* Sin esto, un hijo ancho (la tabla de rollos de Inventario, con bastantes
+   columnas) fuerza a crecer la ÚNICA columna implícita del grid de acá
+   arriba más allá de "width: min(100%, 62rem)" — el clásico "grid
+   blowout": min-width por defecto de un ítem de grid es "auto" (el tamaño
+   de su contenido), no 0. Con min-width:0 el ítem SÍ puede achicarse hasta
+   el ancho del panel, y ahí .tabla-caja (overflow:auto) scrollea la tabla
+   por su cuenta en vez de estirar toda la página. */
+.panel__seccion { min-width: 0; }
 .panel__titulo {
   font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
   letter-spacing: -.035em; line-height: 1;
@@ -457,6 +465,32 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .barra-inventario { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; margin-bottom: var(--e-4); }
 .barra-inventario .entrada { flex: 1 1 16rem; min-width: 0; }
 .barra-inventario .btn { flex: 0 0 auto; margin-left: auto; }
+
+/* Columnas combinadas (Rollo/Origen/Valor/Stock/Acciones) — probamos antes
+   una columna por dato (Textil/Ancho/Proveedor/Compra/Valor/Valor total/
+   Valor restante/Fecha/Estado...) y no entraba ni con la tabla partida en
+   dos; agrupar varios datos por celda (un dato "principal" + detalle chico
+   abajo) resuelve el ancho sin perder ningún dato — cada fila mide lo que
+   necesite verticalmente (celda-combo), no todas 3 líneas por igual. */
+[data-panel="inventario"] .celda-combo { display: grid; gap: .15rem; }
+[data-panel="inventario"] .celda-combo__principal {
+  font-weight: var(--peso-medio);
+  display: flex; align-items: center; gap: .45em;
+}
+[data-panel="inventario"] .celda-combo__detalle { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+/* Estado del rollo: ya no un chip de texto — un punto de color antes del
+   nombre del textil (verde = activo, gris oscuro = inactivo), clickeable
+   para alternar (mismo toggle de antes, ver cambiar_estado_rollo). */
+[data-panel="inventario"] .estado-punto {
+  flex: 0 0 auto;
+  width: .6rem; height: .6rem; border-radius: 50%;
+  border: none; padding: 0; cursor: pointer;
+  transition: transform var(--m-rapida) var(--ease-salida);
+}
+[data-panel="inventario"] .estado-punto:hover { transform: scale(1.25); }
+[data-panel="inventario"] .estado-punto--activo { background: var(--c-tema-fuerte); }
+[data-panel="inventario"] .estado-punto--inactivo { background: var(--c-texto-suave); }
 
 /* Switch de tres posiciones para el orden de la tabla de rollos (Nombre /
    ID / Cantidad restante) — reemplaza el viejo click-en-columna. Pastilla
@@ -704,10 +738,9 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
         <table class="tabla">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Textil</th>
-              <th>Ancho</th>
-              <th>Fecha</th>
+              <th>Rollo</th>
+              <th>Origen</th>
+              <th>Valor</th>
               <th>Stock</th>
               <th>Acciones</th>
             </tr>
@@ -840,21 +873,29 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       <input class="entrada" id="dr-ancho" type="number" step="0.01" min="0">
       <span class="campo__error">Obligatorio</span>
     </div>
-    <div class="fila" data-campos-metros>
-      <div class="campo">
-        <label class="campo__etiqueta" data-requerido for="dr-restantes">Metros disponibles</label>
-        <input class="entrada" id="dr-restantes" type="number" step="0.01" min="0">
-        <span class="campo__error">Obligatorio</span>
-      </div>
-      <div class="campo">
-        <label class="campo__etiqueta" for="dr-iniciales">Metros iniciales</label>
-        <input class="entrada" id="dr-iniciales" type="number" step="0.01" min="0"
-               placeholder="Opcional">
-      </div>
+    <div class="campo" data-campo-metros>
+      <label class="campo__etiqueta" data-requerido for="dr-restantes">Metros disponibles</label>
+      <input class="entrada" id="dr-restantes" type="number" step="0.01" min="0">
+      <span class="campo__error">Obligatorio</span>
     </div>
     <div class="campo" data-campo-metros-fijo hidden>
       <span class="campo__etiqueta">Stock</span>
       <p class="campo__dato" data-metros-fijo></p>
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dr-proveedor">Proveedor</label>
+        <input class="entrada" id="dr-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dr-precio-compra">Compra</label>
+        <input class="entrada" id="dr-precio-compra" type="number" step="1" min="0" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" for="dr-valor">Valor por ML/M²</label>
+      <input class="entrada" id="dr-valor" type="number" step="1" min="0" placeholder="Opcional">
+      <span class="campo__ayuda">Lo que se cobra por metro de este rollo. Se sugiere solo al elegir el textil.</span>
     </div>
   </div>
   <div class="dlg__acciones">
@@ -862,6 +903,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-rollo">Guardar</button>
   </div>
 </dialog>
+<datalist id="lista-proveedores"></datalist>
 
 <dialog id="dlg-ajustar">
   <h2 class="dlg__titulo" data-dlg-ajustar-titulo>Ajustar cantidad</h2>
@@ -1069,14 +1111,49 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       </div>`;
   }
 
+  // Cada celda combina varios datos (un "principal" + detalle chico abajo)
+  // para que la tabla entre en el ancho del panel sin scroll horizontal —
+  // antes cada dato tenía su propia columna y no entraban ni partiendo la
+  // tabla en dos (ver historial de commits). "Valor total"/"Valor
+  // restante" no se guardan, se calculan al vuelo (valor × metros_
+  // iniciales/restantes) para no arriesgar que queden desincronizados si
+  // se ajusta el stock o se edita el valor.
   function filaRollo(r) {
     const tr = document.createElement("tr");
     tr.dataset.id = r.id;
+    const activo = (r.estado || "activo") === "activo";
+
+    // Origen: proveedor como dato principal (o "—" si no se cargó), fecha
+    // + precio de compra como detalle — precio_compra se omite del todo
+    // si no se cargó, en vez de mostrar "· —" colgando.
+    const detalleOrigen = [r.fecha, r.precio_compra ? TD.fmt.pesos(r.precio_compra) : null]
+      .filter(Boolean).join(" · ");
+
+    const celdaValor = r.valor == null
+      ? `<span class="celda-combo__principal">—</span>`
+      : `<span class="celda-combo__principal">${TD.fmt.pesos(r.valor)} /m</span>
+         <span class="celda-combo__detalle">${TD.fmt.pesos(r.valor * r.metros_restantes)} restante</span>
+         <span class="celda-combo__detalle">${TD.fmt.pesos(r.valor * r.metros_iniciales)} total</span>`;
+
     tr.innerHTML = `
-      <td>${esc(r.id)}</td>
-      <td>${esc(r.nombre_textil) || "—"}</td>
-      <td>${esc(r.ancho)} m</td>
-      <td>${esc(r.fecha) || "—"}</td>
+      <td>
+        <div class="celda-combo">
+          <span class="celda-combo__principal">
+            <button class="estado-punto ${activo ? "estado-punto--activo" : "estado-punto--inactivo"}"
+                    type="button" data-accion="toggle-estado-rollo"
+                    title="${activo ? "Marcar como inactivo (no se selecciona para stock)" : "Reactivar"}"></button>
+            ${esc(r.nombre_textil) || "—"}
+          </span>
+          <span class="celda-combo__detalle">#${esc(r.id)} · ${esc(r.ancho)} m</span>
+        </div>
+      </td>
+      <td>
+        <div class="celda-combo">
+          <span class="celda-combo__principal">${esc(r.proveedor) || "—"}</span>
+          <span class="celda-combo__detalle">${esc(detalleOrigen)}</span>
+        </div>
+      </td>
+      <td><div class="celda-combo">${celdaValor}</div></td>
       <td>${celdaStock(r)}</td>
       <td class="acciones">
         <button class="btn-fila-icono" type="button" data-accion="editar-rollo" title="Editar">
@@ -1090,6 +1167,10 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     $("[data-accion='editar-rollo']", tr).addEventListener("click", () => abrirDialogoRollo(r));
     $("[data-accion='ajustar-rollo']", tr).addEventListener("click", () => abrirDialogoAjustar(r.id));
     $("[data-accion='decomisionar-rollo']", tr).addEventListener("click", (e) => abrirPanelDecomisionar(e.currentTarget, r));
+    $("[data-accion='toggle-estado-rollo']", tr).addEventListener("click", async () => {
+      await TD.api.cambiar_estado_rollo(r.id, !activo);
+      await recargarRollosInventario();
+    });
     return tr;
   }
 
@@ -1162,18 +1243,22 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 
     $("#dr-textil").value = rollo?.nombre_textil || "";
     $("#dr-ancho").value = rollo?.ancho ?? "";
+    $("#dr-proveedor").value = rollo?.proveedor || "";
+    $("#dr-precio-compra").value = rollo?.precio_compra || "";
+    $("#dr-valor").value = rollo?.valor ?? "";
 
-    // Metros disponibles/iniciales: editables solo al crear — una vez que
-    // el rollo existe, el remanente se corrige aparte ("Ajustar cantidad" /
+    // Metros disponibles: editable solo al crear — una vez que el rollo
+    // existe, el remanente se corrige aparte ("Ajustar cantidad" /
     // core/repositorio_inventario.py::ajustar_restante), así que acá no se
-    // puede pisar a mano sin perder ese historial.
-    $("[data-campos-metros]").hidden = !!rollo;
+    // puede pisar a mano sin perder ese historial. metros_iniciales ya NO
+    // se pide: siempre es una copia de "disponibles" al crear (ver
+    // core.repositorio_inventario.crear_rollo).
+    $("[data-campo-metros]").hidden = !!rollo;
     $("[data-campo-metros-fijo]").hidden = !rollo;
     if (rollo) {
       $("[data-metros-fijo]").textContent = `${rollo.metros_restantes} / ${rollo.metros_iniciales} m`;
     } else {
       $("#dr-restantes").value = "";
-      $("#dr-iniciales").value = "";
     }
 
     dlgRollo.showModal();
@@ -1182,6 +1267,19 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   $("[data-accion='nuevo-rollo']").addEventListener("click", () => abrirDialogoRollo(null));
   $("[data-accion='cancelar-rollo']").addEventListener("click", () => dlgRollo.close());
   dlgRollo.addEventListener("click", (e) => { if (e.target === dlgRollo) dlgRollo.close(); });
+
+  // Al elegir un textil, se sugiere el Valor (por defecto: el del rollo
+  // más reciente de ese textil, o si no hay ninguno, el del catálogo — ver
+  // core.repositorio_inventario.valor_sugerido_textil). Solo si el campo
+  // está vacío: no pisa un valor que el usuario ya haya tocado a mano.
+  $("#dr-textil").addEventListener("change", async () => {
+    const campoValor = $("#dr-valor");
+    if (campoValor.value.trim()) return;
+    const textil = $("#dr-textil").value;
+    if (!textil) return;
+    const sugerido = await TD.api.valor_sugerido_textil(textil);
+    if (sugerido != null) campoValor.value = sugerido;
+  });
 
   $("[data-accion='guardar-rollo']").addEventListener("click", async () => {
     const campoTextil = $("#dr-textil");
@@ -1195,25 +1293,32 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     campoAncho.closest(".campo").toggleAttribute("data-invalido", !(ancho > 0));
     if (!(ancho > 0)) valido = false;
 
-    // Metros iniciales es opcional (ver core/repositorio_inventario.py::
-    // crear_rollo): si se deja en blanco, el backend asume que el rollo
-    // entra completo (iniciales = disponibles).
-    let metrosRestantes = null, metrosIniciales = null;
+    let metrosRestantes = null;
     if (!idEnEdicionRollo) {
       const campoRestantes = $("#dr-restantes");
       metrosRestantes = parseFloat(campoRestantes.value);
       campoRestantes.closest(".campo").toggleAttribute("data-invalido", !(metrosRestantes > 0));
       if (!(metrosRestantes > 0)) valido = false;
-
-      const campoIniciales = $("#dr-iniciales");
-      metrosIniciales = campoIniciales.value.trim() ? parseFloat(campoIniciales.value) : null;
     }
     if (!valido) return;
 
+    const proveedor = $("#dr-proveedor").value.trim();
+    const campoPrecio = $("#dr-precio-compra").value.trim();
+    const precioCompra = campoPrecio ? parseFloat(campoPrecio) : 0;
+    const campoValor = $("#dr-valor").value.trim();
+    const valor = campoValor ? parseFloat(campoValor) : null;
+
+    if (proveedor) {
+      await TD.api.guardar_proveedor(proveedor);
+      const proveedoresInventario = (await TD.api.cargar_proveedores()) || [];
+      $("#lista-proveedores").innerHTML =
+        proveedoresInventario.map((p) => `<option value="${esc(p)}"></option>`).join("");
+    }
+
     if (idEnEdicionRollo) {
-      await TD.api.editar_rollo(idEnEdicionRollo, textil, ancho);
+      await TD.api.editar_rollo(idEnEdicionRollo, textil, ancho, precioCompra, valor, proveedor);
     } else {
-      await TD.api.crear_rollo(textil, ancho, metrosRestantes, metrosIniciales);
+      await TD.api.crear_rollo(textil, ancho, metrosRestantes, precioCompra, valor, proveedor);
     }
     dlgRollo.close();
     await recargarRollosInventario();
@@ -2084,11 +2189,19 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       '<option value="" disabled selected>Seleccionar textil…</option>' +
       textilesInventario.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
 
+    // Proveedor SÍ es texto libre con autocompletar (a diferencia de
+    // Textil): crece solo a medida que se cargan rollos (ver
+    // core.repositorio.guardar_proveedor), no es un catálogo cerrado.
+    const proveedoresInventario = (await TD.api.cargar_proveedores()) || [];
+    $("#lista-proveedores").innerHTML =
+      proveedoresInventario.map((p) => `<option value="${esc(p)}"></option>`).join("");
+
     await cargar();
 
     if (nuevoTextilInicial) {
       abrirDialogoRollo(null);
       $("#dr-textil").value = nuevoTextilInicial;
+      $("#dr-textil").dispatchEvent(new Event("change"));  // dispara la sugerencia de Valor
     }
   });
 })();

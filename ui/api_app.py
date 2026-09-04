@@ -551,11 +551,29 @@ class ApiApp:
     def cargar_textiles_inventario(self) -> list[str]:
         return self._inventario.cargar_textiles()
 
-    def crear_rollo(self, nombre_textil, ancho, metros_restantes, metros_iniciales=None) -> dict:
-        return self._inventario.crear_rollo(nombre_textil, ancho, metros_restantes, metros_iniciales)
+    def cargar_proveedores(self) -> list[str]:
+        return self._inventario.cargar_proveedores()
 
-    def editar_rollo(self, id_, nombre_textil, ancho) -> dict | None:
-        return self._inventario.editar_rollo(id_, nombre_textil, ancho)
+    def guardar_proveedor(self, nombre) -> None:
+        self._inventario.guardar_proveedor(nombre)
+
+    def valor_sugerido_textil(self, nombre_textil) -> float | None:
+        return self._inventario.valor_sugerido_textil(nombre_textil)
+
+    def crear_rollo(
+        self, nombre_textil, ancho, metros_restantes,
+        precio_compra=0.0, valor=None, proveedor="",
+    ) -> dict:
+        return self._inventario.crear_rollo(nombre_textil, ancho, metros_restantes, precio_compra, valor, proveedor)
+
+    def editar_rollo(
+        self, id_, nombre_textil, ancho,
+        precio_compra=0.0, valor=None, proveedor="",
+    ) -> dict | None:
+        return self._inventario.editar_rollo(id_, nombre_textil, ancho, precio_compra, valor, proveedor)
+
+    def cambiar_estado_rollo(self, id_, activo: bool) -> dict | None:
+        return self._inventario.cambiar_estado_rollo(id_, activo)
 
     def decomisionar_rollo(self, id_) -> bool:
         return self._inventario.decomisionar_rollo(id_)
