@@ -15,11 +15,11 @@ Dropbox (ver el caso real de "Denim crudo 6 onzas" sin "valor") ya no
 puede quedar syncrhonizado silenciosamente a todas las instalaciones sin
 pasar por revisión.
 
-clientes.json y contactos.json SÍ siguen en Dropbox/SGTD/Conf (ver
-core.rutas.CONF) — no son catálogos de referencia, son datos que el
-operador va agregando en el día a día (clientes/contactos nuevos), y
-recursos/ es de solo lectura: no se le puede "agregar un cliente" a un
-archivo empaquetado con el instalador.
+clientes.json, contactos.json y proveedores.json SÍ siguen en Dropbox/
+SGTD/Conf (ver core.rutas.CONF) — no son catálogos de referencia, son
+datos que el operador va agregando en el día a día (clientes/contactos/
+proveedores nuevos), y recursos/ es de solo lectura: no se le puede
+"agregar un cliente" a un archivo empaquetado con el instalador.
 """
 
 import json
@@ -37,6 +37,8 @@ CONTACTOS_PATH    = _CONF_DIR / "contactos.json"
 # cada una es su propia entrada acá, ligada al cliente por RUT (ver
 # módulo Despachos, core/repositorio_despachos.py).
 DIRECCIONES_PATH  = _CONF_DIR / "direcciones.json"
+# Proveedores de tela — dato de Inventario (rollos), ver sección más abajo.
+PROVEEDORES_PATH  = _CONF_DIR / "proveedores.json"
 # Preferencias de interfaz (ej. escala_ui, la A-/A+ de las pantallas HTML
 # nuevas): en DATOS (local por máquina), NO en CONF — es una preferencia
 # personal de quien usa esta instalación, no un dato de negocio compartido
@@ -191,6 +193,35 @@ def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
             return  # ya existe, no duplicar
     contactos.append({"contacto": contacto, "email": email, "descuento": descuento, "condicion": condicion})
     _escribir_json(CONTACTOS_PATH, contactos)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Gestión de proveedores.json — lista de nombres de proveedor de tela (campo
+# "Proveedor" de un rollo, ver core/repositorio_inventario.py). Mismo criterio
+# que clientes/contactos: dato que el operador va agregando al cargar rollos
+# en el día a día, no un catálogo de referencia curado — vive en Conf, no en
+# recursos/, y crece solo (autocompletar + agregar sobre la marcha, ver
+# ui/api_inventario.py).
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cargar_proveedores() -> list[str]:
+    """Lee proveedores.json: lista de nombres de proveedor."""
+    return _leer_json(PROVEEDORES_PATH)
+
+
+def guardar_proveedor(nombre: str) -> None:
+    """Agrega un proveedor nuevo a proveedores.json si no existe ya (dedup
+    por nombre, mismo criterio que guardar_cliente/guardar_contacto). No
+    hace nada si `nombre` viene vacío — el campo Proveedor de un rollo es
+    opcional."""
+    nombre = (nombre or "").strip()
+    if not nombre:
+        return
+    proveedores = cargar_proveedores()
+    if any(p.lower() == nombre.lower() for p in proveedores):
+        return  # ya existe, no duplicar
+    proveedores.append(nombre)
+    _escribir_json(PROVEEDORES_PATH, proveedores)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -78,9 +78,21 @@ def carpeta_decomisionados() -> Path:
 
 def _leer_rollo(ruta: Path) -> dict | None:
     try:
-        return json.loads(ruta.read_text(encoding="utf-8"))
+        r = json.loads(ruta.read_text(encoding="utf-8"))
     except Exception:
         return None
+    # Defaults para rollos guardados antes de que existieran estos campos
+    # (precio_compra/valor/proveedor/estado, ver crear_rollo) — a
+    # diferencia del backfill de "fecha" (ver listar_rollos), acá NO se
+    # inventa un valor retroactivo (ej. "valor" queda None, no una
+    # adivinanza del catálogo): eso solo tiene sentido como sugerencia al
+    # CREAR un rollo nuevo (ver valor_sugerido_textil), no como verdad
+    # histórica de uno que ya existía.
+    r.setdefault("precio_compra", 0.0)
+    r.setdefault("valor", None)
+    r.setdefault("proveedor", "")
+    r.setdefault("estado", "activo")
+    return r
 
 
 def _escribir_rollo(carpeta: Path, rollo: dict) -> Path:
@@ -159,40 +171,98 @@ def _siguiente_id() -> str:
     return f"{maximo + 1:04d}"
 
 
+def valor_sugerido_textil(nombre_textil: str) -> float | None:
+    """Valor por ML/M² sugerido para un rollo NUEVO de `nombre_textil` —
+    pedido de Bruno (2026-09-03): por defecto toma el valor del rollo MÁS
+    RECIENTE que exista de ese mismo textil (entre los activos; el ID más
+    alto, que es el más nuevo), y si no hay ninguno todavía, el valor ya
+    cargado en el catálogo (recursos/textiles.json, core.repositorio.
+    TEXTILES_VALORES) — mismo precio que se factura al cliente, la mejor
+    estimación disponible para un textil que recién se compra por primera
+    vez. None si no hay ni rollo previo ni catálogo (el formulario lo deja
+    en blanco, no inventa un 0)."""
+    from core.repositorio import TEXTILES_VALORES
+
+    nombre_textil = nombre_textil.strip()
+    candidatos = [r for r in listar_rollos()
+                  if r.get("nombre_textil") == nombre_textil and r.get("valor") is not None]
+    if candidatos:
+        return max(candidatos, key=lambda r: r.get("id", "")).get("valor")
+    return TEXTILES_VALORES.get(nombre_textil)
+
+
 def crear_rollo(
     nombre_textil: str, ancho: float, metros_restantes: float,
-    metros_iniciales: float | None = None,
+    precio_compra: float = 0.0, valor: float | None = None, proveedor: str = "",
 ) -> dict:
-    """`metros_iniciales` es opcional: el inventario arranca con rollos que
-    ya vienen usados de antes, así que lo único que se sabe con certeza es
-    cuánto queda AHORA (`metros_restantes`) — no necesariamente cuánto
-    medía el rollo antes de que se le sacara nada. Si no se informa, se
-    asume que el rollo entra al sistema completo (iniciales = restantes,
-    o sea 100% de stock)."""
+    """metros_iniciales YA NO lo ingresa el usuario (pedido de Bruno,
+    2026-09-03: antes se podía cargar un rollo "usado" con menos metros
+    iniciales que restantes, algo que en la práctica nunca se usaba bien y
+    generaba confusión) — un rollo SIEMPRE entra al sistema completo:
+    iniciales = restantes al momento de crearlo, sin excepción.
+
+    `valor` (precio por ML/M² que se cobra) es opcional: si no se informa,
+    se autocompleta con valor_sugerido_textil (ver esa función) — mismo
+    espíritu que antes tenía metros_iniciales, un dato que casi siempre es
+    "el mismo de la última vez" y no vale la pena tipear de nuevo.
+    `precio_compra` (lo que pagó la empresa por el rollo) y `proveedor`
+    son puramente informativos, no entran en ningún cálculo de stock/
+    consumo — quedan en 0.0/"" si no se informan."""
     metros_restantes = float(metros_restantes)
-    metros_iniciales = float(metros_iniciales) if metros_iniciales else metros_restantes
+    if valor is None:
+        valor = valor_sugerido_textil(nombre_textil)
     nuevo = {
         "id":               _siguiente_id(),
         "nombre_textil":    nombre_textil.strip(),
         "ancho":            float(ancho),
-        "metros_iniciales": metros_iniciales,
+        "metros_iniciales": metros_restantes,
         "metros_restantes": metros_restantes,
         "fecha":            _hoy_dma(),
+        "precio_compra":    float(precio_compra) if precio_compra else 0.0,
+        "valor":            float(valor) if valor is not None else None,
+        "proveedor":        (proveedor or "").strip(),
+        "estado":           "activo",
         "usos":             [],
     }
     _escribir_rollo(carpeta_activos(), nuevo)
     return nuevo
 
 
-def editar_rollo(id_: str, nombre_textil: str, ancho: float) -> dict | None:
-    """Solo nombre_textil/ancho son editables después de creado —
-    metros_iniciales/restantes se manejan aparte (ver ajustar_restante),
-    para que no se pueda pisar a mano el historial de stock del rollo."""
+def editar_rollo(
+    id_: str, nombre_textil: str, ancho: float,
+    precio_compra: float = 0.0, valor: float | None = None, proveedor: str = "",
+) -> dict | None:
+    """nombre_textil/ancho/precio_compra/valor/proveedor son editables
+    después de creado — metros_iniciales/restantes se manejan aparte (ver
+    ajustar_restante) y Estado tiene su propio toggle (ver
+    cambiar_estado_rollo), para que ninguno de los dos se pise sin dejar
+    rastro por acá."""
     r = obtener_rollo(id_)
     if r is None:
         return None
     r["nombre_textil"] = nombre_textil.strip()
     r["ancho"] = float(ancho)
+    r["precio_compra"] = float(precio_compra) if precio_compra else 0.0
+    r["valor"] = float(valor) if valor is not None else None
+    r["proveedor"] = (proveedor or "").strip()
+    _escribir_rollo(carpeta_activos(), r)
+    return r
+
+
+def cambiar_estado_rollo(id_: str, activo: bool) -> dict | None:
+    """Activa/inactiva un rollo a mano (switch "Estado" de la tabla de
+    Inventario) — pedido de Bruno (2026-09-03): un rollo inactivo sigue
+    existiendo y viéndose en la tabla tal cual, pero calcular_faltantes/
+    consumir_para_op lo tratan como si no tuviera stock (ver
+    stock_por_textil/consumir_para_op) — sirve para tela reservada,
+    dañada, o que por el motivo que sea no se quiere que se elija todavía,
+    sin tener que decomisionarla (eso sí es definitivo, esto no: se puede
+    reactivar en cualquier momento). Devuelve el rollo actualizado, o None
+    si no existe."""
+    r = obtener_rollo(id_)
+    if r is None:
+        return None
+    r["estado"] = "activo" if activo else "inactivo"
     _escribir_rollo(carpeta_activos(), r)
     return r
 
@@ -344,9 +414,14 @@ def metros_necesarios(productos_internos: list[dict]) -> dict[str, float]:
 
 
 def stock_por_textil() -> dict[str, float]:
-    """{textil: suma de metros_restantes de todos sus rollos activos}."""
+    """{textil: suma de metros_restantes de todos sus rollos SIN
+    decomisionar (viven en Activos/) Y con Estado "activo" (ver
+    cambiar_estado_rollo) — un rollo puesto en "inactivo" a mano cuenta
+    como 0 acá, aunque le queden metros y siga viéndose en la tabla."""
     stock: dict[str, float] = {}
     for r in listar_rollos():
+        if r.get("estado", "activo") != "activo":
+            continue
         textil = r.get("nombre_textil", "")
         stock[textil] = stock.get(textil, 0.0) + r.get("metros_restantes", 0.0)
     return stock
@@ -380,6 +455,10 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     de verdad (ver docstring del módulo). Cada producto descuenta su ML/M²
     real MÁS MARGEN_TENSION_ML (ver _metros_lineales) — la máquina gasta
     esa tela igual, así que también sale de stock.
+
+    Los rollos con Estado "inactivo" (ver cambiar_estado_rollo) quedan
+    afuera de los candidatos, como si no tuvieran stock — mismo criterio
+    que stock_por_textil/calcular_faltantes.
 
     De qué rollo se descuenta cada producto NO lo elige el usuario: entre
     los rollos del textil que corresponda, siempre se prioriza el que
@@ -421,7 +500,8 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
         # consumo de un producto anterior puede haber dejado a un rollo en
         # 0 (sale de la lista) o haber corrido a otro al primer lugar.
         candidatos = sorted(
-            (r for r in rollos if r.get("nombre_textil") == textil and r.get("metros_restantes", 0.0) > 0),
+            (r for r in rollos if r.get("nombre_textil") == textil and r.get("metros_restantes", 0.0) > 0
+             and r.get("estado", "activo") == "activo"),
             key=lambda r: r.get("metros_restantes", 0.0),
         )
         usados = []
