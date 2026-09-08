@@ -14,6 +14,7 @@ from pathlib import Path
 
 from core.rutas import RECURSOS
 from core.repositorio_ops import carpeta_html
+from core.titulo_impresion import titulo_impresion
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml, parsear_valor_manual
 from core.repositorio import TEXTILES_ANCHOS, ESTRUCTURAS_VALORES
@@ -354,6 +355,10 @@ def generar_html(op: dict) -> Path:
     )
 
     reemplazos = {
+        # El <title> es el nombre que el navegador propone al "Guardar como
+        # PDF" — ver core/titulo_impresion.py.
+        "{{titulo}}":           titulo_impresion(numero, nombre_trabajo,
+                                                 op.get("Empresa", "")),
         "{{numero}}":           str(numero),
         "{{fecha_ingreso}}":    op.get("Fecha_ingreso", ""),
         "{{fecha_entrega}}":    op.get("Fecha_entrega", ""),

@@ -135,9 +135,14 @@ class TestGenerarHtml(unittest.TestCase):
         op["Nombre"] = "Banderas plaza de armas"
         ruta = generar_html(op)
         html = ruta.read_text(encoding="utf-8")
-        i_header = html.index("</header>")
-        i_trabajo = html.index("Banderas plaza de armas")
-        i_datos = html.index('class="datos"')
+        # Se busca en el CUERPO: el nombre del trabajo también sale en el
+        # <title> del <head> (es el nombre con el que el navegador guarda
+        # el PDF, ver core/titulo_impresion.py), y esa primera aparición
+        # taparía la del bloque que se quiere ubicar acá.
+        cuerpo = html[html.index("</head>"):]
+        i_header = cuerpo.index("</header>")
+        i_trabajo = cuerpo.index("Banderas plaza de armas")
+        i_datos = cuerpo.index('class="datos"')
         self.assertTrue(i_header < i_trabajo < i_datos)
 
     def test_sin_nombre_no_deja_un_bloque_vacio(self):
