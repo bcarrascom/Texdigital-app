@@ -13,6 +13,7 @@ from pathlib import Path
 
 from core.rutas import RECURSOS
 from core.repositorio_cotizaciones import carpeta_html, producto_desde_json
+from core.titulo_impresion import titulo_impresion
 from core.precios import (
     costo_cotizacion, costo_producto, formatear_clp, parsear_valor_manual,
     ml_o_area_facturable_por_producto,
@@ -165,6 +166,10 @@ def generar_html(json_dict: dict) -> Path:
     )
 
     reemplazos = {
+        # El <title> es el nombre que el navegador propone al "Guardar como
+        # PDF" — ver core/titulo_impresion.py.
+        "{{titulo}}":          titulo_impresion(numero, json_dict.get("Nombre", ""),
+                                                json_dict.get("Empresa", "")),
         "{{numero}}":          str(numero),
         "{{fecha}}":           json_dict.get("Fecha", ""),
         "{{empresa}}":         json_dict.get("Empresa", ""),
