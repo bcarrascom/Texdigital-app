@@ -16,8 +16,14 @@ from core import repositorio_inventario as _repo
 
 class ApiInventario:
 
+    def contexto_extra(self, id_) -> dict:
+        return {"id": id_}
+
     def listar_rollos(self) -> list[dict]:
         return _repo.listar_rollos()
+
+    def obtener_rollo(self, id_: str) -> dict | None:
+        return _repo.obtener_rollo(id_)
 
     def cargar_textiles(self) -> list[str]:
         return repositorio.TEXTILES

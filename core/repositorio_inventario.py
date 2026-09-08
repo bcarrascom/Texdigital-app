@@ -287,20 +287,37 @@ def decomisionar_rollo(id_: str) -> bool:
     return True
 
 
-def _agregar_registro(r: dict, *, tipo: str, anterior: float, nuevo: float, descripcion: str) -> None:
+def _agregar_registro(
+    r: dict, *, tipo: str, anterior: float, nuevo: float, descripcion: str,
+    numero_op=None, cliente: str | None = None, tema: str | None = None, obs: str | None = None,
+) -> None:
     """Un solo formato de entrada para TODO lo que le pasa al stock de un
     rollo — ajuste manual o consumo automático (ver ajustar_restante/
     consumir_para_op): guarda el valor de ANTES y DESPUÉS (no un delta),
     para poder revisarlo más tarde sin ambigüedad y para poder deshacer
-    la entrada más reciente (ver eliminar_ajuste)."""
-    r.setdefault("usos", []).append({
+    la entrada más reciente (ver eliminar_ajuste).
+
+    numero_op/cliente/tema/obs SOLO se guardan para tipo="consumo" (pedido
+    de Bruno, 2026-09-04, pantalla ver-rollo.html: cada consumo tiene que
+    poder mostrar a qué OP/cliente/tema perteneció) — se copian tal cual
+    al momento del consumo, no se recalculan después: la OP puede moverse
+    de carpeta (JSON → Completadas → Historial) o incluso borrarse, y el
+    registro del rollo tiene que seguir siendo legible igual, sin depender
+    de que esa OP todavía exista en algún lado."""
+    entrada = {
         "id":                        uuid.uuid4().hex,
         "fecha":                     _hoy_dma(),
         "tipo":                      tipo,  # "ajuste" (manual) | "consumo" (aprobar cotización)
         "metros_restantes_anterior": anterior,
         "metros_restantes_nuevo":    nuevo,
         "descripcion":               descripcion.strip(),
-    })
+    }
+    if tipo == "consumo":
+        entrada["numero_op"] = numero_op
+        entrada["cliente"] = (cliente or "").strip()
+        entrada["tema"] = (tema or "").strip()
+        entrada["obs"] = (obs or "").strip()
+    r.setdefault("usos", []).append(entrada)
 
 
 def ajustar_restante(id_: str, nuevo_restante: float, descripcion: str = "") -> dict | None:
@@ -454,7 +471,12 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     nunca antes: es el único momento en que el material se da por gastado
     de verdad (ver docstring del módulo). Cada producto descuenta su ML/M²
     real MÁS MARGEN_TENSION_ML (ver _metros_lineales) — la máquina gasta
-    esa tela igual, así que también sale de stock.
+    esa tela igual, así que también sale de stock. `referencia` es el
+    cliente/empresa de la OP (mismo string que antes) — junto con
+    `numero_op` y el tema/obs de CADA producto (ya vienen en
+    `productos_internos`), quedan grabados en el registro de consumo de
+    cada rollo tocado (ver _agregar_registro) para que ver-rollo.html
+    pueda mostrar de qué OP/cliente salió cada metro.
 
     Los rollos con Estado "inactivo" (ver cambiar_estado_rollo) quedan
     afuera de los candidatos, como si no tuvieran stock — mismo criterio
@@ -513,7 +535,11 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
             usar = min(anterior, por_cubrir)
             nuevo = round(anterior - usar, 3)
             r["metros_restantes"] = nuevo
-            _agregar_registro(r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion)
+            _agregar_registro(
+                r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
+                numero_op=numero_op, cliente=referencia,
+                tema=producto.get("tema", ""), obs=producto.get("obs", ""),
+            )
             usados.append({"id": r["id"], "metros": round(usar, 3)})
             por_cubrir -= usar
             tocados[r["id"]] = r

@@ -31,7 +31,9 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
-from core.precios import costo_producto, costo_cotizacion
+from core.precios import (
+    costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
+)
 from core.repositorio_cotizaciones import (
     cargar_cotizacion, guardar_cotizacion as _guardar_cotizacion_repo,
     mapear_producto, producto_desde_json, siguiente_numero, numero_en_uso,
@@ -203,6 +205,18 @@ def _interno_a_frontend(interno: dict) -> dict:
     return base
 
 
+def _calculable(p: dict) -> bool:
+    """Un producto del frontend tiene lo mínimo para calcularle precio: sin
+    medidas o sin cantidad no hay ML/M² que cobrar (y calcular_ml dividiría
+    por un ancho 0). Los paneles recién agregados están así hasta que el
+    usuario escribe algo."""
+    return (
+        _num(p.get("ancho")) > 0
+        and _num(p.get("alto")) > 0
+        and _ent(p.get("cantidad"), 0) > 0
+    )
+
+
 def _error_medida(interno: dict, ancho: float, alto: float) -> tuple[str | None, float | None]:
     """(error, ancho_max) — mismo criterio que ui/cotizacion.py y
     ui/cotizador_backlight.py: el lado corto no puede exceder el ancho
@@ -343,16 +357,47 @@ class ApiCotizacion:
 
     # ── Cálculo en vivo ───────────────────────────────────────────────────────
 
-    def calcular_producto(self, p: dict) -> dict | None:
+    def calcular_productos(self, productos: list) -> list[dict | None]:
+        """Cálculo en vivo de TODA la lista de productos de una vez (lo que
+        llama recalcular() en nueva-cotizacion.html), alineado 1:1 con
+        `productos` — None en los que todavía no tienen medidas/cantidad.
+
+        Va la lista completa y no producto por producto porque el piso
+        mínimo de facturación es POR GRUPO DE TEXTIL/TELA (ver docstring de
+        core/precios.py, "Piso mínimo de facturación"): el precio de un
+        producto depende de cuánta tela del MISMO textil llevan los otros
+        productos de la cotización — dos productos de 1 ML de Felpa gruesa
+        no cobran 2 ML de piso cada uno, entre ambos ya superan el mínimo.
+        Calcularlos sueltos daba un total más caro en el resumen del
+        cotizador que el de la cotización ya guardada (ver
+        ApiVerCotizacion.obtener_cotizacion, que sí usa el piso grupal).
+
+        Los productos sin medidas/cantidad quedan fuera del grupo (no
+        aportan ML ni pueden pasar por calcular_ml, que divide por el
+        ancho) y devuelven None, igual que en calcular_producto."""
+        indices = [i for i, p in enumerate(productos) if _calculable(p)]
+        internos = [_producto_a_interno(productos[i]) for i in indices]
+        facturables = ml_o_area_facturable_por_producto(internos)
+
+        calculos: list[dict | None] = [None] * len(productos)
+        for i, f in zip(indices, facturables):
+            calculos[i] = self.calcular_producto(productos[i], ml_o_area_facturable=f)
+        return calculos
+
+    def calcular_producto(self, p: dict, ml_o_area_facturable: float | None = None) -> dict | None:
+        """Un solo producto. `ml_o_area_facturable` es el ML/M² ya con el
+        piso mínimo del GRUPO aplicado (ver calcular_productos): sin él,
+        costo_producto le aplica el piso a esta línea sola, como si fuera
+        el único producto de su textil."""
+        if not _calculable(p):
+            return None
         ancho = _num(p.get("ancho"), 0.0)
         alto = _num(p.get("alto"), 0.0)
         cantidad = _ent(p.get("cantidad"), 0)
-        if not (ancho > 0 and alto > 0 and cantidad > 0):
-            return None
 
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
-        costo = costo_producto(interno)
+        costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable)
 
         if p.get("tipo") == "backlight":
             materiales = []
@@ -411,10 +456,7 @@ class ApiCotizacion:
         tela todavía). No bloquea nada acá: guardar una cotización con
         stock insuficiente sigue permitido, el único bloqueo real es al
         aprobarla (ver ApiVerCotizacion.aprobar_cotizacion)."""
-        productos_internos = [
-            _producto_a_interno(p) for p in productos
-            if _num(p.get("ancho")) > 0 and _num(p.get("alto")) > 0 and _ent(p.get("cantidad")) > 0
-        ]
+        productos_internos = [_producto_a_interno(p) for p in productos if _calculable(p)]
         return calcular_faltantes(productos_internos)
 
     # ── Guardado ──────────────────────────────────────────────────────────────

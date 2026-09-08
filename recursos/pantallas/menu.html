@@ -466,6 +466,19 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .barra-inventario .entrada { flex: 1 1 16rem; min-width: 0; }
 .barra-inventario .btn { flex: 0 0 auto; margin-left: auto; }
 
+/* Botón "+" de Nuevo rollo — de acá arranca el morph hacia #dlg-rollo (ver
+   más abajo), mismo mecanismo que el 🗑 de la fila -> panel-decomisionar. */
+.btn-nuevo-rollo {
+  flex: 0 0 auto; margin-left: auto;
+  display: grid; place-items: center;
+  width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  border: none; background: var(--c-tema-fuerte); color: var(--c-texto-inv);
+  font-size: 1.4rem; line-height: 1; font-weight: var(--peso-medio);
+  cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida);
+}
+.btn-nuevo-rollo:hover { background: color-mix(in srgb, var(--c-tema-fuerte) 85%, black); }
+
 /* Columnas combinadas (Rollo/Origen/Valor/Stock/Acciones) — probamos antes
    una columna por dato (Textil/Ancho/Proveedor/Compra/Valor/Valor total/
    Valor restante/Fecha/Estado...) y no entraba ni con la tabla partida en
@@ -478,6 +491,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   display: flex; align-items: center; gap: .45em;
 }
 [data-panel="inventario"] .celda-combo__detalle { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+[data-panel="inventario"] .celda-combo__id { color: var(--c-texto); }
 
 /* Estado del rollo: ya no un chip de texto — un punto de color antes del
    nombre del textil (verde = activo, gris oscuro = inactivo), clickeable
@@ -561,7 +575,54 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 }
 .stock__barra > i { display: block; height: 100%; background: var(--c-tema-fuerte); }
 
-#dlg-rollo { width: min(90vw, 30rem); }
+/* #dlg-rollo (boton-panel-morph) — el botón "+"/el lápiz de una fila se
+   deforma hasta ser este diálogo, mismo mecanismo que 🗑 -> panel-
+   decomisionar (ver ese bloque de CSS/JS para el razonamiento completo:
+   JS anima top/left/width/height/border-radius de verdad, nunca
+   transform/scale). Reemplaza el ancho fijo "width: min(90vw, 30rem)" de
+   antes — ahora ese tope lo aplica JS (rectFinalRollo) al calcular el
+   rectángulo final. */
+#dlg-rollo {
+  position: fixed; margin: 0;
+  overflow: hidden;
+  max-width: none; /* el "dialog { max-width: min(90vw,26rem) }" genérico
+    recortaría el ancho de 30rem que calcula rectFinalRollo — JS manda acá */
+  /* "background" viaja en la misma transición: arranca del verde del
+     botón de origen (JS se lo pone justo antes de abrir/cerrar, ver
+     abrirDialogoRollo/cerrarDialogoRollo) y termina en el blanco de
+     "dialog { background: var(--c-superficie) }" — un solo gesto, no dos
+     animaciones separadas. */
+  transition: top var(--m-expansion) var(--ease-salida),
+              left var(--m-expansion) var(--ease-salida),
+              width var(--m-expansion) var(--ease-salida),
+              height var(--m-expansion) var(--ease-salida),
+              border-radius var(--m-expansion) var(--ease-salida),
+              background var(--m-expansion) var(--ease-salida);
+}
+#dlg-rollo[data-abierto] { border-radius: var(--r-xl); }
+#dlg-rollo::backdrop {
+  background: rgba(22, 22, 26, 0);
+  transition: background var(--m-expansion) var(--ease-entrada);
+}
+#dlg-rollo[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg-rollo__contenido {
+  opacity: 0;
+  max-height: 100%; overflow-y: auto;
+  /* "stable" en vez del "auto" por defecto: reserva el ancho de la
+     scrollbar SIEMPRE, aparezca o no. Sin esto, altoContenidoRollo() mide
+     el alto necesario con el ancho COMPLETO (sin scrollbar) — si el
+     contenido queda justo al límite, la scrollbar real termina comiéndose
+     ~10px, el texto se envuelve una línea de más, y el contenido necesita
+     más alto del que ya se calculó y aplicó: aparece la barra aunque "hay
+     espacio para todo". Con el ancho fijo de antemano (acá Y en el
+     medidor), lo medido y lo mostrado miden exactamente lo mismo. */
+  scrollbar-gutter: stable;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+#dlg-rollo[data-abierto] .dlg-rollo__contenido {
+  opacity: 1;
+  transition-delay: var(--m-expansion);
+}
 .dlg-rollo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
 .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
 .campo__dato {
@@ -579,11 +640,33 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 .ajustar__tabla td { padding: .4em; border-top: 1px solid var(--c-borde); }
 .ajustar__tabla td.descripcion { color: var(--c-texto-suave); }
 .ajustar__vacio { padding: var(--e-3) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+.ajustar__ver-todo {
+  display: block; margin: var(--e-2) auto 0; padding: 0;
+  background: none; border: none; font: inherit; font-size: var(--t-sm);
+  color: var(--c-tema-fuerte); cursor: pointer;
+}
+.ajustar__ver-todo:hover { text-decoration: underline; }
+/* Ajuste = delta (+/-), no la cantidad absoluta — pedido de Bruno
+   (2026-09-04): medir cuánto queda de verdad es lento, así que acá se
+   carga cuánto CAMBIÓ (positivo suma, negativo resta) y el backend
+   calcula el nuevo restante solo (ver guardar-ajuste). Grid de 2 filas:
+   delta+descripción arriba (la descripción se llevó la columna ancha,
+   ahora es un <textarea> — puede ser larga), Guardar abajo a la
+   derecha, ocupando todo el ancho para no quedar apretado al lado de un
+   textarea de varias líneas. */
 .ajustar__form {
-  display: grid; grid-template-columns: 9rem 1fr auto; gap: var(--e-2);
-  align-items: end; margin-top: var(--e-4); padding-top: var(--e-4);
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  grid-template-areas: "delta descripcion" "guardar guardar";
+  gap: var(--e-3);
+  margin-top: var(--e-4); padding-top: var(--e-4);
   border-top: 1.5px solid var(--c-borde);
 }
+.ajustar__campo-delta { grid-area: delta; }
+.ajustar__campo-descripcion { grid-area: descripcion; }
+.ajustar__campo-descripcion textarea { resize: vertical; min-height: 4.5rem; font-family: inherit; }
+.ajustar__guardar { grid-area: guardar; justify-self: end; }
+.ajustar__campo-delta[data-invalido] [data-ajustar-preview] { color: var(--c-error); }
 .chip-tipo {
   display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
   font-size: var(--t-xs); font-weight: var(--peso-medio);
@@ -732,7 +815,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v-3"/><path d="M14 15v-3"/><path d="M18 15v-3"/><path d="M2 8V4"/><path d="M22 6H2"/><path d="M22 8V4"/><path d="M6 15v-3"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>
           </button>
         </div>
-        <button class="btn btn--primario btn--chico" type="button" data-accion="nuevo-rollo">+ Nuevo rollo</button>
+        <button class="btn-nuevo-rollo" type="button" data-accion="nuevo-rollo" title="Nuevo rollo">+</button>
       </div>
       <div class="tabla-caja">
         <table class="tabla">
@@ -861,6 +944,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 <!-- ═══ Inventario: diálogos de la tabla de rollos (panel[data-panel="inventario"]) ═══ -->
 
 <dialog id="dlg-rollo">
+  <div class="dlg-rollo__contenido">
   <h2 class="dlg__titulo" data-dlg-rollo-titulo>Rollo nuevo</h2>
   <div class="dlg-rollo__campos">
     <div class="campo">
@@ -868,19 +952,21 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       <select class="entrada" id="dr-textil"></select>
       <span class="campo__error">Obligatorio</span>
     </div>
-    <div class="campo">
-      <label class="campo__etiqueta" data-requerido for="dr-ancho">Ancho de tela (m)</label>
-      <input class="entrada" id="dr-ancho" type="number" step="0.01" min="0">
-      <span class="campo__error">Obligatorio</span>
-    </div>
-    <div class="campo" data-campo-metros>
-      <label class="campo__etiqueta" data-requerido for="dr-restantes">Metros disponibles</label>
-      <input class="entrada" id="dr-restantes" type="number" step="0.01" min="0">
-      <span class="campo__error">Obligatorio</span>
-    </div>
-    <div class="campo" data-campo-metros-fijo hidden>
-      <span class="campo__etiqueta">Stock</span>
-      <p class="campo__dato" data-metros-fijo></p>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="dr-ancho">Ancho de tela (m)</label>
+        <input class="entrada" id="dr-ancho" type="number" step="0.01" min="0">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo" data-campo-metros>
+        <label class="campo__etiqueta" data-requerido for="dr-restantes">Metros disponibles</label>
+        <input class="entrada" id="dr-restantes" type="number" step="0.01" min="0">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo" data-campo-metros-fijo hidden>
+        <span class="campo__etiqueta">Stock</span>
+        <p class="campo__dato" data-metros-fijo></p>
+      </div>
     </div>
     <div class="fila">
       <div class="campo">
@@ -894,13 +980,13 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     </div>
     <div class="campo">
       <label class="campo__etiqueta" for="dr-valor">Valor por ML/M²</label>
-      <input class="entrada" id="dr-valor" type="number" step="1" min="0" placeholder="Opcional">
-      <span class="campo__ayuda">Lo que se cobra por metro de este rollo. Se sugiere solo al elegir el textil.</span>
+      <input class="entrada" id="dr-valor" type="number" step="1" min="0" placeholder="Opcional"></span>
     </div>
   </div>
   <div class="dlg__acciones">
     <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-rollo">Cancelar</button>
     <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-rollo">Guardar</button>
+  </div>
   </div>
 </dialog>
 <datalist id="lista-proveedores"></datalist>
@@ -918,18 +1004,20 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       <tbody data-ajustar-filas></tbody>
     </table>
     <p class="ajustar__vacio" data-ajustar-vacio hidden>Todavía no se registró ningún ajuste.</p>
+    <button class="ajustar__ver-todo" type="button" data-accion="ver-historial-completo" hidden>Ver historial completo →</button>
   </div>
 
   <div class="ajustar__form">
-    <div class="campo">
-      <label class="campo__etiqueta" for="da-restante">Cantidad restante</label>
-      <input class="entrada" id="da-restante" type="number" step="0.01" min="0">
+    <div class="campo ajustar__campo-delta">
+      <label class="campo__etiqueta" for="da-delta">Ajuste (metros)</label>
+      <input class="entrada" id="da-delta" type="number" step="0.01" value="0">
+      <span class="campo__ayuda" data-ajustar-preview></span>
     </div>
-    <div class="campo">
+    <div class="campo ajustar__campo-descripcion">
       <label class="campo__etiqueta" for="da-descripcion">Descripción</label>
-      <input class="entrada" id="da-descripcion" type="text">
+      <textarea class="entrada" id="da-descripcion" rows="3" placeholder="Qué pasó (ej. recorte con error de medida, tela dañada, recuento físico)…"></textarea>
     </div>
-    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-ajuste">Guardar</button>
+    <button class="btn btn--primario btn--chico ajustar__guardar" type="button" data-accion="guardar-ajuste">Guardar</button>
   </div>
 
   <div class="dlg__acciones">
@@ -1144,7 +1232,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
                     title="${activo ? "Marcar como inactivo (no se selecciona para stock)" : "Reactivar"}"></button>
             ${esc(r.nombre_textil) || "—"}
           </span>
-          <span class="celda-combo__detalle">#${esc(r.id)} · ${esc(r.ancho)} m</span>
+          <span class="celda-combo__detalle"><span class="celda-combo__id">#${esc(r.id)}</span> · ${esc(r.ancho)} m</span>
         </div>
       </td>
       <td>
@@ -1159,13 +1247,19 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
         <button class="btn-fila-icono" type="button" data-accion="editar-rollo" title="Editar">
           <div class="icon-pencil"></div>
         </button>
-        <button class="btn-fila-icono" type="button" data-accion="ajustar-rollo" title="Ajustar cantidad">↻</button>
+        <button class="btn-fila-icono" type="button" data-accion="ajustar-rollo" title="Ajustar cantidad">
+          <div class="icon-wrench"></div>
+        </button>
+        <button class="btn-fila-icono" type="button" data-accion="ver-historial-rollo" title="Ver historial completo">
+          <div class="icon-info"></div>
+        </button>
         <button class="btn-fila-icono btn-fila-icono--peligro" type="button" data-accion="decomisionar-rollo" title="Decomisionar">
           <div class="icon-trash"></div>
         </button>
       </td>`;
-    $("[data-accion='editar-rollo']", tr).addEventListener("click", () => abrirDialogoRollo(r));
+    $("[data-accion='editar-rollo']", tr).addEventListener("click", (e) => abrirDialogoRollo(r, e.currentTarget));
     $("[data-accion='ajustar-rollo']", tr).addEventListener("click", () => abrirDialogoAjustar(r.id));
+    $("[data-accion='ver-historial-rollo']", tr).addEventListener("click", () => TD.api.abrir_rollo(r.id));
     $("[data-accion='decomisionar-rollo']", tr).addEventListener("click", (e) => abrirPanelDecomisionar(e.currentTarget, r));
     $("[data-accion='toggle-estado-rollo']", tr).addEventListener("click", async () => {
       await TD.api.cambiar_estado_rollo(r.id, !activo);
@@ -1230,14 +1324,83 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 
   $("[data-inv-buscar]").addEventListener("input", pintarTablaInventario);
 
-  /* ── Diálogo agregar/editar rollo ─────────────────────────────────────── */
+  /* ── Diálogo agregar/editar rollo (boton-panel-morph) ─────────────────────
+     El botón "+" (Nuevo rollo) o el lápiz de una fila (Editar) se deforma
+     hasta ser este diálogo — mismo mecanismo que 🗑 -> panel-decomisionar
+     más arriba (JS anima top/left/width/height/border-radius de verdad,
+     ver el CSS de #dlg-rollo). botonOrigenRollo no es fijo: puede ser
+     cualquiera de los dos, se guarda cuál fue al abrir y se usa ESE para
+     el camino de vuelta. */
+
+  let botonOrigenRollo = null;
+
+  // Mide el alto real que necesita el contenido, vía scrollHeight — NO
+  // vía "poner #dlg-rollo en height:auto y leer su propio alto": se probó
+  // eso primero y Chrome resuelve el "max-height:100%" de
+  // .dlg-rollo__contenido contra un valor intermedio (no el auto de
+  // verdad) cuando su padre está en height:auto — recorta el contenido
+  // ANTES de que se pueda medir, dando un número más chico del que hace
+  // falta (la barra de scroll aparecía aunque "entraba todo"). scrollHeight
+  // no tiene ese problema: siempre refleja el alto natural del contenido,
+  // recortado o no — por eso se saca el max-height de en medio nomás
+  // durante la medición (queda "none" un instante, sin transición, y se
+  // restaura antes de que el usuario llegue a verlo).
+  function altoContenidoRollo(ancho) {
+    const contenido = $(".dlg-rollo__contenido", dlgRollo);
+    const cs = getComputedStyle(dlgRollo);
+    const prevTransition = dlgRollo.style.transition;
+    const prevWidth = dlgRollo.style.width;
+    const prevMaxHeight = contenido.style.maxHeight;
+    dlgRollo.style.transition = "none";
+    dlgRollo.style.width = ancho + "px";
+    contenido.style.maxHeight = "none";
+    const alto = contenido.scrollHeight
+      + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+      + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth) + 1;
+    dlgRollo.style.width = prevWidth;
+    contenido.style.maxHeight = prevMaxHeight;
+    dlgRollo.style.transition = prevTransition;
+    return alto;
+  }
+
+  function rectFinalRollo(rectBoton) {
+    const rem = pxPorRemInventario();
+    const ancho = Math.min(window.innerWidth * 0.9, 30 * rem);
+    const margen = 12;
+    // Techo real: todo el alto disponible menos el margen de arriba y de
+    // abajo — no "90% de la ventana" (eso era de sobra para un diálogo de
+    // confirmación chico como panel-decomisionar, pero acá con un
+    // formulario de varias filas se quedaba corto y aparecía la barra de
+    // scroll aunque "entraba todo": con la ventana real de la app
+    // (1360×860, ver ui/api_app.py::crear_ventana) el formulario completo
+    // mide más que el 85% de esa altura.
+    const alto = Math.min(window.innerHeight - 2 * margen, altoContenidoRollo(ancho));
+    const left = Math.min(
+      Math.max(rectBoton.left + rectBoton.width / 2 - ancho / 2, margen),
+      window.innerWidth - ancho - margen,
+    );
+    const top = Math.min(
+      Math.max(rectBoton.top + rectBoton.height / 2 - alto / 2, margen),
+      window.innerHeight - alto - margen,
+    );
+    return { top, left, ancho, alto };
+  }
+
+  function aplicarRectRollo(top, left, ancho, alto, radio) {
+    dlgRollo.style.top = top + "px";
+    dlgRollo.style.left = left + "px";
+    dlgRollo.style.width = ancho + "px";
+    dlgRollo.style.height = alto + "px";
+    dlgRollo.style.borderRadius = radio;
+  }
 
   function limpiarErroresInventario(dlg) {
     $$(".campo", dlg).forEach((c) => c.removeAttribute("data-invalido"));
   }
 
-  function abrirDialogoRollo(rollo) {
+  function abrirDialogoRollo(rollo, boton) {
     idEnEdicionRollo = rollo ? rollo.id : null;
+    botonOrigenRollo = boton || $("[data-accion='nuevo-rollo']");
     $("[data-dlg-rollo-titulo]").textContent = rollo ? `Editar rollo ${rollo.id}` : "Rollo nuevo";
     limpiarErroresInventario(dlgRollo);
 
@@ -1261,12 +1424,47 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       $("#dr-restantes").value = "";
     }
 
+    // Arranca del color de fondo REAL del botón de origen (el "+" verde,
+    // o el lápiz blanco si se abrió para editar) y lo deja crecer hasta
+    // el blanco del diálogo — "background" ya viaja en la transición de
+    // #dlg-rollo, así que basta con cambiar el valor en el momento justo.
+    const r = botonOrigenRollo.getBoundingClientRect();
+    dlgRollo.removeAttribute("data-abierto");
+    aplicarRectRollo(r.top, r.left, r.width, r.height, "999px");
+    dlgRollo.style.background = getComputedStyle(botonOrigenRollo).backgroundColor;
     dlgRollo.showModal();
+    void dlgRollo.getBoundingClientRect();   // fuerza el reflow antes de animar
+
+    const destino = rectFinalRollo(r);
+    requestAnimationFrame(() => {
+      aplicarRectRollo(destino.top, destino.left, destino.ancho, destino.alto, "");
+      dlgRollo.style.background = "";   // vuelve al blanco de "dialog { background: ... }"
+      dlgRollo.setAttribute("data-abierto", "");
+    });
   }
 
-  $("[data-accion='nuevo-rollo']").addEventListener("click", () => abrirDialogoRollo(null));
-  $("[data-accion='cancelar-rollo']").addEventListener("click", () => dlgRollo.close());
-  dlgRollo.addEventListener("click", (e) => { if (e.target === dlgRollo) dlgRollo.close(); });
+  /* Camino inverso: encoge de vuelta al botón de origen (y su color) y
+     RECIÉN ahí cierra el <dialog> de verdad (si no, desaparece de golpe). */
+  function cerrarDialogoRollo() {
+    if (!dlgRollo.open) return;
+    const boton = botonOrigenRollo || dlgRollo;
+    const r = boton.getBoundingClientRect();
+    dlgRollo.removeAttribute("data-abierto");
+    aplicarRectRollo(r.top, r.left, r.width, r.height, "999px");
+    dlgRollo.style.background = getComputedStyle(boton).backgroundColor;
+    const terminar = (e) => {
+      if (e.target !== dlgRollo || e.propertyName !== "width") return;
+      dlgRollo.removeEventListener("transitionend", terminar);
+      dlgRollo.close();
+      dlgRollo.style.background = "";   // limpio: la próxima apertura no debe arrancar ya verde
+    };
+    dlgRollo.addEventListener("transitionend", terminar);
+  }
+
+  $("[data-accion='nuevo-rollo']").addEventListener("click", (e) => abrirDialogoRollo(null, e.currentTarget));
+  $("[data-accion='cancelar-rollo']").addEventListener("click", () => cerrarDialogoRollo());
+  dlgRollo.addEventListener("cancel", (e) => { e.preventDefault(); cerrarDialogoRollo(); });
+  dlgRollo.addEventListener("click", (e) => { if (e.target === dlgRollo) cerrarDialogoRollo(); });
 
   // Al elegir un textil, se sugiere el Valor (por defecto: el del rollo
   // más reciente de ese textil, o si no hay ninguno, el del catálogo — ver
@@ -1320,7 +1518,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     } else {
       await TD.api.crear_rollo(textil, ancho, metrosRestantes, precioCompra, valor, proveedor);
     }
-    dlgRollo.close();
+    cerrarDialogoRollo();
     await recargarRollosInventario();
     TD.aviso(idEnEdicionRollo ? "Rollo actualizado." : "Rollo guardado.", "info");
   });
@@ -1367,18 +1565,49 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 
     $("[data-dlg-ajustar-titulo]").textContent = `Ajustar cantidad · rollo ${r.id} · ${r.nombre_textil || ""}`;
     $("[data-ajustar-stock]").textContent = `${r.metros_restantes} / ${r.metros_iniciales} m`;
-    $("#da-restante").value = r.metros_restantes;
 
+    // Solo los últimos 2 acá — pedido de Bruno (2026-09-04): este diálogo
+    // es para cargar un ajuste rápido, no para revisar años de historial
+    // (para eso está "Ver historial completo" → ver-rollo.html, con el
+    // timeline entero). i===0 sigue siendo el MÁS reciente de verdad (el
+    // slice no cambia el orden), así "Deshacer" solo se ofrece ahí.
     const usos = (r.usos || []).slice().reverse();   // más reciente primero
+    const mostrar = usos.slice(0, 2);
     const cuerpo = $("[data-ajustar-filas]");
     cuerpo.textContent = "";
-    usos.forEach((u, i) => cuerpo.appendChild(filaAjusteRollo(r.id, u, i === 0)));
+    mostrar.forEach((u, i) => cuerpo.appendChild(filaAjusteRollo(r.id, u, i === 0)));
     $("[data-ajustar-vacio]").hidden = usos.length > 0;
+    $("[data-accion='ver-historial-completo']").hidden = usos.length <= 2;
+  }
+
+  // Vista previa "17 m → 22 m" mientras se escribe el delta — antes de
+  // guardar nada, para que quede claro qué va a pasar (positivo suma,
+  // negativo resta, ver guardarAjusteRollo).
+  function actualizarVistaPreviaAjuste() {
+    const r = rollosInventario.find((x) => x.id === idParaAjustarRollo);
+    const campoDelta = $("#da-delta");
+    const preview = $("[data-ajustar-preview]");
+    if (!r) { preview.textContent = ""; return; }
+    const delta = parseFloat(campoDelta.value);
+    if (!Number.isFinite(delta) || delta === 0) {
+      preview.textContent = "";
+      campoDelta.closest(".campo").removeAttribute("data-invalido");
+      return;
+    }
+    const nuevo = Math.round((r.metros_restantes + delta) * 100) / 100;
+    const invalido = nuevo < 0;
+    campoDelta.closest(".campo").toggleAttribute("data-invalido", invalido);
+    preview.textContent = invalido
+      ? "No puede quedar negativo."
+      : `${TD.fmt.cantidad(r.metros_restantes)} → ${TD.fmt.cantidad(nuevo)} m`;
   }
 
   function abrirDialogoAjustar(rolloId) {
     idParaAjustarRollo = rolloId;
+    $("#da-delta").value = "0";
     $("#da-descripcion").value = "";
+    $("[data-ajustar-preview]").textContent = "";
+    limpiarErroresInventario(dlgAjustar);
     pintarDialogoAjustarRollo(rolloId);
     dlgAjustar.showModal();
   }
@@ -1386,20 +1615,42 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   $("[data-accion='cerrar-ajustar']").addEventListener("click", () => dlgAjustar.close());
   dlgAjustar.addEventListener("click", (e) => { if (e.target === dlgAjustar) dlgAjustar.close(); });
   dlgAjustar.addEventListener("close", () => { idParaAjustarRollo = null; });
+  $("[data-accion='ver-historial-completo']").addEventListener("click", () => {
+    if (idParaAjustarRollo) TD.api.abrir_rollo(idParaAjustarRollo);
+  });
 
-  $("[data-accion='guardar-ajuste']").addEventListener("click", async () => {
+  $("#da-delta").addEventListener("input", actualizarVistaPreviaAjuste);
+
+  async function guardarAjusteRollo() {
     if (!idParaAjustarRollo) return;
-    const campoRestante = $("#da-restante");
-    const nuevoRestante = parseFloat(campoRestante.value);
-    campoRestante.closest(".campo").toggleAttribute("data-invalido", !(nuevoRestante >= 0));
-    if (!(nuevoRestante >= 0)) return;
+    const r = rollosInventario.find((x) => x.id === idParaAjustarRollo);
+    if (!r) return;
+
+    const campoDelta = $("#da-delta");
+    const delta = parseFloat(campoDelta.value);
+    if (!Number.isFinite(delta)) {
+      campoDelta.closest(".campo").setAttribute("data-invalido", "");
+      return;
+    }
+    // 0 no es un ajuste — pedido de Bruno: no tiene sentido guardar "no
+    // cambió nada" en el historial del rollo.
+    if (delta === 0) return;
+
+    const nuevoRestante = Math.round((r.metros_restantes + delta) * 100) / 100;
+    const invalido = nuevoRestante < 0;
+    campoDelta.closest(".campo").toggleAttribute("data-invalido", invalido);
+    if (invalido) return;
 
     await TD.api.ajustar_restante_rollo(idParaAjustarRollo, nuevoRestante, $("#da-descripcion").value.trim());
+    $("#da-delta").value = "0";
     $("#da-descripcion").value = "";
+    $("[data-ajustar-preview]").textContent = "";
     await recargarRollosInventario();
     pintarDialogoAjustarRollo(idParaAjustarRollo);
     TD.aviso("Cantidad ajustada.", "info");
-  });
+  }
+
+  $("[data-accion='guardar-ajuste']").addEventListener("click", guardarAjusteRollo);
 
   /* ── Panel de decomisionar (boton-panel-morph) ─────────────────────────
      El botón 🗑 de la fila se transforma en este panel — mismo mecanismo
