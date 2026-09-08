@@ -975,7 +975,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       r.addEventListener("change", () => {
         p.tipo = r.dataset.tipo;
         aplicarTipo(raiz, p);
-        recalcular(p, raiz);
+        recalcular();
 
         /* Cotizaciones mixtas existen pero son la excepción, no la regla:
            si los productos que siguen a este todavía están sin tocar (ver
@@ -1027,22 +1027,22 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       const clave = el.dataset.c;
       if (el.type === "checkbox") {
         el.checked = !!p[clave];
-        el.addEventListener("change", () => { p[clave] = el.checked; recalcular(p, raiz); });
+        el.addEventListener("change", () => { p[clave] = el.checked; recalcular(); });
         return;
       }
       if (el.value === "" || el.tagName !== "SELECT") el.value = p[clave] != null ? p[clave] : "";
       el.addEventListener("input", () => {
         p[clave] = el.value;
         if (clave === "perfil" || clave === "luces_1" || clave === "luces_2") aplicarTipo(raiz, p);
-        recalcular(p, raiz);
+        recalcular();
       });
-      el.addEventListener("change", () => { p[clave] = el.value; recalcular(p, raiz); });
+      el.addEventListener("change", () => { p[clave] = el.value; recalcular(); });
     });
 
     // ── Impresión y terminaciones de caja ─────────────────────────────────
     $$("[data-imp]", raiz).forEach((r) => {
       r.checked = r.dataset.imp === p.impresion;
-      r.addEventListener("change", () => { p.impresion = r.dataset.imp; recalcular(p, raiz); });
+      r.addEventListener("change", () => { p.impresion = r.dataset.imp; recalcular(); });
     });
     $$("[data-tc]", raiz).forEach((r) => {
       r.checked = r.dataset.tc === p.terminaciones_caja;
@@ -1073,7 +1073,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
         p[clave].push(texto);
         entrada.value = "";
         pintarAditiva(cont, p, clave);
-        recalcular(p, raiz);
+        recalcular();
       };
       boton.addEventListener("click", agregar);
       entrada.addEventListener("keydown", (e) => {
@@ -1092,7 +1092,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     });
 
     aplicarTipo(raiz, p);
-    recalcular(p, raiz);
+    recalcular();
     return nodo;
   }
 
@@ -1121,7 +1121,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
       $(".pastilla__quitar", el).addEventListener("click", () => {
         p[clave].splice(k, 1);
         pintarAditiva(cont, p, clave);
-        recalcular(p, cont.closest(".prod"));
+        recalcular();
       });
       items.appendChild(el);
     });
@@ -1131,16 +1131,28 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
      TODO número sale de Python: precios, ML, M², la tabla de materiales de la
      caja y el aviso de ancho máximo. Acá NO se replica ni una fórmula — el
      día que cambie una tarifa en core/precios.py, esta pantalla ya está al
-     día. Se manda con retardo para no llamar en cada tecla. */
-  const pendientes = new WeakMap();
-  function recalcular(p, raiz) {
-    clearTimeout(pendientes.get(p));
-    pendientes.set(p, setTimeout(async () => {
-      p.calc = (await TD.api.calcular_producto(p)) || null;
-      pintarCalculo(p, raiz);
+     día. Se manda con retardo para no llamar en cada tecla.
+
+     Se recalcula SIEMPRE la cotización entera, no el producto que se tocó:
+     el piso mínimo de facturación es por grupo de textil/tela (ver
+     "Piso mínimo de facturación" en core/precios.py), así que cambiar un
+     producto puede cambiarle el precio a otro del mismo textil — dos
+     productos de 1 ML de Felpa gruesa no cobran 2 ML de piso cada uno.
+     Por eso también un solo temporizador para toda la pantalla (antes uno
+     por producto): la llamada ya los cubre a todos. */
+  let pendiente = null;
+  function recalcular() {
+    clearTimeout(pendiente);
+    pendiente = setTimeout(async () => {
+      const calcs = (await TD.api.calcular_productos(estado.productos)) || [];
+      estado.productos.forEach((p, i) => {
+        p.calc = calcs[i] || null;
+        const nodo = carril.children[i];
+        pintarCalculo(p, nodo && $(".prod", nodo));
+      });
       pintarMapa();
       if (estado.actual === "resumen") pintarResumen();
-    }, 140));
+    }, 140);
   }
 
   function pintarCalculo(p, raiz) {

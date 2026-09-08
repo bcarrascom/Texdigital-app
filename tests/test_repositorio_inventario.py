@@ -335,6 +335,35 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # producto["RollosUsados"] — el panel de producción lo lee tal cual.
         self.assertEqual(asignaciones, [[{"id": r["id"], "metros": 11.0}]])
 
+    def test_consumo_guarda_numero_op_cliente_tema_y_obs(self):
+        # Pedido de Bruno (2026-09-04, pantalla ver-rollo.html): cada
+        # consumo tiene que poder mostrar de qué OP/cliente/tema salió,
+        # sin depender de ir a buscar la OP después (puede haberse movido
+        # de carpeta o borrado).
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+        p["tema"] = "Logo azul"
+        p["obs"] = "Ojales cada 50cm"
+
+        repo_inv.consumir_para_op([p], 4210, "Cliente ABC")
+
+        entrada = repo_inv.obtener_rollo(r["id"])["usos"][0]
+        self.assertEqual(entrada["numero_op"], 4210)
+        self.assertEqual(entrada["cliente"], "Cliente ABC")
+        self.assertEqual(entrada["tema"], "Logo azul")
+        self.assertEqual(entrada["obs"], "Ojales cada 50cm")
+
+    def test_ajuste_no_guarda_campos_de_consumo(self):
+        # numero_op/cliente/tema/obs son propios de "consumo" — un ajuste
+        # manual no tiene ninguno de los dos, así que no deberían aparecer.
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        actualizado = repo_inv.ajustar_restante(r["id"], 80, "Recuento")
+        entrada = actualizado["usos"][0]
+        self.assertNotIn("numero_op", entrada)
+        self.assertNotIn("cliente", entrada)
+        self.assertNotIn("tema", entrada)
+        self.assertNotIn("obs", entrada)
+
     def test_un_rollo_justo_al_ml_real_no_alcanza_por_el_margen_de_tension(self):
         # Pedido de Bruno (2026-09-03): un rollo de exactamente 7 m NO puede
         # cubrir un producto que necesita 7 ML reales — hacen falta 8 (7 +

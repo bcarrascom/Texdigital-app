@@ -100,6 +100,7 @@ _TITULOS = {
     "ver-despacho":     "Despacho",
     "asignar-despacho": "Asignar dirección",
     "gestionar-direcciones": "Gestionar direcciones",
+    "ver-rollo":        "Rollo",
 }
 
 _ARCHIVOS = {
@@ -111,6 +112,7 @@ _ARCHIVOS = {
     "ver-despacho":     "ver-despacho.html",
     "asignar-despacho": "asignar-despacho.html",
     "gestionar-direcciones": "gestionar-direcciones.html",
+    "ver-rollo":        "ver-rollo.html",
 }
 
 # Ver _cargar()/_recargando.html: paso intermedio para forzar una recarga
@@ -302,6 +304,8 @@ class ApiApp:
             ctx.update(self._asignar_despacho.contexto_extra(args.get("numero")))
         elif pantalla == "gestionar-direcciones":
             ctx.update(self._gestionar_direcciones.contexto_extra())
+        elif pantalla == "ver-rollo":
+            ctx.update(self._inventario.contexto_extra(args.get("id")))
         return ctx
 
     def guardar_preferencia(self, clave: str, valor) -> bool:
@@ -451,6 +455,9 @@ class ApiApp:
     def calcular_producto(self, p: dict) -> dict | None:
         return self._cotizacion.calcular_producto(p)
 
+    def calcular_productos(self, productos: list) -> list[dict | None]:
+        return self._cotizacion.calcular_productos(productos)
+
     def guardar_progreso(self, estado: dict) -> dict:
         return self._cotizacion.guardar_progreso(estado)
 
@@ -541,9 +548,17 @@ class ApiApp:
 
     # ── Inventario ──────────────────────────────────────────────────────────
     # La tabla de rollos vive directo en el panel de Inventario de menu.html
-    # (ya no es una pantalla aparte) — por eso no hay un "abrir_rollo" acá:
-    # saltar a un rollo puntual desde su tarjeta del mazo es 100% del lado
-    # del cliente (ver irARollo en menu.html), sin pasar por Python.
+    # (no es una pantalla aparte) — saltar a un rollo puntual DENTRO de esa
+    # tabla (desde su tarjeta del mazo) sigue siendo 100% del lado del
+    # cliente (ver irARollo en menu.html), sin pasar por Python. abrir_rollo
+    # es distinto: abre el HISTORIAL COMPLETO de un rollo (ver-rollo.html,
+    # botón ⓘ de la fila) — esa sí es una pantalla aparte, como ver-op.
+
+    def abrir_rollo(self, id_) -> None:
+        self._ir("ver-rollo", id=id_)
+
+    def obtener_rollo(self, id_) -> dict | None:
+        return self._inventario.obtener_rollo(id_)
 
     def listar_rollos(self) -> list[dict]:
         return self._inventario.listar_rollos()
