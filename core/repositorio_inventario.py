@@ -45,6 +45,7 @@ from pathlib import Path
 
 from core.rutas import DATOS, CONF as _CONF_DIR, _detectar_dropbox
 from core import carpetas_mensuales as cm
+from core import config as _config
 
 _CAMPO_FECHA_DECOMISO = "fecha_decomiso"
 
@@ -485,6 +486,65 @@ def stock_por_textil() -> dict[str, float]:
         textil = r.get("nombre_textil", "")
         stock[textil] = stock.get(textil, 0.0) + r.get("metros_restantes", 0.0)
     return stock
+
+
+def avisos_stock(rollos: list[dict] | None = None, minimo: float | None = None) -> list[dict]:
+    """Un aviso por cada textil que no tiene `minimo` metros disponibles de
+    forma "cómoda" — pedido de Bruno (2026-09-12), para el ícono de aviso
+    del menú principal (menu.html). Tres niveles de gravedad, de menor a
+    mayor:
+
+      "amarilla" — ningún rollo ACTIVO llega a `minimo` por sí solo, pero
+                   sí hay uno INACTIVO que sí llega: alcanza con
+                   reactivarlo (ver ajustar_estado) para resolverlo.
+      "naranja"  — ningún rollo individual (activo o inactivo) llega a
+                   `minimo` por sí solo, pero la SUMA de todos los rollos
+                   de ese textil sí alcanza: hay tela, pero repartida en
+                   rollos chicos — conviene cargar un rollo nuevo grande.
+      "roja"     — ni sumando TODOS los rollos de ese textil se llega a
+                   `minimo`: no alcanza ni combinando lo que hay, hace
+                   falta comprar más tela.
+
+    Un textil con al menos un rollo activo que por sí solo ya llega a
+    `minimo` no genera aviso. Solo se consideran textiles que tengan al
+    menos un rollo cargado en Inventario (activo o inactivo) — uno del
+    catálogo que nunca se compró como rollo queda afuera a propósito:
+    esto avisa sobre stock que se está agotando, no sobre qué textiles
+    todavía no se cargaron nunca.
+
+    `rollos` se puede pasar ya leído (ver ui.api_menu.ApiMenu.
+    obtener_resumen, que ya llama a listar_rollos() para la tabla y evita
+    leerlo dos veces) — si no se pasa, lo lee acá. `minimo` en None usa
+    core.config.STOCK_MINIMO_ML — por atributo de módulo, no importado
+    suelto, para que un cambio en caliente de ese valor (futuro módulo de
+    configuración) se refleje sin reiniciar nada."""
+    if rollos is None:
+        rollos = listar_rollos()
+    if minimo is None:
+        minimo = _config.STOCK_MINIMO_ML
+
+    por_textil: dict[str, list[dict]] = {}
+    for r in rollos:
+        textil = r.get("nombre_textil", "")
+        if not textil:
+            continue
+        por_textil.setdefault(textil, []).append(r)
+
+    avisos = []
+    for textil, lista in por_textil.items():
+        activos = [r for r in lista if r.get("estado", "activo") == "activo"]
+        if any(r.get("metros_restantes", 0.0) >= minimo for r in activos):
+            continue
+        inactivos = [r for r in lista if r.get("estado", "activo") != "activo"]
+        total = sum(r.get("metros_restantes", 0.0) for r in lista)
+        if any(r.get("metros_restantes", 0.0) >= minimo for r in inactivos):
+            severidad = "amarilla"
+        elif total >= minimo:
+            severidad = "naranja"
+        else:
+            severidad = "roja"
+        avisos.append({"textil": textil, "severidad": severidad, "metros": round(total, 2)})
+    return avisos
 
 
 def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:

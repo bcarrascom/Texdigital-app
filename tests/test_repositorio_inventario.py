@@ -472,6 +472,92 @@ class TestStockPorTextil(_ConRutaTemporalYCatalogo):
         self.assertEqual(stock["TelaTest"], 5.0)
 
 
+class TestAvisosStock(_ConRutaTemporalYCatalogo):
+
+    def test_rollo_activo_con_suficiente_stock_no_genera_aviso(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
+
+    def test_sin_ningun_rollo_del_textil_no_genera_aviso(self):
+        # Ver docstring de avisos_stock: un textil que nunca se cargó como
+        # rollo queda fuera del chequeo a propósito.
+        self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
+
+    def test_solo_inactivo_con_suficiente_stock_da_amarilla(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        repo_inv.cambiar_estado_rollo(r["id"], activo=False)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "amarilla", "metros": 30.0})
+
+    def test_ningun_rollo_individual_alcanza_pero_la_suma_si_da_naranja(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 15)
+        repo_inv.crear_rollo("TelaTest", 1.5, 15)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "naranja", "metros": 30.0})
+
+    def test_ni_sumando_todo_alcanza_da_roja(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 10)
+        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "roja", "metros": 15.0})
+
+    def test_sin_ningun_rollo_del_textil_es_roja_si_hay_otros_rollos(self):
+        # Mismo caso que arriba, pero mezclado con un rollo de otro textil
+        # sin problemas — confirma que se agrupa por textil de verdad.
+        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("Backlight Test", 1.48, 100)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0]["textil"], "TelaTest")
+
+    def test_un_activo_grande_tapa_varios_chicos_del_mismo_textil(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 3)
+        repo_inv.crear_rollo("TelaTest", 1.5, 40)
+        self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
+
+    def test_activo_chico_e_inactivo_grande_da_amarilla_no_naranja(self):
+        # El activo chico solo no alcanza, pero como hay un INACTIVO que sí
+        # alcanza por sí solo, el aviso tiene que ser amarilla (reactivar
+        # alcanza) y no naranja (que implicaría que ningún rollo individual
+        # alcanza).
+        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        repo_inv.cambiar_estado_rollo(r2["id"], activo=False)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(avisos[0]["severidad"], "amarilla")
+
+    def test_decomisionado_no_cuenta_para_nada(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 50)
+        repo_inv.decomisionar_rollo(r["id"])
+        self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
+
+    def test_agrupa_varios_textiles_con_distinta_gravedad(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 30)              # sin aviso
+        r_amarillo = repo_inv.crear_rollo("Backlight Test", 1.48, 30)
+        repo_inv.cambiar_estado_rollo(r_amarillo["id"], activo=False)
+        avisos = repo_inv.avisos_stock(minimo=25)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0]["textil"], "Backlight Test")
+
+    def test_recibe_lista_de_rollos_ya_cargada_sin_releer_disco(self):
+        rollos = [
+            {"nombre_textil": "TelaTest", "estado": "activo", "metros_restantes": 5.0},
+        ]
+        avisos = repo_inv.avisos_stock(rollos=rollos, minimo=25)
+        self.assertEqual(avisos, [{"textil": "TelaTest", "severidad": "roja", "metros": 5.0}])
+
+    def test_minimo_none_usa_core_config_stock_minimo_ml(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 10)
+        with mock.patch.object(repo_inv._config, "STOCK_MINIMO_ML", 5):
+            self.assertEqual(repo_inv.avisos_stock(), [])
+        with mock.patch.object(repo_inv._config, "STOCK_MINIMO_ML", 20):
+            avisos = repo_inv.avisos_stock()
+            self.assertEqual(avisos[0]["severidad"], "roja")
+
+
 class TestCambiarEstadoRollo(_ConRutaTemporalYCatalogo):
 
     def test_inactivar_y_reactivar(self):

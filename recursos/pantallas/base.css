@@ -70,6 +70,7 @@
   /* ── Semánticos ────────────────────────────────────────────────────────── */
   --c-ok:          #1E7A4C;  --c-ok-suave:    #E4F2EA;
   --c-aviso:       #A66A00;  --c-aviso-suave: #FBF0DC;
+  --c-alerta:      #C6650E;  --c-alerta-suave:#FCEADA;
   --c-error:       #C0392B;  --c-error-suave: #FBEAE8;
   --c-foco:        #2F7FD6;
 

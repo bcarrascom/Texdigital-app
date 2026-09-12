@@ -23,3 +23,14 @@ MODULOS_HABILITADOS = {
     "ops":          True,
     "despachos":    False,
 }
+
+# Metros mínimos que un textil debería tener disponibles en Inventario sin
+# que el menú principal muestre un aviso (ver core.repositorio_inventario.
+# avisos_stock) — pedido de Bruno (2026-09-12). Por ahora es un número fijo
+# acá: cuando exista un módulo de configuración editable desde la UI, este
+# valor pasa a leerse (y guardarse) desde ahí, sin tocar avisos_stock().
+# Variable mutable a propósito — quien la lea debe hacerlo por atributo de
+# módulo (core.config.STOCK_MINIMO_ML), no importando el nombre suelto, para
+# que un cambio en caliente (ej. desde ese futuro módulo) se vea de
+# inmediato en vez de quedar pisado por una copia importada al arrancar.
+STOCK_MINIMO_ML = 25

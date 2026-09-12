@@ -73,6 +73,7 @@ import threading
 from datetime import datetime
 from urllib.parse import urlencode
 
+from core import config as _config
 from core.config import MODULOS_HABILITADOS
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
@@ -288,6 +289,7 @@ class ApiApp:
             "hoy_iso":             hoy.strftime("%Y-%m-%d"),
             "fecha":               hoy.strftime("%d-%m-%Y"),
             "modulos_habilitados": MODULOS_HABILITADOS,
+            "stock_minimo_ml":     _config.STOCK_MINIMO_ML,
         }
         pantalla, args = self._pantalla_actual, self._args_actuales
         if pantalla == "ver-cotizacion":
