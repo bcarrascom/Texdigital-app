@@ -290,10 +290,12 @@ def decomisionar_rollo(id_: str) -> bool:
 def _agregar_registro(
     r: dict, *, tipo: str, anterior: float, nuevo: float, descripcion: str,
     numero_op=None, cliente: str | None = None, tema: str | None = None, obs: str | None = None,
+    estado_nuevo: str | None = None,
 ) -> None:
-    """Un solo formato de entrada para TODO lo que le pasa al stock de un
-    rollo — ajuste manual o consumo automático (ver ajustar_restante/
-    consumir_para_op): guarda el valor de ANTES y DESPUÉS (no un delta),
+    """Un solo formato de entrada para TODO lo que le pasa a un rollo —
+    ajuste manual de cantidad, consumo automático o cambio de Activo/
+    Inactivo con motivo (ver ajustar_restante/consumir_para_op/
+    ajustar_estado): guarda el valor de ANTES y DESPUÉS (no un delta),
     para poder revisarlo más tarde sin ambigüedad y para poder deshacer
     la entrada más reciente (ver eliminar_ajuste).
 
@@ -303,11 +305,17 @@ def _agregar_registro(
     al momento del consumo, no se recalculan después: la OP puede moverse
     de carpeta (JSON → Completadas → Historial) o incluso borrarse, y el
     registro del rollo tiene que seguir siendo legible igual, sin depender
-    de que esa OP todavía exista en algún lado."""
+    de que esa OP todavía exista en algún lado.
+
+    estado_nuevo SOLO se guarda para tipo="activacion" (pedido de Bruno,
+    2026-09-08, switch "Activación" del diálogo "Ajustar" en menu.html):
+    metros_restantes no cambia con este tipo (anterior == nuevo), así que
+    sin este campo la entrada no diría si fue una activación o una
+    desactivación."""
     entrada = {
         "id":                        uuid.uuid4().hex,
         "fecha":                     _hoy_dma(),
-        "tipo":                      tipo,  # "ajuste" (manual) | "consumo" (aprobar cotización)
+        "tipo":                      tipo,  # "ajuste" (manual) | "consumo" (aprobar cotización) | "activacion" (Activo/Inactivo con motivo)
         "metros_restantes_anterior": anterior,
         "metros_restantes_nuevo":    nuevo,
         "descripcion":               descripcion.strip(),
@@ -317,6 +325,8 @@ def _agregar_registro(
         entrada["cliente"] = (cliente or "").strip()
         entrada["tema"] = (tema or "").strip()
         entrada["obs"] = (obs or "").strip()
+    if tipo == "activacion":
+        entrada["estado_nuevo"] = estado_nuevo
     r.setdefault("usos", []).append(entrada)
 
 
@@ -345,13 +355,44 @@ def ajustar_restante(id_: str, nuevo_restante: float, descripcion: str = "") -> 
     return r
 
 
+def ajustar_estado(id_: str, activo: bool, descripcion: str = "") -> dict | None:
+    """Activa/inactiva un rollo CON motivo, registrado en 'usos' (switch
+    "Activación" del diálogo "Ajustar cantidad" en menu.html, pedido de
+    Bruno 2026-09-08) — a diferencia de cambiar_estado_rollo (el switch
+    rápido de la fila de la tabla, que no deja rastro), este queda en el
+    historial del rollo con tipo="activacion" para poder ver más tarde
+    cuándo y por qué se activó/desactivó (ver ver-rollo.html). metros_
+    restantes no cambia: se registra igual (anterior == nuevo) para
+    mantener el mismo formato de entrada que ajustes/consumos. Devuelve el
+    rollo actualizado, o None si no existe."""
+    r = obtener_rollo(id_)
+    if r is None:
+        return None
+    nuevo_estado = "activo" if activo else "inactivo"
+    r["estado"] = nuevo_estado
+    restantes = r.get("metros_restantes", 0.0)
+    _agregar_registro(
+        r, tipo="activacion", anterior=restantes, nuevo=restantes,
+        descripcion=descripcion, estado_nuevo=nuevo_estado,
+    )
+    _escribir_rollo(carpeta_activos(), r)
+    return r
+
+
 def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
-    """Deshace un ajuste/consumo cargado por error — solo tiene sentido
-    sobre la entrada MÁS RECIENTE (usos[-1]): cada entrada nueva guarda el
-    restante de ANTES relativo a la que le sigue, así que deshacer una del
-    medio dejaría el resto del historial apuntando a un valor que ya no es
-    real. Si `id_ajuste` no es la más reciente, no hace nada y devuelve
-    None (el diálogo solo ofrece deshacer en la fila de arriba)."""
+    """Deshace un ajuste/consumo/activación cargado por error — solo tiene
+    sentido sobre la entrada MÁS RECIENTE (usos[-1]): cada entrada nueva
+    guarda el restante de ANTES relativo a la que le sigue, así que
+    deshacer una del medio dejaría el resto del historial apuntando a un
+    valor que ya no es real. Si `id_ajuste` no es la más reciente, no hace
+    nada y devuelve None (el diálogo solo ofrece deshacer en la fila de
+    arriba).
+
+    Para tipo="activacion" metros_restantes no cambia (ver
+    _agregar_registro), pero el Estado del rollo sí — como la entrada
+    solo guarda a QUÉ estado pasó (estado_nuevo), no de cuál venía, y una
+    activación siempre alterna entre los dos únicos estados posibles,
+    deshacerla es simplemente volver al contrario."""
     r = obtener_rollo(id_rollo)
     if r is None:
         return None
@@ -360,6 +401,8 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
         return None
     objetivo = usos.pop()
     r["metros_restantes"] = objetivo.get("metros_restantes_anterior", r.get("metros_restantes", 0.0))
+    if objetivo.get("tipo") == "activacion":
+        r["estado"] = "inactivo" if objetivo.get("estado_nuevo") == "activo" else "activo"
     _escribir_rollo(carpeta_activos(), r)
     return r
 

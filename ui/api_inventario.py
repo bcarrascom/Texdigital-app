@@ -58,5 +58,8 @@ class ApiInventario:
     def ajustar_restante_rollo(self, id_: str, nuevo_restante, descripcion: str = "") -> dict | None:
         return _repo.ajustar_restante(id_, nuevo_restante, descripcion)
 
+    def ajustar_estado_rollo(self, id_: str, activo: bool, descripcion: str = "") -> dict | None:
+        return _repo.ajustar_estado(id_, activo, descripcion)
+
     def eliminar_ajuste_rollo(self, id_rollo: str, id_ajuste: str) -> dict | None:
         return _repo.eliminar_ajuste(id_rollo, id_ajuste)
