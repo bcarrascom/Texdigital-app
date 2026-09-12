@@ -676,6 +676,13 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 }
 .dlg-rollo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
 .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+/* Proveedor/Precio de compra: Proveedor con el doble de ancho que Precio
+   de compra (nombres de proveedor suelen ser más largos) — y como el
+   campo Valor por ML/M² de abajo baja a la mitad de su ancho (ver
+   .dlg-rollo__campo-valor), el espacio total ocupado entre ambas filas
+   queda igual que antes. */
+.fila--proveedor { grid-template-columns: 2fr 1fr; }
+.dlg-rollo__campo-valor { max-width: 50%; }
 .campo__dato {
   font-size: var(--t-md); font-weight: var(--peso-medio); color: var(--c-tema-fuerte);
   padding: .55em 0;
@@ -1050,19 +1057,19 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
         <p class="campo__dato" data-metros-fijo></p>
       </div>
     </div>
-    <div class="fila">
+    <div class="fila fila--proveedor">
       <div class="campo">
         <label class="campo__etiqueta" for="dr-proveedor">Proveedor</label>
         <input class="entrada" id="dr-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
       </div>
       <div class="campo">
-        <label class="campo__etiqueta" for="dr-precio-compra">Compra</label>
-        <input class="entrada" id="dr-precio-compra" type="number" step="1" min="0" placeholder="Opcional">
+        <label class="campo__etiqueta" for="dr-precio-compra">Precio de compra</label>
+        <input class="entrada" id="dr-precio-compra" type="text" inputmode="numeric" placeholder="Opcional">
       </div>
     </div>
-    <div class="campo">
+    <div class="campo dlg-rollo__campo-valor">
       <label class="campo__etiqueta" for="dr-valor">Valor por ML/M²</label>
-      <input class="entrada" id="dr-valor" type="number" step="1" min="0" placeholder="Opcional"></span>
+      <input class="entrada" id="dr-valor" type="text" inputmode="numeric" placeholder="Opcional">
     </div>
   </div>
   <div class="dlg__acciones">
@@ -1289,6 +1296,21 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   let idParaAjustarRollo = null;  // rollo abierto en el diálogo de ajustar cantidad
   let idADecomisionar = null;
   let botonOrigenDecomisionar = null;
+
+  // Formato CLP en vivo para #dr-precio-compra / #dr-valor (siempre enteros,
+  // sin decimales — igual que TD.fmt.pesos): se guarda solo el dígito, el
+  // "$" y los puntos de miles son puramente de despliegue.
+  function numeroClp(valorCampo) {
+    const limpio = String(valorCampo || "").replace(/[^\d]/g, "");
+    return limpio ? parseInt(limpio, 10) : null;
+  }
+  function formatearClp(valor) {
+    const n = numeroClp(valor);
+    return n == null ? "" : "$" + n.toLocaleString("es-CL");
+  }
+  function activarInputClp(input) {
+    input.addEventListener("input", () => { input.value = formatearClp(input.value); });
+  }
 
   const dlgRollo = $("#dlg-rollo");
   const dlgAjustar = $("#dlg-ajustar");
@@ -1607,8 +1629,8 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     $("#dr-textil").value = rollo?.nombre_textil || "";
     $("#dr-ancho").value = rollo?.ancho ?? "";
     $("#dr-proveedor").value = rollo?.proveedor || "";
-    $("#dr-precio-compra").value = rollo?.precio_compra || "";
-    $("#dr-valor").value = rollo?.valor ?? "";
+    $("#dr-precio-compra").value = rollo?.precio_compra ? formatearClp(rollo.precio_compra) : "";
+    $("#dr-valor").value = rollo?.valor != null ? formatearClp(rollo.valor) : "";
 
     // Metros disponibles: editable solo al crear — una vez que el rollo
     // existe, el remanente se corrige aparte ("Ajustar cantidad" /
@@ -1676,8 +1698,11 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     const textil = $("#dr-textil").value;
     if (!textil) return;
     const sugerido = await TD.api.valor_sugerido_textil(textil);
-    if (sugerido != null) campoValor.value = sugerido;
+    if (sugerido != null) campoValor.value = formatearClp(sugerido);
   });
+
+  activarInputClp($("#dr-precio-compra"));
+  activarInputClp($("#dr-valor"));
 
   $("[data-accion='guardar-rollo']").addEventListener("click", async () => {
     const campoTextil = $("#dr-textil");
@@ -1701,10 +1726,8 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     if (!valido) return;
 
     const proveedor = $("#dr-proveedor").value.trim();
-    const campoPrecio = $("#dr-precio-compra").value.trim();
-    const precioCompra = campoPrecio ? parseFloat(campoPrecio) : 0;
-    const campoValor = $("#dr-valor").value.trim();
-    const valor = campoValor ? parseFloat(campoValor) : null;
+    const precioCompra = numeroClp($("#dr-precio-compra").value) || 0;
+    const valor = numeroClp($("#dr-valor").value);
 
     if (proveedor) {
       await TD.api.guardar_proveedor(proveedor);
