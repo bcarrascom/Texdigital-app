@@ -2145,7 +2145,10 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
      gravedad, rotan solos mientras la tarjeta está abierta. */
 
   const SEVERIDAD_ORDEN = { roja: 3, naranja: 2, amarilla: 1 };
-  const SEVERIDAD_COLOR = { amarilla: "var(--c-aviso)", naranja: "var(--c-alerta)", roja: "var(--c-error)" };
+  // Amarilla usa un amarillo propio (no --c-aviso: esa variable es
+  // compartida con las etiquetas/avisos flotantes de OTRAS pantallas —
+  // pedido de Bruno 2026-09-12) en vez del ámbar del resto de la app.
+  const SEVERIDAD_COLOR = { amarilla: "#FFCE1B", naranja: "var(--c-alerta)", roja: "var(--c-error)" };
   const SEVERIDAD_MENSAJE = {
     amarilla: (x) => `No se encuentra un rollo activo con al menos ${x} metros restantes.`,
     naranja:  (x) => `No se encuentra un rollo con al menos ${x} metros restantes.`,

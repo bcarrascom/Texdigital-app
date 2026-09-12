@@ -517,7 +517,13 @@ def avisos_stock(rollos: list[dict] | None = None, minimo: float | None = None) 
     leerlo dos veces) — si no se pasa, lo lee acá. `minimo` en None usa
     core.config.STOCK_MINIMO_ML — por atributo de módulo, no importado
     suelto, para que un cambio en caliente de ese valor (futuro módulo de
-    configuración) se refleje sin reiniciar nada."""
+    configuración) se refleje sin reiniciar nada.
+
+    Si core.config.AVISOS_STOCK_HABILITADOS es False, devuelve siempre []
+    sin leer ni calcular nada — el interruptor pensado para que el futuro
+    módulo de configuración pueda apagar estos avisos por completo."""
+    if not _config.AVISOS_STOCK_HABILITADOS:
+        return []
     if rollos is None:
         rollos = listar_rollos()
     if minimo is None:
