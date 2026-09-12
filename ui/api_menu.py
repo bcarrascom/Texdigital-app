@@ -14,7 +14,7 @@ from core.repositorio_despachos import (
     listar_ops_despacho, ESTADO_ASIGNACION_ASIGNADA,
     marcar_entregado, eliminar_despacho,
 )
-from core.repositorio_inventario import listar_rollos
+from core.repositorio_inventario import listar_rollos, avisos_stock
 
 
 def _completos_pendiente(p: dict) -> tuple[int, int]:
@@ -127,13 +127,15 @@ class ApiMenu:
                 "completos": completos,
                 "total": total,
             })
+        rollos = listar_rollos()
         return {
             "pendientes":          pendientes,
             "cotizaciones":        listar_cotizaciones(),
             "ops":                 _ops_activas(),
             "despachos":           _despachos_pendientes(),
             "despachos_asignados": _despachos_asignados(),
-            "rollos":              listar_rollos(),
+            "rollos":              rollos,
+            "avisos_inventario":   avisos_stock(rollos),
         }
 
     def marcar_despacho_entregado(self, numero) -> bool:

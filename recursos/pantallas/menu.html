@@ -86,6 +86,10 @@ body[data-fase="saliendo"] .menu {
 
 .menu__modulos {
   grid-row: 3;
+  /* Ancla al aviso-stock (position:absolute, hermano de las .modulo — ver
+     ese comentario para el motivo), sin afectar el grid: un hijo con
+     position:absolute no participa del grid-template-columns. */
+  position: relative;
   display: grid;
   /* Fijas en 4 columnas, no auto-fit: con auto-fit, cada módulo nuevo
      sumaba una columna y encogía a TODOS (efecto no buscado). Con 4
@@ -228,6 +232,68 @@ body[data-fase="saliendo"] .menu {
   padding-top: var(--e-2);
 }
 .modulo:hover .modulo__vacio, .modulo:focus-within .modulo__vacio { opacity: .7; }
+
+/* ── Aviso de stock (círculo arriba de la tarjeta de Inventario) ──────────
+   A propósito NO vive dentro de .modulo: .modulo entero (no solo
+   .modulo__caja) es la zona de :hover que despliega el mazo de tarjetas
+   (ver comentario de "La lista: vive DETRÁS de la caja" más abajo) — si el
+   aviso fuera descendiente suyo, pasar el mouse por el ícono activaría
+   ESA animación también (:hover sube por el árbol del DOM sin importar
+   dónde quede pintado un descendiente position:absolute). Por eso es
+   hermano de las .modulo, directo en .menu__modulos (position:relative
+   agregado ahí abajo), posicionado con JS (posicionarAvisoStock, junto a
+   ajustarRatioTarjetas) sobre las coordenadas reales de la tarjeta de
+   Inventario — así sigue el layout real (escala de texto, resize) sin
+   quedar acoplado a su árbol de hover.
+   z-index alto a propósito: tiene que quedar por encima de la caja y del
+   mazo de tarjetas de CUALQUIER módulo vecino, incluso en pleno hover
+   (.modulo:hover sube a z-index:3, ver arriba).
+   --color-aviso lo fija JS según la gravedad (actualizarAvisoStock) —
+   amarilla/naranja/roja (ver core.repositorio_inventario.avisos_stock): un
+   solo set de reglas sirve para las tres. */
+.aviso-stock { position: absolute; top: 0; left: 0; transform: translateX(-50%); z-index: 5; }
+.aviso-stock__icono {
+  display: grid; place-items: center;
+  width: 2.15rem; height: 2.15rem; padding: 0;
+  border: 2px solid var(--c-superficie); border-radius: var(--r-full);
+  background: var(--color-aviso, var(--c-aviso));
+  cursor: pointer; box-shadow: var(--s-2);
+  transition: transform var(--m-rapida) var(--ease-salida), box-shadow var(--m-rapida) var(--ease-salida);
+}
+.aviso-stock__icono svg { width: 1.05rem; height: 1.05rem; }
+/* "se levanta muy levemente y emite un brillo" — el brillo es un halo del
+   mismo color que el ícono, no una sombra genérica. */
+.aviso-stock__icono:hover, .aviso-stock__icono:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-aviso, var(--c-aviso)) 35%, transparent), var(--s-3);
+}
+
+.aviso-stock__tarjeta {
+  position: absolute; bottom: calc(100% + var(--e-2)); left: 50%;
+  width: 19rem; padding: var(--e-4);
+  display: grid; gap: var(--e-2);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--color-aviso, var(--c-aviso));
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-3);
+  opacity: 0; pointer-events: none;
+  transform: translate(-50%, 6px) scale(.94);
+  transform-origin: bottom center;
+  transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+}
+.aviso-stock[data-abierto] .aviso-stock__tarjeta {
+  opacity: 1; pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+.aviso-stock__texto { font-size: var(--t-sm); color: var(--c-texto-suave); }
+.aviso-stock__textil {
+  font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--color-aviso, var(--c-aviso));
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+.aviso-stock__puntos { display: flex; gap: .35rem; }
+.aviso-stock__punto { width: .4rem; height: .4rem; border-radius: var(--r-full); background: var(--c-borde-fuerte); }
+.aviso-stock__punto[data-activo] { background: var(--color-aviso, var(--c-aviso)); }
+.aviso-stock__accion { justify-self: start; }
 
 .menu__pie {
   grid-row: 5;
@@ -815,6 +881,18 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   </div>
 
   <div class="menu__modulos">
+
+    <div class="aviso-stock" data-tema="inventario" data-aviso-stock hidden>
+      <button class="aviso-stock__icono" type="button" data-aviso-stock-boton aria-expanded="false" title="Aviso de stock">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      </button>
+      <div class="aviso-stock__tarjeta" data-aviso-stock-tarjeta>
+        <p class="aviso-stock__texto" data-aviso-stock-texto></p>
+        <p class="aviso-stock__textil" data-aviso-stock-textil></p>
+        <div class="aviso-stock__puntos" data-aviso-stock-puntos hidden></div>
+        <button class="btn btn--primario btn--chico aviso-stock__accion" type="button" data-aviso-stock-accion></button>
+      </div>
+    </div>
 
     <section class="modulo" data-tema="inventario" data-modulo="inventario" style="--i:0">
       <button class="modulo__caja" type="button">
@@ -2058,6 +2136,178 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     }
   }
 
+  /* ── Aviso de stock (ícono arriba de la tarjeta de Inventario) ────────────
+     Los avisos por textil (severidad + metros, ya calculados por
+     core.repositorio_inventario.avisos_stock) llegan en cada cargar() vía
+     TD.api.obtener_resumen().avisos_inventario — acá solo se decide CUÁL
+     mostrar (el más grave; empatado, el de menos tela — pedido de Bruno
+     2026-09-12) y se arma la tarjeta. Si hay varios textiles en la misma
+     gravedad, rotan solos mientras la tarjeta está abierta. */
+
+  const SEVERIDAD_ORDEN = { roja: 3, naranja: 2, amarilla: 1 };
+  const SEVERIDAD_COLOR = { amarilla: "var(--c-aviso)", naranja: "var(--c-alerta)", roja: "var(--c-error)" };
+  const SEVERIDAD_MENSAJE = {
+    amarilla: (x) => `No se encuentra un rollo activo con al menos ${x} metros restantes.`,
+    naranja:  (x) => `No se encuentra un rollo con al menos ${x} metros restantes.`,
+    roja:     (x) => `No quedan al menos ${x} metros restantes de este textil.`,
+  };
+  const SEVERIDAD_ACCION = {
+    amarilla: { etiqueta: "Ver en Inventario →", ir: (textil) => irAInventarioFiltrado(textil) },
+    naranja:  { etiqueta: "Cargar rollo nuevo →", ir: (textil) => TD.api.abrir_inventario_nuevo_rollo(textil) },
+    roja:     { etiqueta: "Cargar rollo nuevo →", ir: (textil) => TD.api.abrir_inventario_nuevo_rollo(textil) },
+  };
+  const ROTACION_AVISO_MS = 4000;
+
+  let avisoStock = { severidad: null, lista: [] };  // lista ya filtrada a la peor gravedad, ordenada por menos tela
+  let indiceAvisoStock = 0;
+  let temporizadorAvisoStock = null;
+
+  const elAvisoStock       = $("[data-aviso-stock]");
+  const elAvisoStockBoton  = $("[data-aviso-stock-boton]");
+
+  /* Posiciona el aviso (hermano de .modulo, ver comentario CSS) centrado
+     horizontalmente sobre la tarjeta de Inventario y 0.5rem más arriba de
+     lo que ocuparía pegado a su borde superior — así el círculo nunca se
+     intersecta con la tarjeta.
+     Llamada junto a ajustarRatioTarjetas: mismos disparadores (resize,
+     ResizeObserver, cambio de escala A-/A+, cada cargar()), así el aviso
+     sigue el layout real en vez de quedar con coordenadas viejas. */
+  function posicionarAvisoStock() {
+    const contenedor = $(".menu__modulos");
+    const modulo = $(".modulo[data-modulo='inventario']");
+    if (!contenedor || !modulo) return;
+    const rContenedor = contenedor.getBoundingClientRect();
+    const rModulo = modulo.getBoundingClientRect();
+    // "top" fija el borde SUPERIOR del ícono (no hay translateY, solo
+    // translateX para centrarlo) — el offset tiene que cubrir su diámetro
+    // entero (2.15rem) más 0.5rem de aire para que el borde INFERIOR quede
+    // 0.5rem por encima de la tarjeta, no su centro.
+    const offsetPx = pxPorRemInventario() * 2.65;
+    elAvisoStock.style.left = (rModulo.left - rContenedor.left + rModulo.width / 2) + "px";
+    elAvisoStock.style.top = (rModulo.top - rContenedor.top - offsetPx) + "px";
+  }
+
+  // La primera vez que carga el menú, .modulo todavía está a mitad de su
+  // animación de entrada (aparecer: translateY(10px) -> 0, ver base CSS) —
+  // si posicionarAvisoStock() mide su rect ANTES de que termine, calcula
+  // sobre una posición transitoria (hasta 10px más abajo) y nada la vuelve
+  // a corregir después (ese transform no dispara el ResizeObserver, que
+  // solo mira cambios de tamaño). Un animationend puntual alcanza — la
+  // animación no se repite después (no vuelve a cambiar la clase/estilo
+  // que la dispara), así que { once: true } no deja de escuchar nada útil.
+  $(".modulo[data-modulo='inventario']").addEventListener("animationend", () => posicionarAvisoStock(), { once: true });
+
+  /* Mismo mecanismo que irARollo: abre el módulo de Inventario (si no
+     estaba ya abierto) y deja la barra de búsqueda filtrando por el
+     textil — así el usuario ve de un vistazo qué rollo inactivo puede
+     reactivar (aviso amarilla). */
+  async function irAInventarioFiltrado(textil) {
+    const modulo = $(".modulo[data-modulo='inventario']");
+    const yaAbierto = moduloActivo === modulo;
+    const espera = yaAbierto ? Promise.resolve() : new Promise((res) => setTimeout(res, duracion("--m-expansion")));
+    if (!yaAbierto) abrirModulo(modulo);
+    await Promise.all([cargar(), espera]);
+    $("[data-inv-buscar]").value = textil;
+    pintarTablaInventario();
+  }
+
+  function actualizarAvisoStock(avisos) {
+    if (!TD.contexto?.modulos_habilitados?.inventario || !avisos.length) {
+      avisoStock = { severidad: null, lista: [] };
+      elAvisoStock.hidden = true;
+      cerrarTarjetaAvisoStock();
+      return;
+    }
+    const peorSeveridad = avisos.reduce(
+      (peor, a) => (SEVERIDAD_ORDEN[a.severidad] > SEVERIDAD_ORDEN[peor] ? a.severidad : peor),
+      avisos[0].severidad,
+    );
+    avisoStock = {
+      severidad: peorSeveridad,
+      lista: avisos.filter((a) => a.severidad === peorSeveridad).sort((a, b) => a.metros - b.metros),
+    };
+    indiceAvisoStock = 0;
+    elAvisoStock.hidden = false;
+    elAvisoStock.style.setProperty("--color-aviso", SEVERIDAD_COLOR[avisoStock.severidad]);
+    if (elAvisoStock.hasAttribute("data-abierto")) pintarTarjetaAvisoStock();
+  }
+
+  function pintarTarjetaAvisoStock() {
+    const { severidad, lista } = avisoStock;
+    if (!severidad || !lista.length) return;
+    const i = indiceAvisoStock % lista.length;
+    const actual = lista[i];
+    const x = TD.contexto?.stock_minimo_ml ?? 25;
+
+    $("[data-aviso-stock-texto]").textContent = SEVERIDAD_MENSAJE[severidad](x);
+    $("[data-aviso-stock-textil]").textContent = actual.textil;
+    $("[data-aviso-stock-accion]").textContent = SEVERIDAD_ACCION[severidad].etiqueta;
+
+    const puntos = $("[data-aviso-stock-puntos]");
+    puntos.hidden = lista.length <= 1;
+    puntos.textContent = "";
+    lista.forEach((_, j) => {
+      const p = document.createElement("span");
+      p.className = "aviso-stock__punto";
+      if (j === i) p.setAttribute("data-activo", "");
+      puntos.appendChild(p);
+    });
+  }
+
+  function detenerRotacionAvisoStock() {
+    if (temporizadorAvisoStock) { clearInterval(temporizadorAvisoStock); temporizadorAvisoStock = null; }
+  }
+
+  function iniciarRotacionAvisoStock() {
+    detenerRotacionAvisoStock();
+    if (avisoStock.lista.length <= 1) return;
+    temporizadorAvisoStock = setInterval(() => {
+      const elTextil = $("[data-aviso-stock-textil]");
+      elTextil.style.opacity = 0;
+      setTimeout(() => {
+        indiceAvisoStock = (indiceAvisoStock + 1) % avisoStock.lista.length;
+        pintarTarjetaAvisoStock();
+        elTextil.style.opacity = 1;
+      }, 180);
+    }, ROTACION_AVISO_MS);
+  }
+
+  function cerrarTarjetaAvisoStockFuera(e) {
+    if (!elAvisoStock.contains(e.target)) cerrarTarjetaAvisoStock();
+  }
+
+  function abrirTarjetaAvisoStock() {
+    indiceAvisoStock = 0;
+    pintarTarjetaAvisoStock();
+    elAvisoStock.setAttribute("data-abierto", "");
+    elAvisoStockBoton.setAttribute("aria-expanded", "true");
+    iniciarRotacionAvisoStock();
+    document.addEventListener("click", cerrarTarjetaAvisoStockFuera);
+  }
+
+  function cerrarTarjetaAvisoStock() {
+    elAvisoStock.removeAttribute("data-abierto");
+    elAvisoStockBoton.setAttribute("aria-expanded", "false");
+    detenerRotacionAvisoStock();
+    document.removeEventListener("click", cerrarTarjetaAvisoStockFuera);
+  }
+
+  elAvisoStockBoton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (elAvisoStock.hasAttribute("data-abierto")) cerrarTarjetaAvisoStock();
+    else abrirTarjetaAvisoStock();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && elAvisoStock.hasAttribute("data-abierto")) cerrarTarjetaAvisoStock();
+  });
+  $("[data-aviso-stock-accion]").addEventListener("click", async () => {
+    const { severidad, lista } = avisoStock;
+    if (!severidad || !lista.length) return;
+    const actual = lista[indiceAvisoStock % lista.length];
+    cerrarTarjetaAvisoStock();
+    await SEVERIDAD_ACCION[severidad].ir(actual.textil);
+  });
+
   const ESTADOS_DESPACHO = { pendiente: "Pendiente", parcial: "Parcial", despachado: "Despachado" };
 
   /* Distinta a todas las demás tarjetas del menú: acá el click NO navega,
@@ -2258,6 +2508,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       const ancho = (caja.width - gap * (COLUMNAS - 1)) / COLUMNAS;
       m.style.setProperty("--reg-alto", (ancho * (caja.height / caja.width)).toFixed(2) + "px");
     });
+    posicionarAvisoStock();
   }
 
   /* ── Módulos pausados (core/config.py::MODULOS_HABILITADOS) ─────────────
@@ -2299,6 +2550,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     const despachos     = r.despachos    || [];
     const despachosAsignados = r.despachos_asignados || [];
     rollosInventario     = r.rollos       || [];
+    actualizarAvisoStock(r.avisos_inventario || []);
 
     /* Las incompletas van primero: son las que hay que terminar, y así su
        canto de color queda en la fila que más asoma. */
