@@ -34,3 +34,11 @@ MODULOS_HABILITADOS = {
 # que un cambio en caliente (ej. desde ese futuro módulo) se vea de
 # inmediato en vez de quedar pisado por una copia importada al arrancar.
 STOCK_MINIMO_ML = 25
+
+# Apaga por completo el ícono de aviso de stock del menú principal (ver
+# core.repositorio_inventario.avisos_stock) sin tocar STOCK_MINIMO_ML — pedido
+# de Bruno (2026-09-12) pensando en el futuro módulo de configuración: el
+# usuario podría no querer estos avisos aunque el umbral le sirva para otra
+# cosa. Mismo criterio de "variable mutable, leer por atributo de módulo"
+# que STOCK_MINIMO_ML de arriba.
+AVISOS_STOCK_HABILITADOS = True
