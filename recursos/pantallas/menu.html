@@ -547,6 +547,57 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 .orden-switch__opt:hover { color: var(--c-texto-suave); }
 .orden-switch__opt[aria-checked="true"] { color: var(--c-tema-fuerte); }
 
+/* Toggle de 3 estados para los rollos inactivos (Mostrar/No priorizar/
+   Ocultar) — a diferencia del orden-switch (3 botones fijos, un thumb que
+   se desliza entre ellos) este es UN solo botón-"ventana" que cicla los 3
+   íconos: cada click hace que el ícono actual se deslice hacia abajo y
+   SALGA por el marco (el cuadrado con overflow:hidden lo recorta, como si
+   el ícono pasara detrás de una ventana), mientras el siguiente entra
+   desde arriba con el mismo movimiento. Ver avanzarToggleInactivos() —
+   el drop-shadow "de movimiento" (mismo truco de interpolar entre
+   funciones drop-shadow con alfa/radio 0 que .visor__rect de ver-op.html,
+   para poder animarlo) aparece mientras se desliza y desaparece apenas
+   el ícono entrante llega a su lugar. */
+.toggle-inactivos {
+  position: relative;
+  flex: 0 0 auto;
+  width: 2.31rem; height: 2.31rem;
+  border: 1px solid var(--c-borde);
+  border-radius: var(--r-md);
+  background: var(--c-superficie-2);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida);
+}
+.toggle-inactivos:hover { border-color: var(--c-tema-borde); }
+.toggle-inactivos__icono {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: var(--c-tema-fuerte);
+  transform: translateY(0);
+  filter: drop-shadow(0 0 0 rgba(22, 22, 26, 0));
+  transition: transform var(--m-media) var(--ease-salida),
+              filter var(--m-media) var(--ease-salida);
+}
+.toggle-inactivos__icono svg { width: 1.15rem; height: 1.15rem; }
+.toggle-inactivos__icono--entrando {
+  transform: translateY(-100%);
+  filter: drop-shadow(0 5px 4px rgba(22, 22, 26, .4));
+}
+.toggle-inactivos__icono--saliendo {
+  transform: translateY(100%);
+  filter: drop-shadow(0 5px 4px rgba(22, 22, 26, .4));
+}
+
+/* Separador "Inactivos" de la tabla en modo "No priorizar" — ver
+   aplicarModoInactivos(). */
+.fila-separador-inactivos td {
+  padding: var(--e-2) var(--e-3); border-top: 1px solid var(--c-borde);
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+  background: var(--c-superficie-2);
+}
+
 .tabla .btn-fila-icono {
   display: inline-grid; place-items: center;
   width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
@@ -657,22 +708,52 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 .ajustar__form {
   display: grid;
   grid-template-columns: 10rem 1fr;
-  grid-template-areas: "delta descripcion" "guardar guardar";
+  grid-template-areas: "tipo tipo" "delta descripcion" "guardar guardar";
   gap: var(--e-3);
   margin-top: var(--e-4); padding-top: var(--e-4);
   border-top: 1.5px solid var(--c-borde);
 }
+.ajustar__tipo { grid-area: tipo; justify-self: start; }
+.ajustar__tipo label { display: inline-flex; align-items: center; gap: var(--e-2); }
+.ajustar__tipo svg { width: 1rem; height: 1rem; flex: none; }
+/* Cantidad y Activación se pisan a propósito en la misma celda del grid
+   (misma clase .ajustar__campo-delta) — nunca están los dos visibles a la
+   vez (uno de los dos siempre trae [hidden]), así que no llegan a
+   superponerse de verdad. */
 .ajustar__campo-delta { grid-area: delta; }
 .ajustar__campo-descripcion { grid-area: descripcion; }
 .ajustar__campo-descripcion textarea { resize: vertical; min-height: 4.5rem; font-family: inherit; }
 .ajustar__guardar { grid-area: guardar; justify-self: end; }
 .ajustar__campo-delta[data-invalido] [data-ajustar-preview] { color: var(--c-error); }
+
+/* Botón "Activar rollo"/"Desactivar rollo" — se presiona una vez para
+   "armar" el cambio (solo local, del lado del cliente: nada se manda al
+   backend todavía) y queda marcado como tal hasta que se aprieta
+   "Guardar" del formulario o se cierra el diálogo (abrirDialogoAjustar
+   resetea el armado cada vez que se abre) — pedido de Bruno
+   (2026-09-08). */
+.btn-activar-rollo {
+  display: inline-flex; align-items: center; gap: var(--e-2);
+  min-height: 2.25rem; padding: 0 var(--e-4);
+  border: 1.5px solid var(--c-borde-fuerte); border-radius: var(--r-md);
+  background: var(--c-superficie); color: var(--c-texto);
+  font: inherit; font-size: var(--t-sm); font-weight: var(--peso-medio);
+  cursor: pointer;
+  transition: background var(--m-media) var(--ease-salida),
+              color var(--m-media) var(--ease-salida),
+              border-color var(--m-media) var(--ease-salida);
+}
+.btn-activar-rollo svg { width: 1rem; height: 1rem; flex: none; }
+.btn-activar-rollo:hover { background: var(--c-superficie-2); }
+.btn-activar-rollo[data-armado] { background: var(--c-tema-fuerte); border-color: var(--c-tema-fuerte); color: var(--c-texto-inv); }
 .chip-tipo {
   display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
   font-size: var(--t-xs); font-weight: var(--peso-medio);
   background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
 }
 .chip-tipo--consumo { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+.chip-tipo--activo { background: var(--c-ok-suave); color: var(--c-ok); }
+.chip-tipo--inactivo { background: var(--c-error-suave); color: var(--c-error); }
 
 /* ── Panel de decomisionar: el botón 🗑 de la fila se DEFORMA hasta ser
    el panel ("boton-panel-morph", mismo mecanismo que "+ Agregar dirección
@@ -815,6 +896,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v-3"/><path d="M14 15v-3"/><path d="M18 15v-3"/><path d="M2 8V4"/><path d="M22 6H2"/><path d="M22 8V4"/><path d="M6 15v-3"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>
           </button>
         </div>
+        <button class="toggle-inactivos" type="button" data-toggle-inactivos title="Rollos inactivos: mostrar"></button>
         <button class="btn-nuevo-rollo" type="button" data-accion="nuevo-rollo" title="Nuevo rollo">+</button>
       </div>
       <div class="tabla-caja">
@@ -1008,11 +1090,33 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   </div>
 
   <div class="ajustar__form">
-    <div class="campo ajustar__campo-delta">
+    <div class="segmento ajustar__tipo" role="group" aria-label="Tipo de ajuste">
+      <input type="radio" name="da-tipo" id="da-tipo-cantidad" checked>
+      <label for="da-tipo-cantidad">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.42 9.42 8 12"/><circle cx="4" cy="8" r="2"/><path d="m14 6-8.58 8.58"/><circle cx="4" cy="16" r="2"/><path d="M10.8 14.8 14 18"/><path d="M16 12h-2"/><path d="M22 12h-2"/></svg>
+        Cantidad
+      </label>
+      <input type="radio" name="da-tipo" id="da-tipo-activacion">
+      <label for="da-tipo-activacion">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21V10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v11"/><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 1.132-1.803l7.95-3.974a2 2 0 0 1 1.837 0l7.948 3.974A2 2 0 0 1 22 8z"/><path d="M6 13h12"/><path d="M6 17h12"/></svg>
+        Activación
+      </label>
+    </div>
+
+    <div class="campo ajustar__campo-delta" data-panel-tipo="cantidad">
       <label class="campo__etiqueta" for="da-delta">Ajuste (metros)</label>
       <input class="entrada" id="da-delta" type="number" step="0.01" value="0">
       <span class="campo__ayuda" data-ajustar-preview></span>
     </div>
+    <div class="campo ajustar__campo-delta" data-panel-tipo="activacion" hidden>
+      <label class="campo__etiqueta">Estado</label>
+      <button class="btn-activar-rollo" type="button" data-accion="armar-activacion">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21V10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v11"/><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 1.132-1.803l7.95-3.974a2 2 0 0 1 1.837 0l7.948 3.974A2 2 0 0 1 22 8z"/><path d="M6 13h12"/><path d="M6 17h12"/></svg>
+        <span data-activar-texto></span>
+      </button>
+      <span class="campo__ayuda" data-activacion-preview></span>
+    </div>
+
     <div class="campo ajustar__campo-descripcion">
       <label class="campo__etiqueta" for="da-descripcion">Descripción</label>
       <textarea class="entrada" id="da-descripcion" rows="3" placeholder="Qué pasó (ej. recorte con error de medida, tela dañada, recuento físico)…"></textarea>
@@ -1301,15 +1405,111 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     });
   });
 
+  /* Toggle de 3 estados para los rollos inactivos (ver comentario CSS de
+     .toggle-inactivos) — cicla "mostrar" → "no-priorizar" → "ocultar" →
+     "mostrar" con un solo botón, no 3 como el orden-switch: acá no tiene
+     sentido elegir directo (son pasos de un mismo concepto, "cuánto se
+     esconden los inactivos"), así que ciclar de a uno alcanza. */
+  const ICONOS_INACTIVOS = {
+    mostrar: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>',
+    "no-priorizar": '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.054 18.946a11 11 0 0 1-2.11 0"/><path d="M13.054 5.054a11 11 0 0 0-2.11-.001"/><path d="M17.072 6.274a11 11 0 0 1 1.753 1.173"/><path d="M18.825 16.552a11 11 0 0 1-1.753 1.174"/><path d="M2.514 13.303a11 11 0 0 1-.452-.954 1 1 0 0 1 0-.697 11 11 0 0 1 .45-.955"/><path d="M21.485 10.697a11 11 0 0 1 .453.955 1 1 0 0 1 0 .697 11 11 0 0 1-.453.954"/><path d="M5.173 7.448a11 11 0 0 1 1.753-1.174"/><path d="M6.926 17.726a11 11 0 0 1-1.753-1.174"/><circle cx="12" cy="12" r="3"/></svg>',
+    ocultar: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>',
+  };
+  const ORDEN_ESTADOS_INACTIVOS = ["mostrar", "no-priorizar", "ocultar"];
+  const TITULOS_INACTIVOS = {
+    mostrar: "Rollos inactivos: mostrar (mezclados con los activos)",
+    "no-priorizar": "Rollos inactivos: no priorizar (siempre debajo de los activos)",
+    ocultar: "Rollos inactivos: ocultar",
+  };
+
+  let estadoInactivos = "mostrar";
+  const elToggleInactivos = $("[data-toggle-inactivos]");
+  elToggleInactivos.innerHTML = `<span class="toggle-inactivos__icono">${ICONOS_INACTIVOS[estadoInactivos]}</span>`;
+
+  elToggleInactivos.addEventListener("click", () => {
+    const i = ORDEN_ESTADOS_INACTIVOS.indexOf(estadoInactivos);
+    estadoInactivos = ORDEN_ESTADOS_INACTIVOS[(i + 1) % ORDEN_ESTADOS_INACTIVOS.length];
+    elToggleInactivos.title = TITULOS_INACTIVOS[estadoInactivos];
+
+    // Limpieza defensiva: con clicks más rápidos que la animación (280ms),
+    // el "actual" de un click anterior puede seguir sin terminar de salir
+    // (transitionend todavía no disparó) — usar querySelector (el PRIMERO
+    // del DOM) para elegir "el que sale" agarraba ESE remanente viejo en
+    // vez del ícono que de verdad se estaba mostrando, dejando el de
+    // verdad quieto (nunca se le pidió salir) y superpuesto con el nuevo:
+    // de ahí los íconos amontonados. Acá se corta por lo sano en cada
+    // click: se tira cualquier remanente y se parte siempre del ÚLTIMO
+    // ícono agregado (el más reciente es, por construcción, el que está
+    // mostrándose ahora), reseteado a su posición de reposo antes de
+    // animar — así nunca quedan más de dos <span> a la vez.
+    const iconos = $$(".toggle-inactivos__icono", elToggleInactivos);
+    const actual = iconos.pop();
+    iconos.forEach((el) => el.remove());
+    actual.classList.remove("toggle-inactivos__icono--entrando", "toggle-inactivos__icono--saliendo");
+    void actual.getBoundingClientRect();
+
+    // El ícono nuevo entra desde arriba (translateY(-100%), con sombra) y
+    // el viejo sale por abajo (translateY(100%), con sombra) — SIEMPRE en
+    // ese sentido, sea cual sea el paso lógico del ciclo: es un efecto
+    // puramente visual de "carrete", no representa una dirección real.
+    const nuevo = document.createElement("span");
+    nuevo.className = "toggle-inactivos__icono toggle-inactivos__icono--entrando";
+    nuevo.innerHTML = ICONOS_INACTIVOS[estadoInactivos];
+    elToggleInactivos.appendChild(nuevo);
+    void nuevo.getBoundingClientRect();   // fuerza el reflow antes de animar
+
+    requestAnimationFrame(() => {
+      actual.classList.add("toggle-inactivos__icono--saliendo");
+      nuevo.classList.remove("toggle-inactivos__icono--entrando");
+    });
+    actual.addEventListener("transitionend", () => actual.remove(), { once: true });
+
+    pintarTablaInventario();
+  });
+
+  function filaSeparadorInactivos() {
+    const tr = document.createElement("tr");
+    tr.className = "fila-separador-inactivos";
+    tr.innerHTML = `<td colspan="5">Inactivos</td>`;
+    return tr;
+  }
+
+  /* "mostrar": no toca nada — los inactivos se ordenan mezclados con el
+     resto, como pidió Bruno. "no-priorizar": separa en dos grupos (activos
+     arriba, inactivos abajo) preservando DENTRO de cada uno el orden que
+     ya venía de aplicarOrdenInventario (filter() es estable, no
+     reordena). "ocultar": saca los inactivos de la lista entera. */
+  function aplicarModoInactivos(lista) {
+    if (estadoInactivos === "ocultar") {
+      return lista.filter((r) => (r.estado || "activo") === "activo");
+    }
+    if (estadoInactivos === "no-priorizar") {
+      const activos = lista.filter((r) => (r.estado || "activo") === "activo");
+      const inactivos = lista.filter((r) => (r.estado || "activo") !== "activo");
+      return activos.concat(inactivos);
+    }
+    return lista;
+  }
+
   function pintarTablaInventario() {
     const filtro = $("[data-inv-buscar]").value.trim().toLowerCase();
     let filtradas = !filtro ? rollosInventario : rollosInventario.filter((r) =>
       [r.id, r.nombre_textil].some((v) => String(v || "").toLowerCase().includes(filtro)));
     filtradas = aplicarOrdenInventario(filtradas);
+    filtradas = aplicarModoInactivos(filtradas);
 
     const cuerpo = $("[data-inv-filas]");
     cuerpo.textContent = "";
-    filtradas.forEach((r) => cuerpo.appendChild(filaRollo(r)));
+    const primerInactivoIdx = filtradas.findIndex((r) => (r.estado || "activo") !== "activo");
+    filtradas.forEach((r, i) => {
+      // El separador va justo antes del primer inactivo — solo tiene
+      // sentido si además hay al menos un activo arriba (si son todos
+      // inactivos, o todos activos, no hay nada que separar).
+      if (estadoInactivos === "no-priorizar" && i === primerInactivoIdx && i > 0) {
+        cuerpo.appendChild(filaSeparadorInactivos());
+      }
+      cuerpo.appendChild(filaRollo(r));
+    });
 
     $("[data-inv-estado-vacio]").hidden = filtradas.length > 0;
   }
@@ -1532,15 +1732,23 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
      backend puede deshacer sin dejar el resto del historial apuntando a un
      valor que ya no es real (ver eliminar_ajuste). */
 
-  const ETIQUETA_TIPO_ROLLO = { ajuste: "Ajuste", consumo: "Consumo" };
+  const ETIQUETA_TIPO_ROLLO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación" };
 
   function filaAjusteRollo(rolloId, u, esLaMasReciente) {
     const tr = document.createElement("tr");
-    const chipClase = u.tipo === "consumo" ? "chip-tipo chip-tipo--consumo" : "chip-tipo";
+    const chipClase = u.tipo === "consumo" ? "chip-tipo chip-tipo--consumo"
+      : u.tipo === "activacion" ? `chip-tipo ${u.estado_nuevo === "activo" ? "chip-tipo--activo" : "chip-tipo--inactivo"}`
+      : "chip-tipo";
+    // Un "activacion" no cambia metros (ver core.repositorio_inventario.
+    // ajustar_estado) — mostrar "anterior → anterior m" ahí sería ruido,
+    // así que la columna "Cambio" muestra a qué estado pasó en su lugar.
+    const cambio = u.tipo === "activacion"
+      ? (u.estado_nuevo === "activo" ? "Activado" : "Desactivado")
+      : `${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m`;
     tr.innerHTML = `
       <td>${esc(u.fecha)}</td>
       <td><span class="${chipClase}">${esc(ETIQUETA_TIPO_ROLLO[u.tipo] || u.tipo)}</span></td>
-      <td>${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m</td>
+      <td>${cambio}</td>
       <td class="descripcion">${esc(u.descripcion) || "—"}</td>
       <td></td>`;
     if (esLaMasReciente) {
@@ -1559,12 +1767,29 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     return tr;
   }
 
+  // Etiqueta y estado "armado" del botón Activar/Desactivar — se repinta
+  // cada vez que se repinta el diálogo entero (al abrirlo, y después de
+  // guardar o deshacer un ajuste), así el botón nunca queda mostrando un
+  // estado viejo y el armado de una acción ya guardada no sobrevive al
+  // repintado siguiente.
+  function pintarPanelActivacion(r) {
+    const activo = (r.estado || "activo") === "activo";
+    $("[data-activar-texto]").textContent = activo ? "Desactivar rollo" : "Activar rollo";
+    $("[data-accion='armar-activacion']").removeAttribute("data-armado");
+    $("[data-activacion-preview]").textContent = "";
+  }
+
+  function mostrarPanelAjuste(tipo) {
+    $$("[data-panel-tipo]").forEach((el) => { el.hidden = el.dataset.panelTipo !== tipo; });
+  }
+
   function pintarDialogoAjustarRollo(rolloId) {
     const r = rollosInventario.find((x) => x.id === rolloId);
     if (!r) { dlgAjustar.close(); return; }
 
     $("[data-dlg-ajustar-titulo]").textContent = `Ajustar cantidad · rollo ${r.id} · ${r.nombre_textil || ""}`;
     $("[data-ajustar-stock]").textContent = `${r.metros_restantes} / ${r.metros_iniciales} m`;
+    pintarPanelActivacion(r);
 
     // Solo los últimos 2 acá — pedido de Bruno (2026-09-04): este diálogo
     // es para cargar un ajuste rápido, no para revisar años de historial
@@ -1607,6 +1832,8 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     $("#da-delta").value = "0";
     $("#da-descripcion").value = "";
     $("[data-ajustar-preview]").textContent = "";
+    $("#da-tipo-cantidad").checked = true;
+    mostrarPanelAjuste("cantidad");
     limpiarErroresInventario(dlgAjustar);
     pintarDialogoAjustarRollo(rolloId);
     dlgAjustar.showModal();
@@ -1620,11 +1847,43 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   });
 
   $("#da-delta").addEventListener("input", actualizarVistaPreviaAjuste);
+  $("#da-tipo-cantidad").addEventListener("change", () => mostrarPanelAjuste("cantidad"));
+  $("#da-tipo-activacion").addEventListener("change", () => mostrarPanelAjuste("activacion"));
+
+  // El botón Activar/Desactivar no manda nada al backend al apretarlo —
+  // solo "arma" localmente qué se va a guardar (pedido de Bruno,
+  // 2026-09-08: si el usuario sale del panel sin apretar "Guardar", se
+  // cancela solo, porque nunca se llegó a mandar nada). Un segundo click
+  // lo desarma, por si fue un error.
+  $("[data-accion='armar-activacion']").addEventListener("click", (e) => {
+    const r = rollosInventario.find((x) => x.id === idParaAjustarRollo);
+    if (!r) return;
+    const boton = e.currentTarget;
+    const armado = boton.toggleAttribute("data-armado");
+    const activoActual = (r.estado || "activo") === "activo";
+    $("[data-activacion-preview]").textContent = armado
+      ? (activoActual ? "Activo → Inactivo" : "Inactivo → Activo")
+      : "";
+  });
 
   async function guardarAjusteRollo() {
     if (!idParaAjustarRollo) return;
     const r = rollosInventario.find((x) => x.id === idParaAjustarRollo);
     if (!r) return;
+
+    if ($("#da-tipo-activacion").checked) {
+      const boton = $("[data-accion='armar-activacion']");
+      // Sin armar no hay nada que guardar — mismo criterio que delta=0 en
+      // el modo Cantidad: no tiene sentido guardar "no cambió nada".
+      if (!boton.hasAttribute("data-armado")) return;
+      const activoNuevo = (r.estado || "activo") !== "activo";
+      await TD.api.ajustar_estado_rollo(idParaAjustarRollo, activoNuevo, $("#da-descripcion").value.trim());
+      $("#da-descripcion").value = "";
+      await recargarRollosInventario();
+      pintarDialogoAjustarRollo(idParaAjustarRollo);
+      TD.aviso(activoNuevo ? "Rollo activado." : "Rollo desactivado.", "info");
+      return;
+    }
 
     const campoDelta = $("#da-delta");
     const delta = parseFloat(campoDelta.value);

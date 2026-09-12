@@ -86,6 +86,8 @@
   background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
 }
 .chip-tipo--consumo { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+.chip-tipo--activo { background: var(--c-ok-suave); color: var(--c-ok); }
+.chip-tipo--inactivo { background: var(--c-error-suave); color: var(--c-error); }
 .timeline__cab { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; }
 .timeline__fecha { font-size: var(--t-xs); color: var(--c-texto-tenue); margin-left: auto; white-space: nowrap; }
 .timeline__cambio {
@@ -154,7 +156,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (s) => String(s == null ? "" : s);
 
-  const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo" };
+  const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación" };
 
   function dato(et, val, mono, ancho) {
     if (!val && val !== 0) return null;
@@ -211,6 +213,7 @@
      recalcula acá ni depende de que esa OP siga existiendo en algún lado. */
   function tarjetaUso(u) {
     const esConsumo = u.tipo === "consumo";
+    const esActivacion = u.tipo === "activacion";
     const item = document.createElement("div");
     item.className = "timeline__item";
 
@@ -220,11 +223,15 @@
       ["Obs", u.obs],
     ].filter(([, val]) => val);
 
+    const chipClase = esConsumo ? "chip-tipo--consumo"
+      : esActivacion ? (u.estado_nuevo === "activo" ? "chip-tipo--activo" : "chip-tipo--inactivo")
+      : "";
+
     item.innerHTML = `
       <div class="timeline__punto ${esConsumo ? "timeline__punto--consumo" : ""}"></div>
       <div class="timeline__card">
         <div class="timeline__cab">
-          <span class="chip-tipo ${esConsumo ? "chip-tipo--consumo" : ""}"></span>
+          <span class="chip-tipo ${chipClase}"></span>
           <span class="timeline__cambio"></span>
           <span class="timeline__fecha"></span>
         </div>
@@ -233,8 +240,12 @@
       </div>`;
 
     $(".chip-tipo", item).textContent = ETIQUETA_TIPO[u.tipo] || u.tipo;
-    $(".timeline__cambio", item).textContent =
-      `${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m`;
+    // "activacion" no cambia metros (ver core.repositorio_inventario.
+    // ajustar_estado) — mostrar "anterior → anterior m" ahí sería ruido,
+    // así que en su lugar se muestra a qué estado pasó.
+    $(".timeline__cambio", item).textContent = esActivacion
+      ? (u.estado_nuevo === "activo" ? "Activado" : "Desactivado")
+      : `${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m`;
     $(".timeline__fecha", item).textContent = u.fecha || "";
 
     if (!esConsumo) {

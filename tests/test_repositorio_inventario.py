@@ -502,6 +502,67 @@ class TestCambiarEstadoRollo(_ConRutaTemporalYCatalogo):
         self.assertEqual(faltantes[0]["disponible"], 0.0)
 
 
+class TestAjustarEstado(_ConRutaTemporalYCatalogo):
+
+    def test_desactivar_cambia_estado_y_queda_logueado(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="Tela reservada")
+        self.assertEqual(actualizado["estado"], "inactivo")
+        self.assertEqual(len(actualizado["usos"]), 1)
+        entrada = actualizado["usos"][0]
+        self.assertEqual(entrada["tipo"], "activacion")
+        self.assertEqual(entrada["estado_nuevo"], "inactivo")
+        self.assertEqual(entrada["descripcion"], "Tela reservada")
+        # metros_restantes no cambia con este tipo de ajuste.
+        self.assertEqual(entrada["metros_restantes_anterior"], 100.0)
+        self.assertEqual(entrada["metros_restantes_nuevo"], 100.0)
+        self.assertEqual(actualizado["metros_restantes"], 100.0)
+
+    def test_reactivar_cambia_estado_y_queda_logueado(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.ajustar_estado(r["id"], activo=False)
+        actualizado = repo_inv.ajustar_estado(r["id"], activo=True, descripcion="Ya se puede usar")
+        self.assertEqual(actualizado["estado"], "activo")
+        self.assertEqual(actualizado["usos"][-1]["estado_nuevo"], "activo")
+
+    def test_no_guarda_campos_de_consumo(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="x")
+        entrada = actualizado["usos"][0]
+        self.assertNotIn("numero_op", entrada)
+        self.assertNotIn("cliente", entrada)
+        self.assertNotIn("tema", entrada)
+        self.assertNotIn("obs", entrada)
+
+    def test_ajuste_de_cantidad_no_guarda_estado_nuevo(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        actualizado = repo_inv.ajustar_restante(r["id"], 60, "Recuento")
+        self.assertNotIn("estado_nuevo", actualizado["usos"][0])
+
+    def test_rollo_inexistente_da_none(self):
+        self.assertIsNone(repo_inv.ajustar_estado("9999", activo=False))
+
+    def test_deshacer_activacion_mas_reciente_restaura_estado_anterior(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="Reservada")
+        id_activacion = actualizado["usos"][-1]["id"]
+
+        restaurado = repo_inv.eliminar_ajuste(r["id"], id_activacion)
+
+        self.assertEqual(restaurado["estado"], "activo")
+        self.assertEqual(restaurado["usos"], [])
+
+    def test_deshacer_reactivacion_mas_reciente_vuelve_a_inactivo(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.ajustar_estado(r["id"], activo=False)
+        reactivado = repo_inv.ajustar_estado(r["id"], activo=True)
+        id_reactivacion = reactivado["usos"][-1]["id"]
+
+        restaurado = repo_inv.eliminar_ajuste(r["id"], id_reactivacion)
+
+        self.assertEqual(restaurado["estado"], "inactivo")
+
+
 class TestMigrarFormatoViejo(_ConRutaTemporalYCatalogo):
     """Migración de rollos_tela.json/rollos_tela_historial.json (formato
     de antes, una lista JSON única) al formato actual (un archivo por

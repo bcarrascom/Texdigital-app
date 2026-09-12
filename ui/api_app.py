@@ -596,6 +596,9 @@ class ApiApp:
     def ajustar_restante_rollo(self, id_, nuevo_restante, descripcion: str = "") -> dict | None:
         return self._inventario.ajustar_restante_rollo(id_, nuevo_restante, descripcion)
 
+    def ajustar_estado_rollo(self, id_, activo: bool, descripcion: str = "") -> dict | None:
+        return self._inventario.ajustar_estado_rollo(id_, activo, descripcion)
+
     def eliminar_ajuste_rollo(self, id_rollo, id_ajuste) -> dict | None:
         return self._inventario.eliminar_ajuste_rollo(id_rollo, id_ajuste)
 
