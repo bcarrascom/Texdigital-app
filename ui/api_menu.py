@@ -9,7 +9,7 @@ ApiApp.ir()/abrir_cotizacion()/abrir_pendiente()/abrir_op()).
 
 from core.repositorio_cotizaciones import listar_cotizaciones
 from core.repositorio_pendientes import listar_pendientes
-from core.repositorio_ops import listar_todas_las_ops, ESTADO_ACTIVA
+from core.repositorio_ops import listar_todas_las_ops, ESTADO_ACTIVA, avisos_ops
 from core.repositorio_despachos import (
     listar_ops_despacho, ESTADO_ASIGNACION_ASIGNADA,
     marcar_entregado, eliminar_despacho,
@@ -127,15 +127,17 @@ class ApiMenu:
                 "completos": completos,
                 "total": total,
             })
+        ops_activas = _ops_activas()
         rollos = listar_rollos()
         return {
             "pendientes":          pendientes,
             "cotizaciones":        listar_cotizaciones(),
-            "ops":                 _ops_activas(),
+            "ops":                 ops_activas,
             "despachos":           _despachos_pendientes(),
             "despachos_asignados": _despachos_asignados(),
             "rollos":              rollos,
             "avisos_inventario":   avisos_stock(rollos),
+            "avisos_produccion":   avisos_ops(ops_activas),
         }
 
     def marcar_despacho_entregado(self, numero) -> bool:

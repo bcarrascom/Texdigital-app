@@ -379,5 +379,47 @@ class TestListadoPorMes(_ConRutaTemporal):
         self.assertEqual(repo_ops.listar_ops_del_mes(1999, 1), [])
 
 
+class TestAvisosOps(_ConRutaTemporal):
+    """avisos_ops (ver core.repositorio_ops.avisos_ops) — ícono de aviso del
+    módulo de Producción en el menú principal: una OP activa "atrasada"
+    (Fecha_entrega ya pasada) siempre es un aviso, sin niveles de gravedad
+    (a diferencia de core.repositorio_inventario.avisos_stock)."""
+
+    def test_op_activa_atrasada_genera_aviso(self):
+        repo_ops.guardar_op(_op(8001, "01/01/2020", fecha_entrega="01/01/2020"))
+        avisos = repo_ops.avisos_ops()
+        self.assertEqual(avisos, [{"numero": 8001, "empresa": "Empresa 8001", "fecha_entrega": "01/01/2020"}])
+
+    def test_op_activa_a_tiempo_no_genera_aviso(self):
+        from datetime import datetime, timedelta
+        mañana = (datetime.now() + timedelta(days=1)).strftime("%d/%m/%Y")
+        repo_ops.guardar_op(_op(8002, "01/01/2026", fecha_entrega=mañana))
+        self.assertEqual(repo_ops.avisos_ops(), [])
+
+    def test_op_completada_atrasada_no_genera_aviso(self):
+        """Ya no está activa (Estado se resuelve a entregada/entregada_atrasada
+        al completarla) — atrasarse importa mientras sigue pendiente, no
+        después de entregada."""
+        repo_ops.guardar_op(_op(8003, "01/01/2020", fecha_entrega="01/01/2020"))
+        repo_ops.mover_a_completadas(8003)
+        self.assertEqual(repo_ops.avisos_ops(), [])
+
+    def test_sin_ops_no_hay_avisos(self):
+        self.assertEqual(repo_ops.avisos_ops(), [])
+
+    def test_acepta_lista_ya_leida_sin_releer_del_disco(self):
+        ops = [
+            {"numero": 9001, "empresa": "Empresa 9001", "fecha_entrega": "01/01/2020"},
+            {"numero": 9002, "empresa": "Empresa 9002", "fecha_entrega": "01/01/2099"},
+        ]
+        self.assertEqual(
+            repo_ops.avisos_ops(ops),
+            [{"numero": 9001, "empresa": "Empresa 9001", "fecha_entrega": "01/01/2020"}],
+        )
+
+    def test_fecha_entrega_invalida_se_ignora_sin_reventar(self):
+        self.assertEqual(repo_ops.avisos_ops([{"numero": 9003, "empresa": "X", "fecha_entrega": ""}]), [])
+
+
 if __name__ == "__main__":
     unittest.main()
