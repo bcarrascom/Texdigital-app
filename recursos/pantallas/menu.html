@@ -55,9 +55,12 @@
   position: relative; z-index: 2;
   /* Rejilla con dos filas elásticas de distinto peso (1fr arriba, 2.4fr
      abajo): el bloque logo+módulos queda por encima del centro óptico y la
-     lista desplegada tiene lugar de sobra. */
+     lista desplegada tiene lugar de sobra.
+     La fila fija de 15vh entre ambas empuja el logo y los módulos hacia
+     abajo un 15% del alto de pantalla — pedido de Bruno (2026-09-13) — sin
+     tocar el pie (footer), que se queda donde estaba. */
   display: grid;
-  grid-template-rows: 1fr auto auto 2.4fr auto;
+  grid-template-rows: 1fr 15vh auto auto 2.4fr auto;
   justify-items: center;
   row-gap: var(--e-5);
   height: 100vh; padding: var(--e-6) var(--e-6) var(--e-5);
@@ -72,7 +75,7 @@ body[data-fase="saliendo"] .menu {
 }
 
 .menu__marca {
-  grid-row: 2;
+  grid-row: 3;
   display: grid; justify-items: center; gap: var(--e-2);
   animation: aparecer var(--m-lenta) var(--ease-salida) both;
 }
@@ -85,7 +88,7 @@ body[data-fase="saliendo"] .menu {
 }
 
 .menu__modulos {
-  grid-row: 3;
+  grid-row: 4;
   /* Ancla al aviso-stock (position:absolute, hermano de las .modulo — ver
      ese comentario para el motivo), sin afectar el grid: un hijo con
      position:absolute no participa del grid-template-columns. */
@@ -233,26 +236,34 @@ body[data-fase="saliendo"] .menu {
 }
 .modulo:hover .modulo__vacio, .modulo:focus-within .modulo__vacio { opacity: .7; }
 
-/* ── Aviso de stock (círculo arriba de la tarjeta de Inventario) ──────────
-   A propósito NO vive dentro de .modulo: .modulo entero (no solo
+/* ── Avisos de menú (círculo arriba de la tarjeta de un módulo) ───────────
+   .aviso-stock (Inventario, ver core.repositorio_inventario.avisos_stock)
+   y .aviso-produccion (Producción/OPs, ver core.repositorio_ops.avisos_ops)
+   comparten esta cáscara (círculo + tarjeta que se despliega) — el
+   contenido DE ADENTRO de la tarjeta sí es propio de cada una (Inventario
+   muestra un textil que rota; Producción, el número/cliente/fecha de una
+   OP atrasada), así que sus reglas siguen por separado más abajo.
+
+   A propósito NINGUNA vive dentro de su .modulo: .modulo entero (no solo
    .modulo__caja) es la zona de :hover que despliega el mazo de tarjetas
    (ver comentario de "La lista: vive DETRÁS de la caja" más abajo) — si el
    aviso fuera descendiente suyo, pasar el mouse por el ícono activaría
    ESA animación también (:hover sube por el árbol del DOM sin importar
-   dónde quede pintado un descendiente position:absolute). Por eso es
-   hermano de las .modulo, directo en .menu__modulos (position:relative
-   agregado ahí abajo), posicionado con JS (posicionarAvisoStock, junto a
-   ajustarRatioTarjetas) sobre las coordenadas reales de la tarjeta de
-   Inventario — así sigue el layout real (escala de texto, resize) sin
-   quedar acoplado a su árbol de hover.
+   dónde quede pintado un descendiente position:absolute). Por eso son
+   hermanas de las .modulo, directo en .menu__modulos (position:relative
+   agregado ahí abajo), posicionadas con JS (posicionarAvisoMenu, junto a
+   ajustarRatioTarjetas) sobre las coordenadas reales de la tarjeta de su
+   módulo — así siguen el layout real (escala de texto, resize) sin quedar
+   acopladas a su árbol de hover.
    z-index alto a propósito: tiene que quedar por encima de la caja y del
    mazo de tarjetas de CUALQUIER módulo vecino, incluso en pleno hover
    (.modulo:hover sube a z-index:3, ver arriba).
-   --color-aviso lo fija JS según la gravedad (actualizarAvisoStock) —
-   amarilla/naranja/roja (ver core.repositorio_inventario.avisos_stock): un
-   solo set de reglas sirve para las tres. */
-.aviso-stock { position: absolute; top: 0; left: 0; transform: translateX(-50%); z-index: 5; }
-.aviso-stock__icono {
+   --color-aviso lo fija JS según la gravedad — en Inventario puede ser
+   amarilla/naranja/roja (avisos_stock); en Producción siempre roja
+   (avisos_ops, una sola gravedad) — un solo set de reglas sirve para
+   todas. */
+.aviso-stock, .aviso-produccion { position: absolute; top: 0; left: 0; transform: translateX(-50%); z-index: 5; }
+.aviso-stock__icono, .aviso-produccion__icono {
   display: grid; place-items: center;
   width: 2.15rem; height: 2.15rem; padding: 0;
   border: 2px solid var(--c-superficie); border-radius: var(--r-full);
@@ -260,15 +271,16 @@ body[data-fase="saliendo"] .menu {
   cursor: pointer; box-shadow: var(--s-2);
   transition: transform var(--m-rapida) var(--ease-salida), box-shadow var(--m-rapida) var(--ease-salida);
 }
-.aviso-stock__icono svg { width: 1.05rem; height: 1.05rem; }
+.aviso-stock__icono svg, .aviso-produccion__icono svg { width: 1.05rem; height: 1.05rem; }
 /* "se levanta muy levemente y emite un brillo" — el brillo es un halo del
    mismo color que el ícono, no una sombra genérica. */
-.aviso-stock__icono:hover, .aviso-stock__icono:focus-visible {
+.aviso-stock__icono:hover, .aviso-stock__icono:focus-visible,
+.aviso-produccion__icono:hover, .aviso-produccion__icono:focus-visible {
   transform: translateY(-3px);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-aviso, var(--c-aviso)) 35%, transparent), var(--s-3);
 }
 
-.aviso-stock__tarjeta {
+.aviso-stock__tarjeta, .aviso-produccion__tarjeta {
   position: absolute; bottom: calc(100% + var(--e-2)); left: 50%;
   width: 19rem; padding: var(--e-4);
   display: grid; gap: var(--e-2);
@@ -281,22 +293,49 @@ body[data-fase="saliendo"] .menu {
   transform-origin: bottom center;
   transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
 }
-.aviso-stock[data-abierto] .aviso-stock__tarjeta {
+.aviso-stock[data-abierto] .aviso-stock__tarjeta,
+.aviso-produccion[data-abierto] .aviso-produccion__tarjeta {
   opacity: 1; pointer-events: auto;
   transform: translate(-50%, 0) scale(1);
 }
-.aviso-stock__texto { font-size: var(--t-sm); color: var(--c-texto-suave); }
+.aviso-stock__texto, .aviso-produccion__texto { font-size: var(--t-sm); color: var(--c-texto-suave); }
 .aviso-stock__textil {
   font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--color-aviso, var(--c-aviso));
   transition: opacity var(--m-rapida) var(--ease-salida);
 }
-.aviso-stock__puntos { display: flex; gap: .35rem; }
-.aviso-stock__punto { width: .4rem; height: .4rem; border-radius: var(--r-full); background: var(--c-borde-fuerte); }
-.aviso-stock__punto[data-activo] { background: var(--color-aviso, var(--c-aviso)); }
-.aviso-stock__accion { justify-self: start; }
+.aviso-stock__puntos, .aviso-produccion__puntos { display: flex; gap: .35rem; }
+.aviso-stock__punto, .aviso-produccion__punto { width: .4rem; height: .4rem; border-radius: var(--r-full); background: var(--c-borde-fuerte); }
+.aviso-stock__punto[data-activo], .aviso-produccion__punto[data-activo] { background: var(--color-aviso, var(--c-aviso)); }
+.aviso-stock__accion, .aviso-produccion__accion { justify-self: start; }
+
+/* Producción tiene una sola gravedad (roja, ver core.repositorio_ops.
+   avisos_ops: una OP atrasada siempre es igual de urgente) — a diferencia
+   de --color-aviso en Inventario, acá no hace falta que JS la fije por
+   gravedad: es siempre --c-error. */
+.aviso-produccion { --color-aviso: var(--c-error); }
+
+/* Tarjeta de Producción: número de OP + cliente + fecha de entrega — una
+   grilla de etiqueta/valor en vez de un solo nombre de textil grande
+   (aviso-stock__textil), porque acá son tres datos, no uno. Van los dos
+   agrupados en __contenido para poder fundirlos juntos al rotar entre
+   varias OPs atrasadas (mismo mecanismo que aviso-stock__textil, pero acá
+   son dos elementos, no uno). */
+.aviso-produccion__contenido {
+  display: grid; gap: var(--e-2);
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+.aviso-produccion__op {
+  font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--color-aviso, var(--c-aviso));
+}
+.aviso-produccion__datos {
+  display: grid; grid-template-columns: auto 1fr; gap: var(--e-1) var(--e-2);
+  font-size: var(--t-sm);
+}
+.aviso-produccion__datos dt { color: var(--c-texto-tenue); }
+.aviso-produccion__datos dd { color: var(--c-texto-suave); font-weight: var(--peso-medio); }
 
 .menu__pie {
-  grid-row: 5;
+  grid-row: 6;
   display: flex; align-items: center; gap: var(--e-4);
   font-size: var(--t-xs); color: var(--c-texto-tenue);
   animation: aparecer var(--m-lenta) var(--ease-salida) both; animation-delay: 320ms;
@@ -882,7 +921,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 
   <div class="menu__modulos">
 
-    <div class="aviso-stock" data-tema="inventario" data-aviso-stock hidden>
+    <div class="aviso-stock" data-tema="inventario" data-aviso-stock data-aviso-de-modulo="inventario" hidden>
       <button class="aviso-stock__icono" type="button" data-aviso-stock-boton aria-expanded="false" title="Aviso de stock">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
       </button>
@@ -915,6 +954,24 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
         <div class="modulo__rejilla" data-lista="cotizaciones"></div>
       </div>
     </section>
+
+    <div class="aviso-produccion" data-tema="ops" data-aviso-produccion data-aviso-de-modulo="ops" hidden>
+      <button class="aviso-produccion__icono" type="button" data-aviso-produccion-boton aria-expanded="false" title="Aviso de producción">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+      </button>
+      <div class="aviso-produccion__tarjeta" data-aviso-produccion-tarjeta>
+        <p class="aviso-produccion__texto" data-aviso-produccion-texto>Hay una OP atrasada.</p>
+        <div class="aviso-produccion__contenido" data-aviso-produccion-contenido>
+          <p class="aviso-produccion__op" data-aviso-produccion-op></p>
+          <dl class="aviso-produccion__datos">
+            <dt>Cliente</dt><dd data-aviso-produccion-cliente></dd>
+            <dt>Entrega</dt><dd data-aviso-produccion-fecha></dd>
+          </dl>
+        </div>
+        <div class="aviso-produccion__puntos" data-aviso-produccion-puntos hidden></div>
+        <button class="btn btn--primario btn--chico aviso-produccion__accion" type="button" data-aviso-produccion-accion>Abrir OP →</button>
+      </div>
+    </div>
 
     <section class="modulo" data-tema="ops" data-modulo="ops" style="--i:2">
       <button class="modulo__caja" type="button">
@@ -1766,6 +1823,16 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   dlgRollo.addEventListener("cancel", (e) => { e.preventDefault(); cerrarDialogoRollo(); });
   dlgRollo.addEventListener("click", (e) => { if (e.target === dlgRollo) cerrarDialogoRollo(); });
 
+  // Enter dentro del diálogo intenta guardar — el propio handler de
+  // "guardar-rollo" ya valida los campos obligatorios y no hace nada si
+  // falta alguno (solo marca los inválidos en rojo), así que Enter con el
+  // formulario incompleto no cierra ni guarda nada a medias.
+  dlgRollo.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    $("[data-accion='guardar-rollo']").click();
+  });
+
   // Al elegir un textil, se sugiere el Valor (por defecto: el del rollo
   // más reciente de ese textil, o si no hay ninguno, el del catálogo — ver
   // core.repositorio_inventario.valor_sugerido_textil). Solo si el campo
@@ -2165,19 +2232,41 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   let indiceAvisoStock = 0;
   let temporizadorAvisoStock = null;
 
+  // Aviso de Producción (core.repositorio_ops.avisos_ops): una sola
+  // gravedad (roja), así que acá no hace falta filtrar por "la peor" como
+  // en avisoStock — la lista ya es la lista completa de OPs atrasadas,
+  // ordenada de la más atrasada a la menos (ver actualizarAvisoProduccion).
+  let avisoProduccion = { lista: [] };
+  let indiceAvisoProduccion = 0;
+  let temporizadorAvisoProduccion = null;
+
   const elAvisoStock       = $("[data-aviso-stock]");
   const elAvisoStockBoton  = $("[data-aviso-stock-boton]");
+  const elAvisoProduccion       = $("[data-aviso-produccion]");
+  const elAvisoProduccionBoton  = $("[data-aviso-produccion-boton]");
 
-  /* Posiciona el aviso (hermano de .modulo, ver comentario CSS) centrado
-     horizontalmente sobre la tarjeta de Inventario y 0.5rem más arriba de
+  // Todos los avisos de menú existentes — agregar uno nuevo (otro módulo
+  // con su propio ícono) es sumar su {el, boton} acá; el resto de los
+  // handlers genéricos de abajo (ArrowUp para seleccionarlo, el guard de
+  // izquierda/derecha del menú) ya lo recorren solos.
+  const AVISOS_MENU = [
+    { el: elAvisoStock,      boton: elAvisoStockBoton },
+    { el: elAvisoProduccion, boton: elAvisoProduccionBoton },
+  ];
+  function hayAvisoMenuAbierto() {
+    return AVISOS_MENU.some((a) => a.el.hasAttribute("data-abierto"));
+  }
+
+  /* Posiciona un aviso (hermano de .modulo, ver comentario CSS) centrado
+     horizontalmente sobre la tarjeta de su módulo y 0.5rem más arriba de
      lo que ocuparía pegado a su borde superior — así el círculo nunca se
      intersecta con la tarjeta.
      Llamada junto a ajustarRatioTarjetas: mismos disparadores (resize,
      ResizeObserver, cambio de escala A-/A+, cada cargar()), así el aviso
      sigue el layout real en vez de quedar con coordenadas viejas. */
-  function posicionarAvisoStock() {
+  function posicionarAvisoMenu(el, nombreModulo) {
     const contenedor = $(".menu__modulos");
-    const modulo = $(".modulo[data-modulo='inventario']");
+    const modulo = $(`.modulo[data-modulo='${nombreModulo}']`);
     if (!contenedor || !modulo) return;
     const rContenedor = contenedor.getBoundingClientRect();
     const rModulo = modulo.getBoundingClientRect();
@@ -2186,19 +2275,25 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     // entero (2.15rem) más 0.5rem de aire para que el borde INFERIOR quede
     // 0.5rem por encima de la tarjeta, no su centro.
     const offsetPx = pxPorRemInventario() * 2.65;
-    elAvisoStock.style.left = (rModulo.left - rContenedor.left + rModulo.width / 2) + "px";
-    elAvisoStock.style.top = (rModulo.top - rContenedor.top - offsetPx) + "px";
+    el.style.left = (rModulo.left - rContenedor.left + rModulo.width / 2) + "px";
+    el.style.top = (rModulo.top - rContenedor.top - offsetPx) + "px";
+  }
+
+  function posicionarAvisosMenu() {
+    posicionarAvisoMenu(elAvisoStock, "inventario");
+    posicionarAvisoMenu(elAvisoProduccion, "ops");
   }
 
   // La primera vez que carga el menú, .modulo todavía está a mitad de su
   // animación de entrada (aparecer: translateY(10px) -> 0, ver base CSS) —
-  // si posicionarAvisoStock() mide su rect ANTES de que termine, calcula
+  // si posicionarAvisoMenu() mide su rect ANTES de que termine, calcula
   // sobre una posición transitoria (hasta 10px más abajo) y nada la vuelve
   // a corregir después (ese transform no dispara el ResizeObserver, que
   // solo mira cambios de tamaño). Un animationend puntual alcanza — la
   // animación no se repite después (no vuelve a cambiar la clase/estilo
   // que la dispara), así que { once: true } no deja de escuchar nada útil.
-  $(".modulo[data-modulo='inventario']").addEventListener("animationend", () => posicionarAvisoStock(), { once: true });
+  $(".modulo[data-modulo='inventario']").addEventListener("animationend", () => posicionarAvisoMenu(elAvisoStock, "inventario"), { once: true });
+  $(".modulo[data-modulo='ops']").addEventListener("animationend", () => posicionarAvisoMenu(elAvisoProduccion, "ops"), { once: true });
 
   /* Mismo mecanismo que irARollo: abre el módulo de Inventario (si no
      estaba ya abierto) y deja la barra de búsqueda filtrando por el
@@ -2275,6 +2370,22 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     }, ROTACION_AVISO_MS);
   }
 
+  // Mismo efecto visual que un tick de iniciarRotacionAvisoStock (fundido
+  // del textil), pero disparado a mano — y reinicia el temporizador para
+  // que la rotación automática no salte al textil siguiente a mitad del
+  // fundido que dejó el usuario.
+  function navegarAvisoStock(delta) {
+    if (avisoStock.lista.length <= 1) return;
+    const elTextil = $("[data-aviso-stock-textil]");
+    elTextil.style.opacity = 0;
+    setTimeout(() => {
+      indiceAvisoStock = (indiceAvisoStock + delta + avisoStock.lista.length) % avisoStock.lista.length;
+      pintarTarjetaAvisoStock();
+      elTextil.style.opacity = 1;
+    }, 180);
+    iniciarRotacionAvisoStock();
+  }
+
   function cerrarTarjetaAvisoStockFuera(e) {
     if (!elAvisoStock.contains(e.target)) cerrarTarjetaAvisoStock();
   }
@@ -2300,8 +2411,89 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     if (elAvisoStock.hasAttribute("data-abierto")) cerrarTarjetaAvisoStock();
     else abrirTarjetaAvisoStock();
   });
+
+  /* Con el ícono seleccionado (foco, ver el ArrowUp de arriba):
+       Enter   — con la tarjeta cerrada, la abre (igual que un click); con
+                 la tarjeta YA abierta, en cambio, aprieta el botón de
+                 acción de la tarjeta (no la vuelve a cerrar) — pedido de
+                 Bruno (2026-09-12). Por eso NO se deja el Enter nativo del
+                 <button> (dispararía el click de arriba, que SIEMPRE
+                 alterna abrir/cerrar): se intercepta a mano.
+       ArrowDown — baja del ícono de vuelta al módulo que corona (cerrando
+                 la tarjeta si había quedado abierta). */
+  elAvisoStockBoton.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (elAvisoStock.hasAttribute("data-abierto")) $("[data-aviso-stock-accion]").click();
+      else abrirTarjetaAvisoStock();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (elAvisoStock.hasAttribute("data-abierto")) cerrarTarjetaAvisoStock();
+      const modulo = $(`.modulo[data-modulo='${elAvisoStock.dataset.avisoDeModulo}']`);
+      if (modulo) $(".modulo__caja", modulo).focus({ preventScroll: true });
+    }
+  });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && elAvisoStock.hasAttribute("data-abierto")) cerrarTarjetaAvisoStock();
+    if (!elAvisoStock.hasAttribute("data-abierto")) return;
+    if (e.key === "Escape") { cerrarTarjetaAvisoStock(); return; }
+    if (e.key === "ArrowLeft") { e.preventDefault(); navegarAvisoStock(-1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); navegarAvisoStock(1); }
+  });
+
+  /* Izquierda/derecha en el menú principal (nada abierto todavía) SELECCIONA
+     (foco, no click) un módulo — enfocar su .modulo__caja ya dispara la
+     animación de hover por :focus-within (mismo mecanismo que el resto del
+     CSS de .modulo), y <Enter> sobre un <button> enfocado ya lo abre solo
+     (dispara su propio "click", cableado más abajo) — no hace falta nada
+     más para eso.
+       · Sin nada seleccionado todavía: izquierda va al módulo más a la
+         izquierda en pantalla, derecha al más a la derecha.
+       · Con un módulo ya seleccionado (con foco): las flechas pasan al
+         vecino en esa dirección, y desde una punta dan la vuelta a la otra
+         (izquierda desde el primero salta al último, y viceversa) — pedido
+         de Bruno (2026-09-12).
+     Solo pisa las flechas cuando de verdad le "pertenecen" a esto: con un
+     módulo ya abierto, un diálogo abierto, o la tarjeta de aviso de stock
+     desplegada (que ya usa estas mismas teclas para rotar textiles), se
+     queda afuera. */
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    if (moduloActivo) return;
+    if (hayAvisoMenuAbierto()) return;
+    if (document.querySelector("dialog[open]")) return;
+    const cajas = $$(".modulo__caja").filter((c) => !c.disabled);
+    if (!cajas.length) return;
+    e.preventDefault();
+    const ordenadas = cajas.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const iActual = ordenadas.indexOf(document.activeElement);
+    let destino;
+    if (iActual === -1) {
+      destino = e.key === "ArrowLeft" ? ordenadas[0] : ordenadas[ordenadas.length - 1];
+    } else {
+      const delta = e.key === "ArrowLeft" ? -1 : 1;
+      destino = ordenadas[(iActual + delta + ordenadas.length) % ordenadas.length];
+    }
+    destino.focus({ preventScroll: true });
+  });
+
+  /* Arriba, con un módulo seleccionado (no abierto) que tenga su propio
+     ícono de aviso (data-aviso-de-modulo en el HTML enlaza cada aviso con
+     su módulo — AVISOS_MENU de arriba es la lista de todos, así que un
+     aviso de un futuro módulo nuevo se suma solo agregando su {el, boton}
+     ahí, sin tocar este handler): selecciona ese ícono en vez del módulo.
+     Enter/Escape/flechas sobre el ícono ya seleccionado los maneja el
+     propio botón de cada aviso, más abajo. */
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp") return;
+    if (moduloActivo) return;
+    if (document.querySelector("dialog[open]")) return;
+    const caja = document.activeElement.closest(".modulo__caja");
+    if (!caja) return;
+    const modulo = caja.closest(".modulo");
+    const aviso = AVISOS_MENU.find((a) => !a.el.hidden && a.el.dataset.avisoDeModulo === modulo.dataset.modulo);
+    if (!aviso) return;
+    e.preventDefault();
+    aviso.boton.focus({ preventScroll: true });
   });
   $("[data-aviso-stock-accion]").addEventListener("click", async () => {
     const { severidad, lista } = avisoStock;
@@ -2309,6 +2501,140 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     const actual = lista[indiceAvisoStock % lista.length];
     cerrarTarjetaAvisoStock();
     await SEVERIDAD_ACCION[severidad].ir(actual.textil);
+  });
+
+  /* ── Aviso de Producción (OPs atrasadas) ──────────────────────────────
+     Mismo mecanismo que el aviso de stock de arriba (ícono hermano de
+     .modulo, tarjeta que rota si hay varias) pero con una sola gravedad:
+     alcanza con la lista de OPs atrasadas ya ordenada, sin agrupar por
+     severidad. Los avisos (numero/empresa/fecha_entrega, ya calculados por
+     core.repositorio_ops.avisos_ops) llegan en cada cargar() vía
+     TD.api.obtener_resumen().avisos_produccion. */
+
+  function fechaDMAaTime(fechaDMA) {
+    const [d, m, a] = (fechaDMA || "").split("/").map(Number);
+    if (!d || !m || !a) return 0;
+    return new Date(a, m - 1, d).getTime();
+  }
+
+  function actualizarAvisoProduccion(avisos) {
+    if (!TD.contexto?.modulos_habilitados?.ops || !avisos.length) {
+      avisoProduccion = { lista: [] };
+      elAvisoProduccion.hidden = true;
+      cerrarTarjetaAvisoProduccion();
+      return;
+    }
+    // La más atrasada (fecha de entrega más antigua) primero.
+    avisoProduccion = { lista: avisos.slice().sort((a, b) => fechaDMAaTime(a.fecha_entrega) - fechaDMAaTime(b.fecha_entrega)) };
+    indiceAvisoProduccion = 0;
+    elAvisoProduccion.hidden = false;
+    if (elAvisoProduccion.hasAttribute("data-abierto")) pintarTarjetaAvisoProduccion();
+  }
+
+  function pintarTarjetaAvisoProduccion() {
+    const { lista } = avisoProduccion;
+    if (!lista.length) return;
+    const i = indiceAvisoProduccion % lista.length;
+    const actual = lista[i];
+
+    $("[data-aviso-produccion-op]").textContent = `OP ${actual.numero}`;
+    $("[data-aviso-produccion-cliente]").textContent = actual.empresa || "—";
+    $("[data-aviso-produccion-fecha]").textContent = actual.fecha_entrega || "—";
+
+    const puntos = $("[data-aviso-produccion-puntos]");
+    puntos.hidden = lista.length <= 1;
+    puntos.textContent = "";
+    lista.forEach((_, j) => {
+      const p = document.createElement("span");
+      p.className = "aviso-produccion__punto";
+      if (j === i) p.setAttribute("data-activo", "");
+      puntos.appendChild(p);
+    });
+  }
+
+  function detenerRotacionAvisoProduccion() {
+    if (temporizadorAvisoProduccion) { clearInterval(temporizadorAvisoProduccion); temporizadorAvisoProduccion = null; }
+  }
+
+  function iniciarRotacionAvisoProduccion() {
+    detenerRotacionAvisoProduccion();
+    if (avisoProduccion.lista.length <= 1) return;
+    temporizadorAvisoProduccion = setInterval(() => {
+      const elContenido = $("[data-aviso-produccion-contenido]");
+      elContenido.style.opacity = 0;
+      setTimeout(() => {
+        indiceAvisoProduccion = (indiceAvisoProduccion + 1) % avisoProduccion.lista.length;
+        pintarTarjetaAvisoProduccion();
+        elContenido.style.opacity = 1;
+      }, 180);
+    }, ROTACION_AVISO_MS);
+  }
+
+  function navegarAvisoProduccion(delta) {
+    if (avisoProduccion.lista.length <= 1) return;
+    const elContenido = $("[data-aviso-produccion-contenido]");
+    elContenido.style.opacity = 0;
+    setTimeout(() => {
+      indiceAvisoProduccion = (indiceAvisoProduccion + delta + avisoProduccion.lista.length) % avisoProduccion.lista.length;
+      pintarTarjetaAvisoProduccion();
+      elContenido.style.opacity = 1;
+    }, 180);
+    iniciarRotacionAvisoProduccion();
+  }
+
+  function cerrarTarjetaAvisoProduccionFuera(e) {
+    if (!elAvisoProduccion.contains(e.target)) cerrarTarjetaAvisoProduccion();
+  }
+
+  function abrirTarjetaAvisoProduccion() {
+    indiceAvisoProduccion = 0;
+    pintarTarjetaAvisoProduccion();
+    elAvisoProduccion.setAttribute("data-abierto", "");
+    elAvisoProduccionBoton.setAttribute("aria-expanded", "true");
+    iniciarRotacionAvisoProduccion();
+    document.addEventListener("click", cerrarTarjetaAvisoProduccionFuera);
+  }
+
+  function cerrarTarjetaAvisoProduccion() {
+    elAvisoProduccion.removeAttribute("data-abierto");
+    elAvisoProduccionBoton.setAttribute("aria-expanded", "false");
+    detenerRotacionAvisoProduccion();
+    document.removeEventListener("click", cerrarTarjetaAvisoProduccionFuera);
+  }
+
+  elAvisoProduccionBoton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (elAvisoProduccion.hasAttribute("data-abierto")) cerrarTarjetaAvisoProduccion();
+    else abrirTarjetaAvisoProduccion();
+  });
+
+  // Mismo criterio que elAvisoStockBoton: Enter con la tarjeta ya abierta
+  // aprieta el botón de acción en vez de volver a cerrarla; ArrowDown baja
+  // al módulo de OPs que corona.
+  elAvisoProduccionBoton.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (elAvisoProduccion.hasAttribute("data-abierto")) $("[data-aviso-produccion-accion]").click();
+      else abrirTarjetaAvisoProduccion();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (elAvisoProduccion.hasAttribute("data-abierto")) cerrarTarjetaAvisoProduccion();
+      const modulo = $(`.modulo[data-modulo='${elAvisoProduccion.dataset.avisoDeModulo}']`);
+      if (modulo) $(".modulo__caja", modulo).focus({ preventScroll: true });
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!elAvisoProduccion.hasAttribute("data-abierto")) return;
+    if (e.key === "Escape") { cerrarTarjetaAvisoProduccion(); return; }
+    if (e.key === "ArrowLeft") { e.preventDefault(); navegarAvisoProduccion(-1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); navegarAvisoProduccion(1); }
+  });
+  $("[data-aviso-produccion-accion]").addEventListener("click", async () => {
+    const { lista } = avisoProduccion;
+    if (!lista.length) return;
+    const actual = lista[indiceAvisoProduccion % lista.length];
+    cerrarTarjetaAvisoProduccion();
+    await TD.api.abrir_op(Number(actual.numero));
   });
 
   const ESTADOS_DESPACHO = { pendiente: "Pendiente", parcial: "Parcial", despachado: "Despachado" };
@@ -2511,7 +2837,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
       const ancho = (caja.width - gap * (COLUMNAS - 1)) / COLUMNAS;
       m.style.setProperty("--reg-alto", (ancho * (caja.height / caja.width)).toFixed(2) + "px");
     });
-    posicionarAvisoStock();
+    posicionarAvisosMenu();
   }
 
   /* ── Módulos pausados (core/config.py::MODULOS_HABILITADOS) ─────────────
@@ -2554,6 +2880,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     const despachosAsignados = r.despachos_asignados || [];
     rollosInventario     = r.rollos       || [];
     actualizarAvisoStock(r.avisos_inventario || []);
+    actualizarAvisoProduccion(r.avisos_produccion || []);
 
     /* Las incompletas van primero: son las que hay que terminar, y así su
        canto de color queda en la fila que más asoma. */

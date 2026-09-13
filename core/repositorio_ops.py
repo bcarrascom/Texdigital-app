@@ -414,3 +414,44 @@ def listar_todas_las_ops() -> list[dict]:
             vistos.add(numero)
             todas.append(datos)
     return todas
+
+
+def avisos_ops(ops: list[dict] | None = None) -> list[dict]:
+    """Un aviso por cada OP activa cuya Fecha_entrega ya pasó — pedido de
+    Bruno (2026-09-13), para el ícono de aviso del módulo de Producción/OPs
+    en el menú principal (mismo mecanismo que
+    core.repositorio_inventario.avisos_stock, pero con una sola gravedad:
+    acá no hay amarilla/naranja, una OP atrasada siempre es roja).
+
+    `ops` se puede pasar ya leído y filtrado a activas (ver
+    ui.api_menu.ApiMenu.obtener_resumen, que ya arma esa lista — mismo
+    shape {numero, empresa, fecha_entrega} que devuelve ui.api_menu.
+    _ops_activas, con fecha_entrega en "%d/%m/%Y") para no releer todo el
+    historial de OPs una segunda vez. Si no se pasa, arma esa misma lista
+    acá desde listar_todas_las_ops(). Una OP sin Fecha_entrega válida (no
+    debería pasar en una activa, pero por las dudas) se ignora en vez de
+    reventar."""
+    if ops is None:
+        ops = [
+            {
+                "numero":        d.get("Cotizacion"),
+                "empresa":       d.get("Empresa", "—"),
+                "fecha_entrega": d.get("Fecha_entrega", ""),
+            }
+            for d in listar_todas_las_ops()
+            if d.get("Estado") == ESTADO_ACTIVA
+        ]
+    hoy = datetime.now().date()
+    avisos = []
+    for o in ops:
+        try:
+            entrega = datetime.strptime(o.get("fecha_entrega", ""), "%d/%m/%Y").date()
+        except ValueError:
+            continue
+        if entrega < hoy:
+            avisos.append({
+                "numero":        o["numero"],
+                "empresa":       o["empresa"],
+                "fecha_entrega": o["fecha_entrega"],
+            })
+    return avisos
