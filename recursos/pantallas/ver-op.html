@@ -272,15 +272,33 @@
 .ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .ficha-prod__tipo { align-self: flex-start; }
 
-/* ── Recotizar: confirmación con profundidad 3D ─────────────────────────
+/* ── Diálogos de confirmación (Recotizar / Completar) ────────────────────
    Mismo <dialog> nativo que #dlg-eliminar-despacho (menu.html) — así
    hereda gratis el manejo de Escape/backdrop y el guard de app.js que
    apaga los atajos de la pantalla (Volver, ←/→) mientras un <dialog> está
-   abierto (ver "dialog[open]" en app.js::comboDe). Lo único propio acá es
-   el backdrop-filter: el resto de la ventana se DESENFOCA en vez de solo
-   oscurecerse (el dialog::backdrop de base.css ya pone el tinte oscuro) —
-   es el efecto de profundidad 3D pedido, el panel queda nítido y todo lo
-   demás retrocede fuera de foco. */
+   abierto (ver "dialog[open]" en app.js::comboDe). Pero el estilo del
+   propio <dialog> (borde redondeado, ancho acotado, sombra) NO vive en
+   base.css — cada pantalla que usa este patrón lo trae en su propio
+   <style> (ver menu.html, ver-cotizacion.html, historial-ops.html,
+   gestionar-direcciones.html) y acá había quedado sin copiar: sin esto el
+   <dialog> caía al recuadro nativo del navegador (borde negro grueso,
+   esquinas cuadradas, ancho completo) — pedido de Bruno (2026-09-13). */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* Lo único propio de estos dos diálogos puntuales es el backdrop-filter:
+   el resto de la ventana se DESENFOCA en vez de solo oscurecerse (el
+   dialog::backdrop de arriba ya pone el tinte oscuro) — es el efecto de
+   profundidad 3D pedido, el panel queda nítido y todo lo demás retrocede
+   fuera de foco. */
 #dlg-recotizar::backdrop {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
