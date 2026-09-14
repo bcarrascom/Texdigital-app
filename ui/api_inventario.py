@@ -1,17 +1,19 @@
 """
 ui/api_inventario.py
-Lógica de la tabla de rollos del panel de Inventario (menu.html) —
-instanciada una sola vez por ui.api_app.ApiApp. Gestión de rollos de tela,
-el único tipo de material del módulo Inventario por ahora (ver
-core/config.py). CRUD sobre core/repositorio_inventario.py más los
-catálogos de nombres de textil (core.repositorio.TEXTILES) y de
+Lógica de las dos tablas del panel de Inventario (menu.html) — instanciada
+una sola vez por ui.api_app.ApiApp. Gestión de rollos de tela (CRUD sobre
+core/repositorio_inventario.py) y, desde 2026-09-14, de materiales no
+textiles (CRUD sobre core/repositorio_materiales.py) — más los catálogos
+de nombres de textil (core.repositorio.TEXTILES), de materiales (nombres
+YA cargados en la propia tabla, ver cargar_nombres_materiales) y de
 proveedores (core.repositorio.cargar_proveedores/guardar_proveedor) para
-el autocompletado del formulario — mismo mecanismo que el campo Cliente de
-gestionar-direcciones.html.
+el autocompletado de los formularios — mismo mecanismo que el campo
+Cliente de gestionar-direcciones.html.
 """
 
 from core import repositorio
 from core import repositorio_inventario as _repo
+from core import repositorio_materiales as _repo_mat
 
 
 class ApiInventario:
@@ -63,3 +65,43 @@ class ApiInventario:
 
     def eliminar_ajuste_rollo(self, id_rollo: str, id_ajuste: str) -> dict | None:
         return _repo.eliminar_ajuste(id_rollo, id_ajuste)
+
+    # ── Materiales ────────────────────────────────────────────────────────
+    # "gasto_mes" se agrega ACÁ (no vive en el JSON persistido) — es un
+    # derivado de 'historial' que cambia con el simple paso del tiempo (un
+    # 1° de mes, la compra de ayer deja de contar), así que calcularlo al
+    # servir en vez de guardarlo evita que quede desactualizado.
+
+    def _con_gasto_mes(self, m: dict | None) -> dict | None:
+        if m is not None:
+            m["gasto_mes"] = _repo_mat.gasto_del_mes(m)
+        return m
+
+    def listar_materiales(self) -> list[dict]:
+        return [self._con_gasto_mes(m) for m in _repo_mat.listar_materiales()]
+
+    def obtener_material(self, id_: str) -> dict | None:
+        return self._con_gasto_mes(_repo_mat.obtener_material(id_))
+
+    def cargar_nombres_materiales(self) -> list[str]:
+        return [m["nombre"] for m in _repo_mat.listar_materiales()]
+
+    def ingresar_material(
+        self, nombre: str, cantidad, tipo="unidad", proveedor="",
+        costo_total=None, costo_unitario=None,
+    ) -> dict:
+        return self._con_gasto_mes(
+            _repo_mat.ingresar_material(nombre, cantidad, tipo, proveedor, costo_total, costo_unitario)
+        )
+
+    def editar_material(self, id_: str, nombre: str, tipo: str, valor=None, proveedor="") -> dict | None:
+        return self._con_gasto_mes(_repo_mat.editar_material(id_, nombre, tipo, valor, proveedor))
+
+    def registrar_uso_material(self, id_: str, cantidad_usada, descripcion: str = "") -> dict | None:
+        return self._con_gasto_mes(_repo_mat.registrar_uso(id_, cantidad_usada, descripcion))
+
+    def ajustar_cantidad_material(self, id_: str, nueva_cantidad, descripcion: str = "") -> dict | None:
+        return self._con_gasto_mes(_repo_mat.ajustar_cantidad(id_, nueva_cantidad, descripcion))
+
+    def eliminar_ultimo_historial_material(self, id_material: str, id_entrada: str) -> dict | None:
+        return self._con_gasto_mes(_repo_mat.eliminar_ultimo_historial(id_material, id_entrada))

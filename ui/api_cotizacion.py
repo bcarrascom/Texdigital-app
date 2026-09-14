@@ -34,6 +34,7 @@ from core.calculo_cajas import calcular_caja
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
+from core.repositorio_materiales import estructuras_legado_valores_efectivos
 from core.repositorio_cotizaciones import (
     cargar_cotizacion, guardar_cotizacion as _guardar_cotizacion_repo,
     mapear_producto, producto_desde_json, siguiente_numero, numero_en_uso,
@@ -324,6 +325,15 @@ class ApiCotizacion:
         }
 
     def obtener_catalogos(self) -> dict:
+        # Materiales editados en Inventario pisan el catálogo estático por
+        # nombre (ver core.repositorio_materiales.
+        # estructuras_legado_valores_efectivos) — acá importa sobre todo
+        # para "estructuras_unit" de abajo: si alguien le cambia el switch
+        # metro/unidad a un material desde Inventario, esta clasificación
+        # tiene que seguirlo, o el formulario seguiría dejando agregarlo a
+        # un producto sin textil (rompiendo el cálculo, que para ML
+        # necesita el ancho de un textil elegido).
+        estructuras_valores = estructuras_legado_valores_efectivos()
         return {
             "productos": PRODUCTOS,
             "textiles": TEXTILES,
@@ -336,7 +346,7 @@ class ApiCotizacion:
             # lineales, así que en un producto sin textil solo se pueden
             # agregar estas (ver nueva-cotizacion.html::agregar()).
             "estructuras_unit": [
-                n for n in ESTRUCTURAS_LEGADO if "valorUNIT" in ESTRUCTURAS_LEGADO_VALORES.get(n, {})
+                n for n in ESTRUCTURAS_LEGADO if "valorUNIT" in estructuras_valores.get(n, {})
             ],
             "terminaciones_unit": [
                 n for n in TERMINACIONES_LEGADO if "valorUNIT" in TERMINACIONES_LEGADO_VALORES.get(n, {})
@@ -397,7 +407,10 @@ class ApiCotizacion:
 
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
-        costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable)
+        costo = costo_producto(
+            interno, ml_o_area_facturable=ml_o_area_facturable,
+            estructuras_legado_valores=estructuras_legado_valores_efectivos(),
+        )
 
         if p.get("tipo") == "backlight":
             materiales = []
@@ -486,7 +499,8 @@ class ApiCotizacion:
         instalacion = estado.get("instalacion")
         descuento_pct = _num(cliente.get("descuento"), 0.0)
         totales = costo_cotizacion(productos_internos, descuento_pct,
-                                    despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+                                    despacho=despacho or 0.0, instalacion=instalacion or 0.0,
+                                    estructuras_legado_valores=estructuras_legado_valores_efectivos())
 
         fecha = _iso_a_dma(cliente.get("fecha", "")) or datetime.now().strftime("%d/%m/%Y")
         json_dict = {
