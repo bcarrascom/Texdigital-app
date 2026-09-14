@@ -416,6 +416,52 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
   letter-spacing: -.035em; line-height: 1;
 }
 .panel__bajada { font-size: var(--t-md); opacity: .7; margin-top: var(--e-2); }
+.panel__titulo-fila { display: flex; align-items: center; gap: var(--e-3); }
+
+/* ── Switch Textiles/Materiales (panel de Inventario) — misma pastilla con
+   thumb deslizante que .orden-switch de más abajo, a la mitad de ancho (2
+   posiciones en vez de 3) y sin texto, "a la altura del título" — pedido
+   de Bruno (2026-09-14). Vive junto al <h1>, no en .barra-inventario: esa
+   barra es propia de cada tabla (buscador/orden/+ cambian de una a otra),
+   el switch no. */
+.vista-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 3px;
+  background: var(--c-superficie-2);
+  border: 1px solid var(--c-borde);
+  border-radius: var(--r-full);
+}
+.vista-switch__thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 2.25rem; height: 2.25rem;
+  border-radius: 50%;
+  background: var(--c-superficie);
+  box-shadow: var(--s-1);
+  transition: transform var(--m-media) var(--ease-salida);
+}
+.vista-switch[data-activo="materiales"] .vista-switch__thumb { transform: translateX(2.25rem); }
+.vista-switch__opt {
+  position: relative;
+  z-index: 1;
+  display: grid; place-items: center;
+  width: 2.25rem; height: 2.25rem;
+  border: none; border-radius: 50%;
+  background: transparent;
+  color: var(--c-texto-tenue);
+  cursor: pointer;
+  transition: color var(--m-rapida) var(--ease-salida);
+}
+.vista-switch__opt svg { width: 1.15rem; height: 1.15rem; }
+.vista-switch__opt:hover { color: var(--c-texto-suave); }
+.vista-switch__opt[aria-checked="true"] { color: var(--c-tema-fuerte); }
+
+/* Crossfade entre la tabla de textiles y la de materiales (ver
+   cambiarVistaInventario) — mismo fundido de 180ms que usa el resto de la
+   app para repintar contenido (ver navegarAvisoStock). */
+.inv-vista { transition: opacity var(--m-rapida) var(--ease-salida); }
 
 .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
 
@@ -731,21 +777,25 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 }
 .stock__barra > i { display: block; height: 100%; background: var(--c-tema-fuerte); }
 
-/* #dlg-rollo (boton-panel-morph) — el botón "+"/el lápiz de una fila se
-   deforma hasta ser este diálogo, mismo mecanismo que 🗑 -> panel-
-   decomisionar (ver ese bloque de CSS/JS para el razonamiento completo:
-   JS anima top/left/width/height/border-radius de verdad, nunca
+/* #dlg-rollo / #dlg-material (boton-panel-morph) — el botón "+"/el lápiz
+   de una fila se deforma hasta ser el diálogo, mismo mecanismo que 🗑 ->
+   panel-decomisionar (ver ese bloque de CSS/JS para el razonamiento
+   completo: JS anima top/left/width/height/border-radius de verdad, nunca
    transform/scale). Reemplaza el ancho fijo "width: min(90vw, 30rem)" de
-   antes — ahora ese tope lo aplica JS (rectFinalRollo) al calcular el
-   rectángulo final. */
-#dlg-rollo {
+   antes — ahora ese tope lo aplica JS (rectFinalMorph) al calcular el
+   rectángulo final. #dlg-material (Ingresar material) se sumó acá
+   (pedido de Bruno, 2026-09-15) reusando exactamente las mismas reglas:
+   el JS de abrirDialogoMaterial/cerrarDialogoMaterial es el mismo
+   mecanismo genérico (rectFinalMorph/aplicarRectMorph/altoContenidoMorph)
+   que ya usaba #dlg-rollo, parametrizado por diálogo — ver más abajo. */
+#dlg-rollo, #dlg-material {
   position: fixed; margin: 0;
   overflow: hidden;
   max-width: none; /* el "dialog { max-width: min(90vw,26rem) }" genérico
-    recortaría el ancho de 30rem que calcula rectFinalRollo — JS manda acá */
+    recortaría el ancho de 30rem que calcula rectFinalMorph — JS manda acá */
   /* "background" viaja en la misma transición: arranca del verde del
      botón de origen (JS se lo pone justo antes de abrir/cerrar, ver
-     abrirDialogoRollo/cerrarDialogoRollo) y termina en el blanco de
+     abrirDialogoRollo/abrirDialogoMaterial) y termina en el blanco de
      "dialog { background: var(--c-superficie) }" — un solo gesto, no dos
      animaciones separadas. */
   transition: top var(--m-expansion) var(--ease-salida),
@@ -755,12 +805,12 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
               border-radius var(--m-expansion) var(--ease-salida),
               background var(--m-expansion) var(--ease-salida);
 }
-#dlg-rollo[data-abierto] { border-radius: var(--r-xl); }
-#dlg-rollo::backdrop {
+#dlg-rollo[data-abierto], #dlg-material[data-abierto] { border-radius: var(--r-xl); }
+#dlg-rollo::backdrop, #dlg-material::backdrop {
   background: rgba(22, 22, 26, 0);
   transition: background var(--m-expansion) var(--ease-entrada);
 }
-#dlg-rollo[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
+#dlg-rollo[data-abierto]::backdrop, #dlg-material[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
 .dlg-rollo__contenido {
   opacity: 0;
   max-height: 100%; overflow-y: auto;
@@ -775,7 +825,8 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
   scrollbar-gutter: stable;
   transition: opacity var(--m-rapida) var(--ease-salida);
 }
-#dlg-rollo[data-abierto] .dlg-rollo__contenido {
+#dlg-rollo[data-abierto] .dlg-rollo__contenido,
+#dlg-material[data-abierto] .dlg-rollo__contenido {
   opacity: 1;
   transition-delay: var(--m-expansion);
 }
@@ -828,6 +879,20 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 .ajustar__tipo { grid-area: tipo; justify-self: start; }
 .ajustar__tipo label { display: inline-flex; align-items: center; gap: var(--e-2); }
 .ajustar__tipo svg { width: 1rem; height: 1rem; flex: none; }
+
+/* Variante del .segmento genérico para switches de solo ícono (sin texto)
+   — pedido de Bruno (2026-09-15): "Se cobra por" (metro/unidad) del
+   diálogo de editar material. Mismo mecanismo de pastilla deslizante que
+   .segmento, la label solo centra el SVG en vez de acomodar texto.
+   justify-self:start por el mismo motivo que .ajustar__tipo más arriba:
+   dentro de un .campo (grid), un ítem inline-flex igual se estira a lo
+   ancho de la celda si no se le dice lo contrario — sin esto la pastilla
+   quedaba angosta pero el contenedor entero (y el cálculo de
+   .segmento::before, que es "right:50%" DEL CONTENEDOR) ocupaba todo el
+   ancho del diálogo. */
+.segmento--iconos { justify-self: start; }
+.segmento--iconos label { display: grid; place-items: center; padding: .4rem .9rem; }
+.segmento--iconos svg { width: 1.1rem; height: 1.1rem; flex: none; }
 /* Cantidad y Activación se pisan a propósito en la misma celda del grid
    (misma clase .ajustar__campo-delta) — nunca están los dos visibles a la
    vez (uno de los dos siempre trae [hidden]), así que no llegan a
@@ -866,6 +931,11 @@ tr[data-resaltada] { animation: resaltar-fila 2.4s var(--ease-salida); }
 .chip-tipo--consumo { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
 .chip-tipo--activo { background: var(--c-ok-suave); color: var(--c-ok); }
 .chip-tipo--inactivo { background: var(--c-error-suave); color: var(--c-error); }
+/* Mismos chips para el mini-historial de #dlg-material-ajustar (ver-material.
+   html trae su propia copia — cada pantalla es su propio <style>, mismo
+   criterio que el resto de la app). */
+.chip-tipo--compra { background: var(--c-ok-suave); color: var(--c-ok); }
+.chip-tipo--uso { background: var(--c-error-suave); color: var(--c-error); }
 
 /* ── Panel de decomisionar: el botón 🗑 de la fila se DEFORMA hasta ser
    el panel ("boton-panel-morph", mismo mecanismo que "+ Agregar dirección
@@ -1020,41 +1090,77 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   </div>
   <div class="panel__cuerpo">
     <div>
-      <h1 class="panel__titulo">Inventario</h1>
-      <p class="panel__bajada">Rollos de tela — stock disponible.</p>
-    </div>
-    <section class="panel__seccion">
-      <div class="barra-inventario">
-        <input class="entrada" type="search" data-inv-buscar placeholder="Buscar por ID o textil…">
-        <div class="orden-switch" data-orden-switch data-activo="id" role="radiogroup" aria-label="Ordenar rollos por">
-          <span class="orden-switch__thumb" aria-hidden="true"></span>
-          <button class="orden-switch__opt" type="button" data-orden="nombre" role="radio" aria-checked="false" title="Ordenar por nombre de textil (A-Z)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16"/><path d="M15.697 14h5.606"/><path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"/><path d="M3.304 13h6.392"/></svg>
+      <div class="panel__titulo-fila">
+        <h1 class="panel__titulo">Inventario</h1>
+        <div class="vista-switch" data-vista-switch data-activo="textiles" role="radiogroup" aria-label="Vista de inventario">
+          <span class="vista-switch__thumb" aria-hidden="true"></span>
+          <button class="vista-switch__opt" type="button" data-vista="textiles" role="radio" aria-checked="true" title="Rollos de tela">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 11a2 2 0 1 1-4 0 4 4 0 0 1 8 0 6 6 0 0 1-12 0 8 8 0 0 1 16 0 10 10 0 1 1-20 0 11.93 11.93 0 0 1 2.42-7.22 2 2 0 1 1 3.16 2.44"/></svg>
           </button>
-          <button class="orden-switch__opt" type="button" data-orden="id" role="radio" aria-checked="true" title="Ordenar por ID">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><rect x="15" y="4" width="4" height="6" ry="2"/><path d="M17 20v-6h-2"/><path d="M15 20h4"/></svg>
-          </button>
-          <button class="orden-switch__opt" type="button" data-orden="metros_restantes" role="radio" aria-checked="false" title="Ordenar por cantidad restante">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v-3"/><path d="M14 15v-3"/><path d="M18 15v-3"/><path d="M2 8V4"/><path d="M22 6H2"/><path d="M22 8V4"/><path d="M6 15v-3"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>
+          <button class="vista-switch__opt" type="button" data-vista="materiales" role="radio" aria-checked="false" title="Materiales">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3"/><path d="m17 16.5 4.74-2.85"/><path d="M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15"/><path d="m12 8 4.74-2.85"/><path d="M12 13.5V8"/></svg>
           </button>
         </div>
-        <button class="toggle-inactivos" type="button" data-toggle-inactivos title="Rollos inactivos: mostrar"></button>
-        <button class="btn-nuevo-rollo" type="button" data-accion="nuevo-rollo" title="Nuevo rollo">+</button>
       </div>
-      <div class="tabla-caja">
-        <table class="tabla">
-          <thead>
-            <tr>
-              <th>Rollo</th>
-              <th>Origen</th>
-              <th>Valor</th>
-              <th>Stock</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody data-inv-filas></tbody>
-        </table>
-        <p class="estado-vacio" data-inv-estado-vacio hidden>No hay rollos de tela guardados todavía.</p>
+      <p class="panel__bajada" data-inv-bajada>Rollos de tela — stock disponible.</p>
+    </div>
+    <section class="panel__seccion">
+      <div class="inv-vista" data-inv-vista="textiles">
+        <div class="barra-inventario">
+          <input class="entrada" type="search" data-inv-buscar placeholder="Buscar por ID o textil…">
+          <div class="orden-switch" data-orden-switch data-activo="id" role="radiogroup" aria-label="Ordenar rollos por">
+            <span class="orden-switch__thumb" aria-hidden="true"></span>
+            <button class="orden-switch__opt" type="button" data-orden="nombre" role="radio" aria-checked="false" title="Ordenar por nombre de textil (A-Z)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16"/><path d="M15.697 14h5.606"/><path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"/><path d="M3.304 13h6.392"/></svg>
+            </button>
+            <button class="orden-switch__opt" type="button" data-orden="id" role="radio" aria-checked="true" title="Ordenar por ID">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><rect x="15" y="4" width="4" height="6" ry="2"/><path d="M17 20v-6h-2"/><path d="M15 20h4"/></svg>
+            </button>
+            <button class="orden-switch__opt" type="button" data-orden="metros_restantes" role="radio" aria-checked="false" title="Ordenar por cantidad restante">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v-3"/><path d="M14 15v-3"/><path d="M18 15v-3"/><path d="M2 8V4"/><path d="M22 6H2"/><path d="M22 8V4"/><path d="M6 15v-3"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>
+            </button>
+          </div>
+          <button class="toggle-inactivos" type="button" data-toggle-inactivos title="Rollos inactivos: mostrar"></button>
+          <button class="btn-nuevo-rollo" type="button" data-accion="nuevo-rollo" title="Nuevo rollo">+</button>
+        </div>
+        <div class="tabla-caja">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Rollo</th>
+                <th>Origen</th>
+                <th>Valor</th>
+                <th>Stock</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody data-inv-filas></tbody>
+          </table>
+          <p class="estado-vacio" data-inv-estado-vacio hidden>No hay rollos de tela guardados todavía.</p>
+        </div>
+      </div>
+
+      <div class="inv-vista" data-inv-vista="materiales" hidden>
+        <div class="barra-inventario">
+          <input class="entrada" type="search" data-mat-buscar placeholder="Buscar material…">
+          <button class="btn-nuevo-rollo" type="button" data-accion="nuevo-material" title="Ingresar material">+</button>
+        </div>
+        <div class="tabla-caja">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Cantidad</th>
+                <th>Proveedor</th>
+                <th>Gasto este mes</th>
+                <th>Valor</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody data-mat-filas></tbody>
+          </table>
+          <p class="estado-vacio" data-mat-estado-vacio hidden>No hay materiales guardados todavía.</p>
+        </div>
       </div>
     </section>
   </div>
@@ -1284,6 +1390,131 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   </div>
 </dialog>
 
+<!-- ═══ Inventario: diálogos de la tabla de materiales (panel[data-panel="inventario"]) ═══ -->
+
+<dialog id="dlg-material">
+  <div class="dlg-rollo__contenido">
+  <h2 class="dlg__titulo">Ingresar material</h2>
+  <div class="dlg-rollo__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dm-nombre">Material</label>
+      <input class="entrada" id="dm-nombre" type="text" list="lista-materiales" autocomplete="off">
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="dm-cantidad">Cantidad</label>
+        <input class="entrada" id="dm-cantidad" type="number" step="0.01" min="0">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dm-proveedor">Proveedor</label>
+        <input class="entrada" id="dm-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dm-costo-total">Costo total</label>
+        <input class="entrada" id="dm-costo-total" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dm-costo-unitario">Costo unitario</label>
+        <input class="entrada" id="dm-costo-unitario" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-material">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-material">Guardar</button>
+  </div>
+  </div>
+</dialog>
+<datalist id="lista-materiales"></datalist>
+
+<dialog id="dlg-material-editar">
+  <h2 class="dlg__titulo" data-dlg-material-editar-titulo>Editar material</h2>
+  <div class="dlg-rollo__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dme-nombre">Material</label>
+      <input class="entrada" id="dme-nombre" type="text" autocomplete="off">
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="campo">
+      <div class="segmento segmento--iconos" role="radiogroup" aria-label="Cómo se cobra este material">
+        <input type="radio" name="dme-tipo" id="dme-tipo-unidad" checked>
+        <label for="dme-tipo-unidad" title="Por unidad">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        </label>
+        <input type="radio" name="dme-tipo" id="dme-tipo-metro">
+        <label for="dme-tipo-metro" title="Por metro">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
+        </label>
+      </div>
+    </div>
+    <div class="fila fila--proveedor">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-proveedor">Proveedor</label>
+        <input class="entrada" id="dme-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" id="dme-valor-etiqueta" for="dme-valor">Valor por unidad</label>
+        <input class="entrada" id="dme-valor" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+    </div>
+    <p class="campo__ayuda">Este valor pasa a ser lo que cobran las cotizaciones nuevas por este material — las ya guardadas no cambian de precio.</p>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-material-editar">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-material-editar">Guardar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-material-ajustar">
+  <h2 class="dlg__titulo" data-dlg-material-ajustar-titulo>Ajustar cantidad</h2>
+  <div class="ajustar__stock">
+    <span>Cantidad actual</span>
+    <strong data-material-ajustar-stock></strong>
+  </div>
+
+  <div class="ajustar__tabla">
+    <table>
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Cambio</th><th>Descripción</th><th></th></tr></thead>
+      <tbody data-material-ajustar-filas></tbody>
+    </table>
+    <p class="ajustar__vacio" data-material-ajustar-vacio hidden>Todavía no se registró ningún movimiento.</p>
+    <button class="ajustar__ver-todo" type="button" data-accion="ver-historial-completo-material" hidden>Ver historial completo →</button>
+  </div>
+
+  <div class="ajustar__form">
+    <div class="segmento ajustar__tipo" role="group" aria-label="Tipo de movimiento">
+      <input type="radio" name="dma-tipo" id="dma-tipo-uso" checked>
+      <label for="dma-tipo-uso">Uso</label>
+      <input type="radio" name="dma-tipo" id="dma-tipo-ajuste">
+      <label for="dma-tipo-ajuste">Ajuste</label>
+    </div>
+
+    <div class="campo ajustar__campo-delta" data-panel-tipo-material="uso">
+      <label class="campo__etiqueta" for="dma-cantidad-uso">Cantidad usada</label>
+      <input class="entrada" id="dma-cantidad-uso" type="number" step="0.01" min="0" value="0">
+      <span class="campo__ayuda" data-material-ajustar-preview></span>
+    </div>
+    <div class="campo ajustar__campo-delta" data-panel-tipo-material="ajuste" hidden>
+      <label class="campo__etiqueta" for="dma-cantidad-ajuste">Cantidad correcta</label>
+      <input class="entrada" id="dma-cantidad-ajuste" type="number" step="0.01" min="0">
+    </div>
+
+    <div class="campo ajustar__campo-descripcion">
+      <label class="campo__etiqueta" for="dma-descripcion">Descripción</label>
+      <textarea class="entrada" id="dma-descripcion" rows="3" placeholder="Qué pasó (opcional)…"></textarea>
+    </div>
+    <button class="btn btn--primario btn--chico ajustar__guardar" type="button" data-accion="guardar-ajuste-material">Guardar</button>
+  </div>
+
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cerrar-ajustar-material">Cerrar</button>
+  </div>
+</dialog>
+
 <script src="api.js"></script>
 <script src="app.js"></script>
 <script>
@@ -1431,6 +1662,14 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   let idParaAjustarRollo = null;  // rollo abierto en el diálogo de ajustar cantidad
   let idADecomisionar = null;
   let botonOrigenDecomisionar = null;
+
+  // Segunda tabla del panel (materiales no textiles, ver
+  // core/repositorio_materiales.py) — mismo criterio de estado que rollos
+  // arriba, pero sin decomisionar (no hay estado, "todos son activos").
+  let vistaInventario = "textiles";  // "textiles" | "materiales" — ver cambiarVistaInventario
+  let materialesInventario = [];
+  let idEnEdicionMaterial = null;    // material abierto en el diálogo de edición
+  let idParaAjustarMaterial = null;  // material abierto en el diálogo de ajustar cantidad
 
   // Formato CLP en vivo para #dr-precio-compra / #dr-valor (siempre enteros,
   // sin decimales — igual que TD.fmt.pesos): se guarda solo el dígito, el
@@ -1681,6 +1920,373 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
 
   $("[data-inv-buscar]").addEventListener("input", pintarTablaInventario);
 
+  /* ── Segunda tabla: Materiales (switch Textiles/Materiales) ─────────────
+     Mismo mecanismo de tabla que rollos arriba, pero sin Activo/Inactivo
+     ni decomisionar — "todos son activos" (pedido de Bruno, ver
+     core/repositorio_materiales.py). Los 3 diálogos de acá
+     (#dlg-material/-editar/-ajustar) son <dialog> simples con
+     showModal()/close() — ni #dlg-ajustar (su equivalente más cercano
+     entre los de rollos) usa el morph animado de #dlg-rollo, así que
+     tampoco hacía falta acá. */
+
+  const elVistaSwitch = $("[data-vista-switch]");
+  const dlgMaterial = $("#dlg-material");
+  const dlgMaterialEditar = $("#dlg-material-editar");
+  const dlgMaterialAjustar = $("#dlg-material-ajustar");
+  const ETIQUETA_TIPO_MATERIAL = { compra: "Compra", uso: "Uso", ajuste: "Ajuste" };
+
+  function unidadDeMaterial(m) { return (m && m.tipo === "metro") ? "m" : "un."; }
+
+  function celdaValorMaterial(m) {
+    if (m.valor == null) return `<span class="celda-combo__principal">—</span>`;
+    const suf = m.tipo === "metro" ? "/m" : "/un.";
+    return `
+      <span class="celda-combo__principal">${TD.fmt.pesos(m.valor)}${suf}</span>
+      <span class="celda-combo__detalle">${TD.fmt.pesos(m.valor * m.cantidad)} total</span>`;
+  }
+
+  function filaMaterial(m) {
+    const tr = document.createElement("tr");
+    tr.dataset.id = m.id;
+    tr.innerHTML = `
+      <td>${esc(m.nombre)}</td>
+      <td>${TD.fmt.cantidad(m.cantidad)} ${unidadDeMaterial(m)}</td>
+      <td>${esc(m.proveedor) || "—"}</td>
+      <td>${TD.fmt.pesos(m.gasto_mes || 0)}</td>
+      <td><div class="celda-combo">${celdaValorMaterial(m)}</div></td>
+      <td class="acciones">
+        <button class="btn-fila-icono" type="button" data-accion="editar-material" title="Editar">
+          <div class="icon-pencil"></div>
+        </button>
+        <button class="btn-fila-icono" type="button" data-accion="ajustar-material" title="Ajustar cantidad">
+          <div class="icon-wrench"></div>
+        </button>
+        <button class="btn-fila-icono" type="button" data-accion="ver-historial-material" title="Ver historial completo">
+          <div class="icon-info"></div>
+        </button>
+      </td>`;
+    $("[data-accion='editar-material']", tr).addEventListener("click", () => abrirDialogoMaterialEditar(m));
+    $("[data-accion='ajustar-material']", tr).addEventListener("click", () => abrirDialogoAjustarMaterial(m.id));
+    $("[data-accion='ver-historial-material']", tr).addEventListener("click", () => TD.api.abrir_material(m.id));
+    return tr;
+  }
+
+  function pintarTablaMateriales() {
+    const filtro = $("[data-mat-buscar]").value.trim().toLowerCase();
+    const filtradas = !filtro ? materialesInventario
+      : materialesInventario.filter((m) => String(m.nombre || "").toLowerCase().includes(filtro));
+    const cuerpo = $("[data-mat-filas]");
+    cuerpo.textContent = "";
+    filtradas.forEach((m) => cuerpo.appendChild(filaMaterial(m)));
+    $("[data-mat-estado-vacio]").hidden = filtradas.length > 0;
+  }
+
+  async function actualizarListaMateriales() {
+    const nombres = (await TD.api.cargar_nombres_materiales()) || [];
+    $("#lista-materiales").innerHTML = nombres.map((n) => `<option value="${esc(n)}"></option>`).join("");
+  }
+
+  async function recargarMaterialesInventario() {
+    materialesInventario = (await TD.api.listar_materiales()) || [];
+    pintarTablaMateriales();
+    await actualizarListaMateriales();
+  }
+
+  $("[data-mat-buscar]").addEventListener("input", pintarTablaMateriales);
+
+  /* Switch Textiles/Materiales — mismo fundido de 180ms que usa el resto
+     de la app para repintar contenido al cambiar de vista (ver
+     navegarAvisoStock: fade-out -> repintar -> fade-in). Materiales se
+     carga recién la PRIMERA vez que se muestra (no hace falta pedirlo si
+     el usuario nunca abre esa vista en la sesión) — después queda al día
+     solo porque cada acción de materiales (ingresar/editar/ajustar) ya
+     llama a recargarMaterialesInventario(). */
+  function cambiarVistaInventario(vista) {
+    const destino = $(`.inv-vista[data-inv-vista='${vista}']`);
+    if (vista === vistaInventario || !destino) return;
+    const actual = $(`.inv-vista[data-inv-vista='${vistaInventario}']`);
+    actual.style.opacity = 0;
+    setTimeout(() => {
+      actual.hidden = true;
+      destino.hidden = false;
+      destino.style.opacity = 0;
+      requestAnimationFrame(() => { destino.style.opacity = 1; });
+      vistaInventario = vista;
+      elVistaSwitch.setAttribute("data-activo", vista);
+      $$(".vista-switch__opt", elVistaSwitch).forEach((b) =>
+        b.setAttribute("aria-checked", String(b.dataset.vista === vista)));
+      $("[data-inv-bajada]").textContent = vista === "materiales"
+        ? "Materiales — stock disponible."
+        : "Rollos de tela — stock disponible.";
+      if (vista === "materiales" && !materialesInventario.length) recargarMaterialesInventario();
+    }, 180);
+  }
+  $$(".vista-switch__opt", elVistaSwitch).forEach((btn) => {
+    btn.addEventListener("click", () => cambiarVistaInventario(btn.dataset.vista));
+  });
+
+  /* ── Diálogo "Ingresar material" (#dlg-material) ─────────────────────────
+     Una sola acción sirve para crear un material nuevo O sumar stock a
+     uno existente (ver core.repositorio_materiales.ingresar_material,
+     busca por nombre) — por eso el campo Material tiene autocompletado
+     pero es texto libre, no un <select>: el usuario no elige entre "nuevo"
+     o "existente", tipea el nombre y listo. */
+
+  function actualizarCostosMaterial(origen) {
+    const cantidad = parseFloat($("#dm-cantidad").value);
+    if (!(cantidad > 0)) return;
+    const campoTotal = $("#dm-costo-total");
+    const campoUnitario = $("#dm-costo-unitario");
+    if (origen === "total") {
+      const total = numeroClp(campoTotal.value);
+      if (total != null) campoUnitario.value = formatearClp(Math.round(total / cantidad));
+    } else {
+      const unitario = numeroClp(campoUnitario.value);
+      if (unitario != null) campoTotal.value = formatearClp(Math.round(unitario * cantidad));
+    }
+  }
+  $("#dm-costo-total").addEventListener("input", (e) => {
+    e.target.value = formatearClp(e.target.value);
+    actualizarCostosMaterial("total");
+  });
+  $("#dm-costo-unitario").addEventListener("input", (e) => {
+    e.target.value = formatearClp(e.target.value);
+    actualizarCostosMaterial("unitario");
+  });
+  $("#dm-cantidad").addEventListener("input", () => {
+    if (numeroClp($("#dm-costo-total").value) != null) actualizarCostosMaterial("total");
+    else if (numeroClp($("#dm-costo-unitario").value) != null) actualizarCostosMaterial("unitario");
+  });
+
+  // Mismo boton-panel-morph que el diálogo de rollo (pedido de Bruno,
+  // 2026-09-15) — crece desde el botón "+" de la barra de materiales, ver
+  // abrirDialogoMorph/cerrarDialogoMorph más arriba.
+  function abrirDialogoMaterial(boton) {
+    botonOrigenMaterial = boton || $("[data-accion='nuevo-material']");
+    abrirDialogoMorph(dlgMaterial, botonOrigenMaterial, () => {
+      limpiarErroresInventario(dlgMaterial);
+      $("#dm-nombre").value = "";
+      $("#dm-cantidad").value = "";
+      $("#dm-proveedor").value = "";
+      $("#dm-costo-total").value = "";
+      $("#dm-costo-unitario").value = "";
+    });
+  }
+  function cerrarDialogoMaterial() {
+    cerrarDialogoMorph(dlgMaterial, botonOrigenMaterial);
+  }
+  $("[data-accion='nuevo-material']").addEventListener("click", (e) => abrirDialogoMaterial(e.currentTarget));
+  $("[data-accion='cancelar-material']").addEventListener("click", () => cerrarDialogoMaterial());
+  dlgMaterial.addEventListener("cancel", (e) => { e.preventDefault(); cerrarDialogoMaterial(); });
+  dlgMaterial.addEventListener("click", (e) => { if (e.target === dlgMaterial) cerrarDialogoMaterial(); });
+
+  $("[data-accion='guardar-material']").addEventListener("click", async () => {
+    const campoNombre = $("#dm-nombre");
+    const campoCantidad = $("#dm-cantidad");
+    const nombre = campoNombre.value.trim();
+    const cantidad = parseFloat(campoCantidad.value);
+
+    let valido = true;
+    campoNombre.closest(".campo").toggleAttribute("data-invalido", !nombre);
+    if (!nombre) valido = false;
+    campoCantidad.closest(".campo").toggleAttribute("data-invalido", !(cantidad > 0));
+    if (!(cantidad > 0)) valido = false;
+    if (!valido) return;
+
+    const proveedor = $("#dm-proveedor").value.trim();
+    const costoTotal = numeroClp($("#dm-costo-total").value);
+    const costoUnitario = numeroClp($("#dm-costo-unitario").value);
+
+    if (proveedor) {
+      await TD.api.guardar_proveedor(proveedor);
+      const proveedoresInventario = (await TD.api.cargar_proveedores()) || [];
+      $("#lista-proveedores").innerHTML =
+        proveedoresInventario.map((p) => `<option value="${esc(p)}"></option>`).join("");
+    }
+
+    await TD.api.ingresar_material(nombre, cantidad, "unidad", proveedor, costoTotal, costoUnitario);
+    cerrarDialogoMaterial();
+    await recargarMaterialesInventario();
+    TD.aviso("Material ingresado.", "info");
+  });
+
+  /* ── Diálogo "Editar material" (#dlg-material-editar) ────────────────────
+     Nombre/tipo (switch Metro/Unidad)/valor/proveedor — NO cantidad (eso
+     es del diálogo de ajustar). El valor de acá es el que pisa
+     ESTRUCTURAS_LEGADO_VALORES para cotizaciones nuevas — ver
+     core.repositorio_materiales.estructuras_legado_valores_efectivos. */
+
+  function actualizarEtiquetaValorMaterial() {
+    const metro = $("#dme-tipo-metro").checked;
+    $("#dme-valor-etiqueta").textContent = metro ? "Valor por metro" : "Valor por unidad";
+  }
+  $("#dme-tipo-metro").addEventListener("change", actualizarEtiquetaValorMaterial);
+  $("#dme-tipo-unidad").addEventListener("change", actualizarEtiquetaValorMaterial);
+  activarInputClp($("#dme-valor"));
+
+  function abrirDialogoMaterialEditar(m) {
+    idEnEdicionMaterial = m.id;
+    limpiarErroresInventario(dlgMaterialEditar);
+    $("[data-dlg-material-editar-titulo]").textContent = `Editar material · ${m.nombre}`;
+    $("#dme-nombre").value = m.nombre || "";
+    $("#dme-tipo-metro").checked = m.tipo === "metro";
+    $("#dme-tipo-unidad").checked = m.tipo !== "metro";
+    $("#dme-proveedor").value = m.proveedor || "";
+    $("#dme-valor").value = m.valor != null ? formatearClp(m.valor) : "";
+    actualizarEtiquetaValorMaterial();
+    dlgMaterialEditar.showModal();
+  }
+  $("[data-accion='cancelar-material-editar']").addEventListener("click", () => dlgMaterialEditar.close());
+  dlgMaterialEditar.addEventListener("click", (e) => { if (e.target === dlgMaterialEditar) dlgMaterialEditar.close(); });
+  dlgMaterialEditar.addEventListener("close", () => { idEnEdicionMaterial = null; });
+
+  $("[data-accion='guardar-material-editar']").addEventListener("click", async () => {
+    if (!idEnEdicionMaterial) return;
+    const campoNombre = $("#dme-nombre");
+    const nombre = campoNombre.value.trim();
+    campoNombre.closest(".campo").toggleAttribute("data-invalido", !nombre);
+    if (!nombre) return;
+
+    const tipo = $("#dme-tipo-metro").checked ? "metro" : "unidad";
+    const proveedor = $("#dme-proveedor").value.trim();
+    const valor = numeroClp($("#dme-valor").value);
+
+    await TD.api.editar_material(idEnEdicionMaterial, nombre, tipo, valor, proveedor);
+    dlgMaterialEditar.close();
+    await recargarMaterialesInventario();
+    TD.aviso("Material actualizado.", "info");
+  });
+
+  /* ── Diálogo "Ajustar cantidad" (#dlg-material-ajustar) ──────────────────
+     Calco de #dlg-ajustar (rollos): últimos 2 movimientos con deshacer en
+     el más reciente, "Ver historial completo" hacia ver-material.html.
+     Dos modos en vez de Cantidad/Activación: Uso (resta, con vista previa
+     en vivo) y Ajuste (corrección absoluta, sin vista previa — mismo
+     criterio que ajustar_restante de rollos, "poné la cantidad correcta"). */
+
+  function filaAjusteMaterial(materialId, u, esLaMasReciente, unidad) {
+    const tr = document.createElement("tr");
+    const chipClase = u.tipo === "compra" ? "chip-tipo chip-tipo--compra"
+      : u.tipo === "uso" ? "chip-tipo chip-tipo--uso" : "chip-tipo";
+    tr.innerHTML = `
+      <td>${esc(u.fecha)}</td>
+      <td><span class="${chipClase}">${esc(ETIQUETA_TIPO_MATERIAL[u.tipo] || u.tipo)}</span></td>
+      <td>${esc(TD.fmt.cantidad(u.cantidad_anterior))} → ${esc(TD.fmt.cantidad(u.cantidad_nueva))} ${unidad}</td>
+      <td class="descripcion">${esc(u.descripcion) || "—"}</td>
+      <td></td>`;
+    if (esLaMasReciente) {
+      const btn = document.createElement("button");
+      btn.className = "btn-fila-icono btn-fila-icono--peligro";
+      btn.type = "button";
+      btn.title = "Deshacer este movimiento";
+      btn.innerHTML = `<div class="icon-trash"></div>`;
+      btn.addEventListener("click", async () => {
+        await TD.api.eliminar_ultimo_historial_material(materialId, u.id);
+        await recargarMaterialesInventario();
+        pintarDialogoAjustarMaterial(materialId);
+      });
+      tr.lastElementChild.appendChild(btn);
+    }
+    return tr;
+  }
+
+  function mostrarPanelAjusteMaterial(tipo) {
+    $$("[data-panel-tipo-material]").forEach((el) => { el.hidden = el.dataset.panelTipoMaterial !== tipo; });
+  }
+
+  function pintarDialogoAjustarMaterial(materialId) {
+    const m = materialesInventario.find((x) => x.id === materialId);
+    if (!m) { dlgMaterialAjustar.close(); return; }
+
+    const unidad = unidadDeMaterial(m);
+    $("[data-dlg-material-ajustar-titulo]").textContent = `Ajustar cantidad · ${m.nombre}`;
+    $("[data-material-ajustar-stock]").textContent = `${TD.fmt.cantidad(m.cantidad)} ${unidad}`;
+
+    // Solo los últimos 2 acá, mismo criterio que rollos — para revisar
+    // años de historial está "Ver historial completo" (ver-material.html).
+    const historial = (m.historial || []).slice().reverse();
+    const mostrar = historial.slice(0, 2);
+    const cuerpo = $("[data-material-ajustar-filas]");
+    cuerpo.textContent = "";
+    mostrar.forEach((u, i) => cuerpo.appendChild(filaAjusteMaterial(m.id, u, i === 0, unidad)));
+    $("[data-material-ajustar-vacio]").hidden = historial.length > 0;
+    $("[data-accion='ver-historial-completo-material']").hidden = historial.length <= 2;
+  }
+
+  function actualizarVistaPreviaAjusteMaterial() {
+    const m = materialesInventario.find((x) => x.id === idParaAjustarMaterial);
+    const campoUso = $("#dma-cantidad-uso");
+    const preview = $("[data-material-ajustar-preview]");
+    if (!m) { preview.textContent = ""; return; }
+    const usada = parseFloat(campoUso.value);
+    if (!(usada > 0)) {
+      preview.textContent = "";
+      campoUso.closest(".campo").removeAttribute("data-invalido");
+      return;
+    }
+    const nuevo = Math.round((m.cantidad - usada) * 100) / 100;
+    const invalido = nuevo < 0;
+    campoUso.closest(".campo").toggleAttribute("data-invalido", invalido);
+    preview.textContent = invalido
+      ? "No puede quedar negativo."
+      : `${TD.fmt.cantidad(m.cantidad)} → ${TD.fmt.cantidad(nuevo)} ${unidadDeMaterial(m)}`;
+  }
+
+  function abrirDialogoAjustarMaterial(materialId) {
+    idParaAjustarMaterial = materialId;
+    $("#dma-cantidad-uso").value = "0";
+    $("#dma-cantidad-ajuste").value = "";
+    $("#dma-descripcion").value = "";
+    $("[data-material-ajustar-preview]").textContent = "";
+    $("#dma-tipo-uso").checked = true;
+    mostrarPanelAjusteMaterial("uso");
+    limpiarErroresInventario(dlgMaterialAjustar);
+    pintarDialogoAjustarMaterial(materialId);
+    dlgMaterialAjustar.showModal();
+  }
+  $("[data-accion='cerrar-ajustar-material']").addEventListener("click", () => dlgMaterialAjustar.close());
+  dlgMaterialAjustar.addEventListener("click", (e) => { if (e.target === dlgMaterialAjustar) dlgMaterialAjustar.close(); });
+  dlgMaterialAjustar.addEventListener("close", () => { idParaAjustarMaterial = null; });
+  $("[data-accion='ver-historial-completo-material']").addEventListener("click", () => {
+    if (idParaAjustarMaterial) TD.api.abrir_material(idParaAjustarMaterial);
+  });
+
+  $("#dma-cantidad-uso").addEventListener("input", actualizarVistaPreviaAjusteMaterial);
+  $("#dma-tipo-uso").addEventListener("change", () => mostrarPanelAjusteMaterial("uso"));
+  $("#dma-tipo-ajuste").addEventListener("change", () => mostrarPanelAjusteMaterial("ajuste"));
+
+  async function guardarAjusteMaterial() {
+    if (!idParaAjustarMaterial) return;
+    const m = materialesInventario.find((x) => x.id === idParaAjustarMaterial);
+    if (!m) return;
+
+    if ($("#dma-tipo-ajuste").checked) {
+      const campo = $("#dma-cantidad-ajuste");
+      const nueva = parseFloat(campo.value);
+      const invalido = !(nueva >= 0);
+      campo.closest(".campo").toggleAttribute("data-invalido", invalido);
+      if (invalido) return;
+      await TD.api.ajustar_cantidad_material(idParaAjustarMaterial, nueva, $("#dma-descripcion").value.trim());
+      $("#dma-cantidad-ajuste").value = "";
+    } else {
+      const campo = $("#dma-cantidad-uso");
+      const usada = parseFloat(campo.value);
+      if (!(usada > 0)) return;  // 0 no es un uso — nada que guardar
+      const nuevo = Math.round((m.cantidad - usada) * 100) / 100;
+      const invalido = nuevo < 0;
+      campo.closest(".campo").toggleAttribute("data-invalido", invalido);
+      if (invalido) return;
+      await TD.api.registrar_uso_material(idParaAjustarMaterial, usada, $("#dma-descripcion").value.trim());
+      $("#dma-cantidad-uso").value = "0";
+    }
+    $("#dma-descripcion").value = "";
+    $("[data-material-ajustar-preview]").textContent = "";
+    await recargarMaterialesInventario();
+    pintarDialogoAjustarMaterial(idParaAjustarMaterial);
+    TD.aviso("Cantidad actualizada.", "info");
+  }
+  $("[data-accion='guardar-ajuste-material']").addEventListener("click", guardarAjusteMaterial);
+
   /* ── Diálogo agregar/editar rollo (boton-panel-morph) ─────────────────────
      El botón "+" (Nuevo rollo) o el lápiz de una fila (Editar) se deforma
      hasta ser este diálogo — mismo mecanismo que 🗑 -> panel-decomisionar
@@ -1690,10 +2296,11 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
      el camino de vuelta. */
 
   let botonOrigenRollo = null;
+  let botonOrigenMaterial = null;
 
   // Mide el alto real que necesita el contenido, vía scrollHeight — NO
-  // vía "poner #dlg-rollo en height:auto y leer su propio alto": se probó
-  // eso primero y Chrome resuelve el "max-height:100%" de
+  // vía "poner el <dialog> en height:auto y leer su propio alto": se
+  // probó eso primero y Chrome resuelve el "max-height:100%" de
   // .dlg-rollo__contenido contra un valor intermedio (no el auto de
   // verdad) cuando su padre está en height:auto — recorta el contenido
   // ANTES de que se pueda medir, dando un número más chico del que hace
@@ -1702,25 +2309,29 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
   // recortado o no — por eso se saca el max-height de en medio nomás
   // durante la medición (queda "none" un instante, sin transición, y se
   // restaura antes de que el usuario llegue a verlo).
-  function altoContenidoRollo(ancho) {
-    const contenido = $(".dlg-rollo__contenido", dlgRollo);
-    const cs = getComputedStyle(dlgRollo);
-    const prevTransition = dlgRollo.style.transition;
-    const prevWidth = dlgRollo.style.width;
+  // Genérica (parametrizada por `dlg`, ver dlgRollo/dlgMaterial) desde
+  // que #dlg-material sumó el mismo mecanismo de boton-panel-morph que
+  // #dlg-rollo (pedido de Bruno, 2026-09-15) — un solo lugar para las tres
+  // funciones de medición/animación en vez de duplicarlas por diálogo.
+  function altoContenidoMorph(dlg, ancho) {
+    const contenido = $(".dlg-rollo__contenido", dlg);
+    const cs = getComputedStyle(dlg);
+    const prevTransition = dlg.style.transition;
+    const prevWidth = dlg.style.width;
     const prevMaxHeight = contenido.style.maxHeight;
-    dlgRollo.style.transition = "none";
-    dlgRollo.style.width = ancho + "px";
+    dlg.style.transition = "none";
+    dlg.style.width = ancho + "px";
     contenido.style.maxHeight = "none";
     const alto = contenido.scrollHeight
       + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
       + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth) + 1;
-    dlgRollo.style.width = prevWidth;
+    dlg.style.width = prevWidth;
     contenido.style.maxHeight = prevMaxHeight;
-    dlgRollo.style.transition = prevTransition;
+    dlg.style.transition = prevTransition;
     return alto;
   }
 
-  function rectFinalRollo(rectBoton) {
+  function rectFinalMorph(dlg, rectBoton) {
     const rem = pxPorRemInventario();
     const ancho = Math.min(window.innerWidth * 0.9, 30 * rem);
     const margen = 12;
@@ -1731,7 +2342,7 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     // scroll aunque "entraba todo": con la ventana real de la app
     // (1360×860, ver ui/api_app.py::crear_ventana) el formulario completo
     // mide más que el 85% de esa altura.
-    const alto = Math.min(window.innerHeight - 2 * margen, altoContenidoRollo(ancho));
+    const alto = Math.min(window.innerHeight - 2 * margen, altoContenidoMorph(dlg, ancho));
     const left = Math.min(
       Math.max(rectBoton.left + rectBoton.width / 2 - ancho / 2, margen),
       window.innerWidth - ancho - margen,
@@ -1743,79 +2354,92 @@ dialog.panel-decomisionar[data-abierto] .panel-decomisionar__contenido {
     return { top, left, ancho, alto };
   }
 
-  function aplicarRectRollo(top, left, ancho, alto, radio) {
-    dlgRollo.style.top = top + "px";
-    dlgRollo.style.left = left + "px";
-    dlgRollo.style.width = ancho + "px";
-    dlgRollo.style.height = alto + "px";
-    dlgRollo.style.borderRadius = radio;
+  function aplicarRectMorph(dlg, top, left, ancho, alto, radio) {
+    dlg.style.top = top + "px";
+    dlg.style.left = left + "px";
+    dlg.style.width = ancho + "px";
+    dlg.style.height = alto + "px";
+    dlg.style.borderRadius = radio;
   }
 
   function limpiarErroresInventario(dlg) {
     $$(".campo", dlg).forEach((c) => c.removeAttribute("data-invalido"));
   }
 
-  function abrirDialogoRollo(rollo, boton) {
-    idEnEdicionRollo = rollo ? rollo.id : null;
-    botonOrigenRollo = boton || $("[data-accion='nuevo-rollo']");
-    $("[data-dlg-rollo-titulo]").textContent = rollo ? `Editar rollo ${rollo.id}` : "Rollo nuevo";
-    limpiarErroresInventario(dlgRollo);
+  /* Abre un <dialog> de boton-panel-morph creciendo desde `boton` — mismo
+     mecanismo genérico para #dlg-rollo y #dlg-material: arranca del color
+     de fondo REAL del botón de origen y lo deja crecer hasta el blanco
+     del diálogo ("background" ya viaja en la transición del CSS, así que
+     alcanza con cambiar el valor en el momento justo), circular (radio
+     "999px") -> rectángulo final (rectFinalMorph). `pintar` (opcional)
+     corre ANTES de medir/mostrar, para que el diálogo abra ya con sus
+     campos completos (ver abrirDialogoRollo/abrirDialogoMaterial). */
+  function abrirDialogoMorph(dlg, boton, pintar) {
+    if (pintar) pintar();
+    const r = boton.getBoundingClientRect();
+    dlg.removeAttribute("data-abierto");
+    aplicarRectMorph(dlg, r.top, r.left, r.width, r.height, "999px");
+    dlg.style.background = getComputedStyle(boton).backgroundColor;
+    dlg.showModal();
+    void dlg.getBoundingClientRect();   // fuerza el reflow antes de animar
 
-    $("#dr-textil").value = rollo?.nombre_textil || "";
-    $("#dr-ancho").value = rollo?.ancho ?? "";
-    $("#dr-proveedor").value = rollo?.proveedor || "";
-    $("#dr-precio-compra").value = rollo?.precio_compra ? formatearClp(rollo.precio_compra) : "";
-    $("#dr-valor").value = rollo?.valor != null ? formatearClp(rollo.valor) : "";
-
-    // Metros disponibles: editable solo al crear — una vez que el rollo
-    // existe, el remanente se corrige aparte ("Ajustar cantidad" /
-    // core/repositorio_inventario.py::ajustar_restante), así que acá no se
-    // puede pisar a mano sin perder ese historial. metros_iniciales ya NO
-    // se pide: siempre es una copia de "disponibles" al crear (ver
-    // core.repositorio_inventario.crear_rollo).
-    $("[data-campo-metros]").hidden = !!rollo;
-    $("[data-campo-metros-fijo]").hidden = !rollo;
-    if (rollo) {
-      $("[data-metros-fijo]").textContent = `${rollo.metros_restantes} / ${rollo.metros_iniciales} m`;
-    } else {
-      $("#dr-restantes").value = "";
-    }
-
-    // Arranca del color de fondo REAL del botón de origen (el "+" verde,
-    // o el lápiz blanco si se abrió para editar) y lo deja crecer hasta
-    // el blanco del diálogo — "background" ya viaja en la transición de
-    // #dlg-rollo, así que basta con cambiar el valor en el momento justo.
-    const r = botonOrigenRollo.getBoundingClientRect();
-    dlgRollo.removeAttribute("data-abierto");
-    aplicarRectRollo(r.top, r.left, r.width, r.height, "999px");
-    dlgRollo.style.background = getComputedStyle(botonOrigenRollo).backgroundColor;
-    dlgRollo.showModal();
-    void dlgRollo.getBoundingClientRect();   // fuerza el reflow antes de animar
-
-    const destino = rectFinalRollo(r);
+    const destino = rectFinalMorph(dlg, r);
     requestAnimationFrame(() => {
-      aplicarRectRollo(destino.top, destino.left, destino.ancho, destino.alto, "");
-      dlgRollo.style.background = "";   // vuelve al blanco de "dialog { background: ... }"
-      dlgRollo.setAttribute("data-abierto", "");
+      aplicarRectMorph(dlg, destino.top, destino.left, destino.ancho, destino.alto, "");
+      dlg.style.background = "";   // vuelve al blanco de "dialog { background: ... }"
+      dlg.setAttribute("data-abierto", "");
     });
   }
 
   /* Camino inverso: encoge de vuelta al botón de origen (y su color) y
      RECIÉN ahí cierra el <dialog> de verdad (si no, desaparece de golpe). */
-  function cerrarDialogoRollo() {
-    if (!dlgRollo.open) return;
-    const boton = botonOrigenRollo || dlgRollo;
-    const r = boton.getBoundingClientRect();
-    dlgRollo.removeAttribute("data-abierto");
-    aplicarRectRollo(r.top, r.left, r.width, r.height, "999px");
-    dlgRollo.style.background = getComputedStyle(boton).backgroundColor;
+  function cerrarDialogoMorph(dlg, boton) {
+    if (!dlg.open) return;
+    const origen = boton || dlg;
+    const r = origen.getBoundingClientRect();
+    dlg.removeAttribute("data-abierto");
+    aplicarRectMorph(dlg, r.top, r.left, r.width, r.height, "999px");
+    dlg.style.background = getComputedStyle(origen).backgroundColor;
     const terminar = (e) => {
-      if (e.target !== dlgRollo || e.propertyName !== "width") return;
-      dlgRollo.removeEventListener("transitionend", terminar);
-      dlgRollo.close();
-      dlgRollo.style.background = "";   // limpio: la próxima apertura no debe arrancar ya verde
+      if (e.target !== dlg || e.propertyName !== "width") return;
+      dlg.removeEventListener("transitionend", terminar);
+      dlg.close();
+      dlg.style.background = "";   // limpio: la próxima apertura no debe arrancar ya verde
     };
-    dlgRollo.addEventListener("transitionend", terminar);
+    dlg.addEventListener("transitionend", terminar);
+  }
+
+  function abrirDialogoRollo(rollo, boton) {
+    idEnEdicionRollo = rollo ? rollo.id : null;
+    botonOrigenRollo = boton || $("[data-accion='nuevo-rollo']");
+    abrirDialogoMorph(dlgRollo, botonOrigenRollo, () => {
+      $("[data-dlg-rollo-titulo]").textContent = rollo ? `Editar rollo ${rollo.id}` : "Rollo nuevo";
+      limpiarErroresInventario(dlgRollo);
+
+      $("#dr-textil").value = rollo?.nombre_textil || "";
+      $("#dr-ancho").value = rollo?.ancho ?? "";
+      $("#dr-proveedor").value = rollo?.proveedor || "";
+      $("#dr-precio-compra").value = rollo?.precio_compra ? formatearClp(rollo.precio_compra) : "";
+      $("#dr-valor").value = rollo?.valor != null ? formatearClp(rollo.valor) : "";
+
+      // Metros disponibles: editable solo al crear — una vez que el rollo
+      // existe, el remanente se corrige aparte ("Ajustar cantidad" /
+      // core/repositorio_inventario.py::ajustar_restante), así que acá no
+      // se puede pisar a mano sin perder ese historial. metros_iniciales
+      // ya NO se pide: siempre es una copia de "disponibles" al crear
+      // (ver core.repositorio_inventario.crear_rollo).
+      $("[data-campo-metros]").hidden = !!rollo;
+      $("[data-campo-metros-fijo]").hidden = !rollo;
+      if (rollo) {
+        $("[data-metros-fijo]").textContent = `${rollo.metros_restantes} / ${rollo.metros_iniciales} m`;
+      } else {
+        $("#dr-restantes").value = "";
+      }
+    });
+  }
+
+  function cerrarDialogoRollo() {
+    cerrarDialogoMorph(dlgRollo, botonOrigenRollo);
   }
 
   $("[data-accion='nuevo-rollo']").addEventListener("click", (e) => abrirDialogoRollo(null, e.currentTarget));

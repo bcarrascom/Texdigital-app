@@ -102,6 +102,7 @@ _TITULOS = {
     "asignar-despacho": "Asignar dirección",
     "gestionar-direcciones": "Gestionar direcciones",
     "ver-rollo":        "Rollo",
+    "ver-material":     "Material",
 }
 
 _ARCHIVOS = {
@@ -114,6 +115,7 @@ _ARCHIVOS = {
     "asignar-despacho": "asignar-despacho.html",
     "gestionar-direcciones": "gestionar-direcciones.html",
     "ver-rollo":        "ver-rollo.html",
+    "ver-material":     "ver-material.html",
 }
 
 # Ver _cargar()/_recargando.html: paso intermedio para forzar una recarga
@@ -307,6 +309,8 @@ class ApiApp:
         elif pantalla == "gestionar-direcciones":
             ctx.update(self._gestionar_direcciones.contexto_extra())
         elif pantalla == "ver-rollo":
+            ctx.update(self._inventario.contexto_extra(args.get("id")))
+        elif pantalla == "ver-material":
             ctx.update(self._inventario.contexto_extra(args.get("id")))
         return ctx
 
@@ -617,3 +621,39 @@ class ApiApp:
         if pendiente_id and self._pantalla_actual == "nueva-cotizacion":
             self._args_actuales = {"pendiente": pendiente_id}
         self._ir("menu", panel="inventario", nuevo_textil=textil)
+
+    # ── Inventario: materiales (segunda tabla, ver ApiInventario) ────────────
+    # Mismo criterio que rollos arriba: la tabla vive en el panel de
+    # Inventario de menu.html, abrir_material es la excepción — el
+    # historial completo de un material es una pantalla aparte
+    # (ver-material.html).
+
+    def abrir_material(self, id_) -> None:
+        self._ir("ver-material", id=id_)
+
+    def obtener_material(self, id_) -> dict | None:
+        return self._inventario.obtener_material(id_)
+
+    def listar_materiales(self) -> list[dict]:
+        return self._inventario.listar_materiales()
+
+    def cargar_nombres_materiales(self) -> list[str]:
+        return self._inventario.cargar_nombres_materiales()
+
+    def ingresar_material(
+        self, nombre, cantidad, tipo="unidad", proveedor="",
+        costo_total=None, costo_unitario=None,
+    ) -> dict:
+        return self._inventario.ingresar_material(nombre, cantidad, tipo, proveedor, costo_total, costo_unitario)
+
+    def editar_material(self, id_, nombre, tipo, valor=None, proveedor="") -> dict | None:
+        return self._inventario.editar_material(id_, nombre, tipo, valor, proveedor)
+
+    def registrar_uso_material(self, id_, cantidad_usada, descripcion: str = "") -> dict | None:
+        return self._inventario.registrar_uso_material(id_, cantidad_usada, descripcion)
+
+    def ajustar_cantidad_material(self, id_, nueva_cantidad, descripcion: str = "") -> dict | None:
+        return self._inventario.ajustar_cantidad_material(id_, nueva_cantidad, descripcion)
+
+    def eliminar_ultimo_historial_material(self, id_material, id_entrada) -> dict | None:
+        return self._inventario.eliminar_ultimo_historial_material(id_material, id_entrada)

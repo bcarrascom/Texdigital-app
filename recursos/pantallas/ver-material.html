@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es" data-pantalla="ver-material" data-tema="inventario">
+<head>
+<meta charset="utf-8">
+<title>Material · Sistema de Gestión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ver un material — abrir_material(id), botón ⓘ de la fila en la tabla de
+   materiales del panel de Inventario (menu.html). Calco de ver-rollo.html
+   (misma pantalla aparte, mismo timeline) con las diferencias propias de
+   un material (ver core/repositorio_materiales.py):
+     - Sin ID visible ("es oculto, solo para lógica interna") — la cabecera
+       muestra el nombre como dato principal, no un "#0001".
+     - Sin Activo/Inactivo — la etiqueta de la cabecera muestra el tipo
+       (Por metro / Por unidad) en su lugar.
+     - Historial de 3 tipos, no 4: "compra" (reemplaza a "consumo" — trae
+       proveedor/costo en vez de cliente/OP), "uso", "ajuste" — sin
+       "activación" (acá no hay estado que activar/desactivar).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.limite--rollo { width: min(100%, 46rem); margin-inline: auto; display: grid; gap: var(--e-5); }
+
+.hoja {
+  display: grid; gap: var(--e-4);
+  padding: var(--e-5);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+.hoja__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--e-4); }
+.hoja__cab-izq { display: grid; gap: var(--e-1); min-width: 0; }
+.hoja__nombre--principal {
+  font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+  line-height: 1.1; letter-spacing: -.02em; color: var(--c-tema-tinta);
+  overflow-wrap: anywhere;
+}
+
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--e-3) var(--e-4); }
+.dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.dato__et {
+  font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--c-texto-tenue);
+}
+.dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+.dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* ── Timeline del historial (mismo mecanismo que ver-rollo.html) ─────────── */
+.timeline { position: relative; }
+.timeline::before {
+  content: ""; position: absolute; left: .34rem; top: .3rem; bottom: .3rem;
+  width: 2px; background: var(--c-borde);
+}
+.timeline__item { position: relative; padding-left: 1.85rem; }
+.timeline__item + .timeline__item { margin-top: var(--e-4); }
+.timeline__punto {
+  position: absolute; left: 0; top: .3rem; z-index: 1;
+  width: .9rem; height: .9rem; border-radius: 50%;
+  background: var(--c-tema-fuerte);
+  box-shadow: 0 0 0 3px var(--c-lienzo);
+}
+.timeline__punto--compra { background: var(--c-ok); }
+.timeline__punto--uso { background: var(--c-error); }
+
+.timeline__card {
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  padding: var(--e-3) var(--e-4);
+}
+.chip-tipo {
+  display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
+  font-size: var(--t-xs); font-weight: var(--peso-medio);
+  background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
+}
+.chip-tipo--compra { background: var(--c-ok-suave); color: var(--c-ok); }
+.chip-tipo--uso { background: var(--c-error-suave); color: var(--c-error); }
+.timeline__cab { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; }
+.timeline__fecha { font-size: var(--t-xs); color: var(--c-texto-tenue); margin-left: auto; white-space: nowrap; }
+.timeline__cambio {
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  font-weight: var(--peso-medio); font-size: var(--t-sm);
+}
+.timeline__descripcion { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.timeline__datos {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--e-2) var(--e-4);
+  margin-top: var(--e-3); padding-top: var(--e-3); border-top: 1px solid var(--c-borde);
+}
+
+.estado-vacio { padding: var(--e-6) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="cabecera">
+    <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
+    <span class="cabecera__titulo" data-titulo>Material</span>
+    <span class="cabecera__sep"></span>
+    <span class="cabecera__version" data-version></span>
+  </header>
+
+  <main class="contenido">
+    <div class="cargando" data-cargando><span></span><span></span><span></span></div>
+
+    <div class="limite--rollo" data-tras-carga hidden>
+
+      <section class="hoja">
+        <div class="hoja__cab">
+          <div class="hoja__cab-izq">
+            <span class="hoja__nombre--principal" data-nombre>—</span>
+          </div>
+          <span class="etiqueta" data-tipo></span>
+        </div>
+        <div class="datos" data-datos></div>
+      </section>
+
+      <section>
+        <h2 class="seccion-titulo">Historial</h2>
+        <div class="timeline" data-timeline></div>
+        <p class="estado-vacio" data-vacio hidden>Todavía no hay ninguna compra, uso o ajuste registrado para este material.</p>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $  = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s == null ? "" : s);
+
+  const ETIQUETA_TIPO = { compra: "Compra", uso: "Uso", ajuste: "Ajuste" };
+
+  function dato(et, val, mono, ancho) {
+    if (!val && val !== 0) return null;
+    const d = document.createElement("div");
+    d.className = "dato" + (ancho ? " dato--ancho" : "");
+    d.innerHTML = `<span class="dato__et"></span><span class="dato__val${mono ? " dato__val--mono" : ""}"></span>`;
+    $(".dato__et", d).textContent = et;
+    $(".dato__val", d).textContent = esc(val);
+    return d;
+  }
+
+  function unidadDe(m) { return m.tipo === "metro" ? "m" : "un."; }
+
+  function pintarCabecera(m) {
+    $("[data-nombre]").textContent = m.nombre || "—";
+    $("[data-titulo]").textContent = `Material · ${m.nombre || ""}`;
+
+    const chip = $("[data-tipo]");
+    chip.textContent = m.tipo === "metro" ? "Por metro" : "Por unidad";
+    chip.className = "etiqueta etiqueta--neutra";
+
+    const cont = $("[data-datos]");
+    cont.textContent = "";
+    [
+      dato("Cantidad", `${TD.fmt.cantidad(m.cantidad)} ${unidadDe(m)}`, true),
+      dato("Proveedor", m.proveedor || "—"),
+      dato("Valor por " + (m.tipo === "metro" ? "metro" : "unidad"), m.valor != null ? TD.fmt.pesos(m.valor) : "—", true),
+      dato("Valor total", m.valor != null ? TD.fmt.pesos(m.valor * m.cantidad) : "—", true),
+      dato("Gasto este mes", TD.fmt.pesos(m.gasto_mes || 0), true),
+    ].filter(Boolean).forEach((d) => cont.appendChild(d));
+  }
+
+  /* Cada tarjeta del timeline: común (punto de color + fecha + cambio de
+     cantidad), y después lo propio de cada tipo — un ajuste/uso solo trae
+     una descripción libre; una compra viene con proveedor/costo (ver
+     core.repositorio_materiales._agregar_historial). */
+  function tarjetaHistorial(u, m) {
+    const esCompra = u.tipo === "compra";
+    const item = document.createElement("div");
+    item.className = "timeline__item";
+
+    const datosCompra = [
+      ["Proveedor", u.proveedor],
+      ["Costo total", u.costo_total != null ? TD.fmt.pesos(u.costo_total) : null],
+      ["Costo unitario", u.costo_unitario != null ? TD.fmt.pesos(u.costo_unitario) : null],
+    ].filter(([, val]) => val);
+
+    const chipClase = esCompra ? "chip-tipo--compra" : u.tipo === "uso" ? "chip-tipo--uso" : "";
+    const puntoClase = esCompra ? "timeline__punto--compra" : u.tipo === "uso" ? "timeline__punto--uso" : "";
+
+    item.innerHTML = `
+      <div class="timeline__punto ${puntoClase}"></div>
+      <div class="timeline__card">
+        <div class="timeline__cab">
+          <span class="chip-tipo ${chipClase}"></span>
+          <span class="timeline__cambio"></span>
+          <span class="timeline__fecha"></span>
+        </div>
+        ${esCompra ? "" : '<p class="timeline__descripcion"></p>'}
+        ${esCompra && datosCompra.length ? '<div class="timeline__datos"></div>' : ""}
+      </div>`;
+
+    $(".chip-tipo", item).textContent = ETIQUETA_TIPO[u.tipo] || u.tipo;
+    $(".timeline__cambio", item).textContent =
+      `${esc(TD.fmt.cantidad(u.cantidad_anterior))} → ${esc(TD.fmt.cantidad(u.cantidad_nueva))} ${unidadDe(m)}`;
+    $(".timeline__fecha", item).textContent = u.fecha || "";
+
+    if (!esCompra) {
+      $(".timeline__descripcion", item).textContent = u.descripcion || "—";
+    } else {
+      const cont = $(".timeline__datos", item);
+      if (cont) datosCompra.forEach(([et, val]) => cont.appendChild(dato(et, val)));
+    }
+    return item;
+  }
+
+  function pintarTimeline(m) {
+    // Más reciente primero — mismo criterio que ver-rollo.html.
+    const historial = (m.historial || []).slice().reverse();
+    const cont = $("[data-timeline]");
+    cont.textContent = "";
+    historial.forEach((u) => cont.appendChild(tarjetaHistorial(u, m)));
+    $("[data-vacio]").hidden = historial.length > 0;
+  }
+
+  TD.iniciar(async (ctx) => {
+    const m = (await TD.api.obtener_material(ctx.id)) || null;
+    if (!m) { TD.aviso("No se pudo cargar el material.", "error", 8000); return; }
+    pintarCabecera(m);
+    pintarTimeline(m);
+  });
+})();
+</script>
+
+</body>
+</html>
