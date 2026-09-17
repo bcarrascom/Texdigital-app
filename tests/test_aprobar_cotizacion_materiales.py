@@ -167,7 +167,11 @@ class TestAprobarConStockInsuficiente(_ConRutasTemporales):
         self.assertFalse(resultado["ok"])
         self.assertEqual(len(resultado["faltantes"]), 1)
         self.assertEqual(resultado["faltantes"][0]["textil"], "TelaTest")
-        self.assertAlmostEqual(resultado["faltantes"][0]["faltante"], 6.0)
+        # "faltante" es el necesario COMPLETO del producto sin cubrir (11),
+        # no la resta 11-5=6 — desde que un producto no se reparte entre
+        # rollos (pedido de Bruno, 2026-09-15), el único rollo (5m) no
+        # alcanza a cubrir nada de los 11 que hacen falta por sí solo.
+        self.assertAlmostEqual(resultado["faltantes"][0]["faltante"], 11.0)
 
     def test_aprobar_bloqueado_no_crea_op_ni_toca_stock(self):
         repo_inv.crear_rollo("TelaTest", 1.5, 5)
@@ -191,6 +195,54 @@ class TestAprobarConStockInsuficiente(_ConRutasTemporales):
     def test_cotizacion_inexistente_no_revienta(self):
         resultado = self.api.aprobar_cotizacion(9999, "2026-08-29", "2026-09-15")
         self.assertEqual(resultado, {"ok": False, "faltantes": []})
+
+
+class TestAprobarConInventarioApagado(_ConRutasTemporales):
+    """Pedido de Bruno (2026-09-16): sacar un release con el módulo
+    Inventario todavía pausado (core.config.MODULOS_HABILITADOS) no puede
+    dejar sin poder aprobar cotizaciones — con el módulo apagado, la
+    aprobación tiene que funcionar exactamente como si Inventario no
+    existiera, sin importar cuánto (o cuán poco) stock haya cargado."""
+
+    def setUp(self):
+        super().setUp()
+        self._parche_modulo = mock.patch.dict(
+            "core.config.MODULOS_HABILITADOS", {"inventario": False},
+        )
+        self._parche_modulo.start()
+        self.addCleanup(self._parche_modulo.stop)
+
+    def test_aprueba_sin_ningun_rollo_cargado(self):
+        # Sin el parche de arriba, esto sería justo el caso bloqueado de
+        # TestAprobarConStockInsuficiente — apagado, tiene que aprobar
+        # igual.
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
+
+        resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertEqual(resultado, {"ok": True})
+        self.assertIsNotNone(repo_ops.cargar_op(4210))
+
+    def test_no_escribe_rollosusados_en_la_op(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
+
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        op = repo_ops.cargar_op(4210)
+        self.assertNotIn("RollosUsados", op["productos"][0])
+
+    def test_no_toca_stock_aunque_haya_rollos(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
+
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 100.0)
+
+    def test_verificar_materiales_del_boton_aprobar_no_bloquea(self):
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
+        self.assertEqual(self.api.verificar_materiales(4210), [])
 
 
 class TestVerificarMaterialesDeBorrador(_ConRutasTemporales):

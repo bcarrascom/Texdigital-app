@@ -217,10 +217,23 @@ def completar_op(numero: int) -> None:
     docstring de mover_a_despachos). Punto único de esta decisión: la usan
     tanto el panel de producción (ui/panel_produccion.py, el único lugar
     donde esto se podía hacer hasta ahora) como el botón "Completar" de
-    ver-op.html, en la ventana principal."""
+    ver-op.html, en la ventana principal.
+
+    Con el módulo Despachos apagado (core.config.MODULOS_HABILITADOS,
+    pedido de Bruno 2026-09-17 pensando en sacar un release con el módulo
+    todavía pausado) SIEMPRE va a mover_a_completadas, aunque la OP tenga
+    Despacho/Instalacion cargado — nueva-cotizacion.html deja marcar esos
+    checkboxes sin importar si el módulo está habilitado (son solo un
+    monto más del total, no dependen de Despachos para calcularse), así
+    que sin este chequeo una OP así completada quedaría archivada en
+    Despachos/OPs/, un módulo sin pantalla accesible: nadie podría verla,
+    marcarla entregada, ni generar su guía."""
+    from core import config as _config
+
     numero = int(numero)
     datos = cargar_op(numero)
-    if datos and (datos.get("Despacho") is not None or datos.get("Instalacion") is not None):
+    despachos_habilitado = _config.MODULOS_HABILITADOS.get("despachos", True)
+    if despachos_habilitado and datos and (datos.get("Despacho") is not None or datos.get("Instalacion") is not None):
         mover_a_despachos(numero)
     else:
         mover_a_completadas(numero)

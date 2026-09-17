@@ -58,6 +58,26 @@ def _hoy_dma() -> str:
     return datetime.now().strftime("%d/%m/%Y")
 
 
+def _inventario_habilitado() -> bool:
+    """True salvo que core.config.MODULOS_HABILITADOS["inventario"] esté
+    en False — pedido de Bruno (2026-09-16), pensando en sacar un release
+    con Inventario todavía pausado (ver core/config.py): las
+    integraciones de rollos que cruzan a Cotizaciones/OPs (bloqueo de
+    aprobación por stock, consumo automático al aprobar, el precio de
+    materiales que pisa el catálogo — ver core.repositorio_materiales.
+    estructuras_legado_valores_efectivos) tienen que quedar COMPLETAMENTE
+    inertes mientras el módulo esté apagado. Si no, con Inventario recién
+    arrancando (o sin ningún rollo cargado todavía), cualquier cotización
+    se bloquearía sola por "falta de stock" (0 de todo) — aprobar dejaría
+    de funcionar para toda la app, no solo para Inventario.
+
+    Se chequea ACÁ ADENTRO de cada función que cruza de módulo (no solo
+    del lado de quien llama, ni solo en la UI) para que quede a prueba de
+    olvidos: cualquier caller nuevo que aparezca más adelante hereda la
+    protección gratis."""
+    return _config.MODULOS_HABILITADOS.get("inventario", True)
+
+
 def _ruta_base() -> Path:
     dropbox = _detectar_dropbox()
     if dropbox:
@@ -521,8 +541,12 @@ def avisos_stock(rollos: list[dict] | None = None, minimo: float | None = None) 
 
     Si core.config.AVISOS_STOCK_HABILITADOS es False, devuelve siempre []
     sin leer ni calcular nada — el interruptor pensado para que el futuro
-    módulo de configuración pueda apagar estos avisos por completo."""
-    if not _config.AVISOS_STOCK_HABILITADOS:
+    módulo de configuración pueda apagar estos avisos por completo. Mismo
+    resultado si el módulo Inventario está apagado (ver
+    _inventario_habilitado) — el ícono de aviso ya queda oculto del lado
+    del cliente (menu.html chequea modulos_habilitados.inventario), pero
+    conviene que el backend tampoco calcule nada de más."""
+    if not _config.AVISOS_STOCK_HABILITADOS or not _inventario_habilitado():
         return []
     if rollos is None:
         rollos = listar_rollos()
@@ -553,24 +577,99 @@ def avisos_stock(rollos: list[dict] | None = None, minimo: float | None = None) 
     return avisos
 
 
+def _asignar_rollos_por_producto(productos_internos: list[dict], rollos: list[dict]) -> list[dict]:
+    """Para cada producto interno, UN SOLO rollo activo del textil que le
+    corresponde — el de MENOS metros restantes ENTRE LOS QUE ALCANZAN a
+    cubrirlo por sí solos (no simplemente el más chico de todos) — o
+    `None` si ningún rollo, por sí solo, tiene suficiente, aunque la SUMA
+    de varios sí alcanzaría.
+
+    Nunca se reparte un producto entre dos rollos — pedido explícito de
+    Bruno (2026-09-15): cada vez que se carga un rollo nuevo en la
+    impresora se pierde otro MARGEN_TENSION_ML de margen de tensión (ver
+    esa constante); partir un producto en dos rollos gastaría ese margen
+    dos veces por el mismo producto, un desperdicio de tela evitable. Ojo,
+    esto es DISTINTO de "un solo rollo por OP": varios productos de la
+    misma OP (incluso del mismo textil) sí pueden terminar cada uno en un
+    rollo distinto — la restricción es por producto, no por OP.
+
+    Prioriza el rollo más chico que alcance (mismo criterio de siempre:
+    forzar a terminar los rollos flacos que se acumulan en vez de abrir
+    siempre uno grande) simulando sobre una COPIA local de `rollos` (no
+    los mutados de verdad) — se re-arma la lista de candidatos en cada
+    producto, así un producto no puede "ver" metros que un producto
+    anterior de la lista ya se quedó. El orden de `productos_internos`
+    importa: el primero de la lista tiene prioridad sobre el segundo si
+    compiten por el mismo rollo.
+
+    Devuelve, en el MISMO ORDEN que `productos_internos`, un dict
+    {"textil", "necesario", "rollo"} por producto ("rollo" es el dict de
+    la copia local, o None) — compartida por calcular_faltantes (¿alcanza
+    todo?) y consumir_para_op (la asignación real), para que las dos vean
+    EXACTAMENTE la misma disponibilidad y nunca queden desincronizadas."""
+    copia = {r["id"]: dict(r) for r in rollos}
+    resultado = []
+    for producto in productos_internos:
+        textil, necesario = _metros_lineales(producto)
+        if not textil or necesario <= 0:
+            resultado.append({"textil": textil, "necesario": necesario, "rollo": None})
+            continue
+
+        candidatos = sorted(
+            (r for r in copia.values() if r.get("nombre_textil") == textil
+             and r.get("estado", "activo") == "activo" and r.get("metros_restantes", 0.0) >= necesario),
+            key=lambda r: r.get("metros_restantes", 0.0),
+        )
+        if not candidatos:
+            resultado.append({"textil": textil, "necesario": necesario, "rollo": None})
+            continue
+
+        elegido = candidatos[0]
+        elegido["metros_restantes"] = round(elegido["metros_restantes"] - necesario, 3)
+        resultado.append({"textil": textil, "necesario": necesario, "rollo": elegido})
+    return resultado
+
+
 def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:
     """Textiles que NO alcanzan para cubrir `productos_internos`: lista de
     {textil, necesario, disponible, faltante} (metros lineales, 2
     decimales) — vacía si hay stock suficiente de todos. Usado tanto para
     el aviso de nueva-cotizacion.html como para bloquear la aprobación de
-    una cotización (ver ui/dialogo_aprobar.py)."""
+    una cotización (ver ui/dialogo_aprobar.py).
+
+    "Suficiente" ya NO es solo "la suma de los rollos del textil alcanza"
+    — corre la misma simulación de un-solo-rollo-por-producto que
+    consumir_para_op (ver _asignar_rollos_por_producto), así que un
+    textil con stock de sobra pero repartido en rollos chicos (ninguno
+    alcanza solo para un producto grande) SÍ aparece acá como faltante,
+    aunque la suma total diga que "hay tela". `necesario` sigue siendo el
+    total que necesitan TODOS los productos de ese textil (mismo criterio
+    que antes); `faltante` es la parte de ese total que corresponde a
+    productos que se quedaron sin ningún rollo que los cubra solos.
+
+    Con Inventario apagado (ver _inventario_habilitado) da siempre []: sin
+    esto, aprobar CUALQUIER cotización quedaría bloqueado por "falta de
+    stock" apenas se desactivara el módulo."""
+    if not _inventario_habilitado():
+        return []
+    rollos = listar_rollos()
+    asignaciones = _asignar_rollos_por_producto(productos_internos, rollos)
     necesarios = metros_necesarios(productos_internos)
     disponible = stock_por_textil()
+
+    faltante_por_textil: dict[str, float] = {}
+    for asign in asignaciones:
+        if asign["textil"] and asign["necesario"] > 0 and asign["rollo"] is None:
+            faltante_por_textil[asign["textil"]] = faltante_por_textil.get(asign["textil"], 0.0) + asign["necesario"]
+
     faltantes = []
-    for textil, necesario in necesarios.items():
-        stock = disponible.get(textil, 0.0)
-        if stock + 1e-6 < necesario:
-            faltantes.append({
-                "textil":     textil,
-                "necesario":  round(necesario, 2),
-                "disponible": round(stock, 2),
-                "faltante":   round(necesario - stock, 2),
-            })
+    for textil, faltante in faltante_por_textil.items():
+        faltantes.append({
+            "textil":     textil,
+            "necesario":  round(necesarios.get(textil, 0.0), 2),
+            "disponible": round(disponible.get(textil, 0.0), 2),
+            "faltante":   round(faltante, 2),
+        })
     return faltantes
 
 
@@ -580,79 +679,93 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     nunca antes: es el único momento en que el material se da por gastado
     de verdad (ver docstring del módulo). Cada producto descuenta su ML/M²
     real MÁS MARGEN_TENSION_ML (ver _metros_lineales) — la máquina gasta
-    esa tela igual, así que también sale de stock. `referencia` es el
-    cliente/empresa de la OP (mismo string que antes) — junto con
-    `numero_op` y el tema/obs de CADA producto (ya vienen en
-    `productos_internos`), quedan grabados en el registro de consumo de
-    cada rollo tocado (ver _agregar_registro) para que ver-rollo.html
-    pueda mostrar de qué OP/cliente salió cada metro.
+    esa tela igual, así que también sale de stock.
 
-    Los rollos con Estado "inactivo" (ver cambiar_estado_rollo) quedan
-    afuera de los candidatos, como si no tuvieran stock — mismo criterio
-    que stock_por_textil/calcular_faltantes.
+    De qué rollo se descuenta cada producto NO lo elige el usuario — ver
+    _asignar_rollos_por_producto: un solo rollo por producto (nunca
+    repartido en dos, para no perder MARGEN_TENSION_ML dos veces),
+    siempre el más chico que alcance solo, para forzar a terminar los
+    rollos flacos que se acumulan antes de abrir uno grande.
 
-    De qué rollo se descuenta cada producto NO lo elige el usuario: entre
-    los rollos del textil que corresponda, siempre se prioriza el que
-    tiene MENOS metros restantes (no el más viejo). Es a propósito —
-    pedido directo de Bruno: en la oficina se acumulan rollos flacos (varios
-    con menos de 50 m) que nadie elige a mano "por flojera", prefiriendo
-    siempre un rollo nuevo y grande — resultado: millones de pesos en tela
-    a medio usar, acumulándose. Consumir primero el rollo más chico que
-    alcance fuerza a terminarlos antes de tocar uno grande, así los rollos
-    nuevos se abren recién cuando de verdad hacen falta.
+    Un mismo rollo puede tocarle a MÁS DE UN producto de la misma OP (dos
+    productos del mismo textil, por ejemplo) — en ese caso el HISTORIAL
+    DEL ROLLO queda con UN SOLO registro de consumo por OP (no uno por
+    producto), sumando los metros de todos los productos que le tocaron —
+    pedido de Bruno (2026-09-16): "una OP debería contar como 1 solo
+    consumo, se suma todo lo que se usó de una tela". `referencia` es el
+    cliente/empresa de la OP; junto con `numero_op` y el/los tema(s)/obs
+    de los productos que aportaron a ese consumo (unidos con "; ", sin
+    repetir), quedan grabados en el registro (ver _agregar_registro) para
+    que ver-rollo.html pueda mostrar de dónde salió cada metro.
 
-    Devuelve, en el MISMO ORDEN que `productos_internos`, qué rollo(s) le
-    tocaron a cada producto: [[{"id", "metros"}, ...], ...] — un producto
-    puede repartirse entre más de un rollo si el primero (el más chico) no
-    alcanza solo. Esto es lo que ui/dialogo_aprobar.py graba en
-    producto["RollosUsados"] de la OP, para que el panel de producción
-    (recursos/panel_tv/display_op.html) le diga al operario qué rollo
-    buscar — la asignación se decide UNA vez, acá, no se recalcula después.
+    Esto es DISTINTO del valor de retorno: `RollosUsados`, lo que lee el
+    panel de producción (recursos/panel_tv/display_op.html), SIGUE siendo
+    por producto — cada tarjeta de producto necesita saber SU PROPIO
+    rollo/metraje, no un total agregado de toda la OP.
 
-    El reparto es GLOBAL a la OP, no por producto: se consume en el orden
-    de aparición de los productos, así que si dos comparten textil, el
-    segundo puede terminar en un rollo distinto al primero (el más chico
-    ya quedó en 0). Asume que ya se validó con calcular_faltantes() que
-    alcanza — si por alguna razón no alcanzara, un producto se queda sin
-    cubrir del todo y sigue sin reventar: frenar la aprobación es
-    responsabilidad de quien llama, no de esta función."""
+    Devuelve, en el MISMO ORDEN que `productos_internos`, qué rollo le
+    tocó a cada producto: [[{"id", "metros"}], ...] — como máximo UN
+    elemento por producto (lista vacía si ningún rollo alcanzó solo). Esto
+    es lo que ui/api_ver_cotizacion.py graba en producto["RollosUsados"]
+    de la OP — la asignación se decide UNA vez, acá, no se recalcula
+    después.
+
+    Asume que ya se validó con calcular_faltantes() que alcanza — si por
+    alguna razón no alcanzara (stock cambió entre el chequeo y la
+    aprobación), un producto se queda sin rollo asignado y sigue sin
+    reventar: frenar la aprobación es responsabilidad de quien llama, no
+    de esta función.
+
+    Con Inventario apagado (ver _inventario_habilitado) no toca NADA: cada
+    producto queda sin rollo asignado (mismas listas vacías que "no
+    alcanzó"), así que ninguna OP aprobada con el módulo apagado escribe
+    RollosUsados ni descuenta ningún rollo."""
+    if not _inventario_habilitado():
+        return [[] for _ in productos_internos]
     rollos = listar_rollos()
+    asignaciones = _asignar_rollos_por_producto(productos_internos, rollos)
     descripcion = f"OP {numero_op}" + (f" · {referencia}" if referencia else "")
-    asignacion_por_producto: list[list[dict]] = []
-    tocados: dict[str, dict] = {}
 
-    for producto in productos_internos:
-        textil, necesario = _metros_lineales(producto)
-        if not textil or necesario <= 0:
+    por_id = {r["id"]: r for r in rollos}
+    asignacion_por_producto: list[list[dict]] = []
+
+    # Agrupado por rollo tocado (no por producto) — un solo registro de
+    # consumo por rollo al final, sumando lo que le tocó a cada producto
+    # que cayó ahí. temas/obs son listas (no sets): preservan el orden de
+    # aparición, que es más legible que un orden arbitrario al mostrarlos
+    # unidos.
+    consumo_por_rollo: dict[str, dict] = {}
+
+    for producto, asign in zip(productos_internos, asignaciones):
+        rollo_elegido = asign["rollo"]
+        if rollo_elegido is None:
             asignacion_por_producto.append([])
             continue
 
-        # Se re-ordena EN CADA producto, no una sola vez al principio: el
-        # consumo de un producto anterior puede haber dejado a un rollo en
-        # 0 (sale de la lista) o haber corrido a otro al primer lugar.
-        candidatos = sorted(
-            (r for r in rollos if r.get("nombre_textil") == textil and r.get("metros_restantes", 0.0) > 0
-             and r.get("estado", "activo") == "activo"),
-            key=lambda r: r.get("metros_restantes", 0.0),
+        necesario = asign["necesario"]
+        asignacion_por_producto.append([{"id": rollo_elegido["id"], "metros": round(necesario, 3)}])
+
+        acumulado = consumo_por_rollo.setdefault(rollo_elegido["id"], {"metros": 0.0, "temas": [], "obss": []})
+        acumulado["metros"] += necesario
+        tema = (producto.get("tema") or "").strip()
+        obs = (producto.get("obs") or "").strip()
+        if tema and tema not in acumulado["temas"]:
+            acumulado["temas"].append(tema)
+        if obs and obs not in acumulado["obss"]:
+            acumulado["obss"].append(obs)
+
+    tocados: dict[str, dict] = {}
+    for id_rollo, datos in consumo_por_rollo.items():
+        r = por_id[id_rollo]
+        anterior = r.get("metros_restantes", 0.0)
+        nuevo = round(anterior - datos["metros"], 3)
+        r["metros_restantes"] = nuevo
+        _agregar_registro(
+            r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
+            numero_op=numero_op, cliente=referencia,
+            tema="; ".join(datos["temas"]), obs="; ".join(datos["obss"]),
         )
-        usados = []
-        por_cubrir = necesario
-        for r in candidatos:
-            if por_cubrir <= 0:
-                break
-            anterior = r.get("metros_restantes", 0.0)
-            usar = min(anterior, por_cubrir)
-            nuevo = round(anterior - usar, 3)
-            r["metros_restantes"] = nuevo
-            _agregar_registro(
-                r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
-                numero_op=numero_op, cliente=referencia,
-                tema=producto.get("tema", ""), obs=producto.get("obs", ""),
-            )
-            usados.append({"id": r["id"], "metros": round(usar, 3)})
-            por_cubrir -= usar
-            tocados[r["id"]] = r
-        asignacion_por_producto.append(usados)
+        tocados[id_rollo] = r
 
     for r in tocados.values():
         _escribir_rollo(carpeta_activos(), r)

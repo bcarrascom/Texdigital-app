@@ -43,6 +43,12 @@ def _fila_producto(p: dict, ml_o_area_facturable: float | None = None) -> str:
     valor_unit = formatear_clp(costo["valor_unitario"])
     total_fila = formatear_clp(costo["total"])
     medidas = f"{_fmt_medida(p.get('Ancho', 0))} × {_fmt_medida(p.get('Alto', 0))} m"
+    # Mismo criterio que core/presentar_op.py: la observación del producto
+    # se muestra siempre que tenga contenido, sea backlight o estándar —
+    # antes no se mostraba en ningún lado de este documento (pedido de
+    # Bruno, 2026-09-16, tras notar que faltaba al imprimir una cotización).
+    obs = p.get("Obs", "").strip()
+    obs_html = f'<div class="prod-obs">Observación: {obs}</div>' if obs else ""
 
     if "Caja" in p:
         caja = p.get("Caja")
@@ -87,6 +93,7 @@ def _fila_producto(p: dict, ml_o_area_facturable: float | None = None) -> str:
           <div class="prod-nombre">{nombre}</div>
           <div class="prod-detalle">{detalle}</div>
           {extras_html}
+          {obs_html}
         </td>
         <td>{medidas}</td>
         <td class="num">{cantidad}</td>

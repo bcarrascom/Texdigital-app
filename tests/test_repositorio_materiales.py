@@ -328,5 +328,28 @@ class TestSiembraDesdeCatalogo(_ConRutaTemporal):
         self.assertEqual(m["valor"], 25000.0)
 
 
+class TestInventarioApagado(_ConRutaTemporal):
+    """Con core.config.MODULOS_HABILITADOS["inventario"] en False (pedido
+    de Bruno, 2026-09-16 — sacar un release con Inventario todavía
+    pausado), los materiales NO deben pisar el precio de ninguna
+    cotización: estructuras_legado_valores_efectivos tiene que devolver el
+    catálogo estático tal cual."""
+
+    def setUp(self):
+        super().setUp()
+        self._parche_modulo = mock.patch.dict(
+            "core.config.MODULOS_HABILITADOS", {"inventario": False},
+        )
+        self._parche_modulo.start()
+        self.addCleanup(self._parche_modulo.stop)
+
+    def test_no_pisa_el_catalogo_estatico(self):
+        repo_mat.ingresar_material("Base auto", 5, costo_unitario=99999)  # valor editado
+        catalogo_mock = {"Base auto": {"valorUNIT": 11000.0}}
+        with mock.patch("core.repositorio.ESTRUCTURAS_LEGADO_VALORES", catalogo_mock):
+            efectivos = repo_mat.estructuras_legado_valores_efectivos()
+        self.assertEqual(efectivos, catalogo_mock)  # el 99999 del material NO aparece
+
+
 if __name__ == "__main__":
     unittest.main()
