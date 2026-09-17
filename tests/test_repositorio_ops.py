@@ -168,6 +168,71 @@ class TestMoverADespachos(_ConRutaTemporal):
         repo_ops.mover_a_despachos(424242)
 
 
+class TestCompletarOp(_ConRutaTemporal):
+    """completar_op — el punto único que decide entre mover_a_completadas
+    y mover_a_despachos (ver esa docstring)."""
+
+    def setUp(self):
+        super().setUp()
+        self._base_desp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self._base_desp, ignore_errors=True))
+        self._parche_desp = mock.patch.object(repo_desp, "_ruta_base", lambda: self._base_desp)
+        self._parche_desp.start()
+        self.addCleanup(self._parche_desp.stop)
+
+    def test_con_despacho_va_a_despachos(self):
+        op = _op(8003, "20/08/2026")
+        op["Despacho"] = 15000
+        repo_ops.guardar_op(op)
+        repo_ops.completar_op(8003)
+        self.assertTrue((self._base_desp / "OPs" / "NoAsignadas" / "8003.json").exists())
+        self.assertFalse((self._base / "Completadas" / "8003.json").exists())
+
+    def test_sin_despacho_ni_instalacion_va_a_completadas(self):
+        op = _op(8004, "20/08/2026")
+        repo_ops.guardar_op(op)
+        repo_ops.completar_op(8004)
+        self.assertTrue((self._base / "Completadas" / "8004.json").exists())
+
+
+class TestCompletarOpConDespachosApagado(_ConRutaTemporal):
+    """Pedido de Bruno (2026-09-17): sacar un release con el módulo
+    Despachos todavía pausado no puede dejar una OP con Despacho/
+    Instalacion cargado (el checkbox del formulario no depende del módulo,
+    ver nueva-cotizacion.html) archivada en un módulo sin pantalla
+    accesible — con Despachos apagado, completar_op tiene que ir SIEMPRE
+    a Completadas, exactamente como si la OP no tuviera esos campos."""
+
+    def setUp(self):
+        super().setUp()
+        self._base_desp = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(self._base_desp, ignore_errors=True))
+        self._parche_desp = mock.patch.object(repo_desp, "_ruta_base", lambda: self._base_desp)
+        self._parche_desp.start()
+        self.addCleanup(self._parche_desp.stop)
+
+        self._parche_modulo = mock.patch.dict(
+            "core.config.MODULOS_HABILITADOS", {"despachos": False},
+        )
+        self._parche_modulo.start()
+        self.addCleanup(self._parche_modulo.stop)
+
+    def test_con_despacho_cargado_igual_va_a_completadas(self):
+        op = _op(8005, "20/08/2026")
+        op["Despacho"] = 15000
+        repo_ops.guardar_op(op)
+        repo_ops.completar_op(8005)
+        self.assertTrue((self._base / "Completadas" / "8005.json").exists())
+        self.assertFalse((self._base_desp / "OPs" / "NoAsignadas" / "8005.json").exists())
+
+    def test_con_instalacion_cargada_igual_va_a_completadas(self):
+        op = _op(8006, "20/08/2026")
+        op["Instalacion"] = 30000
+        repo_ops.guardar_op(op)
+        repo_ops.completar_op(8006)
+        self.assertTrue((self._base / "Completadas" / "8006.json").exists())
+
+
 class TestEstadoOp(_ConRutaTemporal):
     """Estado de una OP (activa/entregada/entregada_atrasada/cancelada) —
     ver core.repositorio_ops.estado_op. No es lo mismo que la carpeta en la

@@ -18,10 +18,10 @@ queda inalcanzable desde el menú).
 """
 
 MODULOS_HABILITADOS = {
-    "inventario":   False,
+    "inventario":   True,
     "cotizaciones": True,
     "ops":          True,
-    "despachos":    False,
+    "despachos":    True,
 }
 
 # Metros mínimos que un textil debería tener disponibles en Inventario sin

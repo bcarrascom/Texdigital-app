@@ -410,6 +410,15 @@ def estructuras_legado_valores_efectivos() -> dict:
     carga acá pasa a ser lo que cobran las cotizaciones nuevas de ahí en
     adelante. Import adentro de la función (no al tope del módulo) por el
     mismo motivo que valor_sugerido_textil en core.repositorio_inventario:
-    evitar acoplar el import a nivel de módulo con core.repositorio."""
+    evitar acoplar el import a nivel de módulo con core.repositorio.
+
+    Con el módulo Inventario apagado (core.config.MODULOS_HABILITADOS,
+    pedido de Bruno 2026-09-16 pensando en sacar un release con el módulo
+    todavía pausado) devuelve el catálogo estático TAL CUAL, sin pisar
+    nada — los materiales de Inventario, si los hay, no deben afectar el
+    precio de ninguna cotización mientras el módulo no esté habilitado."""
+    from core import config as _config
     from core.repositorio import ESTRUCTURAS_LEGADO_VALORES
+    if not _config.MODULOS_HABILITADOS.get("inventario", True):
+        return dict(ESTRUCTURAS_LEGADO_VALORES)
     return {**ESTRUCTURAS_LEGADO_VALORES, **valores_legado_materiales()}

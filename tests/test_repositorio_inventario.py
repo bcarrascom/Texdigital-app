@@ -294,7 +294,13 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.calcular_faltantes([p]), [])
 
     def test_calcular_faltantes_reporta_textil_corto(self):
-        # Necesita 10 + 1 de margen = 11; hay 5 -> faltan 6.
+        # Necesita 10 + 1 de margen = 11; hay 5 (un solo rollo, no alcanza
+        # ni él solo ni sumado) -> el producto entero queda sin cubrir, así
+        # que "faltante" es el necesario completo (11), no la diferencia
+        # aritmética 11-5=6 — desde que un producto no se reparte entre
+        # rollos (pedido de Bruno, 2026-09-15), "faltante" es "cuánto de lo
+        # necesario quedó sin ningún rollo que lo cubra solo", no un simple
+        # necesario-disponible.
         repo_inv.crear_rollo("TelaTest", 1.5, 5)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         faltantes = repo_inv.calcular_faltantes([p])
@@ -302,18 +308,40 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
         self.assertEqual(faltantes[0]["textil"], "TelaTest")
         self.assertAlmostEqual(faltantes[0]["necesario"], 11.0)
         self.assertAlmostEqual(faltantes[0]["disponible"], 5.0)
-        self.assertAlmostEqual(faltantes[0]["faltante"], 6.0)
+        self.assertAlmostEqual(faltantes[0]["faltante"], 11.0)
 
     def test_calcular_faltantes_sin_stock_de_ese_textil(self):
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         faltantes = repo_inv.calcular_faltantes([p])
         self.assertEqual(faltantes[0]["disponible"], 0.0)
 
-    def test_calcular_faltantes_suma_stock_de_varios_rollos(self):
+    def test_calcular_faltantes_no_alcanza_si_ningun_rollo_solo_cubre(self):
+        # 6+6=12 alcanzaría SUMADO, pero ningún rollo por sí solo llega a
+        # los 11 que hacen falta (10 + 1 de margen) — desde que un
+        # producto no se reparte entre rollos (pedido de Bruno,
+        # 2026-09-15), esto SÍ es un faltante real, aunque la suma total
+        # diga que "hay tela de sobra".
         repo_inv.crear_rollo("TelaTest", 1.5, 6)
         repo_inv.crear_rollo("TelaTest", 1.5, 6)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1
-        self.assertEqual(repo_inv.calcular_faltantes([p]), [])  # 6+6=12 >= 11
+        faltantes = repo_inv.calcular_faltantes([p])
+        self.assertEqual(len(faltantes), 1)
+        self.assertEqual(faltantes[0]["textil"], "TelaTest")
+        self.assertAlmostEqual(faltantes[0]["necesario"], 11.0)
+        self.assertAlmostEqual(faltantes[0]["disponible"], 12.0)
+        self.assertAlmostEqual(faltantes[0]["faltante"], 11.0)
+
+    def test_calcular_faltantes_dos_productos_mismo_textil_uno_no_alcanza(self):
+        # Rollo único de 15m: el primer producto (necesita 11) se lo lleva
+        # entero en la simulación (quedarían 4), el segundo (necesita 6) ya
+        # no tiene ningún rollo que le alcance solo -> el faltante
+        # reportado es el del segundo (6), no el primero ni la resta 11-4.
+        repo_inv.crear_rollo("TelaTest", 1.5, 15)
+        p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 11
+        p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)   # necesita 6
+        faltantes = repo_inv.calcular_faltantes([p1, p2])
+        self.assertEqual(len(faltantes), 1)
+        self.assertAlmostEqual(faltantes[0]["faltante"], 6.0)
 
 
 class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
@@ -367,21 +395,20 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
     def test_un_rollo_justo_al_ml_real_no_alcanza_por_el_margen_de_tension(self):
         # Pedido de Bruno (2026-09-03): un rollo de exactamente 7 m NO puede
         # cubrir un producto que necesita 7 ML reales — hacen falta 8 (7 +
-        # MARGEN_TENSION_ML) para que la máquina mantenga la tensión.
+        # MARGEN_TENSION_ML) para que la máquina mantenga la tensión. Y
+        # desde 2026-09-15 un producto no se reparte entre rollos, así que
+        # el de 7m queda directo afuera de los candidatos (no alcanza
+        # solo) — el que sí alcanza solo (8m) es el elegido, intacto el
+        # otro.
         r_justo = repo_inv.crear_rollo("TelaTest", 1.5, 7)
         r_con_margen = repo_inv.crear_rollo("TelaTest", 1.5, 8)
         p = _producto_estandar(ancho=1.5, alto=7.0, cantidad=1)  # necesita 7+1=8
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
 
-        # r_justo (7m, el "más chico") no cubre solo los 8 que hacen falta,
-        # así que se reparte con r_con_margen — no se lo deja en 0 en falso.
-        self.assertEqual(repo_inv.obtener_rollo(r_justo["id"])["metros_restantes"], 0.0)
-        self.assertEqual(repo_inv.obtener_rollo(r_con_margen["id"])["metros_restantes"], 7.0)
-        self.assertEqual(asignaciones, [[
-            {"id": r_justo["id"], "metros": 7.0},
-            {"id": r_con_margen["id"], "metros": 1.0},
-        ]])
+        self.assertEqual(repo_inv.obtener_rollo(r_justo["id"])["metros_restantes"], 7.0)  # intacto
+        self.assertEqual(repo_inv.obtener_rollo(r_con_margen["id"])["metros_restantes"], 0.0)
+        self.assertEqual(asignaciones, [[{"id": r_con_margen["id"], "metros": 8.0}]])
 
     def test_prioriza_el_rollo_con_menos_metros_restantes_no_el_mas_viejo(self):
         # r1 (0001, "más viejo") tiene MÁS tela que r2 (0002, más nuevo) —
@@ -396,19 +423,56 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.obtener_rollo(r2["id"])["metros_restantes"], 1.0)
         self.assertEqual(asignaciones, [[{"id": r2["id"], "metros": 5.0}]])
 
-    def test_un_producto_se_reparte_entre_varios_rollos_si_el_mas_chico_no_alcanza(self):
+    def test_un_producto_nunca_se_reparte_entre_varios_rollos(self):
+        # Pedido de Bruno (2026-09-15): partir un producto entre dos rollos
+        # gastaría MARGEN_TENSION_ML dos veces (una carga de máquina por
+        # rollo distinto) — así que el rollo chico que no alcanza SOLO
+        # queda afuera de los candidatos, aunque sumado al grande sí
+        # cubriría los 11 que hacen falta.
         r_chico = repo_inv.crear_rollo("TelaTest", 1.5, 3)
         r_grande = repo_inv.crear_rollo("TelaTest", 1.5, 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
 
-        self.assertEqual(repo_inv.obtener_rollo(r_chico["id"])["metros_restantes"], 0.0)
+        self.assertEqual(repo_inv.obtener_rollo(r_chico["id"])["metros_restantes"], 3.0)  # intacto
+        self.assertEqual(repo_inv.obtener_rollo(r_grande["id"])["metros_restantes"], 89.0)
+        self.assertEqual(asignaciones, [[{"id": r_grande["id"], "metros": 11.0}]])
+
+    def test_producto_queda_sin_rollo_si_ninguno_solo_alcanza(self):
+        # Ni r1 ni r2 llegan solos a los 11 que hacen falta, aunque 6+6=12
+        # los cubriría sumados — como no se reparten, el producto queda sin
+        # asignación (en la práctica calcular_faltantes ya debería haber
+        # bloqueado la aprobación antes de llegar acá, pero esta función
+        # no revienta si de todos modos pasa).
+        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
+
+        asignaciones = repo_inv.consumir_para_op([p], 4210)
+
+        self.assertEqual(asignaciones, [[]])
+        self.assertEqual(repo_inv.obtener_rollo(r1["id"])["metros_restantes"], 6.0)
+        self.assertEqual(repo_inv.obtener_rollo(r2["id"])["metros_restantes"], 6.0)
+
+    def test_dos_productos_mismo_textil_pueden_terminar_en_rollos_distintos(self):
+        # Rollo chico (6m) alcanza solo para el primer producto (5); el
+        # segundo (necesita 8) ya no cabe en lo que le queda al chico (1m)
+        # así que le toca el grande — DOS rollos distintos tocados en la
+        # misma OP, uno por producto, ninguno partido.
+        r_chico = repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        r_grande = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        p1 = _producto_estandar(ancho=1.5, alto=4.0, cantidad=1)  # necesita 4+1=5
+        p2 = _producto_estandar(ancho=1.5, alto=7.0, cantidad=1)  # necesita 7+1=8
+
+        asignaciones = repo_inv.consumir_para_op([p1, p2], 4210)
+
+        self.assertEqual(asignaciones, [
+            [{"id": r_chico["id"], "metros": 5.0}],
+            [{"id": r_grande["id"], "metros": 8.0}],
+        ])
+        self.assertEqual(repo_inv.obtener_rollo(r_chico["id"])["metros_restantes"], 1.0)
         self.assertEqual(repo_inv.obtener_rollo(r_grande["id"])["metros_restantes"], 92.0)
-        self.assertEqual(asignaciones, [[
-            {"id": r_chico["id"], "metros": 3.0},
-            {"id": r_grande["id"], "metros": 8.0},
-        ]])
 
     def test_dos_productos_del_mismo_textil_no_pisan_el_stock_entre_si(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
@@ -418,11 +482,50 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         asignaciones = repo_inv.consumir_para_op([p1, p2], 4210)
 
         self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 83.0)
+        # RollosUsados (lo que lee el panel de TV) sigue siendo POR
+        # PRODUCTO — cada tarjeta necesita su propio metraje.
         self.assertEqual(asignaciones, [
             [{"id": r["id"], "metros": 11.0}],
             [{"id": r["id"], "metros": 6.0}],
         ])
-        self.assertEqual(len(repo_inv.obtener_rollo(r["id"])["usos"]), 2)
+        # Pero el historial del ROLLO queda con UN SOLO registro de
+        # consumo por OP (pedido de Bruno, 2026-09-16), no uno por
+        # producto — aunque dos productos distintos lo hayan tocado.
+        usos = repo_inv.obtener_rollo(r["id"])["usos"]
+        self.assertEqual(len(usos), 1)
+        self.assertEqual(usos[0]["metros_restantes_anterior"], 100.0)
+        self.assertEqual(usos[0]["metros_restantes_nuevo"], 83.0)
+
+    def test_registro_combinado_une_temas_y_obs_de_los_productos_sin_repetir(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+        p1["tema"] = "Logo azul"
+        p1["obs"] = "Ojales cada 50cm"
+        p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)
+        p2["tema"] = "Logo azul"   # mismo tema que p1 — no debe duplicarse
+        p2["obs"] = "Sin ojales"
+        p3 = _producto_estandar(ancho=1.5, alto=2.0, cantidad=1)
+        p3["tema"] = ""            # sin tema — no debe dejar un "; " colgando
+        p3["obs"] = ""
+
+        repo_inv.consumir_para_op([p1, p2, p3], 4210, "Cliente ABC")
+
+        entrada = repo_inv.obtener_rollo(r["id"])["usos"][0]
+        self.assertEqual(entrada["tema"], "Logo azul")
+        self.assertEqual(entrada["obs"], "Ojales cada 50cm; Sin ojales")
+        self.assertIn("4210", entrada["descripcion"])
+        self.assertIn("Cliente ABC", entrada["descripcion"])
+
+    def test_productos_de_distinto_textil_no_se_agrupan(self):
+        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r2 = repo_inv.crear_rollo("Backlight Test", 1.48, 100)
+        p1 = _producto_estandar(textil="TelaTest", ancho=1.5, alto=10.0, cantidad=1)   # necesita 11
+        p2 = _producto_backlight(tela="Backlight Test", ancho=1.0, alto=1.0, cantidad=1)
+
+        repo_inv.consumir_para_op([p1, p2], 4210)
+
+        self.assertEqual(len(repo_inv.obtener_rollo(r1["id"])["usos"]), 1)
+        self.assertEqual(len(repo_inv.obtener_rollo(r2["id"])["usos"]), 1)
 
     def test_producto_sin_textil_da_lista_vacia_para_ese_indice(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
@@ -707,6 +810,53 @@ class TestMigrarFormatoViejo(_ConRutaTemporalYCatalogo):
         repo_inv.migrar_formato_viejo()
         repo_inv.migrar_formato_viejo()  # no debe reventar ni duplicar
         self.assertEqual(len(repo_inv.listar_rollos()), 1)
+
+
+class TestInventarioApagado(_ConRutaTemporalYCatalogo):
+    """Con core.config.MODULOS_HABILITADOS["inventario"] en False (pedido
+    de Bruno, 2026-09-16 — sacar un release con Inventario todavía
+    pausado), las integraciones que cruzan a Cotizaciones/OPs tienen que
+    quedar completamente inertes: aprobar una cotización no puede
+    bloquearse ni tocar ningún rollo solo porque el módulo esté apagado."""
+
+    def setUp(self):
+        super().setUp()
+        self._parche_modulo = mock.patch.dict(
+            "core.config.MODULOS_HABILITADOS", {"inventario": False},
+        )
+        self._parche_modulo.start()
+        self.addCleanup(self._parche_modulo.stop)
+
+    def test_calcular_faltantes_siempre_vacio(self):
+        # Sin ningún rollo cargado, con el módulo prendido esto SERÍA un
+        # faltante — apagado, tiene que dar [] igual.
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+        self.assertEqual(repo_inv.calcular_faltantes([p]), [])
+
+    def test_calcular_faltantes_vacio_aunque_haya_poco_stock(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 1)  # a todas luces insuficiente
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+        self.assertEqual(repo_inv.calcular_faltantes([p]), [])
+
+    def test_consumir_para_op_no_toca_ningun_rollo(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
+
+        asignaciones = repo_inv.consumir_para_op([p], 4210, "Cliente ABC")
+
+        self.assertEqual(asignaciones, [[]])
+        actualizado = repo_inv.obtener_rollo(r["id"])
+        self.assertEqual(actualizado["metros_restantes"], 100.0)  # intacto
+        self.assertEqual(actualizado["usos"], [])  # ni un registro nuevo
+
+    def test_avisos_stock_siempre_vacio(self):
+        # Sin ningún rollo, con el módulo prendido esto generaría avisos
+        # rojos (textil sin ningún rollo) — apagado, [] directo.
+        self.assertEqual(repo_inv.avisos_stock(), [])
+
+    def test_inventario_habilitado_por_defecto_si_la_clave_no_esta(self):
+        with mock.patch.dict("core.config.MODULOS_HABILITADOS", {}, clear=True):
+            self.assertTrue(repo_inv._inventario_habilitado())
 
 
 if __name__ == "__main__":
