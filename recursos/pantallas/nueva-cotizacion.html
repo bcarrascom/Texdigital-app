@@ -365,6 +365,11 @@
 .quitar-fila { color: var(--c-texto-tenue); cursor: pointer; padding: 0 var(--e-2); }
 .quitar-fila:hover { color: var(--c-error); }
 
+/* Solo aparece si hay algún producto backlight (ver pintarResumen) — dato
+   manual, sin cálculo asociado, que después se imprime junto al cliente en
+   la OP (ver core/presentar_op.py). */
+.resumen__inser { max-width: 22rem; }
+
 /* ── Diálogo ─────────────────────────────────────────────────────────────── */
 dialog {
   border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
@@ -793,6 +798,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     nombre_trabajo: "",
     despacho: null,             // null = no lleva; número = monto
     instalacion: null,
+    op_ingreso_inser: "",       // solo visible/editable en el resumen si hay algún producto backlight
     cliente: {
       empresa: "", rut: "", razon_social: "",
       contacto: "", email: "", descuento: "0", condicion: "",
@@ -1317,6 +1323,12 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
           </table>
         </div>
 
+        <div class="campo resumen__inser" data-campo-op-inser hidden>
+          <label class="campo__etiqueta" for="op-ingreso-inser">OP ingreso Inser</label>
+          <input class="entrada" id="op-ingreso-inser" type="text" autocomplete="off"
+                 placeholder="N° u observación de ingreso en Inser…">
+        </div>
+
         <div class="resumen__pie">
           <div class="resumen__cierre">
             <div class="cifras" data-resumen-cifras></div>
@@ -1333,6 +1345,9 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     $("[data-accion='agregar']", div).addEventListener("click", () => agregarProducto());
     $("[data-accion='guardar']", div).addEventListener("click", () => guardarCotizacion(false));
     $("[data-accion='guardar-abrir']", div).addEventListener("click", () => guardarCotizacion(true));
+    const campoInser = $("#op-ingreso-inser", div);
+    campoInser.value = estado.op_ingreso_inser || "";
+    campoInser.addEventListener("input", (e) => { estado.op_ingreso_inser = e.target.value; });
     return div;
   }
 
@@ -1340,6 +1355,12 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     const cuerpo = $("[data-resumen-filas]");
     if (!cuerpo) return;
     cuerpo.textContent = "";
+
+    // Campo "OP ingreso Inser" — solo tiene sentido si la cotización lleva
+    // al menos un producto backlight (ver core/presentar_op.py, que lo
+    // imprime junto al cliente cuando viene cargado).
+    const campoInser = $("[data-campo-op-inser]");
+    if (campoInser) campoInser.hidden = !estado.productos.some((p) => p.tipo === "backlight");
     let cant = 0, ml = 0, m2 = 0, total = 0;
 
     estado.productos.forEach((p, i) => {
