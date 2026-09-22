@@ -18,10 +18,18 @@
    asignar_direccion_productos), no una referencia viva.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Dos columnas: izquierda la tabla (scrollea con el resto de .contenido),
+   derecha el panel de mapa, fijo — mismo mecanismo que .vista/.lateral de
+   ver-cotizacion.html (`align-items: start` en la grilla + `align-self:
+   stretch` en el <aside>, para que el sticky tenga recorrido dónde
+   pegarse). */
 .vista-direcciones {
-  width: min(100%, 68rem); margin-inline: auto;
-  display: grid; gap: var(--e-4);
+  width: min(100%, 80rem); margin-inline: auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+  gap: var(--e-4); align-items: start;
 }
+.vista-direcciones__izq { display: grid; gap: var(--e-4); min-width: 0; }
+.vista-direcciones__der { align-self: stretch; min-width: 0; }
 
 .hoja {
   display: grid; gap: var(--e-4);
@@ -32,10 +40,50 @@
   box-shadow: var(--s-2);
 }
 
+/* ── Panel de mapa: acompaña el scroll ────────────────────────────────── */
+.lateral {
+  position: sticky; top: 0;
+  display: grid; gap: var(--e-4);
+  padding: var(--e-4);
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-xl);
+  box-shadow: var(--s-2);
+}
+.mapa-cab { display: grid; gap: var(--e-1); min-width: 0; }
+.mapa-cab__titulo {
+  font-weight: var(--peso-fuerte); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mapa-cab__sub {
+  font-size: var(--t-sm); color: var(--c-texto-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mapa-marco {
+  aspect-ratio: 1 / 1;
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-lg);
+  overflow: hidden; background: var(--c-superficie-2);
+}
+.mapa-marco iframe { width: 100%; height: 100%; border: 0; display: block; }
+
 .barra-direcciones { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; }
 .barra-direcciones .seccion-titulo { margin: 0; }
 .barra-direcciones .entrada { flex: 1 1 16rem; min-width: 0; }
-.barra-direcciones .btn { flex: 0 0 auto; margin-left: auto; }
+.barra-direcciones .btn { flex: 0 0 auto; }
+.barra-direcciones .btn:first-of-type { margin-left: auto; }
+
+/* Cliente y Dirección muestran más de un dato en la misma celda (empresa +
+   RUT; calle/comuna/región) — apilados en líneas, no separados por coma:
+   el pedido fue justamente ahorrar columnas, no volver a juntar todo en
+   una sola línea larga. */
+.celda-lineas { display: grid; gap: .1rem; }
+.celda-lineas__sub { font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+.tabla tbody tr[data-fila-direccion] { cursor: pointer; }
+.tabla tbody tr[data-seleccionada] {
+  background: var(--c-tema-relleno);
+  box-shadow: inset 3px 0 0 var(--c-tema-fuerte);
+}
+.tabla tbody tr[data-seleccionada]:nth-child(even) { background: var(--c-tema-relleno); }
 
 .tabla .btn-fila-icono {
   display: inline-grid; place-items: center;
@@ -93,30 +141,47 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
     <div class="vista-direcciones" data-tras-carga hidden>
 
-      <section class="hoja">
-        <div class="barra-direcciones">
-          <h1 class="seccion-titulo">Direcciones guardadas</h1>
-          <input class="entrada" type="search" data-buscar placeholder="Buscar por cliente, calle o comuna…">
-          <button class="btn btn--primario btn--chico" type="button" data-accion="nueva-direccion">+ Nueva dirección</button>
-        </div>
+      <div class="vista-direcciones__izq">
+        <section class="hoja">
+          <div class="barra-direcciones">
+            <h1 class="seccion-titulo">Direcciones guardadas</h1>
+            <input class="entrada" type="search" data-buscar placeholder="Buscar por cliente, calle o comuna…">
+            <button class="btn btn--secundario btn--chico" type="button" data-accion="editar-seleccionada" disabled>
+              <div class="icon-pencil"></div>
+              Editar
+            </button>
+            <button class="btn btn--primario btn--chico" type="button" data-accion="nueva-direccion">+ Nueva dirección</button>
+          </div>
 
-        <div class="tabla-caja">
-          <table class="tabla">
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Dirección</th>
-                <th>Comuna</th>
-                <th>Región</th>
-                <th>Depto / Edificio / Otro</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody data-filas></tbody>
-          </table>
-          <p class="estado-vacio" data-estado-vacio hidden>No hay direcciones guardadas todavía.</p>
+          <div class="tabla-caja">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Dirección</th>
+                  <th>Depto / Edificio / Otro</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody data-filas></tbody>
+            </table>
+            <p class="estado-vacio" data-estado-vacio hidden>No hay direcciones guardadas todavía.</p>
+          </div>
+        </section>
+      </div>
+
+      <aside class="vista-direcciones__der">
+        <div class="lateral">
+          <div class="mapa-cab">
+            <span class="mapa-cab__titulo" data-mapa-titulo>Sin direcciones guardadas</span>
+            <span class="mapa-cab__sub" data-mapa-sub></span>
+          </div>
+          <div class="mapa-marco">
+            <iframe data-mapa-iframe title="Ubicación en el mapa" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
         </div>
-      </section>
+      </aside>
 
     </div>
   </main>
@@ -194,6 +259,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   let clientes = [];
   let etiquetaClientePorClave = new Map();   // "empresa — rut" -> {empresa, rut}
   let idEnEdicion = null;                    // null = alta nueva
+  let idSeleccionada = null;                 // fila resaltada, ver panel de mapa
 
   const dlgDireccion = $("#dlg-direccion");
   const dlgEliminar = $("#dlg-eliminar-direccion");
@@ -230,22 +296,29 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   function filaDireccion(d) {
     const tr = document.createElement("tr");
     tr.dataset.id = d.id;
+    tr.setAttribute("data-fila-direccion", "");
     tr.innerHTML = `
-      <td>${esc(d.empresa) || '<span class="vacio-cliente">—</span>'}</td>
-      <td>${esc(direccionTexto(d))}</td>
-      <td>${esc(d.comuna) || "—"}</td>
-      <td>${esc(d.region) || "—"}</td>
+      <td>${d.empresa ? `
+        <div class="celda-lineas">
+          <span>${esc(d.empresa)}</span>
+          ${d.rut ? `<span class="celda-lineas__sub">${esc(d.rut)}</span>` : ""}
+        </div>` : '<span class="vacio-cliente">—</span>'}</td>
+      <td>
+        <div class="celda-lineas">
+          <span>${esc(direccionTexto(d))}</span>
+          <span class="celda-lineas__sub">${esc(d.comuna) || "—"}</span>
+          ${d.region && d.region !== REGION_DEFECTO ? `<span class="celda-lineas__sub">${esc(d.region)}</span>` : ""}
+        </div>
+      </td>
       <td>${esc(d.referencia) || '<span class="vacio-referencia">—</span>'}</td>
       <td class="acciones">
-        <button class="btn-fila-icono" type="button" data-accion="editar-direccion" title="Editar">
-          <div class="icon-pencil"></div>
-        </button>
         <button class="btn-fila-icono btn-fila-icono--peligro" type="button" data-accion="eliminar-direccion" title="Eliminar">
           <div class="icon-trash"></div>
         </button>
       </td>`;
-    $("[data-accion='editar-direccion']", tr).addEventListener("click", () => abrirDialogoDireccion(d));
-    $("[data-accion='eliminar-direccion']", tr).addEventListener("click", () => abrirConfirmarEliminar(d));
+    $("[data-accion='eliminar-direccion']", tr).addEventListener("click", (e) => { e.stopPropagation(); abrirConfirmarEliminar(d); });
+    tr.addEventListener("click", () => seleccionarDireccion(d.id));
+    tr.addEventListener("dblclick", () => abrirDialogoDireccion(d));
     return tr;
   }
 
@@ -262,6 +335,14 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     filtradas.forEach((d) => cuerpo.appendChild(filaDireccion(d)));
 
     $("[data-estado-vacio]").hidden = filtradas.length > 0;
+
+    // Si la dirección resaltada quedó fuera del filtro (o se eliminó), el
+    // panel de mapa pasa sola a la primera visible en vez de quedar
+    // apuntando a algo que ya no está en la tabla.
+    if (!filtradas.some((d) => d.id === idSeleccionada)) {
+      idSeleccionada = filtradas[0]?.id ?? null;
+    }
+    marcarFilaSeleccionada();
   }
 
   async function recargarDirecciones() {
@@ -270,6 +351,47 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   }
 
   $("[data-buscar]").addEventListener("input", pintarTabla);
+
+  /* ── Panel de mapa (a la derecha, sigue el scroll) ────────────────────── */
+
+  function direccionCompletaParaMapa(d) {
+    const linea = [d.calle, d.numero].filter(Boolean).join(" ");
+    return [linea, d.comuna, d.region].filter(Boolean).join(", ");
+  }
+
+  function actualizarPanelMapa() {
+    const d = direcciones.find((x) => x.id === idSeleccionada) || null;
+    const iframe = $("[data-mapa-iframe]");
+
+    if (!d) {
+      $("[data-mapa-titulo]").textContent = "Sin direcciones guardadas";
+      $("[data-mapa-sub]").textContent = "";
+      iframe.src = "about:blank";
+      return;
+    }
+
+    $("[data-mapa-titulo]").textContent = direccionTexto(d);
+    $("[data-mapa-sub]").textContent = [d.comuna, d.region].filter(Boolean).join(" · ");
+    iframe.src = `https://www.google.com/maps?q=${encodeURIComponent(direccionCompletaParaMapa(d))}&output=embed`;
+  }
+
+  function marcarFilaSeleccionada() {
+    $$("[data-fila-direccion]").forEach((tr) => {
+      tr.toggleAttribute("data-seleccionada", tr.dataset.id === idSeleccionada);
+    });
+    $("[data-accion='editar-seleccionada']").disabled = !idSeleccionada;
+    actualizarPanelMapa();
+  }
+
+  function seleccionarDireccion(id) {
+    idSeleccionada = id;
+    marcarFilaSeleccionada();
+  }
+
+  $("[data-accion='editar-seleccionada']").addEventListener("click", () => {
+    const d = direcciones.find((x) => x.id === idSeleccionada);
+    if (d) abrirDialogoDireccion(d);
+  });
 
   /* ── Diálogo agregar/editar ───────────────────────────────────────────── */
 

@@ -319,6 +319,15 @@ def generar_html(op: dict) -> Path:
         if descripcion else ""
     )
 
+    # Solo backlight (se carga a mano en el resumen del cotizador, ver
+    # nueva-cotizacion.html) — "" cuando no aplica, mismo criterio que
+    # descripcion_bloque: nada de tarjeta vacía en el área del cliente.
+    op_ingreso_inser = op.get("OpIngresoInser", "").strip()
+    op_ingreso_inser_bloque = (
+        f'<div class="dato"><div class="k">OP ingreso Inser</div><div class="v">{op_ingreso_inser}</div></div>'
+        if op_ingreso_inser else ""
+    )
+
     filas_html = []
     total_cantidad = 0
     total_ml = 0.0
@@ -366,6 +375,7 @@ def generar_html(op: dict) -> Path:
         "{{empresa}}":          op.get("Empresa", ""),
         "{{contacto_email}}":   contacto_email,
         "{{descripcion_bloque}}": descripcion_bloque,
+        "{{op_ingreso_inser_bloque}}": op_ingreso_inser_bloque,
         "{{encabezado_productos}}": _encabezado_productos(es_backlight),
         "{{filas_productos}}":  "\n".join(filas_html),
         "{{fila_totales}}":     _fila_totales(es_backlight, total_cantidad, total_metros_txt),
