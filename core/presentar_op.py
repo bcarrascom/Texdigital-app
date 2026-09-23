@@ -54,6 +54,26 @@ def _fmt_cantidad(valor: float) -> str:
     return entero.replace(",", ".") + "," + decimales.rstrip("0")
 
 
+def _excedente_cm(m2: float) -> float:
+    """Excedente de tela de un producto backlight, en cm, según sus propios
+    m² (Ancho×Alto, sin Cantidad — es por unidad, no por el lote) — más
+    superficie, más excedente para poder tensar la tela sobre la caja al
+    instalar. Valor aparte del margen de costura del corte (ver _corte):
+    no se suma a Corte ancho/alto, se muestra en su propia columna.
+    Rangos fijos, dados por Bruno (2026-09-23):
+      x ≤ 1 m²        -> 1 cm
+      1 m² < x ≤ 2 m²  -> 1,5 cm
+      2 m² < x ≤ 5 m²  -> 2 cm
+      x > 5 m²         -> 2,5 cm"""
+    if m2 <= 1:
+        return 1.0
+    if m2 <= 2:
+        return 1.5
+    if m2 <= 5:
+        return 2.0
+    return 2.5
+
+
 def _metrica_producto(interno: dict) -> tuple[float, str]:
     """(cantidad_de_metros, unidad) de un producto — M² para backlight
     (Alto×Ancho×Cantidad), ML para el resto (misma fórmula que
@@ -93,6 +113,12 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         celdas_corte = f"""
         <td class="num">{corte_ancho} m</td>
         <td class="num">{corte_alto} m</td>"""
+        # El excedente va debajo de Medidas, no en su propia columna (una
+        # columna más para un dato que solo aplica a backlight angostaba
+        # demasiado el resto de la tabla) — mismo estilo prod-obs que la
+        # Observación bajo Tema.
+        excedente = _fmt_cantidad(_excedente_cm(p.get("Ancho", 0) * p.get("Alto", 0)))
+        medidas += f'<div class="prod-obs">Excedente: {excedente} cm</div>'
     else:
         celdas_corte = ""
         nombre = p.get("producto", "")
@@ -260,7 +286,9 @@ def _encabezado_productos(es_backlight: bool) -> str:
     corte de tela (ver _corte) — el resto de las columnas se angostan
     para que sigan entrando cómodas en la hoja (ver docstring del módulo:
     esto solo pasa en OPs backlight, las demás quedan exactamente igual
-    que antes)."""
+    que antes). El excedente (ver _excedente_cm) NO tiene columna propia
+    — va como sub-línea bajo Medidas (ver _fila_producto), para no angostar
+    todavía más el resto de la tabla."""
     if es_backlight:
         return """      <tr>
         <th style="width:30%">Producto</th>
