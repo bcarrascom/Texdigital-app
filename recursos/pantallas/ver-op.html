@@ -176,6 +176,21 @@
 .dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
 .dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 
+/* "OP ingreso Inser" (solo OPs con backlight, ver datoIngresoInser) es el
+   único dato editable de esta pantalla — con caja y fondo siempre visibles
+   (a diferencia de un input "fantasma" que solo se nota al pasar el mouse)
+   para que se lea de entrada como un campo para completar, no como un
+   dato más de la hoja. */
+.dato__input {
+  font: inherit; font-size: var(--t-sm); color: var(--c-texto);
+  width: 100%; margin: -2px -5px; padding: 3px 5px;
+  background: var(--c-superficie-2); border: 1.5px solid var(--c-borde); border-radius: var(--r-sm);
+  transition: border-color var(--m-rapida) var(--ease-salida), background var(--m-rapida) var(--ease-salida);
+}
+.dato__input::placeholder { color: var(--c-texto-tenue); }
+.dato__input:hover { border-color: var(--c-borde-fuerte); }
+.dato__input:focus { outline: 0; border-color: var(--c-tema-fuerte); background: var(--c-superficie); }
+
 /* Materiales: cuánto de qué lleva el trabajo, sumado entre todos los
    productos. Tres columnas fijas —Textiles, Materiales de caja,
    Estructuras— en vez de tres bloques apilados: apiladas desperdiciaban
@@ -513,6 +528,37 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     return d;
   }
 
+  /* "OP ingreso Inser" — N° de ingreso en el proveedor de impresión Inser,
+     opcional y solo para OPs con al menos un producto backlight (ver
+     op.tiene_backlight, ui/api_ver_op.py::op_a_json). A diferencia del
+     resto de dato(), esto es editable: el usuario lo carga cuando quiera,
+     no solo al crear la OP — se guarda solo (debounce mientras se tipea, y
+     de una al perder el foco) con TD.api.guardar_op_ingreso_inser. */
+  function datoIngresoInser() {
+    if (!op.tiene_backlight) return null;
+    const d = document.createElement("div");
+    d.className = "dato";
+    d.innerHTML = `
+      <span class="dato__et">OP ingreso Inser</span>
+      <input class="dato__input" type="text" placeholder="Sin ingresar" autocomplete="off">`;
+    const input = $(".dato__input", d);
+    input.value = op.op_ingreso_inser || "";
+
+    let temporizador = null;
+    const guardar = () => {
+      clearTimeout(temporizador);
+      const valor = input.value.trim();
+      op.op_ingreso_inser = valor;
+      TD.api.guardar_op_ingreso_inser(op.numero, valor);
+    };
+    input.addEventListener("input", () => {
+      clearTimeout(temporizador);
+      temporizador = setTimeout(guardar, 600);
+    });
+    input.addEventListener("blur", guardar);
+    return d;
+  }
+
   function pintarCabecera() {
     $("[data-numero]").textContent = String(op.numero).padStart(4, "0");
     $("[data-nombre]").textContent = op.nombre || "";
@@ -528,6 +574,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       dato("Email", op.email),
       dato("Fecha de ingreso", op.fecha_ingreso, true),
       dato("Descripción", op.descripcion, false, true),
+      datoIngresoInser(),
     ].filter(Boolean).forEach((d) => cont.appendChild(d));
   }
 
