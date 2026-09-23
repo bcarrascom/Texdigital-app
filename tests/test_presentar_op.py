@@ -22,7 +22,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_ops as repo_ops
-from core.presentar_op import _corte
+from core.presentar_op import _corte, _excedente_cm
 
 
 def _op_backlight(numero, terminaciones_caja="CAJA TERMINADA", ancho=1.48, alto=2.25, cantidad=1):
@@ -68,6 +68,29 @@ class TestCorte(unittest.TestCase):
         # margen más grande — más seguro que asumir el más chico.
         self.assertAlmostEqual(_corte(1.48, ""), 1.503)
         self.assertAlmostEqual(_corte(1.48, "algo raro"), 1.503)
+
+
+class TestExcedente(unittest.TestCase):
+    """_excedente_cm — rangos por m² del producto (Ancho×Alto, sin
+    Cantidad), dados por Bruno (2026-09-23). Los bordes de cada rango son
+    inclusivos hacia ABAJO (x ≤ N cae en el rango de N, no en el
+    siguiente)."""
+
+    def test_hasta_1m2_es_1cm(self):
+        self.assertEqual(_excedente_cm(0.5), 1.0)
+        self.assertEqual(_excedente_cm(1.0), 1.0)
+
+    def test_entre_1_y_2m2_es_1_5cm(self):
+        self.assertEqual(_excedente_cm(1.01), 1.5)
+        self.assertEqual(_excedente_cm(2.0), 1.5)
+
+    def test_entre_2_y_5m2_es_2cm(self):
+        self.assertEqual(_excedente_cm(2.01), 2.0)
+        self.assertEqual(_excedente_cm(5.0), 2.0)
+
+    def test_mas_de_5m2_es_2_5cm(self):
+        self.assertEqual(_excedente_cm(5.01), 2.5)
+        self.assertEqual(_excedente_cm(20.0), 2.5)
 
 
 class TestGenerarHtml(unittest.TestCase):
@@ -128,6 +151,29 @@ class TestGenerarHtml(unittest.TestCase):
         fila_totales = html[html.index('class="fila-totales"'):]
         fila_totales = fila_totales[:fila_totales.index("</tr>")]
         self.assertEqual(fila_totales.count("<td"), 7)
+
+    def test_backlight_muestra_excedente_propio_por_producto(self):
+        # Un producto por rango (ver TestExcedente): 0,8×1 = 0,8 m² -> 1cm;
+        # 1×1,5 = 1,5 m² -> 1,5cm; 1×3 = 3 m² -> 2cm; 2×3 = 6 m² -> 2,5cm.
+        from core.presentar_op import generar_html
+        op = _op_backlight(9008)
+        op["productos"] = [
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 0.8, "Alto": 1.0,
+             "Cantidad": 1, "Tema": "Uno", "Obs": ""},
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 1.0, "Alto": 1.5,
+             "Cantidad": 1, "Tema": "Dos", "Obs": ""},
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 1.0, "Alto": 3.0,
+             "Cantidad": 1, "Tema": "Tres", "Obs": ""},
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 2.0, "Alto": 3.0,
+             "Cantidad": 1, "Tema": "Cuatro", "Obs": ""},
+        ]
+        ruta = generar_html(op)
+        html = ruta.read_text(encoding="utf-8")
+        self.assertIn("Excedente", html)
+        self.assertIn("1 cm", html)
+        self.assertIn("1,5 cm", html)
+        self.assertIn("2 cm", html)
+        self.assertIn("2,5 cm", html)
 
     def test_nombre_del_trabajo_aparece_entre_el_header_y_los_datos_del_cliente(self):
         from core.presentar_op import generar_html
