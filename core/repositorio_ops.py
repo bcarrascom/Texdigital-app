@@ -338,6 +338,38 @@ def actualizar_listos(numero: int, indices: list[int]) -> None:
     )
 
 
+def actualizar_op_ingreso_inser(numero: int, valor: str) -> bool:
+    """Graba (o borra, si `valor` viene vacío) el campo OpIngresoInser de
+    una OP — dato de producción para backlight (N° de ingreso en el
+    proveedor de impresión Inser) que el usuario carga a mano desde
+    ver-op.html, en cualquier momento de la vida de la OP: no hay un paso
+    del ciclo (completar, pasar a pendiente, etc.) que lo gatille, así que
+    se busca en las 4 carpetas igual que cargar_op/eliminar_op. Devuelve
+    False sin tocar nada si la OP no existe en ninguna."""
+    numero = int(numero)
+    valor = valor.strip()
+    for carpeta in (carpeta_json(), carpeta_completadas(), carpeta_pendiente()):
+        ruta = carpeta / f"{numero}.json"
+        if ruta.exists():
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+            if valor:
+                datos["OpIngresoInser"] = valor
+            else:
+                datos.pop("OpIngresoInser", None)
+            ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+            return True
+    ruta = cm.buscar(carpeta_historial(), numero)
+    if ruta is None:
+        return False
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    if valor:
+        datos["OpIngresoInser"] = valor
+    else:
+        datos.pop("OpIngresoInser", None)
+    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    return True
+
+
 def eliminar_op(numero: int) -> bool:
     """Elimina el JSON de una OP, sea cual sea la carpeta de ciclo de vida
     en la que esté (activa, completada, pendiente o historial). Devuelve

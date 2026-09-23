@@ -273,7 +273,6 @@ class ApiCotizacion:
             "nombre_trabajo": datos.get("Nombre", ""),
             "despacho": datos.get("Despacho"),
             "instalacion": datos.get("Instalacion"),
-            "op_ingreso_inser": datos.get("OpIngresoInser", ""),
             "cliente": {
                 "empresa": datos.get("Empresa", ""),
                 "rut": datos.get("RUT", ""),
@@ -317,7 +316,6 @@ class ApiCotizacion:
             "nombre_trabajo": datos.get("nombre_trabajo", ""),
             "despacho": datos.get("despacho"),
             "instalacion": datos.get("instalacion"),
-            "op_ingreso_inser": datos.get("op_ingreso_inser", ""),
             "cliente": {
                 "empresa": "", "rut": "", "razon_social": "", "contacto": "", "email": "",
                 "descuento": "0", "condicion": "", "fecha": "", "numero": "", "descripcion": "",
@@ -499,7 +497,6 @@ class ApiCotizacion:
 
         despacho = estado.get("despacho")
         instalacion = estado.get("instalacion")
-        op_ingreso_inser = (estado.get("op_ingreso_inser") or "").strip()
         descuento_pct = _num(cliente.get("descuento"), 0.0)
         totales = costo_cotizacion(productos_internos, descuento_pct,
                                     despacho=despacho or 0.0, instalacion=instalacion or 0.0,
@@ -528,8 +525,6 @@ class ApiCotizacion:
             json_dict["Despacho"] = despacho
         if instalacion is not None:
             json_dict["Instalacion"] = instalacion
-        if op_ingreso_inser:
-            json_dict["OpIngresoInser"] = op_ingreso_inser
 
         _guardar_cotizacion_repo(json_dict)
 

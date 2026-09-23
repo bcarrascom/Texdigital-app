@@ -445,6 +445,9 @@ class ApiApp:
         else:
             self._aviso("No se pudo completar: la OP ya no está activa.", "error")
 
+    def guardar_op_ingreso_inser(self, numero, valor: str) -> bool:
+        return self._ver_op.guardar_op_ingreso_inser(numero, valor)
+
     # ── Historial de OPs ─────────────────────────────────────────────────────
 
     def obtener_historial(self, anio, mes) -> list[dict]:

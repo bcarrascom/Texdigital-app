@@ -9,7 +9,7 @@ import webbrowser
 
 from core.repositorio_ops import (
     cargar_op, estado_op, listar_todas_las_ops, ESTADO_ACTIVA,
-    completar_op as _completar_op,
+    completar_op as _completar_op, actualizar_op_ingreso_inser,
 )
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml
@@ -30,6 +30,20 @@ def _metros_producto(p_interno: dict) -> tuple[float | None, float | None]:
     return (ml or 0.0), None
 
 
+def _texto_caja(caja) -> str:
+    """Nombre de caja para mostrar en pantalla — "Sin caja", el string
+    legado tal cual, o el perfil si `caja` es el objeto con detalle de
+    materiales (perfil/traseras/luces/fp, ver docs/cajas-backlight.md).
+    ver-op.html asume que "caja" siempre le llega como string; sin esto,
+    un producto backlight con el esquema nuevo (objeto) le mostraba el
+    objeto crudo ("[object Object]") en la ficha del producto y en
+    Materiales de caja. Mismo criterio que core.presentar_op._fila_producto
+    (ahí también solo se usa el perfil, no el detalle completo)."""
+    if isinstance(caja, dict):
+        return caja.get("perfil") or "Con caja"
+    return caja or "Sin caja"
+
+
 def _producto_a_json_pantalla(p_interno: dict) -> dict:
     es_bl = "tela" in p_interno
     ml, m2 = _metros_producto(p_interno)
@@ -41,7 +55,7 @@ def _producto_a_json_pantalla(p_interno: dict) -> dict:
         "estructuras":   [] if es_bl else list(p_interno.get("estructuras", [])),
         "terminaciones": [] if es_bl else list(p_interno.get("terminaciones", [])),
         "tela":          p_interno.get("tela", "") if es_bl else "",
-        "caja":          p_interno.get("caja", "") if es_bl else "",
+        "caja":          _texto_caja(p_interno.get("caja", "")) if es_bl else "",
         "tema":          p_interno.get("tema", ""),
         "obs":           p_interno.get("obs", ""),
         "ancho":         p_interno.get("ancho", 0.0),
@@ -73,6 +87,12 @@ def op_a_json(datos: dict) -> dict:
         "instalacion":   datos.get("Instalacion") is not None,
         "direccion":     None,
         "productos":     [_producto_a_json_pantalla(p) for p in productos_internos],
+        # "OP ingreso Inser": N° de ingreso en el proveedor de impresión
+        # Inser, cargado a mano desde ver-op.html — solo tiene sentido si
+        # la OP tiene al menos un producto backlight (ver "Caja" en
+        # core/repositorio_despachos.py::_nombre_producto, mismo chequeo).
+        "tiene_backlight":   any("Caja" in p for p in productos_json),
+        "op_ingreso_inser":  datos.get("OpIngresoInser", ""),
     }
 
 
@@ -127,3 +147,6 @@ class ApiVerOp:
             return False
         _completar_op(numero)
         return True
+
+    def guardar_op_ingreso_inser(self, numero, valor: str) -> bool:
+        return actualizar_op_ingreso_inser(numero, valor or "")
