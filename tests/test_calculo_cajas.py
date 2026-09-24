@@ -33,8 +33,9 @@ CATALOGO_LUCES = [
     # (una "unidad" = una malla completa, medida 0.3m — se cuenta y se
     # cobra IGUAL que cualquier led lateral, ver core/calculo_cajas.py).
     {"corto": "Malla 150", "largo": "Malla Front Led 50x150 5k", "medida": 0.3, "watts": 60},
-    # Malla 12v: 99 luces x 0.46W = 45.54W por unidad.
-    {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 45.54},
+    # Malla 12v: 60 luces x 1W = 60W por unidad (dato del contratista,
+    # 2026-09-24 — reemplaza los 45.54W de una estimación anterior).
+    {"corto": "Malla 12v", "largo": "Malla front led 12v 6000 k", "medida": 1, "watts": 60},
     {"corto": "sin luces", "largo": "sin luces", "medida": 0, "watts": 0},
 ]
 
@@ -223,7 +224,7 @@ class TestMallasComoLuzLateral(unittest.TestCase):
         self.assertEqual(f["cantidad_x_caja"], 1.0)           # "solo entra 1 luz"
         self.assertAlmostEqual(r["ml_x_cubrir"], 0.5)          # "faltan 0.5m por cubrir"
         self.assertEqual(f["cantidad_x_caja"] * 25000, 25000)  # precio del Excel
-        self.assertAlmostEqual(r["watts"], 45.54)
+        self.assertAlmostEqual(r["watts"], 60)
 
     def test_malla_no_se_multiplica_por_lados_a_cubrir(self):
         # Caja mediana (0.8 <= lado corto < 1.5) -> lados_a_cubrir=2 para un
@@ -259,8 +260,71 @@ class TestMallasComoLuzLateral(unittest.TestCase):
         # M12 (medida 0.6): floor((1.5-0.03)/0.6) = 2 -> ml_x_cubrir = 1.5-1.2 = 0.3
         self.assertEqual(_fila(r, "Luces 1")["cantidad_x_caja"], 2)
         self.assertAlmostEqual(r["ml_x_cubrir"], 0.3)
-        # Malla 12v (medida 1.0) sobre 0.3m disponibles -> no entra ninguna.
-        self.assertEqual(_fila(r, "Luces 2")["cantidad_x_caja"], 0)
+        # Malla 12v (medida 1.0) sobre 0.3m disponibles -> no entra ningún
+        # panel completo, pero SÍ se puede cortar un pedazo: cuenta la
+        # fracción de panel que entra (0.3/1.0 = 0.3) en vez de 0 (pedido
+        # de Bruno, 2026-09-24 — ver docstring de _ancho_y_conteo) — 0
+        # unidades significaba "sin luz ahí" aunque la caja SÍ lleva un
+        # trozo de malla.
+        self.assertAlmostEqual(_fila(r, "Luces 2")["cantidad_x_caja"], 0.3)
+
+
+class TestMallaMasChicaQueUnPanel(unittest.TestCase):
+    """Cuando una malla (Malla 150/Malla 12v) no entra ni una vez completa
+    en el espacio disponible, se cuenta la FRACCIÓN de panel que sí entra
+    en vez de 0 — equivale a cobrar por LED individual dentro de la malla
+    (ver docstring de _ancho_y_conteo). Pedido de Bruno (2026-09-24), a
+    partir de una caja real de un cliente: PERFIL 60 MM, Malla 12v, caja de
+    0.497x0.644 m — antes de este fix daba $0 de iluminación y ni fuente
+    de poder, porque la Malla 12v (1 m de ancho) no entraba completa en los
+    0.614 m disponibles del lado más largo."""
+
+    def test_caja_real_del_cliente_con_malla_12v(self):
+        r = calcular_caja(
+            ancho=0.497, alto=0.644, cantidad=1, perfil="PERFIL 60 MM",
+            luces1="Malla 12v", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        f = _fila(r, "Luces 1")
+        # disponible = 0.644 - 0.03 = 0.614 -> 0.614/1.0 = 0.614 de panel
+        self.assertAlmostEqual(f["cantidad_x_caja"], 0.614)
+        self.assertAlmostEqual(r["watts"], 60 * 0.614)  # 36.84 W
+        self.assertEqual(f["cantidad_x_caja"] * 25000, 15350.0)  # antes: $0
+        self.assertIsNotNone(r["fp"])  # antes: sin FP (watts daba 0)
+
+    def test_no_entra_nada_da_fraccion_no_cero(self):
+        r = calcular_caja(
+            ancho=0.2, alto=0.2, cantidad=1, perfil="PERFIL 80 MM",
+            luces1="Malla 12v", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        f = _fila(r, "Luces 1")
+        # disponible = 0.2 - 0.03 = 0.17 -> 0.17 de panel (chico, pero no 0)
+        self.assertAlmostEqual(f["cantidad_x_caja"], 0.17)
+        self.assertGreater(f["cantidad_x_caja"], 0)
+
+    def test_led_lateral_no_tiene_este_fallback(self):
+        # Una tira M12 (0.6m) es una pieza física fija — si no entra ni una,
+        # sigue dando 0 (no se puede vender "media tira"), a diferencia de
+        # una malla.
+        r = calcular_caja(
+            ancho=0.3, alto=0.3, cantidad=1, perfil="PERFIL 80 MM",
+            luces1="M12", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        self.assertEqual(_fila(r, "Luces 1")["cantidad_x_caja"], 0.0)
+        self.assertEqual(r["watts"], 0.0)
+
+    def test_malla_que_ya_entra_completa_no_cambia(self):
+        # Si entra al menos 1 panel completo, sigue siendo el piso de
+        # siempre (no fracciona algo que ya cabía entero) — mismo caso que
+        # test_malla_12v_1_unidad_ejemplo_real de TestMallasComoLuzLateral.
+        r = calcular_caja(
+            ancho=1.5, alto=0.45, cantidad=1, perfil="PERFIL 100 MM SIMPLE",
+            luces1="Malla 12v", luces2="sin luces",
+            catalogo_luces=CATALOGO_LUCES, catalogo_fp=CATALOGO_FP,
+        )
+        self.assertEqual(_fila(r, "Luces 1")["cantidad_x_caja"], 1.0)
 
 
 class TestRedondeoTrasteras(unittest.TestCase):
