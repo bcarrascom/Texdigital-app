@@ -168,16 +168,40 @@ def traseras_tipo(perfil: str, luces1_nombre: str) -> str:
 # §8 — Tabla de materiales completa
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _ancho_y_conteo(nombre: str, disponible: float, catalogo_luces: list[dict]) -> tuple[float, int]:
-    """Ancho físico ("medida") de una luz y cuántas unidades enteras entran
-    en `disponible` metros — misma fórmula para CUALQUIER luz, mallas
+def _ancho_y_conteo(nombre: str, disponible: float, catalogo_luces: list[dict]) -> tuple[float, float]:
+    """Ancho físico ("medida") de una luz y cuántas unidades entran en
+    `disponible` metros — misma fórmula para CUALQUIER luz, mallas
     incluidas (ver docstring del módulo): Malla 150/Malla 12v no son un
-    caso especial, solo tienen su propio ancho (0.3 m / 1.0 m)."""
+    caso especial, solo tienen su propio ancho (0.3 m / 1.0 m).
+
+    Para una malla (Malla 150/Malla 12v) que no entra ni una vez completa
+    en `disponible` (caja más chica que el panel: p.ej. una Malla 12v de
+    1 m de ancho en una caja de 0,614 m disponibles), el piso normal daría
+    0 unidades — 0 watts, $0 de iluminación, ni fuente de poder — aunque
+    la caja SÍ lleva luz (un pedazo cortado del panel). Pedido de Bruno
+    (2026-09-24, caja real de un cliente con Malla 12v en una caja de
+    0,497×0,644 m): en ese caso se cuenta la FRACCIÓN de panel que sí
+    entra (disponible/ancho_luz) en vez de 0 — equivale a cobrar por LED
+    individual dentro de la malla (una Malla 12v completa son 60 LEDs de
+    1W cada uno reunidos en su ancho de 1 m, a $25.000/60 por LED — ver
+    core.valor_cajas._valor_fila_luz), ya que tanto el precio como los
+    watts de una malla se multiplican por esta cantidad más adelante
+    (cantidad_x_caja), así que una fracción de panel ya da la fracción
+    correcta de precio y de watts sin ningún cálculo aparte.
+
+    Los leds laterales (M12, M9, M6, M3, Basic...) NO tienen este
+    fallback — son una tira física fija, no una malla de puntos
+    individuales: no se puede vender ni cobrar "media tira", así que ahí
+    0 unidades sigue siendo 0 si no entra ninguna tira completa."""
     if _es_sin_luces(nombre):
         return 0.0, 0
     luz = _buscar_luz(catalogo_luces, nombre)
     ancho_luz = luz["medida"] if luz else 0.0
-    conteo = 0 if ancho_luz == 0 else math.floor(round(disponible / ancho_luz, 6))
+    if ancho_luz == 0:
+        return 0.0, 0
+    conteo = math.floor(round(disponible / ancho_luz, 6))
+    if conteo == 0 and disponible > 0 and _es_malla(nombre):
+        return ancho_luz, round(disponible / ancho_luz, 6)
     return ancho_luz, conteo
 
 
