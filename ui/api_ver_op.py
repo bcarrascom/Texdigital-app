@@ -9,7 +9,7 @@ import webbrowser
 
 from core.repositorio_ops import (
     cargar_op, estado_op, listar_todas_las_ops, ESTADO_ACTIVA,
-    completar_op as _completar_op, actualizar_op_ingreso_inser,
+    completar_op as _completar_op, actualizar_op_inser, op_inser_marcada,
 )
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml
@@ -92,7 +92,7 @@ def op_a_json(datos: dict) -> dict:
         # la OP tiene al menos un producto backlight (ver "Caja" en
         # core/repositorio_despachos.py::_nombre_producto, mismo chequeo).
         "tiene_backlight":   any("Caja" in p for p in productos_json),
-        "op_ingreso_inser":  datos.get("OpIngresoInser", ""),
+        "op_inser":          op_inser_marcada(datos),
     }
 
 
@@ -148,5 +148,5 @@ class ApiVerOp:
         _completar_op(numero)
         return True
 
-    def guardar_op_ingreso_inser(self, numero, valor: str) -> bool:
-        return actualizar_op_ingreso_inser(numero, valor or "")
+    def guardar_op_inser(self, numero, marcado) -> bool:
+        return actualizar_op_inser(numero, bool(marcado))

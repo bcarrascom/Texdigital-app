@@ -13,7 +13,7 @@ core.precios.
 from pathlib import Path
 
 from core.rutas import RECURSOS
-from core.repositorio_ops import carpeta_html
+from core.repositorio_ops import carpeta_html, op_inser_marcada
 from core.titulo_impresion import titulo_impresion
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml, parsear_valor_manual
@@ -393,13 +393,16 @@ def generar_html(op: dict) -> Path:
         if descripcion else ""
     )
 
-    # Solo backlight (se carga a mano en el resumen del cotizador, ver
-    # nueva-cotizacion.html) — "" cuando no aplica, mismo criterio que
-    # descripcion_bloque: nada de tarjeta vacía en el área del cliente.
-    op_ingreso_inser = op.get("OpIngresoInser", "").strip()
-    op_ingreso_inser_bloque = (
-        f'<div class="dato"><div class="k">OP ingreso Inser</div><div class="v">{op_ingreso_inser}</div></div>'
-        if op_ingreso_inser else ""
+    # Casillero "OP INSER": se imprime VACÍO, a propósito. El N° de ingreso en
+    # el proveedor de impresión Inser no se conoce cuando se arma la OP — se
+    # escribe con lápiz sobre la hoja ya impresa (pedido de Bruno, 2026-10-01),
+    # así que acá solo se reserva el recuadro donde va. Se incluye nada más que
+    # si la OP está marcada en ver-op.html (ver repositorio_ops.op_inser_marcada):
+    # una OP que no pasa por Inser no lleva un recuadro para nada.
+    op_inser_bloque = (
+        '<div class="dato inser"><div class="k">OP Inser</div>'
+        '<div class="inser-caja"></div></div>'
+        if op_inser_marcada(op) else ""
     )
 
     filas_html = []
@@ -449,7 +452,7 @@ def generar_html(op: dict) -> Path:
         "{{empresa}}":          op.get("Empresa", ""),
         "{{contacto_email}}":   contacto_email,
         "{{descripcion_bloque}}": descripcion_bloque,
-        "{{op_ingreso_inser_bloque}}": op_ingreso_inser_bloque,
+        "{{op_inser_bloque}}": op_inser_bloque,
         "{{encabezado_productos}}": _encabezado_productos(es_backlight),
         "{{filas_productos}}":  "\n".join(filas_html),
         "{{fila_totales}}":     _fila_totales(es_backlight, total_cantidad, total_metros_txt),

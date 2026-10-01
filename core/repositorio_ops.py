@@ -338,34 +338,52 @@ def actualizar_listos(numero: int, indices: list[int]) -> None:
     )
 
 
-def actualizar_op_ingreso_inser(numero: int, valor: str) -> bool:
-    """Graba (o borra, si `valor` viene vacío) el campo OpIngresoInser de
-    una OP — dato de producción para backlight (N° de ingreso en el
-    proveedor de impresión Inser) que el usuario carga a mano desde
-    ver-op.html, en cualquier momento de la vida de la OP: no hay un paso
-    del ciclo (completar, pasar a pendiente, etc.) que lo gatille, así que
-    se busca en las 4 carpetas igual que cargar_op/eliminar_op. Devuelve
-    False sin tocar nada si la OP no existe en ninguna."""
+def _ruta_de_op(numero: int):
+    """La ruta del JSON de una OP, buscando en las 4 carpetas (activa,
+    completada, pendiente, historial) — mismo orden que cargar_op. None si no
+    está en ninguna. Para los campos que se editan en cualquier momento de la
+    vida de la OP, sin que ningún paso del ciclo los gatille."""
     numero = int(numero)
-    valor = valor.strip()
     for carpeta in (carpeta_json(), carpeta_completadas(), carpeta_pendiente()):
         ruta = carpeta / f"{numero}.json"
         if ruta.exists():
-            datos = json.loads(ruta.read_text(encoding="utf-8"))
-            if valor:
-                datos["OpIngresoInser"] = valor
-            else:
-                datos.pop("OpIngresoInser", None)
-            ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-            return True
-    ruta = cm.buscar(carpeta_historial(), numero)
+            return ruta
+    return cm.buscar(carpeta_historial(), numero)
+
+
+def op_inser_marcada(datos: dict) -> bool:
+    """Si esta OP lleva el casillero "OP INSER" en el documento impreso.
+
+    El dato es un booleano ("OpInser") desde 2026-10-01. Antes era un texto
+    ("OpIngresoInser"): el N° de ingreso en el proveedor de impresión Inser, que
+    se cargaba a mano en ver-op.html. Resultó que ese número no se conoce cuando
+    se arma la OP — se escribe con lápiz sobre la hoja ya impresa (pedido de
+    Bruno, 2026-10-01), así que el campo digital no tenía sentido y pasó a ser
+    un casillero vacío que se imprime para escribir encima.
+
+    Una OP vieja que tenía número cuenta como marcada: si alguien se tomó el
+    trabajo de cargarlo, esa OP pasaba por Inser. El texto viejo no se borra del
+    archivo —es un dato que alguien tipeó— simplemente ya no se muestra."""
+    if "OpInser" in datos:
+        return bool(datos["OpInser"])
+    return bool(str(datos.get("OpIngresoInser", "") or "").strip())
+
+
+def actualizar_op_inser(numero: int, marcado: bool) -> bool:
+    """Marca o desmarca el casillero "OP INSER" de una OP (ver
+    op_inser_marcada) — se puede en cualquier momento de la vida de la OP, así
+    que se busca en las 4 carpetas. Devuelve False sin tocar nada si la OP no
+    existe en ninguna."""
+    ruta = _ruta_de_op(numero)
     if ruta is None:
         return False
     datos = json.loads(ruta.read_text(encoding="utf-8"))
-    if valor:
-        datos["OpIngresoInser"] = valor
+    if marcado:
+        datos["OpInser"] = True
     else:
-        datos.pop("OpIngresoInser", None)
+        # Desmarcar tiene que pisar también el texto viejo: si quedara, una OP
+        # migrada volvería a leerse como marcada (ver op_inser_marcada).
+        datos["OpInser"] = False
     ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
     return True
 
