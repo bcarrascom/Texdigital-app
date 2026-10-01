@@ -176,20 +176,15 @@
 .dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
 .dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 
-/* "OP ingreso Inser" (solo OPs con backlight, ver datoIngresoInser) es el
-   único dato editable de esta pantalla — con caja y fondo siempre visibles
-   (a diferencia de un input "fantasma" que solo se nota al pasar el mouse)
-   para que se lea de entrada como un campo para completar, no como un
-   dato más de la hoja. */
-.dato__input {
-  font: inherit; font-size: var(--t-sm); color: var(--c-texto);
-  width: 100%; margin: -2px -5px; padding: 3px 5px;
-  background: var(--c-superficie-2); border: 1.5px solid var(--c-borde); border-radius: var(--r-sm);
-  transition: border-color var(--m-rapida) var(--ease-salida), background var(--m-rapida) var(--ease-salida);
-}
-.dato__input::placeholder { color: var(--c-texto-tenue); }
-.dato__input:hover { border-color: var(--c-borde-fuerte); }
-.dato__input:focus { outline: 0; border-color: var(--c-tema-fuerte); background: var(--c-superficie); }
+/* "OP Inser" (solo OPs con backlight, ver datoOpInser) es el único dato
+   editable de esta pantalla. Era un campo de texto para cargar el N° de
+   ingreso en Inser, pero ese número no se conoce acá: se escribe con lápiz
+   sobre la hoja ya impresa (pedido de Bruno, 2026-10-01). Ahora es una
+   casilla que decide si el documento lleva el recuadro vacío donde
+   escribirlo — se reusa .chip-casilla de base.css, el mismo control que el
+   "Forzar igual" del cotizador, para no inventar un checkbox propio. */
+.dato__casilla { margin-top: .35rem; }
+.dato__ayuda { font-size: var(--t-xs); color: var(--c-texto-tenue); margin-top: .3rem; }
 
 /* Materiales: cuánto de qué lleva el trabajo, sumado entre todos los
    productos. Tres columnas fijas —Textiles, Materiales de caja,
@@ -528,34 +523,32 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     return d;
   }
 
-  /* "OP ingreso Inser" — N° de ingreso en el proveedor de impresión Inser,
-     opcional y solo para OPs con al menos un producto backlight (ver
-     op.tiene_backlight, ui/api_ver_op.py::op_a_json). A diferencia del
-     resto de dato(), esto es editable: el usuario lo carga cuando quiera,
-     no solo al crear la OP — se guarda solo (debounce mientras se tipea, y
-     de una al perder el foco) con TD.api.guardar_op_ingreso_inser. */
-  function datoIngresoInser() {
+  /* "OP Inser" — solo para OPs con al menos un producto backlight (ver
+     op.tiene_backlight, ui/api_ver_op.py::op_a_json). A diferencia del resto de
+     dato(), esto es editable: se marca cuando se quiera, no solo al crear la OP,
+     y se guarda al instante (es un booleano, no hay nada que esperar a que el
+     usuario termine de tipear) con TD.api.guardar_op_inser.
+
+     Marcarla NO escribe ningún número: hace que el documento impreso lleve un
+     recuadro vacío rotulado "OP INSER" para escribirlo a mano después (ver
+     core/presentar_op.py). */
+  function datoOpInser() {
     if (!op.tiene_backlight) return null;
     const d = document.createElement("div");
     d.className = "dato";
     d.innerHTML = `
-      <span class="dato__et">OP ingreso Inser</span>
-      <input class="dato__input" type="text" placeholder="Sin ingresar" autocomplete="off">`;
-    const input = $(".dato__input", d);
-    input.value = op.op_ingreso_inser || "";
-
-    let temporizador = null;
-    const guardar = () => {
-      clearTimeout(temporizador);
-      const valor = input.value.trim();
-      op.op_ingreso_inser = valor;
-      TD.api.guardar_op_ingreso_inser(op.numero, valor);
-    };
-    input.addEventListener("input", () => {
-      clearTimeout(temporizador);
-      temporizador = setTimeout(guardar, 600);
+      <span class="dato__et">OP Inser</span>
+      <label class="chip-casilla dato__casilla">
+        <input type="checkbox">
+        <span class="chip-casilla__texto">OP Inser</span>
+      </label>
+      <span class="dato__ayuda">Imprime un recuadro vacío para anotar el número a mano.</span>`;
+    const casilla = $("input", d);
+    casilla.checked = !!op.op_inser;
+    casilla.addEventListener("change", () => {
+      op.op_inser = casilla.checked;
+      TD.api.guardar_op_inser(op.numero, casilla.checked);
     });
-    input.addEventListener("blur", guardar);
     return d;
   }
 
@@ -574,7 +567,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       dato("Email", op.email),
       dato("Fecha de ingreso", op.fecha_ingreso, true),
       dato("Descripción", op.descripcion, false, true),
-      datoIngresoInser(),
+      datoOpInser(),
     ].filter(Boolean).forEach((d) => cont.appendChild(d));
   }
 

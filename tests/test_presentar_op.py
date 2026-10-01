@@ -22,6 +22,9 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_ops as repo_ops
+from core.repositorio_ops import (
+    actualizar_op_inser, cargar_op, op_inser_marcada,
+)
 from core.presentar_op import _corte, _excedente_cm, _terminaciones_caja_de
 
 
@@ -383,6 +386,126 @@ class TestTerminacionesCajaViajaEnLaCadena(unittest.TestCase):
             "cantidad": 1, "terminaciones_caja": "AREA VISUAL",
         })
         self.assertEqual(frontend["terminaciones_caja"], "AREA VISUAL")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# "OP Inser" dejó de ser un campo de texto (2026-10-01). El N° de ingreso en el
+# proveedor de impresión Inser no se conoce cuando se arma la OP: se escribe con
+# lápiz sobre la hoja ya impresa. Ahora es un booleano, y lo que se imprime es un
+# recuadro VACÍO para escribir encima.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestOpInserMarcada(unittest.TestCase):
+    """La lectura del dato, incluida la migración del texto viejo."""
+
+    def test_booleano_true(self):
+        self.assertTrue(op_inser_marcada({"OpInser": True}))
+
+    def test_booleano_false(self):
+        self.assertFalse(op_inser_marcada({"OpInser": False}))
+
+    def test_op_sin_el_campo_no_esta_marcada(self):
+        self.assertFalse(op_inser_marcada({"Cotizacion": 1}))
+
+    def test_texto_viejo_con_numero_cuenta_como_marcada(self):
+        # Si alguien se tomó el trabajo de cargar el número, esa OP pasaba por
+        # Inser: al reimprimirla tiene que seguir llevando el recuadro.
+        self.assertTrue(op_inser_marcada({"OpIngresoInser": "A-4471"}))
+
+    def test_texto_viejo_vacio_no_cuenta(self):
+        self.assertFalse(op_inser_marcada({"OpIngresoInser": ""}))
+        self.assertFalse(op_inser_marcada({"OpIngresoInser": "   "}))
+
+    def test_el_booleano_le_gana_al_texto_viejo(self):
+        # Desmarcar a mano una OP migrada tiene que quedar desmarcada, aunque el
+        # texto viejo siga en el archivo.
+        self.assertFalse(op_inser_marcada({"OpInser": False, "OpIngresoInser": "A-4471"}))
+
+
+class TestActualizarOpInser(_ConCarpetaTemporal):
+    """Marcar/desmarcar escribe en el JSON, en cualquiera de las carpetas donde
+    pueda estar la OP."""
+
+    def _guardar(self, op):
+        from core.repositorio_ops import guardar_op
+        guardar_op(op)
+
+    def test_marcar_graba_true(self):
+        self._guardar(_op_backlight(9201))
+        self.assertTrue(actualizar_op_inser(9201, True))
+        self.assertTrue(op_inser_marcada(cargar_op(9201)))
+
+    def test_desmarcar_graba_false(self):
+        self._guardar(_op_backlight(9202))
+        actualizar_op_inser(9202, True)
+        actualizar_op_inser(9202, False)
+        self.assertFalse(op_inser_marcada(cargar_op(9202)))
+
+    def test_desmarcar_una_op_migrada_queda_desmarcada(self):
+        op = _op_backlight(9203)
+        op["OpIngresoInser"] = "A-4471"
+        self._guardar(op)
+        self.assertTrue(op_inser_marcada(cargar_op(9203)))
+        actualizar_op_inser(9203, False)
+        self.assertFalse(op_inser_marcada(cargar_op(9203)))
+
+    def test_no_borra_el_texto_viejo(self):
+        # Es un dato que alguien tipeó: se deja de mostrar, no se destruye.
+        op = _op_backlight(9204)
+        op["OpIngresoInser"] = "A-4471"
+        self._guardar(op)
+        actualizar_op_inser(9204, False)
+        self.assertEqual(cargar_op(9204)["OpIngresoInser"], "A-4471")
+
+    def test_op_inexistente_devuelve_false(self):
+        self.assertFalse(actualizar_op_inser(99999, True))
+
+
+class TestRecuadroEnElDocumento(_ConCarpetaTemporal):
+    """Lo que sale impreso: un recuadro VACÍO rotulado "OP Inser", solo si la OP
+    está marcada."""
+
+    def _html(self, op):
+        from core.presentar_op import generar_html
+        return Path(generar_html(op)).read_text(encoding="utf-8")
+
+    def _bloque_datos(self, op):
+        """Solo el <div class="datos"> renderizado. Buscar en el documento
+        completo da falsos positivos: la plantilla trae el CSS de .inser-caja
+        siempre, esté o no el recuadro."""
+        html = self._html(op)
+        ini = html.index('<div class="datos">')
+        return html[ini:html.index("</table>", ini)]
+
+    def test_marcada_imprime_el_recuadro(self):
+        op = _op_backlight(9211)
+        op["OpInser"] = True
+        datos = self._bloque_datos(op)
+        self.assertIn("OP Inser", datos)
+        self.assertIn('<div class="inser-caja"></div>', datos)
+
+    def test_el_recuadro_sale_vacio(self):
+        # El punto del cambio: no se imprime ningún número, se reserva el lugar.
+        op = _op_backlight(9212)
+        op["OpInser"] = True
+        datos = self._bloque_datos(op)
+        # El recuadro se abre y se cierra sin nada en medio.
+        self.assertIn('<div class="inser-caja"></div>', datos)
+
+    def test_sin_marcar_no_imprime_nada(self):
+        op = _op_backlight(9213)
+        datos = self._bloque_datos(op)
+        self.assertNotIn("inser-caja", datos)
+        self.assertNotIn("OP Inser", datos)
+
+    def test_una_op_vieja_con_numero_imprime_el_recuadro_vacio(self):
+        op = _op_backlight(9214)
+        op["OpIngresoInser"] = "A-4471"
+        html = self._html(op)
+        self.assertIn('<div class="inser-caja"></div>', self._bloque_datos(op))
+        # El número viejo ya no se imprime: ahora el recuadro es para escribirlo
+        # a mano, y dos números (uno impreso y uno a lápiz) se contradicen.
+        self.assertNotIn("A-4471", html)
 
 
 if __name__ == "__main__":
