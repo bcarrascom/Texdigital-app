@@ -148,6 +148,15 @@ def _producto_a_interno(p: dict) -> dict:
             "tela": p.get("tela", ""), "caja": caja,
             "ancho": ancho, "alto": alto, "cantidad": cantidad,
             "tema": tema, "obs": obs,
+            # Switch "Terminaciones de caja" del panel de backlight: decide el
+            # margen de costura con el que se corta la tela (ver
+            # core.presentar_op._corte). Es POR PRODUCTO, como está el switch
+            # en la pantalla — una misma OP puede mezclar cajas ya armadas con
+            # cajas que hay que montar. Hasta 2026-10-01 este campo se quedaba
+            # en el frontend y no llegaba nunca al JSON, así que elegir "Área
+            # visual" no hacía nada y la OP siempre se imprimía con el margen
+            # de caja terminada (reporte de planta: "sigue sumando 1,3 cms").
+            "terminaciones_caja": (p.get("terminaciones_caja") or "CAJA TERMINADA"),
         }
 
     return {
@@ -192,6 +201,7 @@ def _interno_a_frontend(interno: dict) -> dict:
             "luces_2": (caja.get("luces_2") or {}).get("tipo", "sin luces") if con_caja else "sin luces",
             "ancho": str(ancho), "alto": str(alto), "cantidad": str(cantidad),
             "tema": interno.get("tema", ""), "obs": interno.get("obs", ""),
+            "terminaciones_caja": interno.get("terminaciones_caja", "CAJA TERMINADA"),
         })
         return base
 
