@@ -216,6 +216,7 @@ def costo_producto(
     terminaciones_legado_valores: dict[str, float] | None = None,
     precios_cajas: dict | None = None,
     ml_o_area_facturable: float | None = None,
+    cobro_materiales=None,
 ) -> dict:
     """
     Devuelve el desglose de costo de un producto (dict interno del
@@ -260,6 +261,26 @@ def costo_producto(
     grupo — mismo comportamiento que antes de que existiera el piso grupal.
     En ningún caso afecta "ml_o_area" del resultado, que sigue siendo
     siempre el valor real sin piso.
+
+    `cobro_materiales`: función que recibe este mismo producto y devuelve
+    cuánto cobra por los materiales de Inventario que de verdad gasta —
+    en la práctica core.repositorio_materiales.cobro_materiales_producto
+    (acá se recibe como parámetro, y no se importa, por el mismo motivo que
+    los catálogos: este módulo no toca disco, así se puede testear con
+    montos fijos). Es la nueva forma de cobrar estructuras (pedido de Bruno,
+    2026-10-01) y se comporta así:
+      - Una estructura con materiales asociados cobra la SUMA de ellos, y
+        su valorUNIT/valorML de catálogo se ignora ("reemplaza", decisión de
+        Bruno). Las que no tienen materiales asociados —o los tienen pero sin
+        precio de venta o sin fórmula resoluble— siguen cobrando por catálogo
+        exactamente como antes.
+      - Los materiales asociados al PRODUCTO (no a una de sus estructuras)
+        se suman también, a la misma línea de Estructuras del desglose.
+      - Un monto escrito a mano ("$10.000", ver parsear_valor_manual) le gana
+        a todo: es un precio que alguien decidió para ESTE producto.
+    En None (default) nada de esto corre y el cálculo es el de siempre — es
+    lo que mantiene a este módulo andando igual con el módulo Inventario
+    apagado, o en un test que no quiere saber de materiales.
     """
     textiles_valores       = TEXTILES_VALORES if textiles_valores is None else textiles_valores
     textiles_anchos        = TEXTILES_ANCHOS if textiles_anchos is None else textiles_anchos
@@ -317,11 +338,21 @@ def costo_producto(
         terminaciones = d.get("terminaciones") or []
         estructuras = d.get("estructuras") or []
 
+        # Cobro por materiales de Inventario (ver `cobro_materiales` en el
+        # docstring): lo que esté acá PISA el catálogo para esa estructura;
+        # lo que no, cae al catálogo como siempre.
+        cobro = cobro_materiales(d) if cobro_materiales is not None else None
+        estructuras_por_materiales = (cobro or {}).get("estructuras", {})
+        materiales_del_producto = (cobro or {}).get("materiales_producto", {})
+        detalle_materiales = (cobro or {}).get("detalle", {})
+
         if modelo == "legado":
-            def _valorizar_legado(nombre, catalogo):
+            def _valorizar_legado(nombre, catalogo, es_estructura=False):
                 valor_manual = parsear_valor_manual(nombre)
                 if valor_manual is not None:
                     return valor_manual
+                if es_estructura and nombre in estructuras_por_materiales:
+                    return estructuras_por_materiales[nombre]
                 valores = catalogo.get(nombre)
                 if not valores:
                     return 0.0
@@ -337,7 +368,8 @@ def costo_producto(
             costo_terminaciones = sum(detalle_terminaciones.values())
 
             detalle_estructuras = {
-                e: _valorizar_legado(e, estructuras_legado_valores) for e in estructuras
+                e: _valorizar_legado(e, estructuras_legado_valores, es_estructura=True)
+                for e in estructuras
             }
             costo_estructuras = sum(detalle_estructuras.values())
         else:
@@ -356,6 +388,9 @@ def costo_producto(
                 if valor_manual is not None:
                     detalle_estructuras[nombre] = valor_manual
                     continue
+                if nombre in estructuras_por_materiales:
+                    detalle_estructuras[nombre] = estructuras_por_materiales[nombre]
+                    continue
                 valores = estructuras_valores.get(nombre)
                 if not valores:
                     detalle_estructuras[nombre] = 0.0
@@ -367,6 +402,14 @@ def costo_producto(
                     detalle_estructuras[nombre] = 0.0
             costo_estructuras = sum(detalle_estructuras.values())
 
+        # Materiales asociados al PRODUCTO (no a una de sus estructuras):
+        # misma línea del desglose, decisión de Bruno (2026-10-01). Nunca
+        # pisan una estructura con el mismo nombre — cobro_materiales_producto
+        # ya dedupe por material, así que acá solo se suman.
+        for nombre_material, monto in materiales_del_producto.items():
+            detalle_estructuras[nombre_material] = detalle_estructuras.get(nombre_material, 0.0) + monto
+            costo_estructuras += monto
+
         total = costo_impresion + costo_terminaciones + costo_estructuras
         resultado = {
             "ml_o_area":            ml,
@@ -375,6 +418,12 @@ def costo_producto(
             "costo_estructuras":    costo_estructuras,
             "detalle_estructuras":  detalle_estructuras,
             "detalle_terminaciones": detalle_terminaciones,
+            # {nombre_material: {consumo, valor, monto, origen}} de lo que se
+            # cobró por materiales de Inventario — vacío si no se pasó
+            # `cobro_materiales`. Es para poder MOSTRAR de qué está hecho el
+            # monto de una estructura (qué material, cuánto gasta y a qué
+            # precio); el que suma plata es detalle_estructuras, no esto.
+            "detalle_materiales":   detalle_materiales,
             "total":                total,
         }
 
@@ -467,7 +516,12 @@ def ml_o_area_facturable_por_producto(productos: list[dict], **kwargs) -> list[f
 
     kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
     ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
-    sin piso, de cada producto individual)."""
+    sin piso, de cada producto individual). `cobro_materiales` se descarta a
+    propósito: acá no se mira ningún costo de estructuras, y resolverlo
+    implica leer el inventario del disco por cada producto (ver
+    core.repositorio_materiales.cobro_materiales_producto) para después tirar
+    el resultado."""
+    kwargs.pop("cobro_materiales", None)
     reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
 
     grupos: dict[tuple[str, str], list[int]] = {}
@@ -500,7 +554,9 @@ def en_piso_minimo_por_producto(productos: list[dict], **kwargs) -> list[bool]:
 
     kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
     ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
-    sin piso, de cada producto individual)."""
+    sin piso, de cada producto individual). `cobro_materiales` se descarta
+    por el mismo motivo que en ml_o_area_facturable_por_producto."""
+    kwargs.pop("cobro_materiales", None)
     reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
 
     grupos: dict[tuple[str, str], list[int]] = {}

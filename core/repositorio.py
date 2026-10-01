@@ -224,6 +224,45 @@ def guardar_proveedor(nombre: str) -> None:
     _escribir_json(PROVEEDORES_PATH, proveedores)
 
 
+def editar_proveedor(nombre_actual: str, nombre_nuevo: str) -> bool:
+    """Renombra un proveedor de la lista (panel "Proveedores" del módulo
+    Inventario, ver ui/api_inventario.py — pedido de Bruno, 2026-09-29).
+    Es solo texto libre sin ID (a diferencia de direcciones.json), así que
+    se identifica por el nombre ACTUAL. No toca los rollos/materiales que
+    ya tengan este proveedor cargado — ahí "proveedor" es una copia de
+    texto tomada al momento de guardar, no una referencia viva a esta
+    lista (mismo criterio que editar_direccion con las OPs de Despachos).
+    Devuelve False sin guardar nada si `nombre_actual` no existe, o si
+    `nombre_nuevo` (sin contar mayúsculas) ya es el nombre de OTRO
+    proveedor de la lista."""
+    nombre_actual = (nombre_actual or "").strip()
+    nombre_nuevo = (nombre_nuevo or "").strip()
+    if not nombre_actual or not nombre_nuevo:
+        return False
+    proveedores = cargar_proveedores()
+    indice = next((i for i, p in enumerate(proveedores) if p.lower() == nombre_actual.lower()), None)
+    if indice is None:
+        return False
+    if any(i != indice and p.lower() == nombre_nuevo.lower() for i, p in enumerate(proveedores)):
+        return False
+    proveedores[indice] = nombre_nuevo
+    _escribir_json(PROVEEDORES_PATH, proveedores)
+    return True
+
+
+def eliminar_proveedor(nombre: str) -> bool:
+    """Saca un proveedor de la lista — mismo criterio que eliminar_direccion
+    sobre lo que ya lo tenga cargado: no se toca, queda con su copia de
+    texto tal cual estaba. Devuelve True si encontró y borró algo."""
+    nombre = (nombre or "").strip().lower()
+    proveedores = cargar_proveedores()
+    nuevos = [p for p in proveedores if p.lower() != nombre]
+    if len(nuevos) == len(proveedores):
+        return False
+    _escribir_json(PROVEEDORES_PATH, nuevos)
+    return True
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Gestión de direcciones.json — lista de direcciones de despacho, ligadas a
 # un cliente por RUT (un cliente puede tener varias). Ningún campo de la

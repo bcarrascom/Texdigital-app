@@ -307,5 +307,107 @@ class TestSinTextil(unittest.TestCase):
         self.assertEqual(costo["total"], 45000)
 
 
+class TestCobroPorMateriales(unittest.TestCase):
+    """El cobro por materiales de Inventario (pedido de Bruno, 2026-10-01):
+    `cobro_materiales` es una función que recibe el producto y devuelve cuánto
+    cobra por los materiales que de verdad gasta. Acá se pasa una función fija
+    (nada de disco ni de Inventario real) — lo que se verifica es cómo
+    costo_producto la usa: reemplaza el valor de catálogo de la estructura, deja
+    intactas las que no cubre, y respeta el ajuste manual por encima de todo.
+    Quién la implementa de verdad es
+    core.repositorio_materiales.cobro_materiales_producto."""
+
+    @staticmethod
+    def _cobro(estructuras=None, materiales_producto=None):
+        def fn(_d):
+            return {
+                "estructuras":         estructuras or {},
+                "materiales_producto": materiales_producto or {},
+                "incompletas":         [],
+                "detalle":             {},
+            }
+        return fn
+
+    def test_reemplaza_el_valor_de_catalogo_de_la_estructura(self):
+        d = _producto(estructuras=["Fleje plastico"], cantidad=3)
+        # Catálogo: 3 × 7500 = 22.500. Con materiales: 40.000, y el catálogo
+        # de esa estructura deja de contar (no se suman los dos).
+        costo = costo_producto(d, **CATALOGOS,
+                               cobro_materiales=self._cobro({"Fleje plastico": 40000.0}))
+        self.assertEqual(costo["costo_estructuras"], 40000.0)
+        self.assertEqual(costo["detalle_estructuras"]["Fleje plastico"], 40000.0)
+
+    def test_estructura_no_cubierta_sigue_cobrando_por_catalogo(self):
+        d = _producto(estructuras=["Fleje plastico", "Madera y cancamos"], cantidad=1)
+        costo = costo_producto(d, **CATALOGOS,
+                               cobro_materiales=self._cobro({"Fleje plastico": 40000.0}))
+        self.assertEqual(costo["detalle_estructuras"]["Madera y cancamos"], 15000.0)
+        self.assertEqual(costo["costo_estructuras"], 55000.0)
+
+    def test_sin_cobro_materiales_el_calculo_es_el_de_siempre(self):
+        d = _producto(estructuras=["Fleje plastico"], cantidad=3)
+        self.assertEqual(costo_producto(d, **CATALOGOS)["costo_estructuras"], 22500.0)
+
+    def test_el_ajuste_manual_le_gana_a_los_materiales(self):
+        # "$1.000" escrito a mano en la lista de Estructuras es un precio que
+        # alguien decidió para ESTE producto: no lo pisa ni el inventario.
+        d = _producto(estructuras=["$1.000"], cantidad=5)
+        costo = costo_producto(d, **CATALOGOS,
+                               cobro_materiales=self._cobro({"$1.000": 99999.0}))
+        self.assertEqual(costo["costo_estructuras"], 1000.0)
+
+    def test_materiales_del_producto_se_suman_a_la_linea_de_estructuras(self):
+        d = _producto(estructuras=["Fleje plastico"], cantidad=1)
+        costo = costo_producto(
+            d, **CATALOGOS,
+            cobro_materiales=self._cobro(materiales_producto={"Ojalillo": 2000.0}),
+        )
+        # 7.500 del catálogo (esa estructura no la cubren materiales) + 2.000
+        self.assertEqual(costo["costo_estructuras"], 9500.0)
+        self.assertEqual(costo["detalle_estructuras"]["Ojalillo"], 2000.0)
+
+    def test_materiales_del_producto_sin_estructuras_igual_cobran(self):
+        d = _producto(estructuras=[], cantidad=1)
+        costo = costo_producto(
+            d, **CATALOGOS,
+            cobro_materiales=self._cobro(materiales_producto={"Ojalillo": 2000.0}),
+        )
+        self.assertEqual(costo["costo_estructuras"], 2000.0)
+
+    def test_entra_en_el_total_del_producto(self):
+        d = _producto(estructuras=["Fleje plastico"], cantidad=1,
+                      terminaciones=["Basta"])
+        costo = costo_producto(d, **CATALOGOS,
+                               cobro_materiales=self._cobro({"Fleje plastico": 40000.0}))
+        # impresión 0 (TelaTest vale 0) + terminación 10.000 + estructuras 40.000
+        self.assertEqual(costo["total"], 50000.0)
+
+    def test_el_detalle_de_materiales_viaja_en_el_resultado(self):
+        d = _producto(estructuras=["Fleje plastico"], cantidad=1)
+        def fn(_d):
+            return {
+                "estructuras": {"Fleje plastico": 40000.0}, "materiales_producto": {},
+                "incompletas": [],
+                "detalle": {"Asta": {"consumo": 2, "valor": 20000, "monto": 40000,
+                                     "origen": "Fleje plastico"}},
+            }
+        costo = costo_producto(d, **CATALOGOS, cobro_materiales=fn)
+        self.assertEqual(costo["detalle_materiales"]["Asta"]["monto"], 40000)
+
+    def test_tambien_pisa_en_el_modelo_aditivo(self):
+        # El modelo "aditivo" (Neo) ya no es el default, pero sigue andando —
+        # no debe quedarse cobrando por catálogo algo que el legado ya cobra
+        # por materiales.
+        d = _producto(estructuras=["EstructuraTest"], cantidad=1)
+        costo = costo_producto(
+            d, modelo="aditivo",
+            textiles_valores=TEXTILES_VALORES, textiles_anchos=TEXTILES_ANCHOS,
+            estructuras_valores={"EstructuraTest": {"valorUNIT": 1000}},
+            terminaciones_valores={},
+            cobro_materiales=self._cobro({"EstructuraTest": 7777.0}),
+        )
+        self.assertEqual(costo["costo_estructuras"], 7777.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -447,7 +447,7 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
 MARGEN_TENSION_ML = 1.0
 
 
-def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
+def _metros_lineales(producto_interno: dict, con_margen: bool = True) -> tuple[str, float]:
     """(nombre_textil, metros lineales de rollo que consume) de un
     producto interno de cotización (ver ui/api_cotizacion.py::
     _producto_a_interno / core.repositorio_cotizaciones.producto_desde_json).
@@ -461,7 +461,14 @@ def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
     Incluye MARGEN_TENSION_ML (ver docstring de la constante) sobre el ML/M²
     real del producto — pero solo si el producto de verdad va a pasar por
     la máquina (metros > 0); un producto sin textil o sin ancho de catálogo
-    no imprime nada, así que no le suma margen a lo que ya es 0."""
+    no imprime nada, así que no le suma margen a lo que ya es 0.
+
+    `con_margen=False` devuelve el ML real, sin ese margen — pedido de
+    Bruno (2026-09-27): core.repositorio_materiales reusa esta misma
+    conversión para las fórmulas de consumo de materiales no textiles
+    (metro_lineal_directo/metro_lineal_salto), donde el margen de tensión
+    de LA TELA no aplica (un adhesivo o un ojal no se gasta de más por
+    cómo la impresora sostiene el rollo)."""
     from core.precios import costo_producto
     from core.repositorio import TEXTILES_ANCHOS
 
@@ -475,7 +482,7 @@ def _metros_lineales(producto_interno: dict) -> tuple[str, float]:
         metros = resultado["ml_o_area"] / ancho_tela if ancho_tela else 0.0
     else:
         metros = resultado["ml_o_area"]
-    if metros > 0:
+    if con_margen and metros > 0:
         metros += MARGEN_TENSION_ML
     return textil, metros
 

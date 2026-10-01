@@ -325,6 +325,22 @@ class ApiApp:
         pantalla, argumentos = self._historial.pop() if self._historial else ("menu", {})
         self._cargar(pantalla, argumentos)
 
+    def recordar_vista_inventario(self, vista: str) -> None:
+        """menu.html llama acá cada vez que el usuario cambia de sub-vista
+        en Inventario (Textiles/Materiales, ver cambiarVistaInventario) —
+        ese cambio es 100% del cliente, no navega ni pasa por _ir/_cargar,
+        así que self._args_actuales se queda apuntando a los args con los
+        que se CARGÓ menu.html (#panel=inventario, sin "vista") a menos
+        que se actualice acá a mano. Sin esto, abrir_material()/
+        abrir_rollo() apilarían ese dict viejo en el historial y "Volver"
+        siempre reaparecería en Textiles, sin importar qué tabla se
+        estuviera mirando (pedido de Bruno, 2026-09-29). No-op si no
+        estamos en menu.html — no debería llamarse desde otro lado, pero
+        no hay nada que corregir si pasara."""
+        if self._pantalla_actual != "menu":
+            return
+        self._args_actuales["vista"] = vista
+
     def paginar(self, direccion: str) -> None:
         """Flechas ←/→ de ver-cotizacion.html/ver-op.html: pasa a la
         cotización/OP siguiente o anterior (ver *.numero_adyacente) SIN
@@ -419,11 +435,14 @@ class ApiApp:
     def verificar_materiales_cotizacion(self, numero) -> list[dict]:
         return self._ver_cotizacion.verificar_materiales(numero)
 
-    def aprobar_cotizacion(self, numero, ingreso, entrega) -> dict:
-        resultado = self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega)
+    def aprobar_cotizacion(self, numero, ingreso, entrega, consumos_manuales: dict | None = None) -> dict:
+        resultado = self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega, consumos_manuales)
         if resultado.get("ok"):
             self._ir("menu", panel="ops")
         return resultado
+
+    def materiales_manuales_pendientes(self, numero) -> list[dict]:
+        return self._ver_cotizacion.materiales_manuales_pendientes(numero)
 
     # ── Ver OP ───────────────────────────────────────────────────────────────
 
@@ -581,6 +600,12 @@ class ApiApp:
     def guardar_proveedor(self, nombre) -> None:
         self._inventario.guardar_proveedor(nombre)
 
+    def editar_proveedor(self, nombre_actual, nombre_nuevo) -> bool:
+        return self._inventario.editar_proveedor(nombre_actual, nombre_nuevo)
+
+    def eliminar_proveedor(self, nombre) -> bool:
+        return self._inventario.eliminar_proveedor(nombre)
+
     def valor_sugerido_textil(self, nombre_textil) -> float | None:
         return self._inventario.valor_sugerido_textil(nombre_textil)
 
@@ -646,17 +671,41 @@ class ApiApp:
     def ingresar_material(
         self, nombre, cantidad, tipo="unidad", proveedor="",
         costo_total=None, costo_unitario=None,
+        tipo_consumo=None, consumo_parametros=None,
+        productos_asociados=None, estructuras_asociadas=None,
+        fecha=None,
     ) -> dict:
-        return self._inventario.ingresar_material(nombre, cantidad, tipo, proveedor, costo_total, costo_unitario)
+        return self._inventario.ingresar_material(
+            nombre, cantidad, tipo, proveedor, costo_total, costo_unitario,
+            tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
+            fecha,
+        )
 
-    def editar_material(self, id_, nombre, tipo, valor=None, proveedor="") -> dict | None:
-        return self._inventario.editar_material(id_, nombre, tipo, valor, proveedor)
+    def editar_material(
+        self, id_, nombre, tipo, valor=None, proveedor="",
+        tipo_consumo=None, consumo_parametros=None,
+        productos_asociados=None, estructuras_asociadas=None,
+    ) -> dict | None:
+        return self._inventario.editar_material(
+            id_, nombre, tipo, valor, proveedor,
+            tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
+        )
 
-    def registrar_uso_material(self, id_, cantidad_usada, descripcion: str = "") -> dict | None:
-        return self._inventario.registrar_uso_material(id_, cantidad_usada, descripcion)
+    def cargar_productos_catalogo(self) -> list[str]:
+        return self._inventario.cargar_productos_catalogo()
+
+    def cargar_estructuras_catalogo(self) -> list[str]:
+        return self._inventario.cargar_estructuras_catalogo()
 
     def ajustar_cantidad_material(self, id_, nueva_cantidad, descripcion: str = "") -> dict | None:
         return self._inventario.ajustar_cantidad_material(id_, nueva_cantidad, descripcion)
 
+    def ajustar_valor_material(self, id_, nuevo_valor, descripcion: str = "") -> dict | None:
+        return self._inventario.ajustar_valor_material(id_, nuevo_valor, descripcion)
+
     def eliminar_ultimo_historial_material(self, id_material, id_entrada) -> dict | None:
         return self._inventario.eliminar_ultimo_historial_material(id_material, id_entrada)
+
+    def eliminar_material(self, id_) -> None:
+        self._inventario.eliminar_material(id_)
+        self._ir("menu", panel="inventario")

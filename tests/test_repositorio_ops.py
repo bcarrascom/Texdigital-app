@@ -170,7 +170,11 @@ class TestMoverADespachos(_ConRutaTemporal):
 
 class TestCompletarOp(_ConRutaTemporal):
     """completar_op — el punto único que decide entre mover_a_completadas
-    y mover_a_despachos (ver esa docstring)."""
+    y mover_a_despachos (ver esa docstring). Mockea despachos=True a
+    propósito (no asume el default real de core/config.py, que Bruno
+    puede apagar/prender para un release sin que este test deba
+    enterarse) — el escenario "módulo apagado" tiene su propia clase,
+    TestCompletarOpConDespachosApagado, más abajo."""
 
     def setUp(self):
         super().setUp()
@@ -179,6 +183,12 @@ class TestCompletarOp(_ConRutaTemporal):
         self._parche_desp = mock.patch.object(repo_desp, "_ruta_base", lambda: self._base_desp)
         self._parche_desp.start()
         self.addCleanup(self._parche_desp.stop)
+
+        self._parche_modulo = mock.patch.dict(
+            "core.config.MODULOS_HABILITADOS", {"despachos": True},
+        )
+        self._parche_modulo.start()
+        self.addCleanup(self._parche_modulo.stop)
 
     def test_con_despacho_va_a_despachos(self):
         op = _op(8003, "20/08/2026")

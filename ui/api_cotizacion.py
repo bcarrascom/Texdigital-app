@@ -34,7 +34,9 @@ from core.calculo_cajas import calcular_caja
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
-from core.repositorio_materiales import estructuras_legado_valores_efectivos
+from core.repositorio_materiales import (
+    estructuras_legado_valores_efectivos, kwargs_precios,
+)
 from core.repositorio_cotizaciones import (
     cargar_cotizacion, guardar_cotizacion as _guardar_cotizacion_repo,
     mapear_producto, producto_desde_json, siguiente_numero, numero_en_uso,
@@ -408,8 +410,7 @@ class ApiCotizacion:
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
         costo = costo_producto(
-            interno, ml_o_area_facturable=ml_o_area_facturable,
-            estructuras_legado_valores=estructuras_legado_valores_efectivos(),
+            interno, ml_o_area_facturable=ml_o_area_facturable, **kwargs_precios(),
         )
 
         if p.get("tipo") == "backlight":
@@ -500,7 +501,7 @@ class ApiCotizacion:
         descuento_pct = _num(cliente.get("descuento"), 0.0)
         totales = costo_cotizacion(productos_internos, descuento_pct,
                                     despacho=despacho or 0.0, instalacion=instalacion or 0.0,
-                                    estructuras_legado_valores=estructuras_legado_valores_efectivos())
+                                    **kwargs_precios())
 
         fecha = _iso_a_dma(cliente.get("fecha", "")) or datetime.now().strftime("%d/%m/%Y")
         json_dict = {

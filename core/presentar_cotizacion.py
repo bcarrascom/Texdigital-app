@@ -14,6 +14,7 @@ from pathlib import Path
 from core.rutas import RECURSOS
 from core.repositorio_cotizaciones import carpeta_html, producto_desde_json
 from core.titulo_impresion import titulo_impresion
+from core.repositorio_materiales import kwargs_precios
 from core.precios import (
     costo_cotizacion, costo_producto, formatear_clp, parsear_valor_manual,
     ml_o_area_facturable_por_producto,
@@ -38,7 +39,11 @@ def _fila_producto(p: dict, ml_o_area_facturable: float | None = None) -> str:
     # de facturación se aplica por grupo de textil/tela, no línea por línea
     # (ver core.precios, docstring "Piso mínimo de facturación"), así que
     # esta fila sola no puede decidirlo por su cuenta.
-    costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable)
+    # kwargs_precios(): el documento impreso tiene que cobrar lo mismo que la
+    # pantalla donde se armó la cotización (ver
+    # core.repositorio_materiales.kwargs_precios).
+    costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable,
+                            **kwargs_precios())
     cantidad = p.get("Cantidad", 0)
     valor_unit = formatear_clp(costo["valor_unitario"])
     total_fila = formatear_clp(costo["total"])
@@ -133,7 +138,8 @@ def generar_html(json_dict: dict) -> Path:
     despacho = json_dict.get("Despacho")
     instalacion = json_dict.get("Instalacion")
     totales = costo_cotizacion(productos_internos, descuento_pct,
-                                despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+                                despacho=despacho or 0.0, instalacion=instalacion or 0.0,
+                                **kwargs_precios())
     # Mismo piso-por-grupo que usó costo_cotizacion() arriba — si cada fila
     # decidiera su propio piso por su cuenta, la suma de las filas podría no
     # coincidir con el total del documento (ver core.precios, docstring
