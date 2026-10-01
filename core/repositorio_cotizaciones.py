@@ -292,6 +292,13 @@ def mapear_producto(d: dict) -> dict:
             "Cantidad": int(d.get("cantidad", 0)),
             "Tema":     d.get("tema", ""),
             "Obs":      d.get("obs", ""),
+            # Margen de corte de tela, POR PRODUCTO (ver
+            # core.presentar_op._corte). Antes de 2026-10-01 no se guardaba, y
+            # las OPs viejas no lo tienen: producto_desde_json y presentar_op
+            # caen a "CAJA TERMINADA", que es el margen con el que esas OPs se
+            # imprimieron en su momento — así un documento viejo se reimprime
+            # igual que la primera vez.
+            "TerminacionesCaja": d.get("terminaciones_caja", "CAJA TERMINADA"),
         }
     return {
         "producto":      d.get("producto", ""),
@@ -335,6 +342,7 @@ def producto_desde_json(d: dict) -> dict:
             "tema":      d.get("Tema", ""),
             "obs":       d.get("Obs", ""),
             "rotado":    False,
+            "terminaciones_caja": d.get("TerminacionesCaja", "CAJA TERMINADA"),
         }
     return {
         "producto":      d.get("producto", ""),

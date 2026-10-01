@@ -22,7 +22,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_ops as repo_ops
-from core.presentar_op import _corte, _excedente_cm
+from core.presentar_op import _corte, _excedente_cm, _terminaciones_caja_de
 
 
 def _op_backlight(numero, terminaciones_caja="CAJA TERMINADA", ancho=1.48, alto=2.25, cantidad=1):
@@ -214,6 +214,175 @@ class TestGenerarHtml(unittest.TestCase):
         ruta = generar_html(_op_normal(9010))  # _op_normal trae "Obs": ""
         html = ruta.read_text(encoding="utf-8")
         self.assertNotIn('class="prod-obs"', html)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# "Área visual" de verdad suma 2,3 cm (2026-10-01). El switch existía en la
+# pantalla desde la UI HTML, pero el campo se quedaba en el frontend: no lo
+# mapeaba _producto_a_interno, no lo guardaba mapear_producto, y presentar_op
+# caía siempre al default. Reporte de planta: "sigue sumando 1.3 cms como si
+# fuera medida de caja". Ahora el valor es POR PRODUCTO y viaja la cadena
+# completa — estos tests cubren cada eslabón, para que no se vuelva a cortar.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _producto_backlight_json(terminaciones_caja=None, ancho=1.48, alto=2.25, cantidad=1):
+    p = {
+        "Tela": "Popelina 155", "Caja": "Sin caja",
+        "Ancho": ancho, "Alto": alto, "Cantidad": cantidad, "Tema": "", "Obs": "",
+    }
+    if terminaciones_caja is not None:
+        p["TerminacionesCaja"] = terminaciones_caja
+    return p
+
+
+class TestTerminacionesCajaPorProducto(unittest.TestCase):
+    """El valor del PRODUCTO manda; el de la OP completa queda como respaldo
+    para el esquema viejo (un solo valor para todos los productos)."""
+
+    def test_el_del_producto_le_gana_al_de_la_op(self):
+        p = _producto_backlight_json("AREA VISUAL")
+        self.assertEqual(_terminaciones_caja_de(p, "CAJA TERMINADA"), "AREA VISUAL")
+
+    def test_sin_valor_en_el_producto_usa_el_de_la_op(self):
+        p = _producto_backlight_json()
+        self.assertEqual(_terminaciones_caja_de(p, "AREA VISUAL"), "AREA VISUAL")
+
+    def test_sin_valor_en_ninguno_cae_a_caja_terminada(self):
+        # Una OP de antes de que el campo existiera: se reimprime con el mismo
+        # margen con el que se imprimió la primera vez.
+        self.assertEqual(_terminaciones_caja_de(_producto_backlight_json(), ""), "CAJA TERMINADA")
+
+
+class _ConCarpetaTemporal(unittest.TestCase):
+    """Mismo mock de _ruta_base que TestGenerarHtml, para que generar_html() no
+    escriba en Dropbox/AppData reales."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._parche = mock.patch.object(repo_ops, "_ruta_base", lambda: Path(self._tmp.name))
+        self._parche.start()
+        self.addCleanup(self._parche.stop)
+
+
+class TestMargenEnElDocumento(_ConCarpetaTemporal):
+    """Lo que el taller ve impreso: la medida de corte, el margen que se le
+    sumó en gris bajo las medidas, y qué se midió (caja terminada / área
+    visual) en la línea del producto."""
+
+    def _html(self, op):
+        from core.presentar_op import generar_html
+        return Path(generar_html(op)).read_text(encoding="utf-8")
+
+    def test_area_visual_por_producto_suma_23cm(self):
+        op = _op_backlight(9101)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("AREA VISUAL", ancho=1.48, alto=2.25)]
+        html = self._html(op)
+        self.assertIn("1,503", html)   # 1,48 + 0,023
+        self.assertIn("2,273", html)   # 2,25 + 0,023
+        self.assertNotIn("1,493", html)  # el margen de caja terminada NO aparece
+
+    def test_caja_terminada_sigue_sumando_13cm(self):
+        op = _op_backlight(9102)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("CAJA TERMINADA", ancho=1.48, alto=2.25)]
+        html = self._html(op)
+        self.assertIn("1,493", html)
+        self.assertIn("2,263", html)
+
+    def test_el_margen_se_escribe_bajo_las_medidas(self):
+        op = _op_backlight(9103)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("AREA VISUAL")]
+        html = self._html(op)
+        self.assertIn("(+2,3 cms)", html)
+        # En gris y chico: la misma clase que ya usa el excedente.
+        self.assertIn('<div class="prod-obs">(+2,3 cms)</div>', html)
+        # Sin la palabra "Corte": las columnas de al lado ya lo dicen.
+        self.assertNotIn("Corte (+", html)
+
+    def test_el_margen_de_caja_terminada_tambien_se_escribe(self):
+        # Se muestra siempre, con los dos valores posibles: así el que corta
+        # sabe de dónde salen las medidas sin acordarse de la fórmula.
+        op = _op_backlight(9104)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("CAJA TERMINADA")]
+        self.assertIn("(+1,3 cms)", self._html(op))
+
+    def test_el_producto_queda_marcado_como_area_visual(self):
+        op = _op_backlight(9105)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("AREA VISUAL")]
+        self.assertIn("Área visual", self._html(op))
+
+    def test_el_producto_queda_marcado_como_caja_terminada(self):
+        op = _op_backlight(9106)
+        del op["TerminacionesCaja"]
+        op["productos"] = [_producto_backlight_json("CAJA TERMINADA")]
+        self.assertIn("Caja terminada", self._html(op))
+
+    def test_una_op_puede_mezclar_los_dos(self):
+        # El motivo de que el campo sea por producto y no por OP.
+        op = _op_backlight(9107)
+        del op["TerminacionesCaja"]
+        op["productos"] = [
+            _producto_backlight_json("CAJA TERMINADA", ancho=1.48, alto=2.25),
+            _producto_backlight_json("AREA VISUAL", ancho=1.48, alto=2.25),
+        ]
+        html = self._html(op)
+        self.assertIn("1,493", html)            # el de caja terminada
+        self.assertIn("1,503", html)            # el de área visual
+        self.assertIn("(+1,3 cms)", html)
+        self.assertIn("(+2,3 cms)", html)
+
+
+class TestTerminacionesCajaViajaEnLaCadena(unittest.TestCase):
+    """Los eslabones donde el campo se perdía: frontend -> interno -> JSON
+    guardado -> interno. Si cualquiera de los tres se rompe, elegir "Área
+    visual" deja de hacer efecto sin que nada falle a la vista."""
+
+    def test_del_frontend_al_esquema_interno(self):
+        from ui.api_cotizacion import _producto_a_interno
+        interno = _producto_a_interno({
+            "tipo": "backlight", "tela": "Popelina 155", "perfil": "Sin caja",
+            "ancho": "1.48", "alto": "2.25", "cantidad": "1",
+            "terminaciones_caja": "AREA VISUAL",
+        })
+        self.assertEqual(interno["terminaciones_caja"], "AREA VISUAL")
+
+    def test_el_frontend_sin_el_campo_cae_a_caja_terminada(self):
+        from ui.api_cotizacion import _producto_a_interno
+        interno = _producto_a_interno({
+            "tipo": "backlight", "tela": "Popelina 155", "perfil": "Sin caja",
+            "ancho": "1.48", "alto": "2.25", "cantidad": "1",
+        })
+        self.assertEqual(interno["terminaciones_caja"], "CAJA TERMINADA")
+
+    def test_ida_y_vuelta_por_el_json_guardado(self):
+        from core.repositorio_cotizaciones import mapear_producto, producto_desde_json
+        interno = {
+            "tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.48, "alto": 2.25,
+            "cantidad": 1, "tema": "", "obs": "", "terminaciones_caja": "AREA VISUAL",
+        }
+        guardado = mapear_producto(interno)
+        self.assertEqual(guardado["TerminacionesCaja"], "AREA VISUAL")
+        self.assertEqual(producto_desde_json(guardado)["terminaciones_caja"], "AREA VISUAL")
+
+    def test_un_producto_guardado_viejo_se_lee_como_caja_terminada(self):
+        from core.repositorio_cotizaciones import producto_desde_json
+        viejo = {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 1.48,
+                 "Alto": 2.25, "Cantidad": 1, "Tema": "", "Obs": ""}
+        self.assertEqual(producto_desde_json(viejo)["terminaciones_caja"], "CAJA TERMINADA")
+
+    def test_el_switch_vuelve_al_frontend_al_editar(self):
+        # Reabrir una cotización guardada tiene que dejar el switch donde estaba.
+        from ui.api_cotizacion import _interno_a_frontend
+        frontend = _interno_a_frontend({
+            "tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.48, "alto": 2.25,
+            "cantidad": 1, "terminaciones_caja": "AREA VISUAL",
+        })
+        self.assertEqual(frontend["terminaciones_caja"], "AREA VISUAL")
 
 
 if __name__ == "__main__":

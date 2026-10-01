@@ -23,19 +23,49 @@ RUTA_PLANTILLA = RECURSOS / "plantilla_op.html"
 
 # Márgenes de costura para el corte de tela de backlight — mismas fórmulas
 # que el Excel original (=SI($J$7="CAJA TERMINADA",[@ANCHO]+0.013,[@ANCHO]+0.023)).
-# "TerminacionesCaja" es un valor único por cotización/OP (switch en
-# ui/formulario_cliente.py), no por producto.
+# "TerminacionesCaja" se guarda POR PRODUCTO (switch en el panel de backlight de
+# nueva-cotizacion.html), no por OP: una misma OP puede mezclar cajas ya armadas
+# con cajas que hay que montar. En la versión Tkinter era un valor único por
+# cotización (vivía en el formulario del cliente) — las OPs guardadas con ese
+# esquema se siguen leyendo, ver _terminaciones_caja_de.
 _MARGEN_CAJA_TERMINADA = 0.013
 _MARGEN_AREA_VISUAL    = 0.023
 
+_ETIQUETA_TERMINACIONES_CAJA = {
+    "CAJA TERMINADA": "Caja terminada",
+    "AREA VISUAL":    "Área visual",
+}
+
+
+def _margen_corte(terminaciones_caja: str) -> float:
+    """Margen de costura que se le suma a cada medida: 1,3 cm si la caja viene
+    terminada, 2,3 cm si lo que se midió es el área visual (hay que envolver más
+    perfil). Cualquier otro valor cae a área visual, que es el margen más
+    grande: ante la duda, sobra tela en vez de faltar."""
+    return _MARGEN_CAJA_TERMINADA if terminaciones_caja == "CAJA TERMINADA" else _MARGEN_AREA_VISUAL
+
 
 def _corte(medida: float, terminaciones_caja: str) -> float:
-    """Medida de corte de tela (ancho o alto) para un producto backlight:
-    la medida final del producto + el margen de costura según
-    TerminacionesCaja ("CAJA TERMINADA" -> 1,3 cm, cualquier otro valor,
-    incluido "AREA VISUAL" -> 2,3 cm, mismo default que el formulario)."""
-    margen = _MARGEN_CAJA_TERMINADA if terminaciones_caja == "CAJA TERMINADA" else _MARGEN_AREA_VISUAL
-    return medida + margen
+    """Medida de corte de tela (ancho o alto) para un producto backlight: la
+    medida final del producto + el margen de costura (ver _margen_corte)."""
+    return medida + _margen_corte(terminaciones_caja)
+
+
+def _terminaciones_caja_de(p: dict, op_terminaciones_caja: str) -> str:
+    """El valor que corresponde a ESTE producto. Primero el del producto (lo que
+    guardan las cotizaciones desde 2026-10-01), después el de la OP completa
+    (esquema viejo, un solo valor para todos los productos) y por último el
+    default — así una OP vieja se reimprime con el mismo margen con el que se
+    imprimió la primera vez, y una nueva respeta lo que se eligió por producto."""
+    return p.get("TerminacionesCaja") or op_terminaciones_caja or "CAJA TERMINADA"
+
+
+def _fmt_margen_cm(terminaciones_caja: str) -> str:
+    """"(+2,3 cms)" — el margen que se le sumó a las medidas, para poder leerlo
+    al lado del número de corte sin tener que saberse la fórmula de memoria
+    (pedido de Bruno, 2026-10-01)."""
+    cm = _margen_corte(terminaciones_caja) * 100
+    return f"(+{_fmt_cantidad(cm)} cms)"
 
 
 def _fmt_medida(valor: float) -> str:
@@ -89,8 +119,10 @@ def _metrica_producto(interno: dict) -> tuple[float, str]:
 def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMINADA") -> tuple[str, float, str]:
     """Fila de la tabla de productos (sin precios). Devuelve el HTML de la
     fila, más (metros, unidad) para acumular en los totales. `terminaciones_caja`
-    solo importa para productos backlight (agrega 2 columnas de corte de
-    tela, ver _corte) — se ignora para el resto."""
+    es el valor de la OP completa (esquema viejo) y solo se usa como respaldo del
+    que traiga el producto (ver _terminaciones_caja_de); importa únicamente para
+    productos backlight (agrega 2 columnas de corte de tela, ver _corte) — se
+    ignora para el resto."""
     cantidad = p.get("Cantidad", 0)
     tema = p.get("Tema", "").strip() or "—"
     obs = p.get("Obs", "").strip()
@@ -101,23 +133,37 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
     if "Caja" in p:
         caja = p.get("Caja")
         con_caja = isinstance(caja, dict)
+        # El margen de corte es por producto (ver _terminaciones_caja_de), así
+        # que una OP puede traer una caja terminada y un área visual juntas.
+        tc = _terminaciones_caja_de(p, terminaciones_caja)
+        etiqueta_tc = _ETIQUETA_TERMINACIONES_CAJA.get(tc, _ETIQUETA_TERMINACIONES_CAJA["AREA VISUAL"])
         if con_caja:
             nombre = f"Backlight + Caja · {p.get('Tela', '')}"
             detalle = caja.get("perfil", "")
         else:
             nombre = f"Backlight · {p.get('Tela', '')}"
             detalle = "Solo tela impresa"
+        # Qué se midió (caja terminada vs área visual) va en la línea de detalle
+        # del producto, no escondido en una sub-línea: es lo que decide el corte
+        # de TODA la pieza, y el taller tiene que poder verlo sin buscarlo
+        # (pedido de Bruno, 2026-10-01).
+        detalle = f"{detalle} · {etiqueta_tc}" if detalle else etiqueta_tc
         extras_html = ""
-        corte_ancho = _fmt_medida(_corte(p.get("Ancho", 0), terminaciones_caja))
-        corte_alto  = _fmt_medida(_corte(p.get("Alto", 0), terminaciones_caja))
+        corte_ancho = _fmt_medida(_corte(p.get("Ancho", 0), tc))
+        corte_alto  = _fmt_medida(_corte(p.get("Alto", 0), tc))
         celdas_corte = f"""
         <td class="num">{corte_ancho} m</td>
         <td class="num">{corte_alto} m</td>"""
-        # El excedente va debajo de Medidas, no en su propia columna (una
-        # columna más para un dato que solo aplica a backlight angostaba
-        # demasiado el resto de la tabla) — mismo estilo prod-obs que la
-        # Observación bajo Tema.
+        # El excedente y el margen de corte van debajo de Medidas, no en su
+        # propia columna (una columna más para un dato que solo aplica a
+        # backlight angostaba demasiado el resto de la tabla) — mismo estilo
+        # prod-obs que la Observación bajo Tema. El margen se muestra siempre,
+        # con los dos valores posibles: así el que corta sabe de dónde salen las
+        # medidas de corte sin tener que acordarse de la fórmula. Va solo el
+        # monto, sin la palabra "Corte" (pedido de Bruno, 2026-10-01): las
+        # columnas de al lado ya se llaman "Corte ancho"/"Corte alto".
         excedente = _fmt_cantidad(_excedente_cm(p.get("Ancho", 0) * p.get("Alto", 0)))
+        medidas += f'<div class="prod-obs">{_fmt_margen_cm(tc)}</div>'
         medidas += f'<div class="prod-obs">Excedente: {excedente} cm</div>'
     else:
         celdas_corte = ""
