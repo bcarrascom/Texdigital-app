@@ -6,13 +6,15 @@
 <link rel="stylesheet" href="base.css">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   Ver un rollo — abrir_rollo(id), botón ⓘ de la fila en el panel de
-   Inventario (menu.html). Pantalla aparte (no un <dialog>) a propósito:
-   un rollo puede acumular años de ajustes/consumos, y el diálogo de
-   "Ajustar cantidad" ya recorta su lista a los últimos 2 (ver menu.html) —
-   acá es donde se ve TODO, scrolleando (.contenido ya scrollea solo, ver
-   base.css), con un timeline en vez de una tabla plana para que se lea
-   como lo que es: la vida del rollo en el tiempo.
+   Ver un rollo — abrir_rollo(id), clic en la fila de la tabla de rollos
+   del panel de Inventario (menu.html). Pantalla aparte (no un <dialog>) a
+   propósito: un rollo puede acumular años de ajustes/consumos, así que
+   acá es donde se ve TODO, con un timeline en vez de una tabla plana para
+   que se lea como lo que es: la vida del rollo en el tiempo. Además de
+   historial, esta pantalla ahora ES "la pantalla del rollo" (pedido de
+   Bruno, 2026-09-28, mismo criterio que ver-material.html un día antes):
+   Editar/Ajustar cantidad/Decomisionar viven ACÁ, no en menu.html — esa
+   tabla solo lista y navega.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .limite--rollo { width: min(100%, 46rem); margin-inline: auto; display: grid; gap: var(--e-5); }
@@ -77,9 +79,6 @@
   border-radius: var(--r-lg);
   padding: var(--e-3) var(--e-4);
 }
-/* Mismo chip que la tabla de ajustes de menu.html (.chip-tipo) — vive acá
-   también porque cada pantalla trae su propio CSS puntual, base.css solo
-   tiene lo genérico compartido. */
 .chip-tipo {
   display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
   font-size: var(--t-xs); font-weight: var(--peso-medio);
@@ -106,7 +105,92 @@
 }
 .timeline__op:hover { color: var(--c-tema-tinta); }
 
+/* Deshacer la entrada MÁS RECIENTE del historial — vivía en la mini-tabla
+   de #dlg-ajustar (menu.html); esa tabla se eliminó entera (pedido de
+   Bruno, 2026-09-28, mismo criterio que materiales el día anterior) ahora
+   que el timeline completo está siempre a la vista acá mismo. */
+.timeline__deshacer {
+  flex: 0 0 auto; width: 1.7rem; height: 1.7rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-texto-tenue); display: grid; place-items: center; cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida);
+}
+.timeline__deshacer:hover { color: var(--c-error); border-color: var(--c-error-suave); background: var(--c-error-suave); }
+.timeline__deshacer .icon-trash { width: .95rem; height: .95rem; }
+
 .estado-vacio { padding: var(--e-6) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+
+/* Orden del timeline — pedido de Bruno (2026-09-28): con un rollo usado
+   seguido, el historial se hace largo y siempre había que scrollear hasta
+   el final para ver lo último; ahora se puede invertir con un toque, sin
+   perder qué tarjeta es la más reciente (ver JS: idMasReciente no depende
+   del orden de dibujado). "Más reciente primero" sigue siendo el default. */
+.seccion-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--e-3); margin-bottom: var(--e-3); }
+.seccion-cab .seccion-titulo { margin-bottom: 0; }
+.btn-orden-timeline {
+  display: inline-grid; place-items: center;
+  width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie); color: var(--c-texto-suave);
+  cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              background var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida);
+}
+.btn-orden-timeline:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); color: var(--c-tema-fuerte); }
+.btn-orden-timeline .icon-arrow-down { width: .85rem; height: .85rem; transition: transform var(--m-media) var(--ease-salida); }
+.btn-orden-timeline[aria-pressed="true"] .icon-arrow-down { transform: rotate(180deg); }
+
+/* ── Diálogos ───────────────────────────────────────────────────────────
+   Este estilo base de <dialog> NO vive en base.css — cada pantalla que
+   usa este patrón lo trae en su propio <style> (ver menu.html,
+   ver-cotizacion.html, ver-op.html, ver-material.html): sin esto el
+   <dialog> cae al recuadro nativo del navegador (borde negro grueso,
+   esquinas cuadradas) — mismo bug que ya pasó en ver-op.html (2026-09-13)
+   y de nuevo en ver-material.html (2026-09-27) por no copiarlo al sumar
+   diálogos nuevos a una pantalla que antes no tenía ninguno. */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* ── Diálogo "Editar rollo" ────────────────────────────────────────────── */
+#dlg-rollo-editar { width: min(90vw, 32rem); max-width: min(90vw, 32rem); }
+.dlg-rollo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+.fila--proveedor { grid-template-columns: 2fr 1fr; }
+.dlg-rollo__campo-valor { max-width: 50%; }
+
+/* ── Diálogo "Ajustar cantidad" ───────────────────────────────────────────
+   Mismo formulario que tenía #dlg-ajustar en menu.html (delta +/- con
+   vista previa) — sin la mini-tabla (el timeline de acá arriba ya es el
+   historial completo) y sin el modo "Activación" (pedido de Bruno,
+   2026-09-29: ese switch de estado se mudó a su propio botón/diálogo en
+   el header — ver #dlg-activacion — así este diálogo queda solo para
+   cantidad, que es lo que su nombre dice). */
+#dlg-ajustar { width: min(90vw, 32rem); max-width: min(90vw, 32rem); }
+.ajustar__stock { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e-3); margin-top: var(--e-2); }
+.ajustar__stock strong { color: var(--c-tema-fuerte); font-variant-numeric: tabular-nums; }
+.ajustar__form {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  grid-template-areas: "delta descripcion" "guardar guardar";
+  gap: var(--e-3);
+  margin-top: var(--e-4); padding-top: var(--e-4);
+  border-top: 1.5px solid var(--c-borde);
+}
+.ajustar__campo-delta { grid-area: delta; }
+.ajustar__campo-descripcion { grid-area: descripcion; }
+.ajustar__campo-descripcion textarea { resize: vertical; min-height: 4.5rem; font-family: inherit; }
+.ajustar__guardar { grid-area: guardar; justify-self: end; }
+.ajustar__campo-delta[data-invalido] [data-ajustar-preview] { color: var(--c-error); }
 </style>
 </head>
 
@@ -117,6 +201,10 @@
     <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
     <span class="cabecera__titulo" data-titulo>Rollo</span>
     <span class="cabecera__sep"></span>
+    <button class="cab-btn" data-accion="decomisionar">Decomisionar</button>
+    <button class="cab-btn" data-accion="editar">Editar</button>
+    <button class="cab-btn" data-accion="activacion" data-activacion-texto>Desactivar</button>
+    <button class="btn btn--primario btn--chico" data-accion="ajustar">Ajustar cantidad</button>
     <span class="cabecera__version" data-version></span>
   </header>
 
@@ -137,7 +225,12 @@
       </section>
 
       <section>
-        <h2 class="seccion-titulo">Historial</h2>
+        <div class="seccion-cab">
+          <h2 class="seccion-titulo">Historial</h2>
+          <button class="btn-orden-timeline" type="button" data-accion="orden-timeline" aria-pressed="false" title="Más reciente primero" aria-label="Más reciente primero">
+            <span class="icon-arrow-down" aria-hidden="true"></span>
+          </button>
+        </div>
         <div class="timeline" data-timeline></div>
         <p class="estado-vacio" data-vacio hidden>Todavía no hay ningún ajuste o consumo registrado para este rollo.</p>
       </section>
@@ -145,6 +238,88 @@
     </div>
   </main>
 </div>
+
+<dialog id="dlg-rollo-editar">
+  <h2 class="dlg__titulo">Editar rollo</h2>
+  <div class="dlg-rollo__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dre-textil">Textil</label>
+      <select class="entrada" id="dre-textil"></select>
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dre-ancho">Ancho de tela (m)</label>
+      <input class="entrada" id="dre-ancho" type="number" step="0.01" min="0">
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="fila fila--proveedor">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dre-proveedor">Proveedor</label>
+        <input class="entrada" id="dre-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dre-precio-compra">Precio de compra</label>
+        <input class="entrada" id="dre-precio-compra" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="campo dlg-rollo__campo-valor">
+      <label class="campo__etiqueta" for="dre-valor">Valor por ML/M²</label>
+      <input class="entrada" id="dre-valor" type="text" inputmode="numeric" placeholder="Opcional">
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-editar-rollo">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-editar-rollo">Guardar</button>
+  </div>
+</dialog>
+<datalist id="lista-proveedores"></datalist>
+
+<dialog id="dlg-ajustar">
+  <h2 class="dlg__titulo">Ajustar cantidad</h2>
+  <div class="ajustar__stock">
+    <span>Stock actual</span>
+    <strong data-ajustar-stock></strong>
+  </div>
+
+  <div class="ajustar__form">
+    <div class="campo ajustar__campo-delta">
+      <label class="campo__etiqueta" for="da-delta">Ajuste (metros)</label>
+      <input class="entrada" id="da-delta" type="number" step="0.01" value="0">
+      <span class="campo__ayuda" data-ajustar-preview></span>
+    </div>
+
+    <div class="campo ajustar__campo-descripcion">
+      <label class="campo__etiqueta" for="da-descripcion">Descripción</label>
+      <textarea class="entrada" id="da-descripcion" rows="3" placeholder="Qué pasó (ej. recorte con error de medida, tela dañada, recuento físico)…"></textarea>
+    </div>
+    <button class="btn btn--primario btn--chico ajustar__guardar" type="button" data-accion="guardar-ajuste">Guardar</button>
+  </div>
+
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cerrar-ajustar">Cerrar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-activacion">
+  <h2 class="dlg__titulo" data-dlg-activacion-titulo>¿Desactivar rollo?</h2>
+  <div class="campo">
+    <label class="campo__etiqueta" for="dac-descripcion">Descripción</label>
+    <textarea class="entrada" id="dac-descripcion" rows="3" placeholder="Motivo (opcional)…"></textarea>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-activacion">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="confirmar-activacion">Confirmar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-decomisionar">
+  <h2 class="dlg__titulo">¿Decomisionar rollo?</h2>
+  <p class="dlg__texto" data-dlg-decomisionar-texto></p>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-decomisionar">Cancelar</button>
+    <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-decomisionar">Confirmar</button>
+  </div>
+</dialog>
 
 <script src="api.js"></script>
 <script src="app.js"></script>
@@ -157,6 +332,10 @@
   const esc = (s) => String(s == null ? "" : s);
 
   const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación" };
+
+  let idRollo = null;
+  let rolloActual = null;
+  let ordenReciente = true;  // true = más reciente primero (default) — ver btn-orden-timeline
 
   function dato(et, val, mono, ancho) {
     if (!val && val !== 0) return null;
@@ -190,6 +369,7 @@
     const chip = $("[data-estado]");
     chip.textContent = activo ? "Activo" : "Inactivo";
     chip.className = "etiqueta " + (activo ? "etiqueta--ok" : "etiqueta--neutra");
+    $("[data-activacion-texto]").textContent = activo ? "Desactivar" : "Activar";
 
     const cont = $("[data-datos]");
     cont.textContent = "";
@@ -210,8 +390,11 @@
      descripción libre; un consumo viene con el rastro completo hacia la OP
      que lo generó (cliente/tema/obs), grabado tal cual al momento del
      consumo (ver core.repositorio_inventario._agregar_registro) — no se
-     recalcula acá ni depende de que esa OP siga existiendo en algún lado. */
-  function tarjetaUso(u) {
+     recalcula acá ni depende de que esa OP siga existiendo en algún lado.
+     La tarjeta más reciente (esLaMasReciente) suma un botón para
+     deshacerla — mismo criterio que materiales: solo tiene sentido sobre
+     la última, nunca sobre una del medio (ver eliminar_ajuste). */
+  function tarjetaUso(u, esLaMasReciente) {
     const esConsumo = u.tipo === "consumo";
     const esActivacion = u.tipo === "activacion";
     const item = document.createElement("div");
@@ -226,6 +409,10 @@
     const chipClase = esConsumo ? "chip-tipo--consumo"
       : esActivacion ? (u.estado_nuevo === "activo" ? "chip-tipo--activo" : "chip-tipo--inactivo")
       : "";
+    // Sin descripción, no se muestra el párrafo (antes quedaba un "—"
+    // colgando) — pedido de Bruno (2026-09-29): una activación/ajuste sin
+    // motivo cargado se ve más compacto con solo la línea de arriba.
+    const tieneDescripcion = !esConsumo && u.descripcion;
 
     item.innerHTML = `
       <div class="timeline__punto ${esConsumo ? "timeline__punto--consumo" : ""}"></div>
@@ -235,9 +422,22 @@
           <span class="timeline__cambio"></span>
           <span class="timeline__fecha"></span>
         </div>
-        ${esConsumo ? "" : '<p class="timeline__descripcion"></p>'}
+        ${tieneDescripcion ? '<p class="timeline__descripcion"></p>' : ""}
         ${esConsumo && (u.numero_op || datosConsumo.length) ? '<div class="timeline__datos"></div>' : ""}
       </div>`;
+
+    if (esLaMasReciente) {
+      const btn = document.createElement("button");
+      btn.className = "timeline__deshacer";
+      btn.type = "button";
+      btn.title = "Deshacer este movimiento";
+      btn.innerHTML = `<div class="icon-trash"></div>`;
+      btn.addEventListener("click", async () => {
+        await TD.api.eliminar_ajuste_rollo(idRollo, u.id);
+        await recargarRollo();
+      });
+      $(".timeline__cab", item).appendChild(btn);
+    }
 
     $(".chip-tipo", item).textContent = ETIQUETA_TIPO[u.tipo] || u.tipo;
     // "activacion" no cambia metros (ver core.repositorio_inventario.
@@ -248,9 +448,9 @@
       : `${esc(u.metros_restantes_anterior)} → ${esc(u.metros_restantes_nuevo)} m`;
     $(".timeline__fecha", item).textContent = u.fecha || "";
 
-    if (!esConsumo) {
-      $(".timeline__descripcion", item).textContent = u.descripcion || "—";
-    } else {
+    if (tieneDescripcion) {
+      $(".timeline__descripcion", item).textContent = u.descripcion;
+    } else if (esConsumo) {
       const cont = $(".timeline__datos", item);
       if (cont) {
         if (u.numero_op) {
@@ -273,20 +473,238 @@
   }
 
   function pintarTimeline(r) {
-    // Más reciente primero — mismo criterio que el resto de la app
-    // (cotizaciones/OPs en el menú, la tabla de rollos).
-    const usos = (r.usos || []).slice().reverse();
+    // "Más reciente primero" es el default — invertible con el botón de
+    // arriba (pedido de Bruno, 2026-09-28). "idMasReciente" se calcula
+    // SIEMPRE sobre el array original (el último elemento es el más nuevo)
+    // para que "deshacer" apunte a la tarjeta correcta sin importar en
+    // qué orden se dibuja.
+    const original = r.usos || [];
+    const idMasReciente = original.length ? original[original.length - 1].id : null;
+    const usos = ordenReciente ? original.slice().reverse() : original.slice();
     const cont = $("[data-timeline]");
     cont.textContent = "";
-    usos.forEach((u) => cont.appendChild(tarjetaUso(u)));
+    usos.forEach((u) => cont.appendChild(tarjetaUso(u, u.id === idMasReciente)));
     $("[data-vacio]").hidden = usos.length > 0;
   }
 
+  $("[data-accion='orden-timeline']").addEventListener("click", () => {
+    ordenReciente = !ordenReciente;
+    const btn = $("[data-accion='orden-timeline']");
+    btn.setAttribute("aria-pressed", String(!ordenReciente));
+    const texto = ordenReciente ? "Más reciente primero" : "Más antiguo primero";
+    btn.title = texto;
+    btn.setAttribute("aria-label", texto);
+    if (rolloActual) pintarTimeline(rolloActual);
+  });
+
+  async function recargarRollo() {
+    rolloActual = (await TD.api.obtener_rollo(idRollo)) || null;
+    if (!rolloActual) { TD.aviso("No se pudo cargar el rollo.", "error", 8000); return; }
+    pintarCabecera(rolloActual);
+    pintarTimeline(rolloActual);
+  }
+
+  function limpiarErrores(dlg) {
+    $$(".campo", dlg).forEach((c) => c.removeAttribute("data-invalido"));
+  }
+
+  function numeroClp(valorCampo) {
+    const limpio = String(valorCampo || "").replace(/[^\d]/g, "");
+    return limpio ? parseInt(limpio, 10) : null;
+  }
+  function formatearClp(valor) {
+    const n = numeroClp(valor);
+    return n == null ? "" : "$" + n.toLocaleString("es-CL");
+  }
+  function activarInputClp(input) {
+    input.addEventListener("input", () => { input.value = formatearClp(input.value); });
+  }
+  activarInputClp($("#dre-precio-compra"));
+  activarInputClp($("#dre-valor"));
+
+  // ── Diálogo "Editar rollo" ─────────────────────────────────────────────
+
+  const dlgRolloEditar = $("#dlg-rollo-editar");
+
+  function abrirDialogoEditar() {
+    if (!rolloActual) return;
+    limpiarErrores(dlgRolloEditar);
+    $("#dre-textil").value = rolloActual.nombre_textil || "";
+    $("#dre-ancho").value = rolloActual.ancho ?? "";
+    $("#dre-proveedor").value = rolloActual.proveedor || "";
+    $("#dre-precio-compra").value = rolloActual.precio_compra ? formatearClp(rolloActual.precio_compra) : "";
+    $("#dre-valor").value = rolloActual.valor != null ? formatearClp(rolloActual.valor) : "";
+    dlgRolloEditar.showModal();
+  }
+  $("[data-accion='editar']").addEventListener("click", abrirDialogoEditar);
+  $("[data-accion='cancelar-editar-rollo']").addEventListener("click", () => dlgRolloEditar.close());
+  dlgRolloEditar.addEventListener("click", (e) => { if (e.target === dlgRolloEditar) dlgRolloEditar.close(); });
+
+  $("[data-accion='guardar-editar-rollo']").addEventListener("click", async () => {
+    if (!rolloActual) return;
+    const campoTextil = $("#dre-textil");
+    const campoAncho = $("#dre-ancho");
+    const textil = campoTextil.value;
+    const ancho = parseFloat(campoAncho.value);
+
+    let valido = true;
+    campoTextil.closest(".campo").toggleAttribute("data-invalido", !textil);
+    if (!textil) valido = false;
+    campoAncho.closest(".campo").toggleAttribute("data-invalido", !(ancho > 0));
+    if (!(ancho > 0)) valido = false;
+    if (!valido) return;
+
+    const proveedor = $("#dre-proveedor").value.trim();
+    const precioCompra = numeroClp($("#dre-precio-compra").value) || 0;
+    const valor = numeroClp($("#dre-valor").value);
+
+    if (proveedor) await TD.api.guardar_proveedor(proveedor);
+    await TD.api.editar_rollo(rolloActual.id, textil, ancho, precioCompra, valor, proveedor);
+    dlgRolloEditar.close();
+    await recargarRollo();
+    TD.aviso("Rollo actualizado.", "info");
+  });
+
+  // ── Diálogo "Ajustar cantidad" ────────────────────────────────────────────
+  // El consumo real es AUTOMÁTICO al aprobar una cotización (ver
+  // core/repositorio_inventario.py::consumir_para_op) — este diálogo es
+  // una herramienta de corrección manual, siempre con una descripción
+  // para poder revisarla después (ajustar_restante).
+
+  const dlgAjustar = $("#dlg-ajustar");
+
+  function actualizarVistaPreviaAjuste() {
+    const campoDelta = $("#da-delta");
+    const preview = $("[data-ajustar-preview]");
+    if (!rolloActual) { preview.textContent = ""; return; }
+    const delta = parseFloat(campoDelta.value);
+    if (!Number.isFinite(delta) || delta === 0) {
+      preview.textContent = "";
+      campoDelta.closest(".campo").removeAttribute("data-invalido");
+      return;
+    }
+    const nuevo = Math.round((rolloActual.metros_restantes + delta) * 100) / 100;
+    const invalido = nuevo < 0;
+    campoDelta.closest(".campo").toggleAttribute("data-invalido", invalido);
+    preview.textContent = invalido
+      ? "No puede quedar negativo."
+      : `${TD.fmt.cantidad(rolloActual.metros_restantes)} → ${TD.fmt.cantidad(nuevo)} m`;
+  }
+
+  function abrirDialogoAjustar() {
+    if (!rolloActual) return;
+    $("[data-ajustar-stock]").textContent = `${rolloActual.metros_restantes} / ${rolloActual.metros_iniciales} m`;
+    $("#da-delta").value = "0";
+    $("#da-descripcion").value = "";
+    $("[data-ajustar-preview]").textContent = "";
+    limpiarErrores(dlgAjustar);
+    dlgAjustar.showModal();
+  }
+  $("[data-accion='ajustar']").addEventListener("click", abrirDialogoAjustar);
+  $("[data-accion='cerrar-ajustar']").addEventListener("click", () => dlgAjustar.close());
+  dlgAjustar.addEventListener("click", (e) => { if (e.target === dlgAjustar) dlgAjustar.close(); });
+
+  $("#da-delta").addEventListener("input", actualizarVistaPreviaAjuste);
+
+  async function guardarAjusteRollo() {
+    if (!rolloActual) return;
+
+    const campoDelta = $("#da-delta");
+    const delta = parseFloat(campoDelta.value);
+    if (!Number.isFinite(delta)) {
+      campoDelta.closest(".campo").setAttribute("data-invalido", "");
+      return;
+    }
+    if (delta === 0) return;  // no es un ajuste — nada que guardar
+
+    const nuevoRestante = Math.round((rolloActual.metros_restantes + delta) * 100) / 100;
+    const invalido = nuevoRestante < 0;
+    campoDelta.closest(".campo").toggleAttribute("data-invalido", invalido);
+    if (invalido) return;
+
+    await TD.api.ajustar_restante_rollo(rolloActual.id, nuevoRestante, $("#da-descripcion").value.trim());
+    $("#da-delta").value = "0";
+    $("#da-descripcion").value = "";
+    $("[data-ajustar-preview]").textContent = "";
+    await recargarRollo();
+    TD.aviso("Cantidad ajustada.", "info");
+  }
+  $("[data-accion='guardar-ajuste']").addEventListener("click", guardarAjusteRollo);
+
+  // ── Diálogo "Activar/Desactivar" ──────────────────────────────────────
+  // Antes era un modo dentro de "Ajustar cantidad" (con un botón que
+  // había que "armar" antes de Guardar) — pedido de Bruno (2026-09-29):
+  // separarlo en su propio botón de header simplifica los dos diálogos,
+  // cada uno con un solo propósito. Sigue quedando en el historial con
+  // tipo="activacion" (ver core.repositorio_inventario.ajustar_estado) —
+  // a diferencia del toggle rápido de la fila en menu.html
+  // (cambiar_estado_rollo, sin rastro), acá se puede dejar un motivo.
+
+  const dlgActivacion = $("#dlg-activacion");
+
+  function abrirDialogoActivacion() {
+    if (!rolloActual) return;
+    const activo = (rolloActual.estado || "activo") === "activo";
+    $("[data-dlg-activacion-titulo]").textContent = activo ? "¿Desactivar rollo?" : "¿Activar rollo?";
+    $("#dac-descripcion").value = "";
+    dlgActivacion.showModal();
+  }
+  $("[data-accion='activacion']").addEventListener("click", abrirDialogoActivacion);
+  $("[data-accion='cancelar-activacion']").addEventListener("click", () => dlgActivacion.close());
+  dlgActivacion.addEventListener("click", (e) => { if (e.target === dlgActivacion) dlgActivacion.close(); });
+
+  $("[data-accion='confirmar-activacion']").addEventListener("click", async () => {
+    if (!rolloActual) return;
+    const activoNuevo = (rolloActual.estado || "activo") !== "activo";
+    dlgActivacion.close();
+    await TD.api.ajustar_estado_rollo(rolloActual.id, activoNuevo, $("#dac-descripcion").value.trim());
+    await recargarRollo();
+    TD.aviso(activoNuevo ? "Rollo activado." : "Rollo desactivado.", "info");
+  });
+
+  // ── Diálogo "Decomisionar" ─────────────────────────────────────────────
+  // A diferencia de Eliminar material (2026-09-27), decomisionar un rollo
+  // NO es destructivo — sale de Activos/ pero su historial completo queda
+  // archivado en Decomisionados/AAAA/MM (ver core.repositorio_inventario.
+  // decomisionar_rollo), así que no hace falta el trámite de tipear el
+  // nombre para confirmar: un solo botón de confirmación alcanza, mismo
+  // criterio que ya tenía este panel en menu.html.
+
+  const dlgDecomisionar = $("#dlg-decomisionar");
+
+  function abrirDialogoDecomisionar() {
+    if (!rolloActual) return;
+    $("[data-dlg-decomisionar-texto]").textContent =
+      `Rollo ${rolloActual.id} · ${rolloActual.nombre_textil || "sin nombre"}: este rollo no se seleccionará para su uso en trabajos de su textil.`;
+    dlgDecomisionar.showModal();
+  }
+  $("[data-accion='decomisionar']").addEventListener("click", abrirDialogoDecomisionar);
+  $("[data-accion='cancelar-decomisionar']").addEventListener("click", () => dlgDecomisionar.close());
+  dlgDecomisionar.addEventListener("click", (e) => { if (e.target === dlgDecomisionar) dlgDecomisionar.close(); });
+
+  $("[data-accion='confirmar-decomisionar']").addEventListener("click", async () => {
+    if (!rolloActual) return;
+    dlgDecomisionar.close();
+    await TD.api.decomisionar_rollo(rolloActual.id);
+    TD.aviso("Rollo decomisionado.", "info");
+    TD.api.volver();
+  });
+
+  // ── Arranque ─────────────────────────────────────────────────────────────
+
+  async function cargarCatalogosEdicion() {
+    const textiles = (await TD.api.cargar_textiles_inventario()) || [];
+    $("#dre-textil").innerHTML =
+      '<option value="" disabled selected>Seleccionar textil…</option>' +
+      textiles.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    const proveedores = (await TD.api.cargar_proveedores()) || [];
+    $("#lista-proveedores").innerHTML = proveedores.map((p) => `<option value="${esc(p)}"></option>`).join("");
+  }
+
   TD.iniciar(async (ctx) => {
-    const r = (await TD.api.obtener_rollo(ctx.id)) || null;
-    if (!r) { TD.aviso("No se pudo cargar el rollo.", "error", 8000); return; }
-    pintarCabecera(r);
-    pintarTimeline(r);
+    idRollo = ctx.id;
+    await cargarCatalogosEdicion();
+    await recargarRollo();
   });
 })();
 </script>

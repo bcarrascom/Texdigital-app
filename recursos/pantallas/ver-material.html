@@ -6,20 +6,47 @@
 <link rel="stylesheet" href="base.css">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   Ver un material — abrir_material(id), botón ⓘ de la fila en la tabla de
+   Ver un material — abrir_material(id), clic en la fila de la tabla de
    materiales del panel de Inventario (menu.html). Calco de ver-rollo.html
-   (misma pantalla aparte, mismo timeline) con las diferencias propias de
-   un material (ver core/repositorio_materiales.py):
+   en la cabecera/timeline, pero con las 3 acciones (Ajustar/Editar/
+   Eliminar) vivienda ACÁ, no en menu.html (pedido de Bruno, 2026-09-27):
+   esta pantalla ahora ES "la pantalla del material", igual que
+   ver-cotizacion.html es la pantalla de una cotización — menu.html solo
+   lista y navega, ya no abre diálogos de edición/ajuste por su cuenta.
      - Sin ID visible ("es oculto, solo para lógica interna") — la cabecera
        muestra el nombre como dato principal, no un "#0001".
      - Sin Activo/Inactivo — la etiqueta de la cabecera muestra el tipo
        (Por metro / Por unidad) en su lugar.
-     - Historial de 3 tipos, no 4: "compra" (reemplaza a "consumo" — trae
-       proveedor/costo en vez de cliente/OP), "uso", "ajuste" — sin
-       "activación" (acá no hay estado que activar/desactivar).
+     - Historial de 4 tipos: "restock" (proveedor/costo), "ajuste"
+       (corrección o merma, en + o en -, con descripción libre), "consumo"
+       (automático al aprobar una OP, ver core.repositorio_materiales.
+       consumir_para_op — mismo criterio que el "consumo" de ver-rollo.html,
+       con el link a la OP) y "precio" (cambio del precio de venta, el único
+       que no mueve stock). El tipo "uso" se eliminó (2026-10-01): lo que se
+       gasta sin OP es un ajuste, ver _TIPOS_RENOMBRADOS en el repositorio.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .limite--rollo { width: min(100%, 46rem); margin-inline: auto; display: grid; gap: var(--e-5); }
+
+/* ── Diálogos ───────────────────────────────────────────────────────────
+   Este estilo base de <dialog> NO vive en base.css — cada pantalla que
+   usa este patrón lo trae en su propio <style> (ver menu.html,
+   ver-cotizacion.html, ver-op.html, historial-ops.html,
+   gestionar-direcciones.html) y acá se había quedado sin copiar al sumar
+   los 3 diálogos de Ajustar/Editar/Eliminar (pedido de Bruno, 2026-09-28):
+   sin esto el <dialog> cae al recuadro nativo del navegador (borde negro
+   grueso, esquinas cuadradas) — mismo bug que ya pasó una vez en
+   ver-op.html (2026-09-13, ver su comentario). */
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
 
 .hoja {
   display: grid; gap: var(--e-4);
@@ -39,6 +66,7 @@
 
 .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--e-3) var(--e-4); }
 .dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+.dato--ancho { grid-column: 1 / -1; }
 .dato__et {
   font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
   text-transform: uppercase; color: var(--c-texto-tenue);
@@ -60,8 +88,9 @@
   background: var(--c-tema-fuerte);
   box-shadow: 0 0 0 3px var(--c-lienzo);
 }
-.timeline__punto--compra { background: var(--c-ok); }
-.timeline__punto--uso { background: var(--c-error); }
+.timeline__punto--restock { background: var(--c-ok); }
+.timeline__punto--consumo { background: var(--c-op-fuerte); }
+.timeline__punto--precio { background: var(--c-aviso); }
 
 .timeline__card {
   background: var(--c-superficie);
@@ -74,21 +103,213 @@
   font-size: var(--t-xs); font-weight: var(--peso-medio);
   background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
 }
-.chip-tipo--compra { background: var(--c-ok-suave); color: var(--c-ok); }
-.chip-tipo--uso { background: var(--c-error-suave); color: var(--c-error); }
+.chip-tipo--restock { background: var(--c-ok-suave); color: var(--c-ok); }
+.chip-tipo--consumo { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+/* "Ajuste" se queda con el color base de .chip-tipo, sin variante propia: puede
+   ser en + o en -, así que pintarlo de rojo (como estaba el "uso", que siempre
+   restaba) marcaría de alarma un ajuste que sumó stock. */
+/* "Precio" es el único movimiento que no toca el stock (ver
+   core.repositorio_materiales.ajustar_valor): se distingue de los otros
+   tres por color, y su tarjeta muestra el cambio de PRECIO en vez del de
+   cantidad (que sería "10 → 10"). */
+.chip-tipo--precio { background: var(--c-aviso-suave); color: var(--c-aviso); }
 .timeline__cab { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; }
 .timeline__fecha { font-size: var(--t-xs); color: var(--c-texto-tenue); margin-left: auto; white-space: nowrap; }
 .timeline__cambio {
   font-family: var(--f-mono); font-variant-numeric: tabular-nums;
   font-weight: var(--peso-medio); font-size: var(--t-sm);
 }
+/* El neto del movimiento ("+25" / "-18", ver netoDeMovimiento): es lo primero
+   que uno busca al escanear el historial, así que va pegado al chip y pesa más
+   que el "de cuánto a cuánto", que queda al lado como respaldo. Sin color
+   propio a propósito: el chip ya dice de qué movimiento se trata, y pintar en
+   rojo todo lo que resta haría ver un consumo normal como un problema. */
+.timeline__neto {
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  font-weight: var(--peso-fuerte); font-size: var(--t-sm);
+  color: var(--c-tema-tinta); white-space: nowrap;
+}
+/* Con el neto al lado, el "104 → 129 un." pasa a ser el dato de respaldo. */
+.timeline__neto + .timeline__cambio { color: var(--c-texto-suave); font-weight: var(--peso-normal); }
 .timeline__descripcion { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
 .timeline__datos {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--e-2) var(--e-4);
   margin-top: var(--e-3); padding-top: var(--e-3); border-top: 1px solid var(--c-borde);
 }
+.timeline__op {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--c-tema-fuerte); font-family: var(--f-mono); font-weight: var(--peso-medio);
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.timeline__op:hover { color: var(--c-tema-tinta); }
+
+/* Deshacer la entrada MÁS RECIENTE del historial — vivía en la mini-tabla
+   de #dlg-material-ajustar (menu.html); esa tabla se eliminó entera
+   (pedido de Bruno, 2026-09-27: "elimina todo el código del panel") ahora
+   que el timeline completo está siempre a la vista acá mismo, así que el
+   botón de deshacer se mudó directo a la primera tarjeta. */
+.timeline__deshacer {
+  flex: 0 0 auto; width: 1.7rem; height: 1.7rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-texto-tenue); display: grid; place-items: center; cursor: pointer;
+  transition: background var(--m-rapida) var(--ease-salida),
+              border-color var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida);
+}
+.timeline__deshacer:hover { color: var(--c-error); border-color: var(--c-error-suave); background: var(--c-error-suave); }
+.timeline__deshacer .icon-trash { width: .95rem; height: .95rem; }
 
 .estado-vacio { padding: var(--e-6) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+
+/* Orden del timeline — pedido de Bruno (2026-09-28): con un material muy
+   usado, el historial se hace largo y siempre había que scrollear hasta
+   el final para ver lo último; ahora se puede invertir con un toque, sin
+   perder qué tarjeta es la más reciente (ver JS: idMasReciente no depende
+   del orden de dibujado, así que "deshacer" sigue apareciendo en la
+   correcta aunque esté al final de la lista). "Más reciente primero"
+   sigue siendo el default. */
+.seccion-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--e-3); margin-bottom: var(--e-3); }
+.seccion-cab .seccion-titulo { margin-bottom: 0; }
+.btn-orden-timeline {
+  display: inline-grid; place-items: center;
+  width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie); color: var(--c-texto-suave);
+  cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              background var(--m-rapida) var(--ease-salida),
+              color var(--m-rapida) var(--ease-salida);
+}
+.btn-orden-timeline:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); color: var(--c-tema-fuerte); }
+.btn-orden-timeline .icon-arrow-down { width: .85rem; height: .85rem; transition: transform var(--m-media) var(--ease-salida); }
+.btn-orden-timeline[aria-pressed="true"] .icon-arrow-down { transform: rotate(180deg); }
+
+/* ── Diálogo "Ajustar cantidad" ───────────────────────────────────────────
+   Mismo formulario que #dlg-ajustar de rollos (delta +/- con vista previa,
+   no la cantidad absoluta) — sin la mini-tabla que tenía antes en
+   menu.html: el timeline de acá arriba ya es el historial completo. */
+#dlg-material-ajustar { width: min(90vw, 36rem); max-width: min(90vw, 36rem); }
+.ajustar__stock { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e-3); margin-top: var(--e-2); }
+.ajustar__stock strong { color: var(--c-tema-fuerte); font-variant-numeric: tabular-nums; }
+.ajustar__form {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  grid-template-areas: "tipo tipo" "delta descripcion" "guardar guardar";
+  gap: var(--e-3);
+  margin-top: var(--e-4); padding-top: var(--e-4);
+  border-top: 1.5px solid var(--c-borde);
+}
+.ajustar__tipo { grid-area: tipo; justify-self: start; }
+.ajustar__tipo label { display: inline-flex; align-items: center; gap: var(--e-2); }
+.ajustar__campo-delta { grid-area: delta; }
+/* Los dos campos del ajuste, lado a lado: son dos formas de escribir lo mismo
+   (ver el markup), así que se muestran juntos y no uno detrás del otro. */
+.ajustar__par { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-3); }
+@media (max-width: 30rem) { .ajustar__par { grid-template-columns: 1fr; } }
+.ajustar__campo-descripcion { grid-area: descripcion; }
+.ajustar__campo-descripcion textarea { resize: vertical; min-height: 4.5rem; font-family: inherit; }
+.ajustar__guardar { grid-area: guardar; justify-self: end; }
+.ajustar__campo-delta[data-invalido] [data-ajustar-preview] { color: var(--c-error); }
+
+/* Variante del .segmento genérico para switches de solo ícono (sin texto)
+   — "Se cobra por" (metro/unidad) del diálogo de editar material. */
+.segmento--iconos { justify-self: start; }
+.segmento--iconos label { display: grid; place-items: center; padding: .4rem .9rem; }
+.segmento--iconos svg { width: 1.1rem; height: 1.1rem; flex: none; }
+
+/* ── Diálogo "Editar material" ────────────────────────────────────────────
+   Diseño de Bruno (mockup editar_material.html, 2026-09-27), portado acá
+   con los tokens/componentes reales de la app (.entrada/.campo/.segmento/
+   .aditiva/.pastilla de base.css) en vez de los valores fijos del mockup,
+   para que herede tema/foco/hover del resto de la app. Más ancho que el
+   diálogo genérico (26rem): con el consumo automático (select +
+   parámetros + dos pickers de asociaciones) sumado al resto de campos,
+   26rem los apretaba mucho — acá cada campo tiene lugar de sobra. */
+#dlg-material-editar { width: min(94vw, 56rem); max-width: min(94vw, 56rem); }
+.dlg-rollo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+.fila--proveedor { grid-template-columns: 2fr 1fr; }
+.material-row { display: flex; align-items: center; gap: var(--e-3); }
+.material-row .entrada { flex: 1 1 auto; min-width: 0; }
+.material-row .segmento { flex: 0 0 auto; }
+.fila--consumo { grid-template-columns: 1fr auto; }
+/* La cantidad de "fijo_por_producto" es un número corto (n): un ancho fijo
+   angosto evita que el grid le regale tanto espacio como al selector de
+   al lado, que sí necesita todo el texto de sus 4 opciones. */
+.campo--estrecho { width: 8rem; }
+.campo--estrecho .entrada { text-align: center; }
+
+/* El <select> nativo ignora el look redondeado/suave de .entrada (borde
+   recto, flecha del sistema) — pedido de Bruno (2026-09-28): "bordes bien
+   marcados y cuadrados" en este diálogo era justo este selector, no el
+   diálogo en sí. Se le saca el chrome nativo (appearance:none) y se
+   dibuja una flecha propia encima, mismo tratamiento que ya traía el
+   mockup original (.field-icon .chevron). */
+.campo-select { position: relative; }
+.campo-select select.entrada { appearance: none; padding-right: 2.5rem; }
+.campo-select__chevron {
+  position: absolute; right: var(--e-4); top: 50%; transform: translateY(-50%);
+  width: 1.1rem; height: 1.1rem; color: var(--c-texto-suave); pointer-events: none;
+}
+
+/* Buscador con lupa (productos/estructuras asociados) + botón circular
+   "+" — mismo componente .aditiva de nueva-cotizacion.html, con una lupa
+   superpuesta al input (.entrada-icono) y un botón redondo en vez del
+   .btn de siempre, más compacto al lado de un buscador. */
+.aditiva__alta .entrada-icono { position: relative; flex: 1 1 auto; min-width: 0; }
+.entrada-icono__svg {
+  position: absolute; top: 50%; left: var(--e-4); transform: translateY(-50%);
+  width: 1.05rem; height: 1.05rem; color: var(--c-texto-tenue); pointer-events: none;
+}
+.entrada-icono .entrada { padding-left: 2.6rem; }
+.btn-agregar-redondo {
+  flex: 0 0 auto; width: 3rem; height: 3rem; border-radius: var(--r-full);
+  border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+  color: var(--c-tema-fuerte); display: grid; place-items: center; cursor: pointer;
+  transition: border-color var(--m-rapida) var(--ease-salida),
+              background var(--m-rapida) var(--ease-salida),
+              transform var(--m-rapida) var(--ease-salida);
+}
+.btn-agregar-redondo svg { width: 1.1rem; height: 1.1rem; }
+.btn-agregar-redondo:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); transform: translateY(-1px); }
+.btn-agregar-redondo:active { transform: translateY(0) scale(.92); }
+
+/* ── Diálogo "Restock" (boton-panel-morph) ─────────────────────────────────
+   Mismo mecanismo que #dlg-rollo/#dlg-material de menu.html: el botón de
+   header se deforma hasta ser el panel (JS anima top/left/width/height/
+   border-radius de verdad, ver altoContenidoMorph/rectFinalMorph más
+   abajo) — pedido de Bruno (2026-09-29): el restock de un material es
+   frecuente, así que un solo botón + panel chico gana contra abrir un
+   diálogo completo aparte. Un único botón "Guardar": apretar afuera o
+   Esc cancela (mismo criterio que cerrar cualquier <dialog> de la app),
+   no hace falta un "Cancelar" redundante. */
+#dlg-restock {
+  position: fixed; margin: 0;
+  overflow: hidden;
+  max-width: none; /* el "dialog { max-width: min(90vw,26rem) }" genérico
+    recortaría el ancho que calcula rectFinalMorph — JS manda acá */
+  transition: top var(--m-expansion) var(--ease-salida),
+              left var(--m-expansion) var(--ease-salida),
+              width var(--m-expansion) var(--ease-salida),
+              height var(--m-expansion) var(--ease-salida),
+              border-radius var(--m-expansion) var(--ease-salida),
+              background var(--m-expansion) var(--ease-salida);
+}
+#dlg-restock[data-abierto] { border-radius: var(--r-xl); }
+#dlg-restock::backdrop {
+  background: rgba(22, 22, 26, 0);
+  transition: background var(--m-expansion) var(--ease-entrada);
+}
+#dlg-restock[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
+.dlg-rollo__contenido {
+  opacity: 0;
+  max-height: 100%; overflow-y: auto;
+  scrollbar-gutter: stable;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+#dlg-restock[data-abierto] .dlg-rollo__contenido {
+  opacity: 1;
+  transition-delay: var(--m-expansion);
+}
 </style>
 </head>
 
@@ -99,6 +320,10 @@
     <button class="cab-btn cab-btn--fantasma" data-accion="volver">← Volver</button>
     <span class="cabecera__titulo" data-titulo>Material</span>
     <span class="cabecera__sep"></span>
+    <button class="cab-btn" data-accion="eliminar">Eliminar</button>
+    <button class="cab-btn" data-accion="editar">Editar</button>
+    <button class="btn btn--primario btn--chico" data-accion="ajustar">Ajustar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="restock">Restock</button>
     <span class="cabecera__version" data-version></span>
   </header>
 
@@ -118,14 +343,231 @@
       </section>
 
       <section>
-        <h2 class="seccion-titulo">Historial</h2>
+        <div class="seccion-cab">
+          <h2 class="seccion-titulo">Historial</h2>
+          <button class="btn-orden-timeline" type="button" data-accion="orden-timeline" aria-pressed="false" title="Más reciente primero" aria-label="Más reciente primero">
+            <span class="icon-arrow-down" aria-hidden="true"></span>
+          </button>
+        </div>
         <div class="timeline" data-timeline></div>
-        <p class="estado-vacio" data-vacio hidden>Todavía no hay ninguna compra, uso o ajuste registrado para este material.</p>
+        <p class="estado-vacio" data-vacio hidden>Todavía no hay ningún restock, ajuste, consumo ni cambio de precio registrado para este material.</p>
       </section>
 
     </div>
   </main>
 </div>
+
+<dialog id="dlg-material-ajustar">
+  <h2 class="dlg__titulo" data-dlg-material-ajustar-titulo>Ajustar</h2>
+  <div class="ajustar__stock">
+    <span>Cantidad actual</span>
+    <strong data-material-ajustar-stock></strong>
+  </div>
+  <div class="ajustar__form">
+    <div class="segmento ajustar__tipo" role="group" aria-label="Qué se ajusta">
+      <input type="radio" name="dma-tipo" id="dma-tipo-ajuste" checked>
+      <label for="dma-tipo-ajuste">Cantidad</label>
+      <input type="radio" name="dma-tipo" id="dma-tipo-precio">
+      <label for="dma-tipo-precio">Precio</label>
+    </div>
+
+    <!-- DOS formas de escribir el MISMO ajuste (pedido de Bruno, 2026-10-01:
+         "restar o sumar a la par que solo ingresar el número nuevo"): se
+         completa cualquiera de los dos campos y el otro se calcula solo, igual
+         que costo total / costo unitario en el panel Restock. Se guarda siempre
+         como un tipo="ajuste" (ya no existe el "uso"): lo que cambia es cómo
+         se escribe, no qué movimiento queda registrado. -->
+    <div class="campo ajustar__campo-delta" data-panel-tipo-material="ajuste">
+      <div class="ajustar__par">
+        <div>
+          <label class="campo__etiqueta" for="dma-delta">Sumar o restar</label>
+          <input class="entrada" id="dma-delta" type="number" step="0.01" placeholder="ej. -3">
+        </div>
+        <div>
+          <label class="campo__etiqueta" for="dma-cantidad-ajuste">Cantidad final</label>
+          <input class="entrada" id="dma-cantidad-ajuste" type="number" step="0.01">
+        </div>
+      </div>
+      <span class="campo__ayuda" data-material-ajustar-preview></span>
+    </div>
+    <!-- Precio de VENTA (pedido de Bruno, 2026-10-01): es el único de los
+         dos precios de un material que se pone a mano, y cambiarlo queda
+         registrado en el historial como cualquier otro movimiento (ver
+         core.repositorio_materiales.ajustar_valor). El COSTO no se edita
+         acá ni en ningún formulario: sale solo de los restocks. -->
+    <div class="campo ajustar__campo-delta" data-panel-tipo-material="precio" hidden>
+      <label class="campo__etiqueta" for="dma-precio">Precio de venta nuevo</label>
+      <input class="entrada" id="dma-precio" type="text" inputmode="numeric" placeholder="$">
+      <span class="campo__ayuda" data-material-precio-actual></span>
+    </div>
+
+    <div class="campo ajustar__campo-descripcion">
+      <label class="campo__etiqueta" for="dma-descripcion">Descripción</label>
+      <textarea class="entrada" id="dma-descripcion" rows="3" placeholder="Qué pasó (opcional)…"></textarea>
+    </div>
+    <button class="btn btn--primario btn--chico ajustar__guardar" type="button" data-accion="guardar-ajuste-material">Guardar</button>
+  </div>
+
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cerrar-ajustar-material">Cerrar</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-material-editar">
+  <h2 class="dlg__titulo" data-dlg-material-editar-titulo>Editar material</h2>
+  <div class="dlg-rollo__campos">
+    <div class="campo">
+      <label class="campo__etiqueta" data-requerido for="dme-nombre">Material</label>
+      <div class="material-row">
+        <input class="entrada" id="dme-nombre" type="text" autocomplete="off">
+        <div class="segmento segmento--iconos" role="radiogroup" aria-label="Cómo se cobra este material">
+          <input type="radio" name="dme-tipo" id="dme-tipo-unidad" checked>
+          <label for="dme-tipo-unidad" title="Por unidad">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+          </label>
+          <input type="radio" name="dme-tipo" id="dme-tipo-metro">
+          <label for="dme-tipo-metro" title="Por metro">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
+          </label>
+        </div>
+      </div>
+      <span class="campo__error">Obligatorio</span>
+    </div>
+    <div class="fila fila--proveedor">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-proveedor">Proveedor</label>
+        <input class="entrada" id="dme-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" id="dme-valor-etiqueta" for="dme-valor">Precio de venta por unidad</label>
+        <input class="entrada" id="dme-valor" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+    </div>
+    <p class="campo__ayuda">El precio de venta es lo que cobran las cotizaciones nuevas por este material — las ya guardadas no cambian de precio. Cambiarlo queda registrado en el historial. El costo no se edita acá: se cuenta solo con cada restock.</p>
+
+    <div class="fila fila--consumo">
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-tipo-consumo">Consumo automático</label>
+        <div class="campo-select">
+          <select class="entrada" id="dme-tipo-consumo">
+            <option value="">Sin fórmula automática</option>
+            <option value="fijo_por_producto">Cantidad fija por producto</option>
+            <option value="metro_lineal_salto">Por tramos de metro lineal</option>
+            <option value="metro_lineal_directo">Metro lineal directo</option>
+            <option value="manual">Monto manual al aprobar</option>
+          </select>
+          <svg class="campo-select__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+      <div class="campo campo--estrecho" data-dme-parametros="fijo_por_producto" hidden>
+        <label class="campo__etiqueta" for="dme-param-n">Cantidad</label>
+        <input class="entrada" id="dme-param-n" type="number" step="0.01" min="0" placeholder="0">
+      </div>
+    </div>
+    <p class="campo__ayuda" data-dme-consumo-ayuda></p>
+
+    <div class="fila" data-dme-parametros="metro_lineal_salto" hidden>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-param-paso">Cada cuántos metros</label>
+        <input class="entrada" id="dme-param-paso" type="number" step="0.01" min="0" placeholder="0">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-param-salto-n">Cantidad por tramo</label>
+        <input class="entrada" id="dme-param-salto-n" type="number" step="0.01" min="0" placeholder="0">
+      </div>
+    </div>
+
+    <div data-dme-asociaciones hidden>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-productos-buscar">Productos que lo gastan</label>
+        <div class="aditiva" data-aditiva-material="productos">
+          <div class="aditiva__alta">
+            <div class="entrada-icono">
+              <svg class="entrada-icono__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              <input class="entrada" id="dme-productos-buscar" type="text" list="lista-productos-catalogo" autocomplete="off" placeholder="Buscar producto…">
+            </div>
+            <button class="btn-agregar-redondo" type="button" aria-label="Agregar producto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="aditiva__items"></div>
+        </div>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="dme-estructuras-buscar">Estructuras que lo gastan</label>
+        <div class="aditiva" data-aditiva-material="estructuras">
+          <div class="aditiva__alta">
+            <div class="entrada-icono">
+              <svg class="entrada-icono__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              <input class="entrada" id="dme-estructuras-buscar" type="text" list="lista-estructuras-catalogo" autocomplete="off" placeholder="Buscar estructura…">
+            </div>
+            <button class="btn-agregar-redondo" type="button" aria-label="Agregar estructura">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <div class="aditiva__items"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-material-editar">Cancelar</button>
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-material-editar">Guardar</button>
+  </div>
+</dialog>
+<datalist id="lista-proveedores"></datalist>
+<datalist id="lista-productos-catalogo"></datalist>
+<datalist id="lista-estructuras-catalogo"></datalist>
+
+<dialog id="dlg-restock">
+  <div class="dlg-rollo__contenido">
+  <h2 class="dlg__titulo">Restock</h2>
+  <div class="dlg-rollo__campos">
+    <div class="fila">
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="rs-cantidad">Cantidad</label>
+        <input class="entrada" id="rs-cantidad" type="number" step="0.01" min="0">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" data-requerido for="rs-fecha">Fecha</label>
+        <input class="entrada" id="rs-fecha" type="date">
+        <span class="campo__error">Obligatorio</span>
+      </div>
+    </div>
+    <div class="fila fila--proveedor">
+      <div class="campo">
+        <label class="campo__etiqueta" for="rs-proveedor">Proveedor</label>
+        <input class="entrada" id="rs-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+      </div>
+      <div class="campo">
+        <label class="campo__etiqueta" for="rs-gasto">Gasto</label>
+        <input class="entrada" id="rs-gasto" type="text" inputmode="numeric" placeholder="Opcional">
+      </div>
+    </div>
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--primario btn--chico" type="button" data-accion="guardar-restock">Guardar</button>
+  </div>
+  </div>
+</dialog>
+
+<!-- Borrar para siempre exige tipear el nombre EXACTO — mismo criterio que
+     borrar un repositorio en GitHub (pedido de Bruno, 2026-09-27): un
+     material no tiene "decomisionado" como los rollos, así que el único
+     freno contra un clic apurado es este. -->
+<dialog id="dlg-eliminar-material">
+  <h2 class="dlg__titulo">¿Eliminar este material?</h2>
+  <p class="dlg__texto" data-dlg-eliminar-texto></p>
+  <div class="campo">
+    <label class="campo__etiqueta" for="confirmar-nombre-eliminar">Escribí el nombre del material para confirmar</label>
+    <input class="entrada" id="confirmar-nombre-eliminar" type="text" autocomplete="off">
+  </div>
+  <div class="dlg__acciones">
+    <button class="btn btn--fantasma btn--chico" type="button" data-accion="cancelar-eliminar-material">Cancelar</button>
+    <button class="btn btn--peligro btn--chico" type="button" data-accion="confirmar-eliminar-material" disabled>Eliminar</button>
+  </div>
+</dialog>
 
 <script src="api.js"></script>
 <script src="app.js"></script>
@@ -134,9 +576,19 @@
   "use strict";
 
   const $  = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = (s) => String(s == null ? "" : s);
 
-  const ETIQUETA_TIPO = { compra: "Compra", uso: "Uso", ajuste: "Ajuste" };
+  const ETIQUETA_TIPO = {
+    restock: "Restock", ajuste: "Ajuste", consumo: "Consumo",
+    precio: "Precio",  // cambio del precio de venta (no mueve stock)
+  };
+
+  let idMaterial = null;
+  let materialActual = null;
+  let ordenReciente = true;  // true = más reciente primero (default) — ver btn-orden-timeline
+  let hoyISO = "";
+  let botonOrigenRestock = null;
 
   function dato(et, val, mono, ancho) {
     if (!val && val !== 0) return null;
@@ -150,6 +602,20 @@
 
   function unidadDe(m) { return m.tipo === "metro" ? "m" : "un."; }
 
+  // Un material ya no tiene "un" proveedor — el panel Restock (pedido de
+  // Bruno, 2026-09-29) deja elegir uno distinto en cada restock, así que
+  // m.proveedor (el campo plano de editar_material) solo sirve como
+  // sugerencia por defecto para el próximo restock, no como "el
+  // proveedor real". Acá se arma la lista completa a partir de los
+  // restocks del historial — más reciente primero, sin repetidos.
+  function proveedoresDeHistorial(m) {
+    const vistos = new Set();
+    (m.historial || []).slice().reverse().forEach((h) => {
+      if (h.tipo === "restock" && h.proveedor) vistos.add(h.proveedor);
+    });
+    return [...vistos];
+  }
+
   function pintarCabecera(m) {
     $("[data-nombre]").textContent = m.nombre || "—";
     $("[data-titulo]").textContent = `Material · ${m.nombre || ""}`;
@@ -158,75 +624,619 @@
     chip.textContent = m.tipo === "metro" ? "Por metro" : "Por unidad";
     chip.className = "etiqueta etiqueta--neutra";
 
+    const proveedores = proveedoresDeHistorial(m);
+
+    // Las mismas 9 cifras que la tabla de materiales del menú (ver
+    // core/repositorio_materiales.py::metricas_material), en el mismo orden:
+    // gastos, valor, ganancias. "—" cuando el dato todavía no existe —
+    // nunca "$0", que significaría algo distinto.
+    const porUnidad = m.tipo === "metro" ? "/m" : "/un.";
+    const plata = (v, sufijo = "") => (v == null ? "—" : TD.fmt.pesos(v) + sufijo);
+
     const cont = $("[data-datos]");
     cont.textContent = "";
     [
       dato("Cantidad", `${TD.fmt.cantidad(m.cantidad)} ${unidadDe(m)}`, true),
-      dato("Proveedor", m.proveedor || "—"),
-      dato("Valor por " + (m.tipo === "metro" ? "metro" : "unidad"), m.valor != null ? TD.fmt.pesos(m.valor) : "—", true),
-      dato("Valor total", m.valor != null ? TD.fmt.pesos(m.valor * m.cantidad) : "—", true),
-      dato("Gasto este mes", TD.fmt.pesos(m.gasto_mes || 0), true),
+      dato("Gasto unitario", plata(m.gasto_unitario, porUnidad), true),
+      dato("Gasto este mes", plata(m.gasto_mes), true),
+      dato("Gasto total", plata(m.gasto_total), true),
+      dato("Valor unitario", plata(m.valor_unitario, porUnidad), true),
+      dato("Valor restante", plata(m.valor_restante), true),
+      dato("Valor vendido", plata(m.valor_vendido), true),
+      dato("Ganancia unitaria", plata(m.ganancia_unitaria, porUnidad), true),
+      dato("Ganancias este mes", plata(m.ganancia_mes), true),
+      dato("Ganancias totales", plata(m.ganancia_total), true),
+      dato("Proveedores", proveedores.length ? proveedores.join(", ") : "—", false, true),
     ].filter(Boolean).forEach((d) => cont.appendChild(d));
   }
 
-  /* Cada tarjeta del timeline: común (punto de color + fecha + cambio de
-     cantidad), y después lo propio de cada tipo — un ajuste/uso solo trae
-     una descripción libre; una compra viene con proveedor/costo (ver
-     core.repositorio_materiales._agregar_historial). */
-  function tarjetaHistorial(u, m) {
-    const esCompra = u.tipo === "compra";
+  /* El NETO de un movimiento de stock, con signo explícito: "+25", "-18"
+     (pedido de Bruno, 2026-10-01). La entrada no lo guarda —guarda la cantidad
+     de antes y la de después, ver core.repositorio_materiales._agregar_historial—
+     así que se deriva acá. Va además del "104 → 129 un.", no en su lugar: el
+     "de cuánto a cuánto" sirve para auditar y el neto para leer de un vistazo
+     cuánto entró o salió, que es lo que uno busca cuando escanea el historial.
+     Un ajuste puede ir para los dos lados, así que el signo sale del número y
+     no del tipo de movimiento. */
+  function netoDeMovimiento(u) {
+    const delta = Math.round(((u.cantidad_nueva || 0) - (u.cantidad_anterior || 0)) * 100) / 100;
+    if (!delta) return "";
+    return (delta > 0 ? "+" : "-") + TD.fmt.cantidad(Math.abs(delta));
+  }
+
+  /* Cada tarjeta del timeline: común (punto de color + fecha + neto + cambio
+     de cantidad), y después lo propio de cada tipo — un ajuste solo trae una
+     descripción libre; un restock viene con proveedor/costo; un consumo viene
+     con el número de OP (clickeable) y el cliente, grabado tal cual al momento
+     del consumo (ver core.repositorio_materiales.consumir_para_op) — no se
+     recalcula acá. La tarjeta más reciente (esLaMasReciente) suma un botón para
+     deshacerla — mismo criterio que eliminar_ultimo_historial de rollos: solo
+     tiene sentido sobre la última, nunca sobre una del medio. */
+  function tarjetaHistorial(u, m, esLaMasReciente) {
+    const esRestock = u.tipo === "restock";
+    const esConsumo = u.tipo === "consumo";
+    const esPrecio = u.tipo === "precio";
     const item = document.createElement("div");
     item.className = "timeline__item";
 
-    const datosCompra = [
+    const datosRestock = [
       ["Proveedor", u.proveedor],
       ["Costo total", u.costo_total != null ? TD.fmt.pesos(u.costo_total) : null],
       ["Costo unitario", u.costo_unitario != null ? TD.fmt.pesos(u.costo_unitario) : null],
     ].filter(([, val]) => val);
+    const datosConsumo = [["Cliente", u.cliente]].filter(([, val]) => val);
 
-    const chipClase = esCompra ? "chip-tipo--compra" : u.tipo === "uso" ? "chip-tipo--uso" : "";
-    const puntoClase = esCompra ? "timeline__punto--compra" : u.tipo === "uso" ? "timeline__punto--uso" : "";
+    const chipClase = esRestock ? "chip-tipo--restock"
+      : esConsumo ? "chip-tipo--consumo"
+      : esPrecio ? "chip-tipo--precio" : "";
+    const puntoClase = esRestock ? "timeline__punto--restock"
+      : esConsumo ? "timeline__punto--consumo"
+      : esPrecio ? "timeline__punto--precio" : "";
+    const conDatos = (esRestock && datosRestock.length) || (esConsumo && (u.numero_op || datosConsumo.length));
+    // Sin descripción, no se muestra el párrafo (antes quedaba un "—"
+    // colgando) — pedido de Bruno (2026-09-29): un ajuste sin motivo
+    // cargado se ve más compacto con solo la línea de arriba.
+    const tieneDescripcion = !esRestock && !esConsumo && u.descripcion;
+    const precio = (v) => (v == null ? "—" : TD.fmt.pesos(v));
+    // El precio no mueve stock, así que no tiene neto que mostrar.
+    const neto = esPrecio ? "" : netoDeMovimiento(u);
 
     item.innerHTML = `
       <div class="timeline__punto ${puntoClase}"></div>
       <div class="timeline__card">
         <div class="timeline__cab">
           <span class="chip-tipo ${chipClase}"></span>
+          ${neto ? '<span class="timeline__neto"></span>' : ""}
           <span class="timeline__cambio"></span>
           <span class="timeline__fecha"></span>
         </div>
-        ${esCompra ? "" : '<p class="timeline__descripcion"></p>'}
-        ${esCompra && datosCompra.length ? '<div class="timeline__datos"></div>' : ""}
+        ${tieneDescripcion ? '<p class="timeline__descripcion"></p>' : ""}
+        ${conDatos ? '<div class="timeline__datos"></div>' : ""}
       </div>`;
 
     $(".chip-tipo", item).textContent = ETIQUETA_TIPO[u.tipo] || u.tipo;
-    $(".timeline__cambio", item).textContent =
-      `${esc(TD.fmt.cantidad(u.cantidad_anterior))} → ${esc(TD.fmt.cantidad(u.cantidad_nueva))} ${unidadDe(m)}`;
+    // Un cambio de precio no mueve stock: mostrar "10 → 10 un." no diría
+    // nada, así que en su lugar va el cambio que SÍ hubo (ver
+    // core.repositorio_materiales._fijar_valor_venta).
+    $(".timeline__cambio", item).textContent = esPrecio
+      ? `${precio(u.valor_anterior)} → ${precio(u.valor_nuevo)}${m.tipo === "metro" ? "/m" : "/un."}`
+      : `${esc(TD.fmt.cantidad(u.cantidad_anterior))} → ${esc(TD.fmt.cantidad(u.cantidad_nueva))} ${unidadDe(m)}`;
+    if (neto) $(".timeline__neto", item).textContent = `${neto} ${unidadDe(m)}`;
     $(".timeline__fecha", item).textContent = u.fecha || "";
 
-    if (!esCompra) {
-      $(".timeline__descripcion", item).textContent = u.descripcion || "—";
-    } else {
+    if (esLaMasReciente) {
+      const btn = document.createElement("button");
+      btn.className = "timeline__deshacer";
+      btn.type = "button";
+      btn.title = "Deshacer este movimiento";
+      btn.innerHTML = `<div class="icon-trash"></div>`;
+      btn.addEventListener("click", async () => {
+        await TD.api.eliminar_ultimo_historial_material(m.id, u.id);
+        await recargarMaterial();
+      });
+      $(".timeline__cab", item).appendChild(btn);
+    }
+
+    if (tieneDescripcion) {
+      $(".timeline__descripcion", item).textContent = u.descripcion;
+    } else if (conDatos) {
       const cont = $(".timeline__datos", item);
-      if (cont) datosCompra.forEach(([et, val]) => cont.appendChild(dato(et, val)));
+      if (esConsumo && u.numero_op) {
+        const d = document.createElement("div");
+        d.className = "dato";
+        d.innerHTML = `<span class="dato__et">OP</span>`;
+        const btnOp = document.createElement("button");
+        btnOp.type = "button";
+        btnOp.className = "timeline__op";
+        btnOp.textContent = "#" + u.numero_op;
+        btnOp.title = "Abrir esta OP";
+        btnOp.addEventListener("click", () => TD.api.abrir_op(u.numero_op));
+        d.appendChild(btnOp);
+        cont.appendChild(d);
+      }
+      (esRestock ? datosRestock : datosConsumo).forEach(([et, val]) => cont.appendChild(dato(et, val)));
     }
     return item;
   }
 
   function pintarTimeline(m) {
-    // Más reciente primero — mismo criterio que ver-rollo.html.
-    const historial = (m.historial || []).slice().reverse();
+    // "Más reciente primero" es el default — invertible con el botón de
+    // arriba (pedido de Bruno, 2026-09-28). "idMasReciente" se calcula
+    // SIEMPRE sobre el array original (el último elemento es el más nuevo,
+    // ver _agregar_historial: siempre hace .append()) para que "deshacer"
+    // apunte a la tarjeta correcta sin importar en qué orden se dibuja.
+    const original = m.historial || [];
+    const idMasReciente = original.length ? original[original.length - 1].id : null;
+    const historial = ordenReciente ? original.slice().reverse() : original.slice();
     const cont = $("[data-timeline]");
     cont.textContent = "";
-    historial.forEach((u) => cont.appendChild(tarjetaHistorial(u, m)));
+    historial.forEach((u) => cont.appendChild(tarjetaHistorial(u, m, u.id === idMasReciente)));
     $("[data-vacio]").hidden = historial.length > 0;
   }
 
+  $("[data-accion='orden-timeline']").addEventListener("click", () => {
+    ordenReciente = !ordenReciente;
+    const btn = $("[data-accion='orden-timeline']");
+    btn.setAttribute("aria-pressed", String(!ordenReciente));
+    const texto = ordenReciente ? "Más reciente primero" : "Más antiguo primero";
+    btn.title = texto;
+    btn.setAttribute("aria-label", texto);
+    if (materialActual) pintarTimeline(materialActual);
+  });
+
+  async function recargarMaterial() {
+    materialActual = (await TD.api.obtener_material(idMaterial)) || null;
+    if (!materialActual) { TD.aviso("No se pudo cargar el material.", "error", 8000); return; }
+    pintarCabecera(materialActual);
+    pintarTimeline(materialActual);
+  }
+
+  function limpiarErrores(dlg) {
+    $$(".campo", dlg).forEach((c) => c.removeAttribute("data-invalido"));
+  }
+
+  // ── Diálogo "Ajustar" (cantidad o precio) ─────────────────────────────────
+
+  const dlgMaterialAjustar = $("#dlg-material-ajustar");
+
+  function mostrarPanelAjusteMaterial(tipo) {
+    $$("[data-panel-tipo-material]").forEach((el) => { el.hidden = el.dataset.panelTipoMaterial !== tipo; });
+  }
+
+  /* Los dos campos del ajuste de cantidad son dos formas de escribir lo mismo
+     (pedido de Bruno, 2026-10-01): se completa "Sumar o restar" o "Cantidad
+     final" y el otro se calcula solo, igual que costo total / costo unitario en
+     el panel Restock. Al guardar siempre se manda la cantidad FINAL (ver
+     core.repositorio_materiales.ajustar_cantidad): el delta es una comodidad de
+     este formulario, no otra forma de guardar el movimiento.
+
+     `campoEditado` recuerda cuál de los dos tocó el usuario, para no pisarle lo
+     que está tipeando con el valor derivado del otro. */
+  let campoEditado = null;
+
+  function cantidadFinalDelAjuste() {
+    const delta = parseFloat($("#dma-delta").value);
+    const final = parseFloat($("#dma-cantidad-ajuste").value);
+    if (campoEditado === "delta") return Number.isNaN(delta) ? null : redondear(materialActual.cantidad + delta);
+    return Number.isNaN(final) ? null : redondear(final);
+  }
+
+  function redondear(n) { return Math.round(n * 100) / 100; }
+
+  function sincronizarCamposAjuste(origen) {
+    if (!materialActual) return;
+    campoEditado = origen;
+    const delta = parseFloat($("#dma-delta").value);
+    const final = parseFloat($("#dma-cantidad-ajuste").value);
+    if (origen === "delta") {
+      $("#dma-cantidad-ajuste").value = Number.isNaN(delta) ? "" : redondear(materialActual.cantidad + delta);
+    } else {
+      $("#dma-delta").value = Number.isNaN(final) ? "" : redondear(final - materialActual.cantidad);
+    }
+    actualizarVistaPreviaAjusteMaterial();
+  }
+
+  function actualizarVistaPreviaAjusteMaterial() {
+    const preview = $("[data-material-ajustar-preview]");
+    const campo = $("#dma-delta").closest(".campo");
+    if (!materialActual) { preview.textContent = ""; return; }
+    const final = cantidadFinalDelAjuste();
+    if (final == null) {
+      preview.textContent = "";
+      campo.removeAttribute("data-invalido");
+      return;
+    }
+    const delta = redondear(final - materialActual.cantidad);
+    const signo = delta > 0 ? "+" : delta < 0 ? "-" : "";
+    const invalido = final < 0;
+    campo.toggleAttribute("data-invalido", invalido);
+    preview.textContent = invalido
+      ? "No puede quedar negativo."
+      : `${TD.fmt.cantidad(materialActual.cantidad)} → ${TD.fmt.cantidad(final)} ${unidadDe(materialActual)}`
+        + (delta ? ` (${signo}${TD.fmt.cantidad(Math.abs(delta))})` : " (sin cambio)");
+  }
+
+  function abrirDialogoAjustar() {
+    if (!materialActual) return;
+    $("[data-dlg-material-ajustar-titulo]").textContent = `Ajustar · ${materialActual.nombre}`;
+    $("[data-material-ajustar-stock]").textContent = `${TD.fmt.cantidad(materialActual.cantidad)} ${unidadDe(materialActual)}`;
+    $("#dma-delta").value = "";
+    $("#dma-cantidad-ajuste").value = "";
+    campoEditado = null;
+    $("#dma-precio").value = materialActual.valor != null ? formatearClp(materialActual.valor) : "";
+    $("[data-material-precio-actual]").textContent = materialActual.valor != null
+      ? `Actual: ${TD.fmt.pesos(materialActual.valor)}${materialActual.tipo === "metro" ? "/m" : "/un."}`
+      : "Todavía sin precio de venta.";
+    $("#dma-descripcion").value = "";
+    $("[data-material-ajustar-preview]").textContent = "";
+    $("#dma-tipo-ajuste").checked = true;
+    mostrarPanelAjusteMaterial("ajuste");
+    limpiarErrores(dlgMaterialAjustar);
+    dlgMaterialAjustar.showModal();
+  }
+  $("[data-accion='ajustar']").addEventListener("click", abrirDialogoAjustar);
+  $("[data-accion='cerrar-ajustar-material']").addEventListener("click", () => dlgMaterialAjustar.close());
+  dlgMaterialAjustar.addEventListener("click", (e) => { if (e.target === dlgMaterialAjustar) dlgMaterialAjustar.close(); });
+  $("#dma-delta").addEventListener("input", () => sincronizarCamposAjuste("delta"));
+  $("#dma-cantidad-ajuste").addEventListener("input", () => sincronizarCamposAjuste("final"));
+  $("#dma-tipo-ajuste").addEventListener("change", () => mostrarPanelAjusteMaterial("ajuste"));
+  $("#dma-tipo-precio").addEventListener("change", () => mostrarPanelAjusteMaterial("precio"));
+  $("#dma-precio").addEventListener("input", (e) => { e.target.value = formatearClp(e.target.value); });
+
+  async function guardarAjusteMaterial() {
+    if (!materialActual) return;
+    if ($("#dma-tipo-precio").checked) {
+      // Campo vacío = dejar el material SIN precio de venta (null), que no
+      // es lo mismo que $0: sin precio, sus estructuras vuelven a cobrar por
+      // catálogo (ver core.repositorio_materiales.cobro_materiales_producto).
+      const nuevo = numeroClp($("#dma-precio").value);
+      await TD.api.ajustar_valor_material(materialActual.id, nuevo, $("#dma-descripcion").value.trim());
+      dlgMaterialAjustar.close();
+      await recargarMaterial();
+      TD.aviso("Precio de venta actualizado.", "info");
+      return;
+    }
+    const final = cantidadFinalDelAjuste();
+    const campo = $("#dma-delta").closest(".campo");
+    const invalido = final == null || final < 0;
+    campo.toggleAttribute("data-invalido", invalido);
+    if (invalido) return;
+    // Un ajuste que no mueve nada no es un ajuste: no se guarda una entrada de
+    // historial que diga "104 → 104".
+    if (final === materialActual.cantidad) { dlgMaterialAjustar.close(); return; }
+    await TD.api.ajustar_cantidad_material(materialActual.id, final, $("#dma-descripcion").value.trim());
+    dlgMaterialAjustar.close();
+    await recargarMaterial();
+    TD.aviso("Cantidad actualizada.", "info");
+  }
+  $("[data-accion='guardar-ajuste-material']").addEventListener("click", guardarAjusteMaterial);
+
+  // ── Diálogo "Editar material" ─────────────────────────────────────────────
+
+  const dlgMaterialEditar = $("#dlg-material-editar");
+
+  function numeroClp(valorCampo) {
+    const limpio = String(valorCampo || "").replace(/[^\d]/g, "");
+    return limpio ? parseInt(limpio, 10) : null;
+  }
+  function formatearClp(valor) {
+    const n = numeroClp(valor);
+    return n == null ? "" : "$" + n.toLocaleString("es-CL");
+  }
+  $("#dme-valor").addEventListener("input", (e) => { e.target.value = formatearClp(e.target.value); });
+
+  function actualizarEtiquetaValorMaterial() {
+    const metro = $("#dme-tipo-metro").checked;
+    $("#dme-valor-etiqueta").textContent = metro ? "Precio de venta por metro" : "Precio de venta por unidad";
+  }
+  $("#dme-tipo-metro").addEventListener("change", actualizarEtiquetaValorMaterial);
+  $("#dme-tipo-unidad").addEventListener("change", actualizarEtiquetaValorMaterial);
+
+  // Consumo automático (core.repositorio_materiales.TIPOS_CONSUMO_VALIDOS,
+  // pedido de Bruno 2026-09-27): qué bloque de parámetros mostrar según la
+  // fórmula elegida, y los pickers de productos/estructuras que la
+  // disparan (ocultos si no hay fórmula — sin fórmula no hay nada que
+  // asociar).
+  const AYUDA_CONSUMO_MATERIAL = {
+    "": "Se descuenta solo a mano, desde “Ajustar cantidad”.",
+    fijo_por_producto: "Cada producto asociado gasta la misma cantidad, sin importar su tamaño.",
+    metro_lineal_salto: "Se gasta en bloques enteros: cada tramo de metros lineales suma la cantidad fija.",
+    metro_lineal_directo: "Gasta exactamente los metros lineales del producto (sin el margen de la impresora).",
+    manual: "Al aprobar la cotización se pide el monto gastado — una vez por cotización, no por producto.",
+  };
+
+  function actualizarConsumoMaterial() {
+    const tipo = $("#dme-tipo-consumo").value;
+    $("[data-dme-consumo-ayuda]").textContent = AYUDA_CONSUMO_MATERIAL[tipo] || "";
+    $$("[data-dme-parametros]").forEach((bloque) => { bloque.hidden = bloque.dataset.dmeParametros !== tipo; });
+    $$("[data-dme-asociaciones]").forEach((bloque) => { bloque.hidden = !tipo; });
+  }
+  $("#dme-tipo-consumo").addEventListener("change", actualizarConsumoMaterial);
+
+  let materialEditarProductos = [];
+  let materialEditarEstructuras = [];
+
+  function pintarAsociacionesMaterial(clave) {
+    const lista = clave === "productos" ? materialEditarProductos : materialEditarEstructuras;
+    const items = $(`.aditiva__items`, $(`[data-aditiva-material="${clave}"]`));
+    items.textContent = "";
+    lista.forEach((nombre, k) => {
+      const el = document.createElement("div");
+      el.className = "pastilla";
+      el.style.setProperty("--i", k);
+      el.innerHTML = `<span class="pastilla__nombre"></span><button class="pastilla__quitar" type="button" aria-label="Quitar">✕</button>`;
+      $(".pastilla__nombre", el).textContent = nombre;
+      $(".pastilla__quitar", el).addEventListener("click", () => {
+        lista.splice(k, 1);
+        pintarAsociacionesMaterial(clave);
+      });
+      items.appendChild(el);
+    });
+  }
+
+  $$("[data-aditiva-material]").forEach((cont) => {
+    const clave = cont.dataset.aditivaMaterial;
+    const lista = clave === "productos" ? materialEditarProductos : materialEditarEstructuras;
+    const entrada = $(".aditiva__alta input", cont);
+    const boton = $(".aditiva__alta button", cont);
+    const agregar = () => {
+      const texto = entrada.value.trim();
+      if (!texto || lista.includes(texto)) { entrada.value = ""; return; }
+      lista.push(texto);
+      entrada.value = "";
+      pintarAsociacionesMaterial(clave);
+    };
+    boton.addEventListener("click", agregar);
+    entrada.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault(); e.stopPropagation();
+      agregar();
+    });
+  });
+
+  function abrirDialogoMaterialEditar() {
+    if (!materialActual) return;
+    const m = materialActual;
+    limpiarErrores(dlgMaterialEditar);
+    $("[data-dlg-material-editar-titulo]").textContent = `Editar material · ${m.nombre}`;
+    $("#dme-nombre").value = m.nombre || "";
+    $("#dme-tipo-metro").checked = m.tipo === "metro";
+    $("#dme-tipo-unidad").checked = m.tipo !== "metro";
+    $("#dme-proveedor").value = m.proveedor || "";
+    $("#dme-valor").value = m.valor != null ? formatearClp(m.valor) : "";
+    actualizarEtiquetaValorMaterial();
+
+    const parametros = m.consumo_parametros || {};
+    $("#dme-tipo-consumo").value = m.tipo_consumo || "";
+    $("#dme-param-n").value = parametros.n ?? "";
+    $("#dme-param-paso").value = parametros.paso ?? "";
+    $("#dme-param-salto-n").value = parametros.n ?? "";
+    materialEditarProductos.length = 0;
+    (m.productos_asociados || []).forEach((n) => materialEditarProductos.push(n));
+    materialEditarEstructuras.length = 0;
+    (m.estructuras_asociadas || []).forEach((n) => materialEditarEstructuras.push(n));
+    pintarAsociacionesMaterial("productos");
+    pintarAsociacionesMaterial("estructuras");
+    actualizarConsumoMaterial();
+
+    dlgMaterialEditar.showModal();
+  }
+  $("[data-accion='editar']").addEventListener("click", abrirDialogoMaterialEditar);
+  $("[data-accion='cancelar-material-editar']").addEventListener("click", () => dlgMaterialEditar.close());
+  dlgMaterialEditar.addEventListener("click", (e) => { if (e.target === dlgMaterialEditar) dlgMaterialEditar.close(); });
+
+  $("[data-accion='guardar-material-editar']").addEventListener("click", async () => {
+    if (!materialActual) return;
+    const campoNombre = $("#dme-nombre");
+    const nombre = campoNombre.value.trim();
+    campoNombre.closest(".campo").toggleAttribute("data-invalido", !nombre);
+    if (!nombre) return;
+
+    const tipo = $("#dme-tipo-metro").checked ? "metro" : "unidad";
+    const proveedor = $("#dme-proveedor").value.trim();
+    const valor = numeroClp($("#dme-valor").value);
+
+    const tipoConsumo = $("#dme-tipo-consumo").value || null;
+    let consumoParametros = {};
+    if (tipoConsumo === "fijo_por_producto") {
+      consumoParametros = { n: parseFloat($("#dme-param-n").value) || 0 };
+    } else if (tipoConsumo === "metro_lineal_salto") {
+      consumoParametros = {
+        paso: parseFloat($("#dme-param-paso").value) || 0,
+        n: parseFloat($("#dme-param-salto-n").value) || 0,
+      };
+    }
+
+    await TD.api.editar_material(
+      materialActual.id, nombre, tipo, valor, proveedor,
+      tipoConsumo, consumoParametros, materialEditarProductos, materialEditarEstructuras,
+    );
+    dlgMaterialEditar.close();
+    await recargarMaterial();
+    TD.aviso("Material actualizado.", "info");
+  });
+
+  // ── Diálogo "Restock" (boton-panel-morph) ─────────────────────────────────
+  // El restock (sumar stock a un material que ya existe) es frecuente —
+  // pedido de Bruno (2026-09-29): un botón de header que se deforma en un
+  // panel chico (mismo mecanismo que #dlg-rollo/#dlg-material de
+  // menu.html) gana contra abrir un diálogo completo aparte. Reusa
+  // core.repositorio_materiales.ingresar_material — la MISMA función que
+  // el "+" de menu.html, que ya sabe sumar stock a un material existente
+  // buscando por nombre — solo que acá el nombre ya se conoce (es
+  // materialActual), así que no hace falta autocompletado.
+
+  const dlgRestock = $("#dlg-restock");
+
+  // Mide el alto real del contenido vía scrollHeight (no "height:auto" del
+  // <dialog>: Chrome resuelve el max-height de .dlg-rollo__contenido
+  // contra un valor intermedio y recorta antes de poder medir) — mismo
+  // mecanismo que altoContenidoMorph/rectFinalMorph de menu.html.
+  function altoContenidoMorph(dlg, ancho) {
+    const contenido = $(".dlg-rollo__contenido", dlg);
+    const cs = getComputedStyle(dlg);
+    const prevTransition = dlg.style.transition;
+    const prevWidth = dlg.style.width;
+    const prevMaxHeight = contenido.style.maxHeight;
+    dlg.style.transition = "none";
+    dlg.style.width = ancho + "px";
+    contenido.style.maxHeight = "none";
+    const alto = contenido.scrollHeight
+      + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+      + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth) + 1;
+    dlg.style.width = prevWidth;
+    contenido.style.maxHeight = prevMaxHeight;
+    dlg.style.transition = prevTransition;
+    return alto;
+  }
+
+  function pxPorRem() {
+    return parseFloat(getComputedStyle(document.documentElement).fontSize);
+  }
+
+  function rectFinalMorph(dlg, rectBoton) {
+    const rem = pxPorRem();
+    const ancho = Math.min(window.innerWidth * 0.9, 26 * rem);
+    const margen = 12;
+    const alto = Math.min(window.innerHeight - 2 * margen, altoContenidoMorph(dlg, ancho));
+    const left = Math.min(
+      Math.max(rectBoton.left + rectBoton.width / 2 - ancho / 2, margen),
+      window.innerWidth - ancho - margen,
+    );
+    const top = Math.min(
+      Math.max(rectBoton.top + rectBoton.height / 2 - alto / 2, margen),
+      window.innerHeight - alto - margen,
+    );
+    return { top, left, ancho, alto };
+  }
+
+  function aplicarRectMorph(dlg, top, left, ancho, alto, radio) {
+    dlg.style.top = top + "px";
+    dlg.style.left = left + "px";
+    dlg.style.width = ancho + "px";
+    dlg.style.height = alto + "px";
+    dlg.style.borderRadius = radio;
+  }
+
+  function abrirDialogoMorph(dlg, boton, pintar) {
+    if (pintar) pintar();
+    const r = boton.getBoundingClientRect();
+    dlg.removeAttribute("data-abierto");
+    aplicarRectMorph(dlg, r.top, r.left, r.width, r.height, "999px");
+    dlg.style.background = getComputedStyle(boton).backgroundColor;
+    dlg.showModal();
+    void dlg.getBoundingClientRect();   // fuerza el reflow antes de animar
+
+    const destino = rectFinalMorph(dlg, r);
+    requestAnimationFrame(() => {
+      aplicarRectMorph(dlg, destino.top, destino.left, destino.ancho, destino.alto, "");
+      dlg.style.background = "";
+      dlg.setAttribute("data-abierto", "");
+    });
+  }
+
+  function cerrarDialogoMorph(dlg, boton) {
+    if (!dlg.open) return;
+    const origen = boton || dlg;
+    const r = origen.getBoundingClientRect();
+    dlg.removeAttribute("data-abierto");
+    aplicarRectMorph(dlg, r.top, r.left, r.width, r.height, "999px");
+    dlg.style.background = getComputedStyle(origen).backgroundColor;
+    const terminar = (e) => {
+      if (e.target !== dlg || e.propertyName !== "width") return;
+      dlg.removeEventListener("transitionend", terminar);
+      dlg.close();
+      dlg.style.background = "";
+    };
+    dlg.addEventListener("transitionend", terminar);
+  }
+
+  function abrirDialogoRestock(boton) {
+    if (!materialActual) return;
+    botonOrigenRestock = boton;
+    abrirDialogoMorph(dlgRestock, botonOrigenRestock, () => {
+      limpiarErrores(dlgRestock);
+      $("#rs-cantidad").value = "";
+      $("#rs-fecha").value = hoyISO;
+      $("#rs-proveedor").value = materialActual.proveedor || "";
+      $("#rs-gasto").value = "";
+    });
+  }
+  function cerrarDialogoRestock() {
+    cerrarDialogoMorph(dlgRestock, botonOrigenRestock);
+  }
+  $("[data-accion='restock']").addEventListener("click", (e) => abrirDialogoRestock(e.currentTarget));
+  dlgRestock.addEventListener("cancel", (e) => { e.preventDefault(); cerrarDialogoRestock(); });
+  dlgRestock.addEventListener("click", (e) => { if (e.target === dlgRestock) cerrarDialogoRestock(); });
+  $("#rs-gasto").addEventListener("input", (e) => { e.target.value = formatearClp(e.target.value); });
+
+  $("[data-accion='guardar-restock']").addEventListener("click", async () => {
+    if (!materialActual) return;
+    const campoCantidad = $("#rs-cantidad");
+    const campoFecha = $("#rs-fecha");
+    const cantidad = parseFloat(campoCantidad.value);
+
+    let valido = true;
+    campoCantidad.closest(".campo").toggleAttribute("data-invalido", !(cantidad > 0));
+    if (!(cantidad > 0)) valido = false;
+    campoFecha.closest(".campo").toggleAttribute("data-invalido", !campoFecha.value);
+    if (!campoFecha.value) valido = false;
+    if (!valido) return;
+
+    const proveedor = $("#rs-proveedor").value.trim();
+    const gasto = numeroClp($("#rs-gasto").value);
+
+    if (proveedor) await TD.api.guardar_proveedor(proveedor);
+    await TD.api.ingresar_material(
+      materialActual.nombre, cantidad, materialActual.tipo, proveedor, gasto, null,
+      null, null, null, null, campoFecha.value,
+    );
+    cerrarDialogoRestock();
+    await recargarMaterial();
+    TD.aviso("Material restockeado.", "info");
+  });
+
+  // ── Diálogo "Eliminar material" ───────────────────────────────────────────
+
+  const dlgEliminarMaterial = $("#dlg-eliminar-material");
+
+  function abrirDialogoEliminarMaterial() {
+    if (!materialActual) return;
+    $("[data-dlg-eliminar-texto]", dlgEliminarMaterial).textContent =
+      `El material "${materialActual.nombre}" se borra para siempre, junto con todo su historial. No se puede deshacer.`;
+    $("#confirmar-nombre-eliminar").value = "";
+    $("[data-accion='confirmar-eliminar-material']").disabled = true;
+    dlgEliminarMaterial.showModal();
+    $("#confirmar-nombre-eliminar").focus();
+  }
+  $("[data-accion='eliminar']").addEventListener("click", abrirDialogoEliminarMaterial);
+  $("[data-accion='cancelar-eliminar-material']").addEventListener("click", () => dlgEliminarMaterial.close());
+  dlgEliminarMaterial.addEventListener("click", (e) => { if (e.target === dlgEliminarMaterial) dlgEliminarMaterial.close(); });
+  $("#confirmar-nombre-eliminar").addEventListener("input", (e) => {
+    $("[data-accion='confirmar-eliminar-material']").disabled = !materialActual || e.target.value !== materialActual.nombre;
+  });
+  $("[data-accion='confirmar-eliminar-material']").addEventListener("click", async () => {
+    if (!materialActual || $("#confirmar-nombre-eliminar").value !== materialActual.nombre) return;
+    dlgEliminarMaterial.close();
+    await TD.api.eliminar_material(materialActual.id);
+  });
+
+  // ── Arranque ─────────────────────────────────────────────────────────────
+
+  async function cargarCatalogosEdicion() {
+    const proveedores = (await TD.api.cargar_proveedores()) || [];
+    $("#lista-proveedores").innerHTML = proveedores.map((p) => `<option value="${esc(p)}"></option>`).join("");
+    const productosCatalogo = (await TD.api.cargar_productos_catalogo()) || [];
+    $("#lista-productos-catalogo").innerHTML = productosCatalogo.map((p) => `<option value="${esc(p)}"></option>`).join("");
+    const estructurasCatalogo = (await TD.api.cargar_estructuras_catalogo()) || [];
+    $("#lista-estructuras-catalogo").innerHTML = estructurasCatalogo.map((e) => `<option value="${esc(e)}"></option>`).join("");
+  }
+
   TD.iniciar(async (ctx) => {
-    const m = (await TD.api.obtener_material(ctx.id)) || null;
-    if (!m) { TD.aviso("No se pudo cargar el material.", "error", 8000); return; }
-    pintarCabecera(m);
-    pintarTimeline(m);
+    idMaterial = ctx.id;
+    hoyISO = ctx.hoy_iso || new Date().toISOString().slice(0, 10);
+    await cargarCatalogosEdicion();
+    await recargarMaterial();
   });
 })();
 </script>

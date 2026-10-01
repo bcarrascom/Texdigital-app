@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.repositorio_cotizaciones as repo_cot
 import core.repositorio_inventario as repo_inv
+import core.repositorio_materiales as repo_mat
 import core.repositorio_ops as repo_ops
 from ui.api_ver_cotizacion import ApiVerCotizacion
 from ui.api_cotizacion import ApiCotizacion
@@ -69,6 +70,7 @@ class _ConRutasTemporales(unittest.TestCase):
             mock.patch.object(repo_cot, "_ruta_base", lambda: base / "Cotizaciones"),
             mock.patch.object(repo_ops, "_ruta_base", lambda: base / "OPs"),
             mock.patch.object(repo_inv, "_ruta_base", lambda: base / "Inventario"),
+            mock.patch.object(repo_mat, "_ruta_base", lambda: base / "Inventario"),
             mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", _ANCHOS, clear=True),
         ]
         for p in self._parches:
@@ -277,6 +279,93 @@ class TestVerificarMaterialesDeBorrador(_ConRutasTemporales):
         incompleto = self._producto_frontend(ancho="", alto="", cantidad="")
         faltantes = self.api_cot.verificar_materiales([incompleto])
         self.assertEqual(faltantes, [])
+
+
+class TestAprobarConsumeMateriales(_ConRutasTemporales):
+    """Enganche con core.repositorio_materiales.consumir_para_op (pedido de
+    Bruno, 2026-09-27): al aprobar, además de los rollos, se descuentan
+    los materiales no textiles con tipo_consumo asociados al producto."""
+
+    def test_material_fijo_por_producto_se_descuenta_solo(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        material = repo_mat.ingresar_material(
+            "Ojal", 50, "unidad", tipo_consumo="fijo_por_producto",
+            consumo_parametros={"n": 4}, productos_asociados=["Pendón"],
+        )
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertEqual(resultado, {"ok": True})
+        actualizado = repo_mat.obtener_material(material["id"])
+        self.assertEqual(actualizado["cantidad"], 50 - 4 * 3)
+        consumos = [h for h in actualizado["historial"] if h["tipo"] == "consumo"]
+        self.assertEqual(len(consumos), 1)
+        self.assertEqual(consumos[0]["numero_op"], 4210)
+
+    def test_material_sin_asociacion_no_se_toca(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        material = repo_mat.ingresar_material("Ojal", 50, "unidad")
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 50)
+
+    def test_material_manual_sin_monto_no_se_toca(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        material = repo_mat.ingresar_material(
+            "Bastidor", 20, "unidad", tipo_consumo="manual", productos_asociados=["Pendón"],
+        )
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 20)
+
+    def test_material_manual_con_monto_se_descuenta(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        material = repo_mat.ingresar_material(
+            "Bastidor", 20, "unidad", tipo_consumo="manual", productos_asociados=["Pendón"],
+        )
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        resultado = self.api.aprobar_cotizacion(
+            4210, "2026-08-29", "2026-09-15", {material["id"]: 7},
+        )
+
+        self.assertEqual(resultado, {"ok": True})
+        self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 13)
+
+    def test_materiales_manuales_pendientes_lista_antes_de_aprobar(self):
+        material = repo_mat.ingresar_material(
+            "Bastidor", 20, "unidad", tipo_consumo="manual", productos_asociados=["Pendón"],
+        )
+        repo_mat.ingresar_material(
+            "Ojal", 50, "unidad", tipo_consumo="fijo_por_producto",
+            consumo_parametros={"n": 4}, productos_asociados=["Pendón"],
+        )
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        pendientes = self.api.materiales_manuales_pendientes(4210)
+
+        self.assertEqual(len(pendientes), 1)
+        self.assertEqual(pendientes[0]["id"], material["id"])
+        self.assertEqual(pendientes[0]["nombre"], "Bastidor")
+
+    def test_bloqueo_por_stock_de_rollos_no_toca_materiales(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 5)  # insuficiente: necesita 11
+        material = repo_mat.ingresar_material(
+            "Ojal", 50, "unidad", tipo_consumo="fijo_por_producto",
+            consumo_parametros={"n": 4}, productos_asociados=["Pendón"],
+        )
+        repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
+
+        resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertFalse(resultado["ok"])
+        self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 50)
 
 
 if __name__ == "__main__":

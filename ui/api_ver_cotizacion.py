@@ -19,6 +19,10 @@ from core.repositorio_cotizaciones import (
 from core.precios import costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto
 from core.presentar_cotizacion import generar_html
 from core.repositorio_inventario import calcular_faltantes, consumir_para_op
+from core.repositorio_materiales import (
+    materiales_para_producto, kwargs_precios,
+    consumir_para_op as consumir_materiales_para_op,
+)
 from ui.dialogo_aprobar import promover_a_op
 
 
@@ -95,8 +99,12 @@ class ApiVerCotizacion:
         productos_json = datos.get("productos", [])
         productos_internos = [producto_desde_json(p) for p in productos_json]
         facturables = ml_o_area_facturable_por_producto(productos_internos)
+        # kwargs_precios(): la misma valorización con la que se creó la
+        # cotización (ver core.repositorio_materiales.kwargs_precios) — sin
+        # esto, verla la recalculaba con el catálogo estático y los montos no
+        # coincidían con los que se habían cobrado.
         costos = [
-            costo_producto(p, ml_o_area_facturable=f)
+            costo_producto(p, ml_o_area_facturable=f, **kwargs_precios())
             for p, f in zip(productos_internos, facturables)
         ]
 
@@ -108,7 +116,8 @@ class ApiVerCotizacion:
         instalacion = datos.get("Instalacion")
         descuento_pct = datos.get("Descuento", 0.0) or 0.0
         totales = costo_cotizacion(productos_internos, descuento_pct,
-                                    despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+                                    despacho=despacho or 0.0, instalacion=instalacion or 0.0,
+                                    **kwargs_precios())
 
         # Mismo criterio que core.presentar_cotizacion.generar_html: si
         # ganó el descuento automático por volumen, se muestra SU %, no el
@@ -181,18 +190,53 @@ class ApiVerCotizacion:
         productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
         return calcular_faltantes(productos_internos)
 
-    def aprobar_cotizacion(self, numero, ingreso, entrega) -> dict:
+    def materiales_manuales_pendientes(self, numero) -> list[dict]:
+        """Materiales tipo_consumo="manual" (ver core.repositorio_materiales)
+        que aplican a los productos de esta cotización, por nombre y/o
+        Estructuras — el frontend lo llama justo antes de abrir el diálogo
+        de aprobar (ver-cotizacion.html), para pedir el monto gastado de
+        cada uno ahí mismo, junto con las fechas de ingreso/entrega.
+        Deduplicado por id: un material "manual" que aplica a varios
+        productos de la misma cotización se pide UNA sola vez (mismo
+        criterio que consumir_para_op de materiales — un monto total por
+        OP, no uno por producto)."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return []
+        productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
+        vistos: dict[str, dict] = {}
+        for p in productos_internos:
+            nombre_producto = p.get("producto", "")
+            nombres_estructuras = list(p.get("estructuras", []) or [])
+            for m in materiales_para_producto(nombre_producto, nombres_estructuras):
+                if m.get("tipo_consumo") == "manual" and m["id"] not in vistos:
+                    vistos[m["id"]] = {"id": m["id"], "nombre": m["nombre"], "tipo": m.get("tipo", "unidad")}
+        return list(vistos.values())
+
+    def aprobar_cotizacion(
+        self, numero, ingreso, entrega, consumos_manuales: dict | None = None,
+    ) -> dict:
         """Único punto real de "aprobación" del sistema (no existe un
         estado de OP pendiente-de-aprobar aparte, ver ui/dialogo_aprobar.py)
         — por eso es acá, y no antes, donde se bloquea si faltan
         materiales y donde el consumo se da por real (ver
-        core/repositorio_inventario.py::consumir_para_op). Devuelve
+        core/repositorio_inventario.py::consumir_para_op, rollos de tela —
+        y core/repositorio_materiales.py::consumir_para_op, materiales no
+        textiles con fórmula, pedido de Bruno 2026-09-27). Devuelve
         {"ok": True} si aprobó, o {"ok": False, "faltantes": [...]} si
         frenó por stock insuficiente. ver-cotizacion.html ya chequeó esto
         ANTES de llegar acá (ver verificar_materiales/botón "Aprobar →" de
         la cabecera) — este bloqueo es la red de seguridad real por si el
         stock cambió mientras el diálogo de fechas estaba abierto (más de
         una instalación puede estar mirando el mismo Dropbox).
+
+        `consumos_manuales` ({id_material: cantidad}) viene de
+        materiales_manuales_pendientes(): el frontend ya le pidió esos
+        montos al usuario en el mismo diálogo de fechas, ANTES de llamar
+        acá — los materiales con tipo_consumo="manual" no bloquean la
+        aprobación si falta alguno (a diferencia de los rollos), esos
+        simplemente no se descuentan (ver docstring de
+        core.repositorio_materiales.consumir_para_op).
 
         Todo el cuerpo corre bajo self._lock_aprobar (ver __init__): dos
         llamadas concurrentes a esta función (pywebview corre cada llamada
@@ -217,6 +261,10 @@ class ApiVerCotizacion:
             for producto_json, rollos_usados in zip(productos_json, asignaciones):
                 if rollos_usados:
                     producto_json["RollosUsados"] = rollos_usados
+
+            consumir_materiales_para_op(
+                productos_internos, int(numero), datos.get("Empresa", ""), consumos_manuales,
+            )
 
             promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
             return {"ok": True}

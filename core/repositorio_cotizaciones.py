@@ -205,8 +205,14 @@ def recalcular_descuentos(datos: dict, *, guardar: bool = True) -> dict:
     descuento_pct = datos.get("Descuento", 0.0) or 0.0
     despacho = datos.get("Despacho")
     instalacion = datos.get("Instalacion")
+    # kwargs_precios(): misma valorización que al crear/ver/imprimir (ver
+    # core.repositorio_materiales.kwargs_precios) — este recálculo REESCRIBE
+    # el archivo si algún monto cambió, así que valorizar acá con otros
+    # precios que el resto del sistema corrompería la cotización guardada.
+    from core.repositorio_materiales import kwargs_precios
     totales = costo_cotizacion(productos_internos, descuento_pct,
-                                despacho=despacho or 0.0, instalacion=instalacion or 0.0)
+                                despacho=despacho or 0.0, instalacion=instalacion or 0.0,
+                                **kwargs_precios())
 
     cambio = (
         datos.get("Neto") != totales["neto"]

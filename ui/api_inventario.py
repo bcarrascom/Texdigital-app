@@ -16,6 +16,15 @@ from core import repositorio_inventario as _repo
 from core import repositorio_materiales as _repo_mat
 
 
+def _iso_a_dma(iso: str) -> str:
+    """"yyyy-mm-dd" (lo que manda un <input type="date">) -> "dd/mm/aaaa"
+    (lo que usa el resto del sistema) — mismo criterio que _iso_a_dma de
+    ui/api_ver_cotizacion.py, acá para el panel "Restock" de
+    ver-material.html (pedido de Bruno, 2026-09-29)."""
+    anio, mes, dia = iso.split("-")
+    return f"{dia}/{mes}/{anio}"
+
+
 class ApiInventario:
 
     def contexto_extra(self, id_) -> dict:
@@ -35,6 +44,12 @@ class ApiInventario:
 
     def guardar_proveedor(self, nombre: str) -> None:
         repositorio.guardar_proveedor(nombre)
+
+    def editar_proveedor(self, nombre_actual: str, nombre_nuevo: str) -> bool:
+        return repositorio.editar_proveedor(nombre_actual, nombre_nuevo)
+
+    def eliminar_proveedor(self, nombre: str) -> bool:
+        return repositorio.eliminar_proveedor(nombre)
 
     def valor_sugerido_textil(self, nombre_textil: str) -> float | None:
         return _repo.valor_sugerido_textil(nombre_textil)
@@ -67,21 +82,25 @@ class ApiInventario:
         return _repo.eliminar_ajuste(id_rollo, id_ajuste)
 
     # ── Materiales ────────────────────────────────────────────────────────
-    # "gasto_mes" se agrega ACÁ (no vive en el JSON persistido) — es un
-    # derivado de 'historial' que cambia con el simple paso del tiempo (un
-    # 1° de mes, la compra de ayer deja de contar), así que calcularlo al
-    # servir en vez de guardarlo evita que quede desactualizado.
+    # Las 9 cifras del modelo económico (ver
+    # core.repositorio_materiales.metricas_material) se agregan ACÁ, no viven
+    # en el JSON persistido: unas son derivados de 'historial' que cambian con
+    # el simple paso del tiempo (un 1° de mes, la compra de ayer deja de
+    # contar en "gasto este mes") y otras son cuentas de dos campos que sí
+    # están guardados. Calcularlas al servir en vez de guardarlas evita que
+    # queden desactualizadas, y le ahorra a la UI tener que saber de dónde
+    # sale cada una.
 
-    def _con_gasto_mes(self, m: dict | None) -> dict | None:
+    def _con_metricas(self, m: dict | None) -> dict | None:
         if m is not None:
-            m["gasto_mes"] = _repo_mat.gasto_del_mes(m)
+            m.update(_repo_mat.metricas_material(m))
         return m
 
     def listar_materiales(self) -> list[dict]:
-        return [self._con_gasto_mes(m) for m in _repo_mat.listar_materiales()]
+        return [self._con_metricas(m) for m in _repo_mat.listar_materiales()]
 
     def obtener_material(self, id_: str) -> dict | None:
-        return self._con_gasto_mes(_repo_mat.obtener_material(id_))
+        return self._con_metricas(_repo_mat.obtener_material(id_))
 
     def cargar_nombres_materiales(self) -> list[str]:
         return [m["nombre"] for m in _repo_mat.listar_materiales()]
@@ -89,19 +108,48 @@ class ApiInventario:
     def ingresar_material(
         self, nombre: str, cantidad, tipo="unidad", proveedor="",
         costo_total=None, costo_unitario=None,
+        tipo_consumo=None, consumo_parametros=None,
+        productos_asociados=None, estructuras_asociadas=None,
+        fecha=None,
     ) -> dict:
-        return self._con_gasto_mes(
-            _repo_mat.ingresar_material(nombre, cantidad, tipo, proveedor, costo_total, costo_unitario)
+        return self._con_metricas(
+            _repo_mat.ingresar_material(
+                nombre, cantidad, tipo, proveedor, costo_total, costo_unitario,
+                tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
+                _iso_a_dma(fecha) if fecha else None,
+            )
         )
 
-    def editar_material(self, id_: str, nombre: str, tipo: str, valor=None, proveedor="") -> dict | None:
-        return self._con_gasto_mes(_repo_mat.editar_material(id_, nombre, tipo, valor, proveedor))
+    def editar_material(
+        self, id_: str, nombre: str, tipo: str, valor=None, proveedor="",
+        tipo_consumo=None, consumo_parametros=None,
+        productos_asociados=None, estructuras_asociadas=None,
+    ) -> dict | None:
+        return self._con_metricas(
+            _repo_mat.editar_material(
+                id_, nombre, tipo, valor, proveedor,
+                tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
+            )
+        )
 
-    def registrar_uso_material(self, id_: str, cantidad_usada, descripcion: str = "") -> dict | None:
-        return self._con_gasto_mes(_repo_mat.registrar_uso(id_, cantidad_usada, descripcion))
+    def cargar_productos_catalogo(self) -> list[str]:
+        return list(repositorio.PRODUCTOS)
+
+    def cargar_estructuras_catalogo(self) -> list[str]:
+        return list(repositorio.ESTRUCTURAS_LEGADO)
 
     def ajustar_cantidad_material(self, id_: str, nueva_cantidad, descripcion: str = "") -> dict | None:
-        return self._con_gasto_mes(_repo_mat.ajustar_cantidad(id_, nueva_cantidad, descripcion))
+        return self._con_metricas(_repo_mat.ajustar_cantidad(id_, nueva_cantidad, descripcion))
+
+    def ajustar_valor_material(self, id_: str, nuevo_valor, descripcion: str = "") -> dict | None:
+        """Ajuste del precio de VENTA — hermano de ajustar_cantidad_material y
+        el único camino desde la UI para cambiarlo (queda en el historial, ver
+        core.repositorio_materiales.ajustar_valor). El costo no tiene método
+        acá a propósito: sale de los restocks, no de un formulario."""
+        return self._con_metricas(_repo_mat.ajustar_valor(id_, nuevo_valor, descripcion))
 
     def eliminar_ultimo_historial_material(self, id_material: str, id_entrada: str) -> dict | None:
-        return self._con_gasto_mes(_repo_mat.eliminar_ultimo_historial(id_material, id_entrada))
+        return self._con_metricas(_repo_mat.eliminar_ultimo_historial(id_material, id_entrada))
+
+    def eliminar_material(self, id_: str) -> bool:
+        return _repo_mat.eliminar_material(id_)

@@ -292,6 +292,16 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
 .dlg-faltantes__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
 .dlg-faltantes__item { font-size: var(--t-xs); }
 
+/* Materiales "manual" (core.repositorio_materiales, tipo_consumo=="manual")
+   asociados a los productos de la cotización — se piden ACÁ, dentro del
+   mismo diálogo de aprobar, porque recién ahí se sabe que la cotización
+   efectivamente se va a convertir en OP (ver
+   TD.api.materiales_manuales_pendientes). Dejar un monto vacío es válido:
+   ese material simplemente no se descuenta (no bloquea, ver
+   core.repositorio_materiales.consumir_para_op). */
+.dlg-materiales-manuales { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.dlg-materiales-manuales__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+
 /* ── Materiales insuficientes: aviso al apretar "Aprobar →" ──────────────
    Mismo tratamiento que #dlg-materiales de nueva-cotizacion.html (dropshadow
    marcado + fondo desenfocado, efecto "3D") — acá es un bloqueo de verdad
@@ -436,6 +446,10 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
   <div class="dlg-faltantes" data-dlg-faltantes hidden>
     <div class="dlg-faltantes__titulo">No se puede aprobar: faltan materiales</div>
     <div data-dlg-faltantes-lista></div>
+  </div>
+  <div class="dlg-materiales-manuales" data-dlg-materiales-manuales hidden>
+    <div class="dlg-materiales-manuales__titulo">Materiales a cargar a mano</div>
+    <div data-dlg-materiales-manuales-lista></div>
   </div>
   <div class="dlg__acciones">
     <button class="btn btn--fantasma btn--chico" data-cerrar-dlg>Cancelar</button>
@@ -754,6 +768,32 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
     $("[data-mat-cerrar]", dlg).onclick = () => dlg.close();
   }
 
+  function pintarMaterialesManuales(dlg, pendientes) {
+    const bloque = $("[data-dlg-materiales-manuales]", dlg);
+    const lista = $("[data-dlg-materiales-manuales-lista]", dlg);
+    lista.textContent = "";
+    if (!pendientes.length) { bloque.hidden = true; return; }
+    pendientes.forEach((m) => {
+      const campo = document.createElement("div");
+      campo.className = "campo";
+      campo.innerHTML = `
+        <label class="campo__etiqueta" for="material-manual-${esc(m.id)}">${esc(m.nombre)}</label>
+        <input class="entrada" type="number" min="0" step="any" placeholder="0"
+               id="material-manual-${esc(m.id)}" data-material-manual data-id="${esc(m.id)}">`;
+      lista.appendChild(campo);
+    });
+    bloque.hidden = false;
+  }
+
+  function leerConsumosManuales(dlg) {
+    const consumos = {};
+    $$("[data-material-manual]", dlg).forEach((input) => {
+      const monto = num(input.value);
+      if (monto > 0) consumos[input.dataset.id] = monto;
+    });
+    return consumos;
+  }
+
   $("[data-accion='aprobar']").addEventListener("click", async () => {
     const faltantes = (await TD.api.verificar_materiales_cotizacion(cot.numero)) || [];
     if (faltantes.length) { mostrarDialogoMaterialesBloqueado(faltantes); return; }
@@ -771,6 +811,7 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
     entrega.value = "";
     $("#campo-entrega").removeAttribute("data-invalido");
     $("[data-dlg-faltantes]", dlg).hidden = true;
+    pintarMaterialesManuales(dlg, (await TD.api.materiales_manuales_pendientes(cot.numero)) || []);
 
     const revisar = () => { btnOk.disabled = !(entrega.value && ingreso.value); };
     revisar();
@@ -786,7 +827,8 @@ dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
     btnOk.onclick = async () => {
       if (!entrega.value) { $("#campo-entrega").setAttribute("data-invalido", ""); entrega.focus(); return; }
       btnOk.disabled = true;
-      const r = (await TD.api.aprobar_cotizacion(cot.numero, ingreso.value, entrega.value)) || {};
+      const consumosManuales = leerConsumosManuales(dlg);
+      const r = (await TD.api.aprobar_cotizacion(cot.numero, ingreso.value, entrega.value, consumosManuales)) || {};
       btnOk.disabled = false;
       if (r.ok) { dlg.close(); return; }
 
