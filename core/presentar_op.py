@@ -21,15 +21,19 @@ from core.repositorio import TEXTILES_ANCHOS, ESTRUCTURAS_VALORES
 
 RUTA_PLANTILLA = RECURSOS / "plantilla_op.html"
 
-# Márgenes de costura para el corte de tela de backlight — mismas fórmulas
-# que el Excel original (=SI($J$7="CAJA TERMINADA",[@ANCHO]+0.013,[@ANCHO]+0.023)).
+# Márgenes de costura para el corte de tela de backlight. La fórmula es la misma
+# del Excel original (=SI($J$7="CAJA TERMINADA",[@ANCHO]+0.013,[@ANCHO]+0.023))
+# pero los VALORES ya no: desde 2026-10-01 son 1,5 y 2,5 cm (antes 1,3 y 2,3) por
+# pedido de Bruno. Si alguna vez se vuelve a generar el Excel de OP, su fórmula
+# interna sigue con los valores viejos — ver excel/generador_documentos.py, que
+# solo escribe J7 y no toca la fórmula.
 # "TerminacionesCaja" se guarda POR PRODUCTO (switch en el panel de backlight de
 # nueva-cotizacion.html), no por OP: una misma OP puede mezclar cajas ya armadas
 # con cajas que hay que montar. En la versión Tkinter era un valor único por
 # cotización (vivía en el formulario del cliente) — las OPs guardadas con ese
 # esquema se siguen leyendo, ver _terminaciones_caja_de.
-_MARGEN_CAJA_TERMINADA = 0.013
-_MARGEN_AREA_VISUAL    = 0.023
+_MARGEN_CAJA_TERMINADA = 0.015
+_MARGEN_AREA_VISUAL    = 0.025
 
 _ETIQUETA_TERMINACIONES_CAJA = {
     "CAJA TERMINADA": "Caja terminada",
@@ -38,8 +42,8 @@ _ETIQUETA_TERMINACIONES_CAJA = {
 
 
 def _margen_corte(terminaciones_caja: str) -> float:
-    """Margen de costura que se le suma a cada medida: 1,3 cm si la caja viene
-    terminada, 2,3 cm si lo que se midió es el área visual (hay que envolver más
+    """Margen de costura que se le suma a cada medida: 1,5 cm si la caja viene
+    terminada, 2,5 cm si lo que se midió es el área visual (hay que envolver más
     perfil). Cualquier otro valor cae a área visual, que es el margen más
     grande: ante la duda, sobra tela en vez de faltar."""
     return _MARGEN_CAJA_TERMINADA if terminaciones_caja == "CAJA TERMINADA" else _MARGEN_AREA_VISUAL
@@ -52,16 +56,28 @@ def _corte(medida: float, terminaciones_caja: str) -> float:
 
 
 def _terminaciones_caja_de(p: dict, op_terminaciones_caja: str) -> str:
-    """El valor que corresponde a ESTE producto. Primero el del producto (lo que
+    """El valor que corresponde a ESTE producto.
+
+    Si el producto lleva caja NUESTRA (p["Caja"] es un dict con el perfil), el
+    margen es siempre el de caja terminada, sin mirar lo guardado: el ancho×alto
+    cotizado ES la caja, porque de ahí sale el cálculo del perfil (decisión de
+    Bruno, 2026-10-01 — en la pantalla el switch ni se muestra en ese caso, ver
+    aplicarTipo en nueva-cotizacion.html). Se decide también acá, y no solo al
+    guardar, porque esto es lo que el taller corta: una OP guardada con un valor
+    que ya no corresponde no debe poder cortarse 1 cm de más.
+
+    Si no, manda lo que eligió el usuario: primero el valor del producto (lo que
     guardan las cotizaciones desde 2026-10-01), después el de la OP completa
     (esquema viejo, un solo valor para todos los productos) y por último el
     default — así una OP vieja se reimprime con el mismo margen con el que se
-    imprimió la primera vez, y una nueva respeta lo que se eligió por producto."""
+    imprimió la primera vez."""
+    if isinstance(p.get("Caja"), dict):
+        return "CAJA TERMINADA"
     return p.get("TerminacionesCaja") or op_terminaciones_caja or "CAJA TERMINADA"
 
 
 def _fmt_margen_cm(terminaciones_caja: str) -> str:
-    """"(+2,3 cms)" — el margen que se le sumó a las medidas, para poder leerlo
+    """"(+2,5 cms)" — el margen que se le sumó a las medidas, para poder leerlo
     al lado del número de corte sin tener que saberse la fórmula de memoria
     (pedido de Bruno, 2026-10-01)."""
     cm = _margen_corte(terminaciones_caja) * 100
@@ -146,8 +162,13 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         # Qué se midió (caja terminada vs área visual) va en la línea de detalle
         # del producto, no escondido en una sub-línea: es lo que decide el corte
         # de TODA la pieza, y el taller tiene que poder verlo sin buscarlo
-        # (pedido de Bruno, 2026-10-01).
-        detalle = f"{detalle} · {etiqueta_tc}" if detalle else etiqueta_tc
+        # (pedido de Bruno, 2026-10-01). Solo se rotula cuando la caja NO es
+        # nuestra: ahí hubo una elección que comunicar. Con perfil propio el
+        # margen es siempre el de caja terminada (ver _terminaciones_caja en
+        # ui/api_cotizacion.py), así que el rótulo no informaría nada — el
+        # margen igual se imprime más abajo, que es lo que el que corta necesita.
+        if not con_caja:
+            detalle = f"{detalle} · {etiqueta_tc}" if detalle else etiqueta_tc
         extras_html = ""
         corte_ancho = _fmt_medida(_corte(p.get("Ancho", 0), tc))
         corte_alto  = _fmt_medida(_corte(p.get("Alto", 0), tc))

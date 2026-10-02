@@ -125,6 +125,17 @@ def _empaquetar_caja(tabla: dict, perfil: str) -> dict:
     }
 
 
+def _terminaciones_caja(perfil: str, elegido) -> str:
+    """Qué medida entregó el cliente, para el margen de corte de la tela (ver
+    core.presentar_op._corte). Con perfil nuestro no es una pregunta: el ancho×
+    alto cotizado es la caja terminada. Sin perfil manda lo que eligió el
+    usuario, y cualquier valor que no sea de los dos conocidos cae al default."""
+    if perfil != SIN_CAJA:
+        return "CAJA TERMINADA"
+    elegido = (elegido or "").strip().upper()
+    return elegido if elegido in ("CAJA TERMINADA", "AREA VISUAL") else "CAJA TERMINADA"
+
+
 def _producto_a_interno(p: dict) -> dict:
     """Convierte un producto del frontend (p) al esquema interno que usan
     core.precios.costo_producto / core.repositorio_cotizaciones.
@@ -156,7 +167,15 @@ def _producto_a_interno(p: dict) -> dict:
             # en el frontend y no llegaba nunca al JSON, así que elegir "Área
             # visual" no hacía nada y la OP siempre se imprimía con el margen
             # de caja terminada (reporte de planta: "sigue sumando 1,3 cms").
-            "terminaciones_caja": (p.get("terminaciones_caja") or "CAJA TERMINADA"),
+            #
+            # Con perfil nuestro el valor se FUERZA a caja terminada: el switch
+            # ni se muestra (solo aplica cuando la caja no la armamos nosotros,
+            # ver aplicarTipo en nueva-cotizacion.html), y el ancho×alto cotizado
+            # ES la caja. Se decide acá además de en la pantalla porque esto es
+            # lo que queda guardado: un estado viejo del frontend, o un producto
+            # retomado de un borrador, no deben poder meter un margen que ya no
+            # corresponde.
+            "terminaciones_caja": _terminaciones_caja(perfil, p.get("terminaciones_caja")),
         }
 
     return {

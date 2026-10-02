@@ -254,6 +254,12 @@
    sobresale parejo arriba y abajo — su propio centro cae en el centro de
    esa franja, que es el de los selects. */
 .caja-bl { display: grid; gap: var(--e-3); }
+/* El bloque sin perfil solo tiene el switch de terminaciones de caja: no lleva
+   la franja de 3rem de .campo--switch porque acá su etiqueta es una pregunta de
+   verdad ("¿Qué medida entregó el cliente?"), no el &nbsp; que alinea el switch
+   con los selects de al lado. */
+.sin-caja-bl { display: grid; gap: var(--e-3); }
+.sin-caja-bl .campo--switch { grid-template-rows: auto auto auto; align-items: start; }
 
 /* Las dos listas aditivas, una al lado de la otra: cada una lista lo agregado
    hacia abajo, y juntas ocupan la mitad del alto que ocupaban apiladas. */
@@ -629,7 +635,7 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
               </div>
             </div>
             <div class="caja-bl" data-caja hidden>
-              <div class="fila-prod">
+              <div class="fila fila--2">
                 <div class="campo">
                   <label class="campo__etiqueta">Luces 1</label>
                   <select class="entrada" data-c="luces_1"></select>
@@ -638,13 +644,22 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
                   <label class="campo__etiqueta">Luces 2</label>
                   <select class="entrada" data-c="luces_2"></select>
                 </div>
-                <div class="campo campo--switch">
-                  <span class="campo__etiqueta" aria-hidden="true">&nbsp;</span>
-                  <div class="segmento segmento--vertical" role="group" aria-label="Terminaciones de caja">
-                    <input type="radio" data-tc="CAJA TERMINADA"><label data-lbl-tc="CAJA TERMINADA">Caja terminada</label>
-                    <input type="radio" data-tc="AREA VISUAL"><label data-lbl-tc="AREA VISUAL">Área visual</label>
-                  </div>
+              </div>
+            </div>
+            <!-- Terminaciones de caja: SOLO cuando NO hay perfil (pedido de
+                 Bruno, 2026-10-01). El switch dice qué midió el cliente, y eso
+                 solo es una pregunta cuando la caja no la armamos nosotros: si
+                 lleva perfil nuestro, el ancho×alto cotizado ES la caja (de ahí
+                 sale el cálculo del perfil), así que no hay ambigüedad y el
+                 margen queda fijo en caja terminada (ver aplicarTipo). -->
+            <div class="sin-caja-bl" data-sin-caja hidden>
+              <div class="campo campo--switch">
+                <span class="campo__etiqueta">¿Qué medida entregó el cliente?</span>
+                <div class="segmento" role="group" aria-label="Terminaciones de caja">
+                  <input type="radio" data-tc="CAJA TERMINADA"><label data-lbl-tc="CAJA TERMINADA">Caja terminada</label>
+                  <input type="radio" data-tc="AREA VISUAL"><label data-lbl-tc="AREA VISUAL">Área visual</label>
                 </div>
+                <span class="campo__ayuda">Define el margen de costura del corte: caja terminada +1,5 cm, área visual +2,5 cm.</span>
               </div>
             </div>
           </div>
@@ -1096,11 +1111,23 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
     return nodo;
   }
 
-  /* Muestra/oculta los bloques según el tipo y el perfil elegido. */
+  /* Muestra/oculta los bloques según el tipo y el perfil elegido.
+
+     Los dos bloques de backlight son excluyentes: con perfil se piden las luces,
+     sin perfil se pregunta qué medida entregó el cliente (ver el markup). Y al
+     elegir un perfil el margen se FUERZA a caja terminada: el switch deja de
+     verse, así que dejarle un "área visual" viejo adentro haría que dos
+     productos idénticos se cortaran distinto sin que se vea por qué. */
   function aplicarTipo(raiz, p) {
     $$("[data-solo]", raiz).forEach((g) => { g.hidden = g.dataset.solo !== p.tipo; });
-    const caja = $("[data-caja]", raiz);
-    caja.hidden = p.tipo !== "backlight" || p.perfil === "Sin caja";
+    const esBacklight = p.tipo === "backlight";
+    const conPerfil = esBacklight && p.perfil !== "Sin caja";
+    $("[data-caja]", raiz).hidden = !conPerfil;
+    $("[data-sin-caja]", raiz).hidden = !esBacklight || conPerfil;
+    if (conPerfil && p.terminaciones_caja !== "CAJA TERMINADA") {
+      p.terminaciones_caja = "CAJA TERMINADA";
+      $$("[data-tc]", raiz).forEach((r) => { r.checked = r.dataset.tc === p.terminaciones_caja; });
+    }
   }
 
   function pintarAditiva(cont, p, clave) {
