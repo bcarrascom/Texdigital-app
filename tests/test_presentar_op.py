@@ -59,18 +59,18 @@ def _op_normal(numero):
 
 class TestCorte(unittest.TestCase):
 
-    def test_caja_terminada_suma_13mm(self):
-        self.assertAlmostEqual(_corte(1.48, "CAJA TERMINADA"), 1.493)
+    def test_caja_terminada_suma_15mm(self):
+        self.assertAlmostEqual(_corte(1.48, "CAJA TERMINADA"), 1.495)
 
-    def test_area_visual_suma_23mm(self):
-        self.assertAlmostEqual(_corte(1.48, "AREA VISUAL"), 1.503)
+    def test_area_visual_suma_25mm(self):
+        self.assertAlmostEqual(_corte(1.48, "AREA VISUAL"), 1.505)
 
     def test_valor_desconocido_se_trata_como_area_visual(self):
         # Cualquier valor que no sea exactamente "CAJA TERMINADA" (dato
         # viejo/corrupto, o el default del formulario si cambiara) cae al
         # margen más grande — más seguro que asumir el más chico.
-        self.assertAlmostEqual(_corte(1.48, ""), 1.503)
-        self.assertAlmostEqual(_corte(1.48, "algo raro"), 1.503)
+        self.assertAlmostEqual(_corte(1.48, ""), 1.505)
+        self.assertAlmostEqual(_corte(1.48, "algo raro"), 1.505)
 
 
 class TestExcedente(unittest.TestCase):
@@ -111,15 +111,15 @@ class TestGenerarHtml(unittest.TestCase):
         html = ruta.read_text(encoding="utf-8")
         self.assertIn("Corte ancho", html)
         self.assertIn("Corte alto", html)
-        self.assertIn("1,493 m", html)  # 1.48 + 0.013
-        self.assertIn("2,263 m", html)  # 2.25 + 0.013
+        self.assertIn("1,495 m", html)  # 1.48 + 0.015
+        self.assertIn("2,265 m", html)  # 2.25 + 0.015
 
     def test_backlight_area_visual_usa_el_margen_mas_grande(self):
         from core.presentar_op import generar_html
         ruta = generar_html(_op_backlight(9002, "AREA VISUAL", ancho=1.48, alto=2.25))
         html = ruta.read_text(encoding="utf-8")
-        self.assertIn("1,503 m", html)  # 1.48 + 0.023
-        self.assertIn("2,273 m", html)  # 2.25 + 0.023
+        self.assertIn("1,505 m", html)  # 1.48 + 0.025
+        self.assertIn("2,275 m", html)  # 2.25 + 0.025
 
     def test_backlight_sin_terminaciones_caja_guardado_usa_default(self):
         # OP vieja, guardada antes de este campo existir — no debe reventar,
@@ -130,7 +130,7 @@ class TestGenerarHtml(unittest.TestCase):
         del op["TerminacionesCaja"]
         ruta = generar_html(op)
         html = ruta.read_text(encoding="utf-8")
-        self.assertIn("1,493 m", html)
+        self.assertIn("1,495 m", html)
 
     def test_no_backlight_no_muestra_columnas_de_corte(self):
         from core.presentar_op import generar_html
@@ -220,7 +220,7 @@ class TestGenerarHtml(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# "Área visual" de verdad suma 2,3 cm (2026-10-01). El switch existía en la
+# "Área visual" de verdad suma su margen (2026-10-01; desde esa fecha 2,5 cm). El switch existía en la
 # pantalla desde la UI HTML, pero el campo se quedaba en el frontend: no lo
 # mapeaba _producto_a_interno, no lo guardaba mapear_producto, y presentar_op
 # caía siempre al default. Reporte de planta: "sigue sumando 1.3 cms como si
@@ -282,26 +282,26 @@ class TestMargenEnElDocumento(_ConCarpetaTemporal):
         del op["TerminacionesCaja"]
         op["productos"] = [_producto_backlight_json("AREA VISUAL", ancho=1.48, alto=2.25)]
         html = self._html(op)
-        self.assertIn("1,503", html)   # 1,48 + 0,023
-        self.assertIn("2,273", html)   # 2,25 + 0,023
-        self.assertNotIn("1,493", html)  # el margen de caja terminada NO aparece
+        self.assertIn("1,505", html)   # 1,48 + 0,025
+        self.assertIn("2,275", html)   # 2,25 + 0,025
+        self.assertNotIn("1,495", html)  # el margen de caja terminada NO aparece
 
     def test_caja_terminada_sigue_sumando_13cm(self):
         op = _op_backlight(9102)
         del op["TerminacionesCaja"]
         op["productos"] = [_producto_backlight_json("CAJA TERMINADA", ancho=1.48, alto=2.25)]
         html = self._html(op)
-        self.assertIn("1,493", html)
-        self.assertIn("2,263", html)
+        self.assertIn("1,495", html)
+        self.assertIn("2,265", html)
 
     def test_el_margen_se_escribe_bajo_las_medidas(self):
         op = _op_backlight(9103)
         del op["TerminacionesCaja"]
         op["productos"] = [_producto_backlight_json("AREA VISUAL")]
         html = self._html(op)
-        self.assertIn("(+2,3 cms)", html)
+        self.assertIn("(+2,5 cms)", html)
         # En gris y chico: la misma clase que ya usa el excedente.
-        self.assertIn('<div class="prod-obs">(+2,3 cms)</div>', html)
+        self.assertIn('<div class="prod-obs">(+2,5 cms)</div>', html)
         # Sin la palabra "Corte": las columnas de al lado ya lo dicen.
         self.assertNotIn("Corte (+", html)
 
@@ -311,7 +311,7 @@ class TestMargenEnElDocumento(_ConCarpetaTemporal):
         op = _op_backlight(9104)
         del op["TerminacionesCaja"]
         op["productos"] = [_producto_backlight_json("CAJA TERMINADA")]
-        self.assertIn("(+1,3 cms)", self._html(op))
+        self.assertIn("(+1,5 cms)", self._html(op))
 
     def test_el_producto_queda_marcado_como_area_visual(self):
         op = _op_backlight(9105)
@@ -334,10 +334,10 @@ class TestMargenEnElDocumento(_ConCarpetaTemporal):
             _producto_backlight_json("AREA VISUAL", ancho=1.48, alto=2.25),
         ]
         html = self._html(op)
-        self.assertIn("1,493", html)            # el de caja terminada
-        self.assertIn("1,503", html)            # el de área visual
-        self.assertIn("(+1,3 cms)", html)
-        self.assertIn("(+2,3 cms)", html)
+        self.assertIn("1,495", html)            # el de caja terminada
+        self.assertIn("1,505", html)            # el de área visual
+        self.assertIn("(+1,5 cms)", html)
+        self.assertIn("(+2,5 cms)", html)
 
 
 class TestTerminacionesCajaViajaEnLaCadena(unittest.TestCase):
@@ -506,6 +506,139 @@ class TestRecuadroEnElDocumento(_ConCarpetaTemporal):
         # El número viejo ya no se imprime: ahora el recuadro es para escribirlo
         # a mano, y dos números (uno impreso y uno a lápiz) se contradicen.
         self.assertNotIn("A-4471", html)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# El switch de terminaciones de caja solo aplica cuando la caja NO es nuestra
+# (decisión de Bruno, 2026-10-01). Con perfil propio el ancho×alto cotizado ES la
+# caja —de ahí sale el cálculo del perfil— así que no hay nada que preguntar y el
+# margen queda fijo en caja terminada. En la pantalla el switch se muestra solo
+# sin perfil (ver aplicarTipo en nueva-cotizacion.html); acá se cubre que el dato
+# GUARDADO respete lo mismo, que es lo que después corta el taller.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTerminacionesCajaSegunPerfil(unittest.TestCase):
+
+    def test_con_perfil_se_fuerza_caja_terminada(self):
+        from ui.api_cotizacion import _terminaciones_caja
+        self.assertEqual(_terminaciones_caja("PERFIL 80 MM", "AREA VISUAL"), "CAJA TERMINADA")
+
+    def test_sin_perfil_respeta_lo_elegido(self):
+        from ui.api_cotizacion import _terminaciones_caja, SIN_CAJA
+        self.assertEqual(_terminaciones_caja(SIN_CAJA, "AREA VISUAL"), "AREA VISUAL")
+        self.assertEqual(_terminaciones_caja(SIN_CAJA, "CAJA TERMINADA"), "CAJA TERMINADA")
+
+    def test_sin_perfil_sin_elegir_cae_al_default(self):
+        from ui.api_cotizacion import _terminaciones_caja, SIN_CAJA
+        self.assertEqual(_terminaciones_caja(SIN_CAJA, None), "CAJA TERMINADA")
+        self.assertEqual(_terminaciones_caja(SIN_CAJA, ""), "CAJA TERMINADA")
+
+    def test_valor_desconocido_cae_al_default(self):
+        from ui.api_cotizacion import _terminaciones_caja, SIN_CAJA
+        self.assertEqual(_terminaciones_caja(SIN_CAJA, "cualquier cosa"), "CAJA TERMINADA")
+
+    def test_producto_con_perfil_se_guarda_como_caja_terminada(self):
+        # El caso que el forzado del backend protege: un estado viejo del
+        # frontend (o un borrador retomado) que trae "AREA VISUAL" junto con un
+        # perfil no debe poder meter el margen grande.
+        from ui.api_cotizacion import _producto_a_interno
+        interno = _producto_a_interno({
+            "tipo": "backlight", "tela": "Popelina 155", "perfil": "PERFIL 80 MM",
+            "luces_1": "M12", "luces_2": "sin luces",
+            "ancho": "1.48", "alto": "2.25", "cantidad": "1",
+            "terminaciones_caja": "AREA VISUAL",
+        })
+        self.assertEqual(interno["terminaciones_caja"], "CAJA TERMINADA")
+
+    def test_producto_sin_perfil_conserva_area_visual(self):
+        from ui.api_cotizacion import _producto_a_interno
+        interno = _producto_a_interno({
+            "tipo": "backlight", "tela": "Popelina 155", "perfil": "Sin caja",
+            "ancho": "1.48", "alto": "2.25", "cantidad": "1",
+            "terminaciones_caja": "AREA VISUAL",
+        })
+        self.assertEqual(interno["terminaciones_caja"], "AREA VISUAL")
+
+
+class TestCajaNuestraFuerzaElMargen(unittest.TestCase):
+    """Un producto con caja nuestra se corta siempre con el margen de caja
+    terminada, sin importar lo que diga el JSON guardado: el ancho×alto cotizado
+    ES la caja. La regla vive en el backend al guardar Y acá al imprimir, porque
+    esto es lo que el taller corta."""
+
+    def _con_caja(self, tc):
+        return {"Tela": "Popelina 155", "Caja": {"perfil": "PERFIL 80 MM"},
+                "Ancho": 1.48, "Alto": 2.25, "Cantidad": 1, "TerminacionesCaja": tc}
+
+    def test_ignora_un_area_visual_guardado(self):
+        self.assertEqual(_terminaciones_caja_de(self._con_caja("AREA VISUAL"), ""),
+                          "CAJA TERMINADA")
+
+    def test_ignora_tambien_el_valor_de_la_op_completa(self):
+        p = {"Tela": "Popelina 155", "Caja": {"perfil": "PERFIL 80 MM"},
+             "Ancho": 1.48, "Alto": 2.25, "Cantidad": 1}
+        self.assertEqual(_terminaciones_caja_de(p, "AREA VISUAL"), "CAJA TERMINADA")
+
+    def test_el_corte_sale_con_el_margen_chico(self):
+        tc = _terminaciones_caja_de(self._con_caja("AREA VISUAL"), "")
+        self.assertAlmostEqual(_corte(1.48, tc), 1.495)
+
+    def test_sin_caja_no_se_fuerza(self):
+        p = {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 1.48,
+             "Alto": 2.25, "Cantidad": 1, "TerminacionesCaja": "AREA VISUAL"}
+        self.assertEqual(_terminaciones_caja_de(p, ""), "AREA VISUAL")
+        self.assertAlmostEqual(_corte(1.48, _terminaciones_caja_de(p, "")), 1.505)
+
+
+class TestRotuloSegunCaja(_ConCarpetaTemporal):
+    """En el impreso, el rótulo "Caja terminada"/"Área visual" solo va cuando la
+    caja NO es nuestra: ahí hubo una elección que comunicar. El margen en gris se
+    imprime siempre — es lo que el que corta necesita."""
+
+    def _fila(self, op):
+        from core.presentar_op import generar_html
+        html = Path(generar_html(op)).read_text(encoding="utf-8")
+        return html[html.index("<tbody>"):html.index("</tbody>")]
+
+    def _op(self, numero, caja, tc):
+        op = _op_backlight(numero)
+        del op["TerminacionesCaja"]
+        op["productos"] = [{
+            "Tela": "Popelina 155", "Caja": caja,
+            "Ancho": 1.48, "Alto": 2.25, "Cantidad": 1, "Tema": "", "Obs": "",
+            "TerminacionesCaja": tc,
+        }]
+        return op
+
+    def test_con_caja_nuestra_no_se_rotula(self):
+        fila = self._fila(self._op(9301, {"perfil": "PERFIL 80 MM"}, "CAJA TERMINADA"))
+        self.assertIn("PERFIL 80 MM", fila)
+        self.assertNotIn("Caja terminada", fila)
+        self.assertNotIn("Área visual", fila)
+
+    def test_con_caja_nuestra_el_margen_igual_se_imprime(self):
+        fila = self._fila(self._op(9302, {"perfil": "PERFIL 80 MM"}, "CAJA TERMINADA"))
+        self.assertIn("(+1,5 cms)", fila)
+        self.assertIn("1,495", fila)
+
+    def test_con_caja_nuestra_un_area_visual_guardado_no_cambia_el_corte(self):
+        # Dato inconsistente (perfil + área visual): al imprimir se corta con el
+        # margen que corresponde, no con el que quedó guardado.
+        fila = self._fila(self._op(9305, {"perfil": "PERFIL 80 MM"}, "AREA VISUAL"))
+        self.assertIn("(+1,5 cms)", fila)
+        self.assertIn("1,495", fila)
+        self.assertNotIn("1,505", fila)
+
+    def test_sin_caja_si_se_rotula(self):
+        fila = self._fila(self._op(9303, "Sin caja", "AREA VISUAL"))
+        self.assertIn("Área visual", fila)
+        self.assertIn("(+2,5 cms)", fila)
+        self.assertIn("1,505", fila)
+
+    def test_sin_caja_con_caja_terminada_tambien_se_rotula(self):
+        fila = self._fila(self._op(9304, "Sin caja", "CAJA TERMINADA"))
+        self.assertIn("Caja terminada", fila)
+        self.assertIn("(+1,5 cms)", fila)
 
 
 if __name__ == "__main__":

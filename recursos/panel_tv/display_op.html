@@ -377,12 +377,17 @@ const fmt = n => (Math.round(n*100)/100).toLocaleString("es-CL");
    existiera no lo traen: en los dos casos se cae a "CAJA TERMINADA", que es el
    margen con el que esas OPs se imprimieron en su momento (ver
    _terminaciones_caja_de en core/presentar_op.py). */
-const MARGEN_CAJA_TERMINADA = 0.013, MARGEN_AREA_VISUAL = 0.023;
+const MARGEN_CAJA_TERMINADA = 0.015, MARGEN_AREA_VISUAL = 0.025;
 const ETIQUETA_TERMINACIONES_CAJA = {
   "CAJA TERMINADA": "Caja terminada",
   "AREA VISUAL":    "Área visual",
 };
 function terminacionesCajaDe(p, op){
+  /* Con caja NUESTRA (p.Caja es el objeto con el perfil) el margen es siempre el
+     de caja terminada: el ancho×alto cotizado ES la caja. Misma regla que
+     _terminaciones_caja_de en core/presentar_op.py — las dos vistas tienen que
+     dar el mismo número. */
+  if (p.Caja && typeof p.Caja === "object") return "CAJA TERMINADA";
   return p.TerminacionesCaja || (op && op.TerminacionesCaja) || "CAJA TERMINADA";
 }
 function margenCorte(terminacionesCaja){
@@ -391,7 +396,7 @@ function margenCorte(terminacionesCaja){
 function corte(medida, terminacionesCaja){
   return medida + margenCorte(terminacionesCaja);
 }
-/* "(+2,3 cms)" — el margen que se le sumó, para leerlo al lado del número de
+/* "(+2,5 cms)" — el margen que se le sumó, para leerlo al lado del número de
    corte sin saberse la fórmula de memoria (pedido de Bruno, 2026-10-01). */
 function margenCorteTexto(terminacionesCaja){
   return `(+${fmt(margenCorte(terminacionesCaja) * 100)} cms)`;
