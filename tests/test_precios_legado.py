@@ -394,6 +394,35 @@ class TestCobroPorMateriales(unittest.TestCase):
         costo = costo_producto(d, **CATALOGOS, cobro_materiales=fn)
         self.assertEqual(costo["detalle_materiales"]["Asta"]["monto"], 40000)
 
+    def test_backlight_cobra_sus_materiales_en_linea_propia(self):
+        # Un backlight no tiene línea de Estructuras (su desglose es impresión +
+        # caja), así que los materiales que gasta —la silicona de los 4 bordes—
+        # van a "costo_materiales" y suman al total (pedido de Bruno, 2026-10-01).
+        d = {"tela": "TelaTest", "caja": "Sin caja", "ancho": 1.48, "alto": 2.25,
+             "cantidad": 3, "tema": "", "obs": ""}
+        sin = costo_producto(d, textiles_valores=TEXTILES_VALORES,
+                             textiles_anchos=TEXTILES_ANCHOS)
+        con = costo_producto(d, textiles_valores=TEXTILES_VALORES,
+                             textiles_anchos=TEXTILES_ANCHOS,
+                             cobro_materiales=self._cobro(
+                                 materiales_producto={"Silicona": 69378.0}))
+        self.assertEqual(sin["costo_materiales"], 0.0)
+        self.assertEqual(con["costo_materiales"], 69378.0)
+        self.assertEqual(con["total"], sin["total"] + 69378.0)
+        # No se cuela en estructuras, que en backlight no existe.
+        self.assertEqual(con["costo_estructuras"], 0.0)
+        self.assertEqual(con["detalle_estructuras"], {})
+
+    def test_en_los_estandar_costo_materiales_queda_en_cero(self):
+        # Ahí ya está sumado dentro de costo_estructuras: contarlo en las dos
+        # claves lo duplicaría para quien sume el desglose.
+        d = _producto(estructuras=["Fleje plastico"], cantidad=1)
+        costo = costo_producto(d, **CATALOGOS,
+                               cobro_materiales=self._cobro(
+                                   materiales_producto={"Ojalillo": 2000.0}))
+        self.assertEqual(costo["costo_materiales"], 0.0)
+        self.assertEqual(costo["detalle_estructuras"]["Ojalillo"], 2000.0)
+
     def test_tambien_pisa_en_el_modelo_aditivo(self):
         # El modelo "aditivo" (Neo) ya no es el default, pero sigue andando —
         # no debe quedarse cobrando por catálogo algo que el legado ya cobra

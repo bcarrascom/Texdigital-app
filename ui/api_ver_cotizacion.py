@@ -20,7 +20,7 @@ from core.precios import costo_producto, costo_cotizacion, ml_o_area_facturable_
 from core.presentar_cotizacion import generar_html
 from core.repositorio_inventario import calcular_faltantes, consumir_para_op
 from core.repositorio_materiales import (
-    materiales_para_producto, kwargs_precios,
+    materiales_para_producto, kwargs_precios, nombre_producto_para_consumo,
     consumir_para_op as consumir_materiales_para_op,
 )
 from ui.dialogo_aprobar import promover_a_op
@@ -199,14 +199,22 @@ class ApiVerCotizacion:
         Deduplicado por id: un material "manual" que aplica a varios
         productos de la misma cotización se pide UNA sola vez (mismo
         criterio que consumir_para_op de materiales — un monto total por
-        OP, no uno por producto)."""
+        OP, no uno por producto).
+
+        Con el módulo Inventario apagado devuelve [] solo: materiales_para_producto
+        ya es inerte ahí (ver core.repositorio_materiales._inventario_habilitado),
+        así que el diálogo de aprobar no pide ningún monto."""
         datos = cargar_cotizacion(int(numero))
         if datos is None:
             return []
         productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
         vistos: dict[str, dict] = {}
         for p in productos_internos:
-            nombre_producto = p.get("producto", "")
+            # nombre_producto_para_consumo, no p["producto"]: un backlight no
+            # tiene producto de catálogo y responde al nombre reservado
+            # "Backlight" (ver core.repositorio_materiales). Con el nombre crudo,
+            # un material "manual" asociado a todos los backlight nunca se pedía.
+            nombre_producto = nombre_producto_para_consumo(p)
             nombres_estructuras = list(p.get("estructuras", []) or [])
             for m in materiales_para_producto(nombre_producto, nombres_estructuras):
                 if m.get("tipo_consumo") == "manual" and m["id"] not in vistos:

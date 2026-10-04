@@ -79,7 +79,39 @@ from pathlib import Path
 from core.rutas import DATOS, _detectar_dropbox
 
 TIPOS_VALIDOS = ("unidad", "metro")
-TIPOS_CONSUMO_VALIDOS = ("fijo_por_producto", "metro_lineal_salto", "metro_lineal_directo", "manual")
+TIPOS_CONSUMO_VALIDOS = (
+    "fijo_por_producto", "metro_lineal_salto", "metro_lineal_directo", "perimetro", "manual",
+)
+
+# Nombre de producto reservado para asociar un material a TODOS los backlight
+# (pedido de Bruno, 2026-10-01). "Backlight" no es un producto del catálogo sino
+# un TIPO de producto —no tiene entrada en recursos/productos.json, así que no
+# había ningún nombre al que asociarle la silicona, que se aplica a todos— por eso
+# esta constante se ofrece a mano en la lista de productos asociables (ver
+# ui/api_inventario.py::cargar_productos_catalogo) y matchea cualquier producto
+# backlight, con caja o sin caja. Está verificado que ningún producto real del
+# catálogo se llama así.
+PRODUCTO_BACKLIGHT = "Backlight"
+
+
+def _inventario_habilitado() -> bool:
+    """True salvo que core.config.MODULOS_HABILITADOS["inventario"] esté en False
+    — mismo helper y mismo criterio que core.repositorio_inventario (rollos).
+
+    Con el módulo apagado, TODO lo que cruza de Inventario a Cotizaciones/OPs
+    queda completamente inerte: no se descuenta stock, no se cuentan ventas ni
+    ganancias, no se piden consumos manuales al aprobar, la OP no lista
+    materiales, y las cotizaciones cobran por el catálogo estático y no por los
+    materiales. Un módulo se deshabilita porque todavía no está listo, y en ese
+    estado no puede ensuciar datos ni mover precios de los módulos que sí salieron
+    (pedido de Bruno, 2026-10-01: "aún cabe la posibilidad de un release anterior
+    de emergencia, por lo que DEBE funcionar bien con el módulo inhabilitado").
+
+    Se chequea ACÁ ADENTRO de cada función que cruza de módulo (no solo del lado
+    de quien llama, ni solo en la UI) para que quede a prueba de olvidos:
+    cualquier caller nuevo hereda la protección gratis."""
+    from core import config as _config
+    return _config.MODULOS_HABILITADOS.get("inventario", True)
 
 
 def _hoy_dma() -> str:
@@ -163,10 +195,18 @@ def _reconstruir_indice_consumo() -> None:
 
 def materiales_para_producto(nombre_producto: str, nombres_estructuras: list[str] | None = None) -> list[dict]:
     """Materiales (con tipo_consumo, no solo el nombre) que aplican a un
-    producto — por su propio nombre (catálogo Productos) y/o por
-    cualquiera de sus Estructuras — vía el índice invertido, sin escanear
-    todos los materiales. Deduplicado: un material asociado tanto al
-    producto como a una de sus estructuras aparece una sola vez."""
+    producto — por su propio nombre (catálogo Productos, o el nombre reservado
+    PRODUCTO_BACKLIGHT) y/o por cualquiera de sus Estructuras — vía el índice
+    invertido, sin escanear todos los materiales. Deduplicado: un material
+    asociado tanto al producto como a una de sus estructuras aparece una sola
+    vez. Quien llama resuelve el nombre con nombre_producto_para_consumo.
+
+    Con el módulo Inventario apagado devuelve [] (ver _inventario_habilitado):
+    es la consulta de la que cuelga TODO lo que materiales le hace a una
+    cotización o a una OP, así que apagarla acá deja inerte la cadena completa
+    aunque alguien agregue un camino nuevo más adelante."""
+    if not _inventario_habilitado():
+        return []
     indice = _leer_indice()
     ids: list[str] = []
     for id_ in indice.get("productos", {}).get(nombre_producto, []):
@@ -396,7 +436,7 @@ def ingresar_material(
     costo_total: float | None = None, costo_unitario: float | None = None,
     tipo_consumo: str | None = None, consumo_parametros: dict | None = None,
     productos_asociados: list[str] | None = None, estructuras_asociadas: list[str] | None = None,
-    fecha: str | None = None,
+    fecha: str | None = None, valor: float | None = None,
 ) -> dict:
     """La acción única del diálogo "+" de materiales (pedido de Bruno:
     elegir el material con autocompletado, cantidad, proveedor opcional,
@@ -419,13 +459,18 @@ def ingresar_material(
     `fecha` (dd/mm/aaaa) es HOY salvo que se pase explícito — ver
     docstring de _agregar_historial.
 
-    El "valor" (precio de VENTA, lo que cobra una cotización) NO lo toca
-    esta función NUNCA — ni siquiera en un material recién creado. Antes se
-    sembraba con costo_unitario como "mejor estimación disponible", pero
-    desde el modelo económico de 2026-10-01 eso sería cobrar exactamente lo
-    que costó (ganancia 0) y además ensuciaría las ganancias con un precio
-    que nadie decidió: ponerlo es una decisión comercial explícita (ver
-    ajustar_valor), no un efecto colateral de una compra.
+    `valor` (precio de VENTA) solo se aplica si el material es NUEVO, igual que
+    `tipo` y las asociaciones: desde 2026-10-01 el formulario de alta lo pide
+    obligatorio (pedido de Bruno), así que un material nace con su precio puesto
+    y queda registrado en el historial como cualquier cambio de precio (entrada
+    tipo="precio", ver _fijar_valor_venta). En un material que YA EXISTE no se
+    toca: un restock no es el lugar para cambiar el precio de venta, para eso
+    está el panel de ajuste.
+
+    Lo que NO se hace nunca es DERIVAR el precio de venta del costo. Antes se
+    sembraba con costo_unitario como "mejor estimación disponible", pero eso sería
+    cobrar exactamente lo que costó (ganancia 0) y ensuciaría las ganancias con un
+    precio que nadie decidió: ponerlo es una decisión comercial explícita.
 
     Lo que SÍ actualiza cada compra es el lado del costo (pedido de Bruno:
     "los gastos no se ingresan manualmente, sino que se cuentan al
@@ -483,6 +528,11 @@ def ingresar_material(
         proveedor=proveedor, costo_total=costo_total, costo_unitario=costo_unitario,
         gasto_unitario_anterior=gasto_unitario_anterior, fecha=fecha,
     )
+    # El precio de venta se registra DESPUÉS del restock: así el historial se lee
+    # en el orden en que pasaron las cosas (entró el stock, se le puso precio) y
+    # la entrada de precio guarda la cantidad real, no el 0 de antes del ingreso.
+    if es_nuevo and valor is not None:
+        _fijar_valor_venta(m, float(valor), "precio de venta inicial")
     _escribir_material(m)
     if es_nuevo and (m["productos_asociados"] or m["estructuras_asociadas"]):
         _reconstruir_indice_consumo()
@@ -669,6 +719,24 @@ def eliminar_material(id_: str) -> bool:
     return True
 
 
+def es_backlight(producto_interno: dict) -> bool:
+    """Si este producto interno es backlight. Se mira por la CLAVE "tela" (los
+    estándar traen "textil") — mismo criterio estructural que usan
+    core.repositorio_inventario._metros_lineales y core.precios.costo_producto,
+    para no depender de que alguien haya escrito un nombre en algún campo."""
+    return "tela" in producto_interno
+
+
+def nombre_producto_para_consumo(producto_interno: dict) -> str:
+    """El nombre con el que este producto busca materiales asociados (ver
+    materiales_para_producto). Un backlight responde al nombre reservado
+    PRODUCTO_BACKLIGHT, porque no tiene producto de catálogo propio; el resto, al
+    nombre de producto que eligió el usuario."""
+    if es_backlight(producto_interno):
+        return PRODUCTO_BACKLIGHT
+    return producto_interno.get("producto", "") or ""
+
+
 def medida_unitaria(producto_interno: dict) -> float:
     """La medida que gasta material en UNA pieza del producto: su ALTO
     físico, en metros (decisión de Bruno, 2026-10-01).
@@ -687,45 +755,80 @@ def medida_unitaria(producto_interno: dict) -> float:
 
     El margen de tensión de la tela tampoco entra (nunca entró): es tela en
     la impresora, no se le gasta de más a un adhesivo/ojal/remache."""
+    return _dimension(producto_interno, "alto")
+
+
+def _dimension(producto_interno: dict, clave: str) -> float:
     try:
-        return max(float(producto_interno.get("alto", 0.0) or 0.0), 0.0)
+        return max(float(producto_interno.get(clave, 0.0) or 0.0), 0.0)
     except (TypeError, ValueError):
         return 0.0
 
 
-def calcular_consumo(material: dict, medida: float, cantidad_producto: int) -> float:
-    """Cuánto gasta de `material` una línea de producto, según su
-    `tipo_consumo` y `consumo_parametros` (ver docstring del módulo) —
-    pedido de Bruno (2026-09-27). `medida` es la medida de UNA pieza, en
-    metros (ver medida_unitaria), y las tres fórmulas multiplican por
-    `cantidad_producto` al final:
+def perimetro_unitario(producto_interno: dict) -> float:
+    """El contorno de UNA pieza, en metros: 2 × (ancho + alto).
 
-      "fijo_por_producto"    — n × cantidad_producto (el tamaño no importa).
-      "metro_lineal_salto"   — techo(medida / paso) × n × cantidad_producto
-                                (el material se gasta en bloques enteros de
-                                `paso`: una pieza que no completa un bloque
-                                igual gasta el bloque entero).
-      "metro_lineal_directo" — medida × cantidad_producto, sin pasos.
-      "manual" o sin tipo_consumo — 0 acá (el manual se resuelve aparte,
-                                ver consumir_para_op; sin tipo_consumo el
-                                material simplemente no auto-consume)."""
+    Para los materiales que se aplican por el BORDE de la pieza y no por su
+    largo: la silicona de un backlight se pasa por los 4 lados del rectángulo,
+    así que lo que gasta no es el alto ni el área, es el perímetro (pedido de
+    Bruno, 2026-10-01 — ninguna de las fórmulas anteriores podía expresarlo).
+    Si falta una de las dos medidas devuelve 0: media pieza no tiene contorno."""
+    ancho = _dimension(producto_interno, "ancho")
+    alto = _dimension(producto_interno, "alto")
+    if ancho <= 0 or alto <= 0:
+        return 0.0
+    return 2 * (ancho + alto)
+
+
+def calcular_consumo(material: dict, producto_interno: dict) -> float:
+    """Cuánto gasta de `material` una línea de producto, según su `tipo_consumo` y
+    `consumo_parametros` (ver docstring del módulo) — pedido de Bruno
+    (2026-09-27). Recibe el producto interno completo y saca de ahí la geometría
+    que cada fórmula necesita, en lugar de una medida suelta: así agregar una
+    fórmula que mire otra dimensión no cambia la firma ni obliga a revisar a
+    quién la llama.
+
+    Todas las fórmulas son POR PIEZA y se multiplican por la cantidad al final:
+
+      "fijo_por_producto"    — n × cantidad (el tamaño no importa).
+      "metro_lineal_salto"   — techo(alto / paso) × n × cantidad: el material se
+                                gasta en bloques enteros de `paso`, y una pieza
+                                que no completa un bloque igual lo gasta entero.
+      "metro_lineal_directo" — alto × cantidad, sin tramos.
+      "perimetro"            — 2 × (ancho + alto) × n × cantidad: para lo que se
+                                aplica por el borde de la pieza (la silicona de un
+                                backlight va por los 4 lados). `n` son las
+                                pasadas; si no se carga, 1.
+      "manual" o sin tipo_consumo — 0 acá (el manual se resuelve aparte, ver
+                                consumir_para_op; sin tipo_consumo el material
+                                simplemente no auto-consume)."""
     tipo_consumo = material.get("tipo_consumo")
     parametros = material.get("consumo_parametros") or {}
+    try:
+        cantidad = int(producto_interno.get("cantidad", 0) or 0)
+    except (TypeError, ValueError):
+        cantidad = 0
 
     if tipo_consumo == "fijo_por_producto":
-        n = float(parametros.get("n", 0.0))
-        return n * cantidad_producto
+        return float(parametros.get("n", 0.0)) * cantidad
 
     if tipo_consumo == "metro_lineal_salto":
         paso = float(parametros.get("paso", 0.0))
         n = float(parametros.get("n", 0.0))
-        if paso <= 0 or medida <= 0:
+        alto = medida_unitaria(producto_interno)
+        if paso <= 0 or alto <= 0:
             return 0.0
-        bloques = math.ceil(medida / paso)
-        return bloques * n * cantidad_producto
+        return math.ceil(alto / paso) * n * cantidad
 
     if tipo_consumo == "metro_lineal_directo":
-        return medida * cantidad_producto
+        return medida_unitaria(producto_interno) * cantidad
+
+    if tipo_consumo == "perimetro":
+        # n por default 1: el caso normal es una sola pasada por el contorno, y
+        # pedirle al usuario que escriba "1" para eso sería un trámite.
+        n = parametros.get("n")
+        n = 1.0 if n in (None, "", 0) else float(n)
+        return perimetro_unitario(producto_interno) * n * cantidad
 
     return 0.0
 
@@ -760,22 +863,28 @@ def consumir_para_op(
     módulo): lo vendido en una OP vieja no se revaloriza nunca si después
     cambia el precio.
 
+    Con el módulo Inventario apagado no toca NADA y devuelve {} (ver
+    _inventario_habilitado): ni stock, ni historial, ni los acumulados de vendido
+    y ganancia. Se chequea acá además de en materiales_para_producto porque esta
+    es la función que ESCRIBE: que quede explícito que con el módulo apagado no
+    hay ningún dato que se ensucie, incluidos los consumos manuales que llegan
+    por parámetro.
+
     Devuelve {id_material: metros/unidades descontados} — informativo,
     quien llama no está obligado a usarlo."""
+    if not _inventario_habilitado():
+        return {}
     consumos_manuales = consumos_manuales or {}
     descripcion = f"OP {numero_op}" + (f" · {referencia}" if referencia else "")
 
     acumulado: dict[str, float] = {}
     for producto in productos_internos:
-        medida = medida_unitaria(producto)
-        cantidad_producto = int(producto.get("cantidad", 0) or 0)
-        # Backlight ("tela" en vez de "textil", sin "producto" ni
-        # "estructuras" — ver ui/api_cotizacion.py::_producto_a_interno)
-        # no tiene nombre de Producto ni lista de Estructuras: por ahora
-        # no dispara ningún material por esta vía (nombre_producto="" no
-        # matchea nada real en el índice) — el vínculo material→producto
-        # que pidió Bruno es sobre productos estándar.
-        nombre_producto = producto.get("producto", "")
+        # Un backlight responde al nombre reservado "Backlight" (ver
+        # nombre_producto_para_consumo): no tiene producto de catálogo propio ni
+        # lista de Estructuras, así que ese nombre es su única vía de asociación
+        # — y alcanza para lo que se gasta en TODOS los backlight, con caja o sin
+        # caja, que es el caso de la silicona.
+        nombre_producto = nombre_producto_para_consumo(producto)
         nombres_estructuras = list(producto.get("estructuras", []) or [])
 
         for material in materiales_para_producto(nombre_producto, nombres_estructuras):
@@ -791,7 +900,7 @@ def consumir_para_op(
                 if material["id"] in acumulado:
                     continue
             else:
-                consumo = calcular_consumo(material, medida, cantidad_producto)
+                consumo = calcular_consumo(material, producto)
                 if consumo <= 0:
                     continue
             acumulado[material["id"]] = acumulado.get(material["id"], 0.0) + consumo
@@ -843,7 +952,41 @@ def gasto_del_mes(m: dict) -> float:
     return round(total, 2)
 
 
-def _cobrable(material: dict, medida: float, cantidad: int) -> tuple[float, bool]:
+def consumo_estimado(productos_internos: list[dict]) -> dict[str, dict]:
+    """{nombre_material: {"consumo": x, "tipo": "metro"|"unidad"}} que gastaría
+    esta lista de productos — la misma cuenta que consumir_para_op pero SIN tocar
+    stock ni escribir historial.
+
+    Es para MOSTRAR: el documento de la OP lista los materiales que el trabajo va
+    a gastar (pedido de Bruno, 2026-10-01), igual que ya lista textiles y
+    materiales de caja. Hasta ahora los materiales de Inventario no aparecían en
+    la OP para ningún tipo de producto, ni backlight ni estándar.
+
+    Los materiales "manual" y los que no tienen fórmula quedan afuera: su consumo
+    no se puede calcular desde la geometría, así que no hay cifra que mostrar.
+
+    Con el módulo Inventario apagado devuelve {} (ver _inventario_habilitado), y
+    la OP no imprime el bloque: con el módulo apagado no se descuenta nada, así
+    que listar materiales en la hoja prometería un gasto que nadie va a registrar."""
+    if not _inventario_habilitado():
+        return {}
+    total: dict[str, dict] = {}
+    for producto in productos_internos:
+        nombre_producto = nombre_producto_para_consumo(producto)
+        nombres_estructuras = list(producto.get("estructuras", []) or [])
+        for material in materiales_para_producto(nombre_producto, nombres_estructuras):
+            if material.get("tipo_consumo") in (None, "manual"):
+                continue
+            consumo = calcular_consumo(material, producto)
+            if consumo <= 0:
+                continue
+            slot = total.setdefault(material["nombre"],
+                                    {"consumo": 0.0, "tipo": material.get("tipo", "unidad")})
+            slot["consumo"] = round(slot["consumo"] + consumo, 3)
+    return total
+
+
+def _cobrable(material: dict, producto_interno: dict) -> tuple[float, bool]:
     """(monto a cobrar por este material en esta línea de producto, se_puede).
 
     se_puede=False significa "no hay con qué cobrarlo acá", y pasa en tres
@@ -859,7 +1002,7 @@ def _cobrable(material: dict, medida: float, cantidad: int) -> tuple[float, bool
         return 0.0, False
     if material.get("tipo_consumo") in (None, "manual"):
         return 0.0, False
-    consumo = calcular_consumo(material, medida, cantidad)
+    consumo = calcular_consumo(material, producto_interno)
     if consumo <= 0:
         return 0.0, False
     return round(consumo * float(material["valor"]), 2), True
@@ -886,8 +1029,10 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
                             pero no se pudieron cobrar enteros (ver
                             _cobrable) — siguen cobrando por catálogo, y acá
                             quedan nombradas para poder avisarlo en la UI.
-      "detalle"             {nombre_material: {consumo, valor, monto, origen}}
-                            de todo lo que se cobró, para el desglose.
+      "detalle"             {nombre_material: {consumo, valor, monto, tipo, origen}}
+                            de todo lo que se cobró, para el desglose — "tipo" es
+                            metro/unidad, para poder escribir la unidad al lado
+                            del consumo.
 
     Una estructura se cobra entera o no se cobra: si uno solo de sus
     materiales no es cobrable, la estructura completa vuelve al catálogo. Un
@@ -904,22 +1049,18 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
     caras no gasta dos astas. Es la misma cantidad con la que se descuenta el
     stock al aprobar (ver consumir_para_op), y eso es a propósito — lo que se
     cobra y lo que se gasta tienen que ser la misma cuenta."""
-    from core import config as _config
-
     vacio = {"estructuras": {}, "materiales_producto": {}, "incompletas": [], "detalle": {}}
-    if not _config.MODULOS_HABILITADOS.get("inventario", True):
+    if not _inventario_habilitado():
         return vacio
 
     nombres_estructuras = list(producto_interno.get("estructuras", []) or [])
-    nombre_producto = producto_interno.get("producto", "") or ""
+    nombre_producto = nombre_producto_para_consumo(producto_interno)
     if not nombres_estructuras and not nombre_producto:
         return vacio
 
     indice = _leer_indice()
     por_estructura = indice.get("estructuras", {})
     por_producto = indice.get("productos", {})
-    medida = medida_unitaria(producto_interno)
-    cantidad = int(producto_interno.get("cantidad", 0) or 0)
 
     estructuras: dict[str, float] = {}
     incompletas: list[str] = []
@@ -936,15 +1077,16 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
             material = obtener_material(id_)
             if material is None:
                 continue
-            monto, se_puede = _cobrable(material, medida, cantidad)
+            monto, se_puede = _cobrable(material, producto_interno)
             if not se_puede:
                 completo = False
                 break
             total += monto
             parcial[material["nombre"]] = {
-                "consumo": calcular_consumo(material, medida, cantidad),
+                "consumo": calcular_consumo(material, producto_interno),
                 "valor":   material["valor"],
                 "monto":   monto,
+                "tipo":    material.get("tipo", "unidad"),
                 "origen":  nombre_estructura,
             }
         if completo and parcial:
@@ -961,14 +1103,15 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
         material = obtener_material(id_)
         if material is None:
             continue
-        monto, se_puede = _cobrable(material, medida, cantidad)
+        monto, se_puede = _cobrable(material, producto_interno)
         if not se_puede:
             continue
         materiales_producto[material["nombre"]] = monto
         detalle[material["nombre"]] = {
-            "consumo": calcular_consumo(material, medida, cantidad),
+            "consumo": calcular_consumo(material, producto_interno),
             "valor":   material["valor"],
             "monto":   monto,
+            "tipo":    material.get("tipo", "unidad"),
             "origen":  nombre_producto,
         }
 
@@ -1040,10 +1183,18 @@ def metricas_material(m: dict) -> dict:
     valor = m.get("valor")
     gasto_unitario = m.get("gasto_unitario")
     cantidad = m.get("cantidad", 0.0)
+    # Si nunca se registró un costo, las tres cifras de Gastos son None, no 0:
+    # el material costó algo, solo que no se cargó. gasto_unitario en None y
+    # acumulado en 0 solo pasan juntos (todo restock con costo mueve los dos), así
+    # que alcanza con mirarlos. Mismo criterio que un rollo sin precio de compra
+    # (core.repositorio_inventario.metricas_rollo) — las dos tablas de Inventario
+    # tienen que mostrar lo mismo en la misma celda.
+    acumulado = round(m.get("gasto_acumulado", 0.0), 2)
+    sin_costo = gasto_unitario is None and not acumulado
     return {
         "gasto_unitario":     gasto_unitario,
-        "gasto_mes":          gasto_del_mes(m),
-        "gasto_total":        round(m.get("gasto_acumulado", 0.0), 2),
+        "gasto_mes":          None if sin_costo else gasto_del_mes(m),
+        "gasto_total":        None if sin_costo else acumulado,
         "valor_unitario":     valor,
         "valor_restante":     None if valor is None else round(float(valor) * cantidad, 2),
         "valor_vendido":      round(m.get("vendido_acumulado", 0.0), 2),
@@ -1117,8 +1268,7 @@ def estructuras_legado_valores_efectivos() -> dict:
     todavía pausado) devuelve el catálogo estático TAL CUAL, sin pisar
     nada — los materiales de Inventario, si los hay, no deben afectar el
     precio de ninguna cotización mientras el módulo no esté habilitado."""
-    from core import config as _config
     from core.repositorio import ESTRUCTURAS_LEGADO_VALORES
-    if not _config.MODULOS_HABILITADOS.get("inventario", True):
+    if not _inventario_habilitado():
         return dict(ESTRUCTURAS_LEGADO_VALORES)
     return {**ESTRUCTURAS_LEGADO_VALORES, **valores_legado_materiales()}

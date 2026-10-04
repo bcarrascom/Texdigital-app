@@ -454,6 +454,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
             <option value="fijo_por_producto">Cantidad fija por producto</option>
             <option value="metro_lineal_salto">Por tramos de metro lineal</option>
             <option value="metro_lineal_directo">Metro lineal directo</option>
+            <option value="perimetro">Por el contorno de la pieza</option>
             <option value="manual">Monto manual al aprobar</option>
           </select>
           <svg class="campo-select__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
@@ -465,6 +466,16 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       </div>
     </div>
     <p class="campo__ayuda" data-dme-consumo-ayuda></p>
+
+    <!-- El perímetro no necesita medidas: sale de ancho y alto de la pieza. Lo
+         único configurable son las pasadas, y por default es 1 (ver
+         core.repositorio_materiales.calcular_consumo). -->
+    <div class="fila" data-dme-parametros="perimetro" hidden>
+      <div class="campo campo--estrecho">
+        <label class="campo__etiqueta" for="dme-param-perimetro-n">Pasadas por el contorno</label>
+        <input class="entrada" id="dme-param-perimetro-n" type="number" step="0.01" min="0" placeholder="1">
+      </div>
+    </div>
 
     <div class="fila" data-dme-parametros="metro_lineal_salto" hidden>
       <div class="campo">
@@ -942,6 +953,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     fijo_por_producto: "Cada producto asociado gasta la misma cantidad, sin importar su tamaño.",
     metro_lineal_salto: "Se gasta en bloques enteros: cada tramo de metros lineales suma la cantidad fija.",
     metro_lineal_directo: "Gasta exactamente los metros lineales del producto (sin el margen de la impresora).",
+    perimetro: "Gasta el contorno de cada pieza: 2 × (ancho + alto). Para lo que se aplica por los 4 bordes, como la silicona de un backlight.",
     manual: "Al aprobar la cotización se pide el monto gastado — una vez por cotización, no por producto.",
   };
 
@@ -1010,6 +1022,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     $("#dme-tipo-consumo").value = m.tipo_consumo || "";
     $("#dme-param-n").value = parametros.n ?? "";
     $("#dme-param-paso").value = parametros.paso ?? "";
+    $("#dme-param-perimetro-n").value = parametros.n ?? "";
     $("#dme-param-salto-n").value = parametros.n ?? "";
     materialEditarProductos.length = 0;
     (m.productos_asociados || []).forEach((n) => materialEditarProductos.push(n));
@@ -1045,6 +1058,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
         paso: parseFloat($("#dme-param-paso").value) || 0,
         n: parseFloat($("#dme-param-salto-n").value) || 0,
       };
+    } else if (tipoConsumo === "perimetro") {
+      // Campo vacío = 1 pasada, el caso normal. Se manda explícito para que el
+      // material guarde lo que de verdad va a usar y no dependa del default.
+      consumoParametros = { n: parseFloat($("#dme-param-perimetro-n").value) || 1 };
     }
 
     await TD.api.editar_material(

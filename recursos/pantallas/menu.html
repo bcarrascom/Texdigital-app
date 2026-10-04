@@ -411,6 +411,11 @@ body[data-fase="panel"] .panel[data-deslizando] { display: flex; }
    el ancho del panel, y ahí .tabla-caja (overflow:auto) scrollea la tabla
    por su cuenta en vez de estirar toda la página. */
 .panel__seccion { min-width: 0; }
+/* Inventario es el panel más ancho de la app: sus dos tablas tienen 6 columnas,
+   tres de ellas con tres cifras apiladas (pedido de Bruno, 2026-10-01). Se le da
+   más ancho que al resto en vez de dejar que .tabla-caja scrollee en horizontal
+   todo el tiempo — los otros paneles se quedan en 62rem, donde se leen mejor. */
+[data-panel="inventario"] .panel__cuerpo { width: min(100%, 86rem); }
 .panel__titulo {
   font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
   letter-spacing: -.035em; line-height: 1;
@@ -1071,12 +1076,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
         </div>
         <div class="tabla-caja">
           <table class="tabla">
+            <!-- Mismas columnas monetarias que la tabla de materiales no
+                 textiles (pedido de Bruno, 2026-10-01): las dos tablas de
+                 Inventario tienen que leerse igual. Cada grupo apila sus tres
+                 cifras en la celda (ver celdasPlata). -->
             <thead>
               <tr>
                 <th>Rollo</th>
                 <th>Origen</th>
-                <th>Valor</th>
                 <th>Stock</th>
+                <th class="num">Gastos</th>
+                <th class="num">Valor</th>
+                <th class="num">Ganancias</th>
               </tr>
             </thead>
             <tbody data-inv-filas></tbody>
@@ -1098,11 +1109,12 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
                  se apilan de a tres dentro de su celda, igual que la columna
                  "Valor"/"Stock" de la tabla de rollos de acá al lado — el
                  valor unitario arriba y los dos derivados abajo en chico (ver
-                 celdaGrupoMaterial). Así son 5 columnas en vez de 11 y la
+                 celdasPlata). Así son 6 columnas en vez de 14 y la
                  tabla entra sin scroll horizontal. -->
             <thead>
               <tr>
                 <th data-orden-col="material" tabindex="0" role="button" aria-label="Ordenar por material">Material<span class="icon-arrow-down th-orden__flecha" aria-hidden="true"></span></th>
+                <th data-orden-col="origen" tabindex="0" role="button" aria-label="Ordenar por proveedor">Origen<span class="icon-arrow-down th-orden__flecha" aria-hidden="true"></span></th>
                 <th data-orden-col="cantidad" tabindex="0" role="button" aria-label="Ordenar por cantidad">Cantidad<span class="icon-arrow-down th-orden__flecha" aria-hidden="true"></span></th>
                 <th data-orden-col="gasto_unitario" tabindex="0" role="button" aria-label="Ordenar por gasto unitario">Gastos<span class="icon-arrow-down th-orden__flecha" aria-hidden="true"></span></th>
                 <th data-orden-col="valor_unitario" tabindex="0" role="button" aria-label="Ordenar por valor unitario">Valor<span class="icon-arrow-down th-orden__flecha" aria-hidden="true"></span></th>
@@ -1248,8 +1260,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     </div>
     <div class="fila fila--proveedor">
       <div class="campo">
-        <label class="campo__etiqueta" for="dr-proveedor">Proveedor</label>
-        <input class="entrada" id="dr-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+        <label class="campo__etiqueta" data-requerido for="dr-proveedor">Proveedor</label>
+        <input class="entrada" id="dr-proveedor" type="text" list="lista-proveedores" autocomplete="off">
+        <span class="campo__error">Obligatorio</span>
       </div>
       <div class="campo">
         <label class="campo__etiqueta" for="dr-precio-compra">Precio de compra</label>
@@ -1257,8 +1270,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       </div>
     </div>
     <div class="campo dlg-rollo__campo-valor">
-      <label class="campo__etiqueta" for="dr-valor">Valor por ML/M²</label>
-      <input class="entrada" id="dr-valor" type="text" inputmode="numeric" placeholder="Opcional">
+      <label class="campo__etiqueta" data-requerido for="dr-valor">Valor por ML/M²</label>
+      <input class="entrada" id="dr-valor" type="text" inputmode="numeric">
+      <span class="campo__error">Obligatorio</span>
     </div>
   </div>
   <div class="dlg__acciones">
@@ -1287,8 +1301,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
         <span class="campo__error">Obligatorio</span>
       </div>
       <div class="campo">
-        <label class="campo__etiqueta" for="dm-proveedor">Proveedor</label>
-        <input class="entrada" id="dm-proveedor" type="text" list="lista-proveedores" autocomplete="off" placeholder="Opcional">
+        <label class="campo__etiqueta" data-requerido for="dm-proveedor">Proveedor</label>
+        <input class="entrada" id="dm-proveedor" type="text" list="lista-proveedores" autocomplete="off">
+        <span class="campo__error">Obligatorio</span>
       </div>
     </div>
     <div class="fila">
@@ -1300,6 +1315,18 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
         <label class="campo__etiqueta" for="dm-costo-unitario">Costo unitario</label>
         <input class="entrada" id="dm-costo-unitario" type="text" inputmode="numeric" placeholder="Opcional">
       </div>
+    </div>
+    <!-- Precio de venta obligatorio al dar de alta un material (pedido de Bruno,
+         2026-10-01): sin él, sus estructuras siguen cobrando por catálogo y el
+         material no aporta ganancias — un material a medio cargar se nota recién
+         al cotizar. En un RESTOCK de algo que ya existe el campo se precarga con
+         el precio actual y no se puede cambiar acá: cambiarlo es un ajuste, y
+         queda registrado como tal (ver ver-material.html). -->
+    <div class="campo" data-dm-valor-campo>
+      <label class="campo__etiqueta" data-requerido for="dm-valor">Precio de venta</label>
+      <input class="entrada" id="dm-valor" type="text" inputmode="numeric">
+      <span class="campo__ayuda" data-dm-valor-ayuda></span>
+      <span class="campo__error">Obligatorio</span>
     </div>
   </div>
   <div class="dlg__acciones">
@@ -1520,11 +1547,6 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     const detalleOrigen = [r.fecha, r.precio_compra ? TD.fmt.pesos(r.precio_compra) : null]
       .filter(Boolean).join(" · ");
 
-    const celdaValor = r.valor == null
-      ? `<span class="celda-combo__principal">—</span>`
-      : `<span class="celda-combo__principal">${TD.fmt.pesos(r.valor)} /m</span>
-         <span class="celda-combo__detalle">${TD.fmt.pesos(r.valor * r.metros_restantes)} restante</span>
-         <span class="celda-combo__detalle">${TD.fmt.pesos(r.valor * r.metros_iniciales)} total</span>`;
 
     tr.innerHTML = `
       <td>
@@ -1544,8 +1566,8 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
           <span class="celda-combo__detalle">${esc(detalleOrigen)}</span>
         </div>
       </td>
-      <td><div class="celda-combo">${celdaValor}</div></td>
-      <td>${celdaStock(r)}</td>`;
+      <td>${celdaStock(r)}</td>
+      ${celdasPlata(r, "/m")}`;
     // El punto de estado sigue siendo un toggle rápido EN la fila (no una
     // acción que se mudó a ver-rollo.html) — stopPropagation para que
     // tocarlo no dispare también la navegación de la fila entera.
@@ -1759,12 +1781,53 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     return `<span class="${clase}${negativo}">${pesosConSigno(valor)}${etiqueta}</span>`;
   }
 
-  function celdaGrupoMaterial(m, unitario, derivados, { resaltar = false } = {}) {
-    const porUnidad = m.tipo === "metro" ? "/m" : "/un.";
+  /* Una celda de grupo (Gastos / Valor / Ganancias) con sus tres cifras
+     apiladas. La usan las DOS tablas de Inventario —rollos y materiales— con los
+     mismos nombres de campo, porque la API sirve las mismas 9 claves para los dos
+     (ver metricas_rollo / metricas_material). El sufijo de la unitaria viene por
+     parámetro: un rollo siempre es por metro, un material puede ser por unidad. */
+  function celdaGrupo(obj, unitario, derivados, { sufijo = "", resaltar = false } = {}) {
     return `<td><div class="celda-combo celda-combo--plata">
-      ${lineaPlata(m[unitario], porUnidad, { clase: "celda-combo__principal", resaltar })}
-      ${derivados.map(([campo, etiqueta]) => lineaPlata(m[campo], " " + etiqueta, { resaltar })).join("")}
+      ${lineaPlata(obj[unitario], sufijo, { clase: "celda-combo__principal", resaltar })}
+      ${derivados.map(([campo, etiqueta]) => lineaPlata(obj[campo], " " + etiqueta, { resaltar })).join("")}
     </div></td>`;
+  }
+
+  /* Los tres grupos, en el orden fijo que pidió Bruno: la unitaria arriba y los
+     dos derivados abajo. Compartidos por las dos tablas. */
+  const GRUPOS_PLATA = [
+    ["gasto_unitario", [["gasto_mes", "este mes"], ["gasto_total", "total"]], false],
+    ["valor_unitario", [["valor_restante", "restante"], ["valor_vendido", "vendido"]], false],
+    ["ganancia_unitaria", [["ganancia_mes", "este mes"], ["ganancia_total", "total"]], true],
+  ];
+
+  function celdasPlata(obj, sufijo) {
+    return GRUPOS_PLATA
+      .map(([unitario, derivados, resaltar]) =>
+        celdaGrupo(obj, unitario, derivados, { sufijo, resaltar }))
+      .join("");
+  }
+
+  /* Origen de un material: el proveedor del último restock como dato principal
+     y la fecha + costo de esa compra como detalle — misma forma que la columna
+     Origen de rollos (pedido de Bruno, 2026-10-01: igualar las dos tablas). Un
+     material puede tener varios proveedores a lo largo de su historial; acá va
+     el del último restock, que es el relevante para reponer. */
+  function ultimoRestock(m) {
+    return (m.historial || []).slice().reverse().find((h) => h.tipo === "restock") || null;
+  }
+
+  function celdaOrigenMaterial(m) {
+    const ultimo = ultimoRestock(m);
+    const proveedor = (ultimo && ultimo.proveedor) || m.proveedor || "";
+    const detalle = ultimo
+      ? [ultimo.fecha, ultimo.costo_unitario != null
+          ? `${TD.fmt.pesos(ultimo.costo_unitario)}${m.tipo === "metro" ? "/m" : "/un."}`
+          : null].filter(Boolean).join(" · ")
+      : "";
+    return `
+      <span class="celda-combo__principal">${esc(proveedor) || "—"}</span>
+      <span class="celda-combo__detalle">${esc(detalle)}</span>`;
   }
 
   function filaMaterial(m) {
@@ -1773,10 +1836,9 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     tr.tabIndex = 0;
     tr.innerHTML = `
       <td>${esc(m.nombre)}</td>
+      <td><div class="celda-combo">${celdaOrigenMaterial(m)}</div></td>
       <td class="num">${TD.fmt.cantidad(m.cantidad)} ${unidadDeMaterial(m)}</td>
-      ${celdaGrupoMaterial(m, "gasto_unitario", [["gasto_mes", "este mes"], ["gasto_total", "total"]])}
-      ${celdaGrupoMaterial(m, "valor_unitario", [["valor_restante", "restante"], ["valor_vendido", "vendido"]])}
-      ${celdaGrupoMaterial(m, "ganancia_unitaria", [["ganancia_mes", "este mes"], ["ganancia_total", "total"]], { resaltar: true })}`;
+      ${celdasPlata(m, m.tipo === "metro" ? "/m" : "/un.")}`;
     tr.addEventListener("click", () => TD.api.abrir_material(m.id));
     tr.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -1816,6 +1878,12 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
 
   function valorOrdenMaterial(m, columna) {
     if (columna === "cantidad") return m.cantidad || 0;
+    if (columna === "origen") {
+      const ultimo = ultimoRestock(m);
+      const proveedor = (ultimo && ultimo.proveedor) || m.proveedor || "";
+      // Sin proveedor va al final, como cualquier dato ausente (ver ordenarMateriales).
+      return proveedor.trim().toLowerCase() || null;
+    }
     if (COLUMNAS_PLATA_MATERIAL.includes(columna)) return m[columna];
     return (m.nombre || "").trim().toLowerCase();
   }
@@ -2074,6 +2142,39 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   // Mismo boton-panel-morph que el diálogo de rollo (pedido de Bruno,
   // 2026-09-15) — crece desde el botón "+" de la barra de materiales, ver
   // abrirDialogoMorph/cerrarDialogoMorph más arriba.
+  /* El "+" de materiales sirve para dar de alta uno nuevo Y para sumar stock a
+     uno que ya existe: la diferencia la hace el nombre (ver
+     core.repositorio_materiales.ingresar_material). Con el precio de venta
+     obligatorio, el formulario tiene que saber en cuál de los dos casos está,
+     para no pedir un precio que ya existe. */
+  function materialPorNombre(nombre) {
+    const buscado = String(nombre || "").trim().toLowerCase();
+    if (!buscado) return null;
+    return materialesInventario.find(
+      (m) => String(m.nombre || "").trim().toLowerCase() === buscado) || null;
+  }
+
+  /* Al tipear el nombre de un material que ya existe, el formulario deja de
+     pedir el precio de venta: lo muestra, de solo lectura, y aclara que para
+     cambiarlo hay que ir al ajuste (ahí queda registrado en el historial). */
+  function sincronizarCamposMaterialNuevo() {
+    const existente = materialPorNombre($("#dm-nombre").value);
+    const campoValor = $("#dm-valor");
+    const ayuda = $("[data-dm-valor-ayuda]");
+    const etiqueta = $("[data-dm-valor-campo] .campo__etiqueta");
+    campoValor.readOnly = !!existente;
+    campoValor.closest(".campo").toggleAttribute("data-invalido", false);
+    etiqueta.toggleAttribute("data-requerido", !existente);
+    if (existente) {
+      campoValor.value = existente.valor != null ? formatearClp(existente.valor) : "";
+      ayuda.textContent = "Ya cargado. Para cambiarlo, usá “Ajustar · Precio” en el material.";
+      if (!$("#dm-proveedor").value.trim() && existente.proveedor)
+        $("#dm-proveedor").value = existente.proveedor;
+    } else {
+      ayuda.textContent = "";
+    }
+  }
+
   function abrirDialogoMaterial(boton) {
     botonOrigenMaterial = boton || $("[data-accion='nuevo-material']");
     abrirDialogoMorph(dlgMaterial, botonOrigenMaterial, () => {
@@ -2083,8 +2184,11 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
       $("#dm-proveedor").value = "";
       $("#dm-costo-total").value = "";
       $("#dm-costo-unitario").value = "";
+      $("#dm-valor").value = "";
+      sincronizarCamposMaterialNuevo();
     });
   }
+  $("#dm-nombre").addEventListener("input", sincronizarCamposMaterialNuevo);
   function cerrarDialogoMaterial() {
     cerrarDialogoMorph(dlgMaterial, botonOrigenMaterial);
   }
@@ -2096,17 +2200,29 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
   $("[data-accion='guardar-material']").addEventListener("click", async () => {
     const campoNombre = $("#dm-nombre");
     const campoCantidad = $("#dm-cantidad");
+    const campoProveedor = $("#dm-proveedor");
+    const campoValor = $("#dm-valor");
     const nombre = campoNombre.value.trim();
     const cantidad = parseFloat(campoCantidad.value);
+    const proveedor = campoProveedor.value.trim();
+    const valor = numeroClp(campoValor.value);
+    const existente = materialPorNombre(nombre);
 
     let valido = true;
     campoNombre.closest(".campo").toggleAttribute("data-invalido", !nombre);
     if (!nombre) valido = false;
     campoCantidad.closest(".campo").toggleAttribute("data-invalido", !(cantidad > 0));
     if (!(cantidad > 0)) valido = false;
+    // Proveedor y precio de venta obligatorios (pedido de Bruno, 2026-10-01).
+    // El precio solo se exige en un material NUEVO: en un restock ya existe, el
+    // campo va precargado y de solo lectura.
+    campoProveedor.closest(".campo").toggleAttribute("data-invalido", !proveedor);
+    if (!proveedor) valido = false;
+    const faltaValor = !existente && !(valor > 0);
+    campoValor.closest(".campo").toggleAttribute("data-invalido", faltaValor);
+    if (faltaValor) valido = false;
     if (!valido) return;
 
-    const proveedor = $("#dm-proveedor").value.trim();
     const costoTotal = numeroClp($("#dm-costo-total").value);
     const costoUnitario = numeroClp($("#dm-costo-unitario").value);
 
@@ -2117,7 +2233,10 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
         proveedoresInventario.map((p) => `<option value="${esc(p)}"></option>`).join("");
     }
 
-    await TD.api.ingresar_material(nombre, cantidad, "unidad", proveedor, costoTotal, costoUnitario);
+    await TD.api.ingresar_material(
+      nombre, cantidad, "unidad", proveedor, costoTotal, costoUnitario,
+      null, null, null, null, null, existente ? null : valor,
+    );
     cerrarDialogoMaterial();
     await recargarMaterialesInventario();
     TD.aviso("Material ingresado.", "info");
@@ -2292,6 +2411,7 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     if (sugerido != null) campoValor.value = formatearClp(sugerido);
   });
 
+  activarInputClp($("#dm-valor"));
   activarInputClp($("#dr-precio-compra"));
   activarInputClp($("#dr-valor"));
 
@@ -2311,11 +2431,21 @@ dialog::backdrop { background: rgba(22, 22, 26, .35); }
     const metrosRestantes = parseFloat(campoRestantes.value);
     campoRestantes.closest(".campo").toggleAttribute("data-invalido", !(metrosRestantes > 0));
     if (!(metrosRestantes > 0)) valido = false;
+
+    // Proveedor y valor por ML obligatorios, igual que en materiales (pedido de
+    // Bruno, 2026-10-01): sin valor no hay precio de venta con el que calcular
+    // las ganancias del rollo, y la fila queda con media tabla en "—".
+    const campoProveedor = $("#dr-proveedor");
+    const campoValor = $("#dr-valor");
+    const proveedor = campoProveedor.value.trim();
+    const valor = numeroClp(campoValor.value);
+    campoProveedor.closest(".campo").toggleAttribute("data-invalido", !proveedor);
+    if (!proveedor) valido = false;
+    campoValor.closest(".campo").toggleAttribute("data-invalido", !(valor > 0));
+    if (!(valor > 0)) valido = false;
     if (!valido) return;
 
-    const proveedor = $("#dr-proveedor").value.trim();
     const precioCompra = numeroClp($("#dr-precio-compra").value) || 0;
-    const valor = numeroClp($("#dr-valor").value);
 
     if (proveedor) {
       await TD.api.guardar_proveedor(proveedor);

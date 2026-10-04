@@ -30,11 +30,22 @@ class ApiInventario:
     def contexto_extra(self, id_) -> dict:
         return {"id": id_}
 
+    # Las 9 cifras del modelo económico (ver
+    # core.repositorio_inventario.metricas_rollo) se agregan ACÁ, igual que en
+    # materiales: son derivados que cambian con el paso del tiempo ("gasto este
+    # mes") o cuentas de dos campos guardados, así que calcularlas al servir evita
+    # que queden desactualizadas y le ahorra a la UI saber de dónde sale cada una.
+
+    def _con_metricas_rollo(self, r: dict | None) -> dict | None:
+        if r is not None:
+            r.update(_repo.metricas_rollo(r))
+        return r
+
     def listar_rollos(self) -> list[dict]:
-        return _repo.listar_rollos()
+        return [self._con_metricas_rollo(r) for r in _repo.listar_rollos()]
 
     def obtener_rollo(self, id_: str) -> dict | None:
-        return _repo.obtener_rollo(id_)
+        return self._con_metricas_rollo(_repo.obtener_rollo(id_))
 
     def cargar_textiles(self) -> list[str]:
         return repositorio.TEXTILES
@@ -110,13 +121,13 @@ class ApiInventario:
         costo_total=None, costo_unitario=None,
         tipo_consumo=None, consumo_parametros=None,
         productos_asociados=None, estructuras_asociadas=None,
-        fecha=None,
+        fecha=None, valor=None,
     ) -> dict:
         return self._con_metricas(
             _repo_mat.ingresar_material(
                 nombre, cantidad, tipo, proveedor, costo_total, costo_unitario,
                 tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
-                _iso_a_dma(fecha) if fecha else None,
+                _iso_a_dma(fecha) if fecha else None, valor,
             )
         )
 
@@ -133,7 +144,13 @@ class ApiInventario:
         )
 
     def cargar_productos_catalogo(self) -> list[str]:
-        return list(repositorio.PRODUCTOS)
+        """Los nombres de producto a los que se puede asociar un material. Va
+        "Backlight" primero, que NO es un producto del catálogo sino un tipo de
+        producto (ver core.repositorio_materiales.PRODUCTO_BACKLIGHT): asociarle
+        un material lo hace gastar en todo backlight, con caja o sin caja. Era lo
+        que faltaba para la silicona, que se aplica a todos y no tenía ningún
+        nombre al que colgarse (pedido de Bruno, 2026-10-01)."""
+        return [_repo_mat.PRODUCTO_BACKLIGHT] + list(repositorio.PRODUCTOS)
 
     def cargar_estructuras_catalogo(self) -> list[str]:
         return list(repositorio.ESTRUCTURAS_LEGADO)

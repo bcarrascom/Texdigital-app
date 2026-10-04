@@ -192,6 +192,110 @@ def _siguiente_id() -> str:
     return f"{maximo + 1:04d}"
 
 
+def _es_del_mes_en_curso(fecha_dma: str) -> bool:
+    """Si una fecha dd/mm/aaaa cae en el mes calendario en curso."""
+    hoy = datetime.now()
+    try:
+        fecha = datetime.strptime(fecha_dma or "", "%d/%m/%Y")
+    except (ValueError, TypeError):
+        return False
+    return fecha.year == hoy.year and fecha.month == hoy.month
+
+
+def _precio_compra(r: dict) -> float | None:
+    """Lo que se pagó por el rollo, o None si no se cargó. crear_rollo guarda 0.0
+    cuando el campo viene vacío (es opcional en el formulario), así que 0 acá
+    significa "no se sabe", no "salió gratis" — mismo criterio que ya usa la
+    columna Origen de la tabla. Importa: con un costo de 0 inventado, la ganancia
+    por metro saldría igual al precio de venta entero."""
+    precio = r.get("precio_compra")
+    if precio is None:
+        return None
+    try:
+        precio = float(precio)
+    except (TypeError, ValueError):
+        return None
+    return precio if precio > 0 else None
+
+
+def costo_unitario_rollo(r: dict) -> float | None:
+    """Lo que costó UN metro de este rollo: precio_compra / metros_iniciales.
+
+    A diferencia de un material —que es una bodega con un promedio ponderado
+    móvil de muchas compras, ver core.repositorio_materiales— un rollo es un
+    LOTE con una sola compra, así que su costo por metro es exacto y no hay
+    promedio que calcular. None si no se cargó el precio de compra: sin él no se
+    sabe qué costó, y suponer 0 daría una ganancia inventada."""
+    precio = _precio_compra(r)
+    iniciales = r.get("metros_iniciales") or 0.0
+    if precio is None or iniciales <= 0:
+        return None
+    return round(precio / float(iniciales), 4)
+
+
+def _metros_gastados(r: dict) -> float:
+    """Metros que salieron de este rollo: iniciales − restantes. Nunca negativo
+    (ajustar_restante sube "iniciales" si el restante lo supera, así que esto no
+    debería pasar, pero una resta de stock no puede dar un gasto negativo)."""
+    return max((r.get("metros_iniciales") or 0.0) - (r.get("metros_restantes") or 0.0), 0.0)
+
+
+def _metros_consumidos_del_mes(r: dict) -> float:
+    """Metros descontados por consumo de OP durante el mes en curso — de los
+    registros tipo="consumo" (ver _agregar_registro). Los ajustes manuales no
+    cuentan: no son una venta."""
+    total = 0.0
+    for u in r.get("usos", []):
+        if u.get("tipo") != "consumo" or not _es_del_mes_en_curso(u.get("fecha", "")):
+            continue
+        total += (u.get("metros_restantes_anterior", 0.0) - u.get("metros_restantes_nuevo", 0.0))
+    return max(round(total, 3), 0.0)
+
+
+def metricas_rollo(r: dict) -> dict:
+    """Las mismas 9 cifras que muestra la tabla de materiales no textiles (ver
+    core.repositorio_materiales.metricas_material), para un rollo — pedido de
+    Bruno (2026-10-01): las dos tablas de Inventario tienen que leerse igual.
+
+    Las diferencias vienen de que un rollo es un LOTE y un material una bodega:
+      - "gasto_unitario" es exacto (una sola compra, ver costo_unitario_rollo),
+        no un promedio ponderado.
+      - "gasto_total" es el precio de compra del rollo, y "gasto_mes" ese mismo
+        monto solo si el rollo se compró este mes (decisión de Bruno) — en un
+        rollo viejo queda en 0, que es la verdad: ese mes no se gastó nada en él.
+      - lo vendido y las ganancias se DERIVAN de los metros que salieron
+        (decisión de Bruno), no de un precio grabado en cada consumo como en los
+        materiales: un rollo tiene un solo costo por metro, así que alcanza con
+        multiplicar. La contra, asumida: cambiar el valor revaloriza también lo
+        ya vendido.
+
+    Las unitarias son None cuando falta el dato con el que se calculan (nunca 0):
+    sin precio de compra cargado no hay un costo de $0, hay un costo que no se
+    sabe — y la UI lo muestra distinto ("—" en vez de "$0")."""
+    valor = r.get("valor")
+    costo = costo_unitario_rollo(r)
+    precio_compra = _precio_compra(r)
+    gastados = _metros_gastados(r)
+    restantes = r.get("metros_restantes") or 0.0
+    margen = None if (valor is None or costo is None) else float(valor) - costo
+    # Sin precio de compra cargado, el gasto del mes y el total son None, no 0:
+    # el rollo costó algo, solo que no se sabe cuánto. Con precio cargado y
+    # comprado otro mes, el del mes SÍ es 0 — ese mes no se gastó nada en él.
+    return {
+        "gasto_unitario":    costo,
+        "gasto_mes":         None if precio_compra is None else (
+                                 round(precio_compra, 2)
+                                 if _es_del_mes_en_curso(r.get("fecha", "")) else 0.0),
+        "gasto_total":       None if precio_compra is None else round(precio_compra, 2),
+        "valor_unitario":    valor,
+        "valor_restante":    None if valor is None else round(float(valor) * restantes, 2),
+        "valor_vendido":     None if valor is None else round(float(valor) * gastados, 2),
+        "ganancia_unitaria": None if margen is None else round(margen, 2),
+        "ganancia_mes":      None if margen is None else round(margen * _metros_consumidos_del_mes(r), 2),
+        "ganancia_total":    None if margen is None else round(margen * gastados, 2),
+    }
+
+
 def valor_sugerido_textil(nombre_textil: str) -> float | None:
     """Valor por ML/M² sugerido para un rollo NUEVO de `nombre_textil` —
     pedido de Bruno (2026-09-03): por defecto toma el valor del rollo MÁS

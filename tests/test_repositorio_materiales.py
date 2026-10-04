@@ -88,6 +88,36 @@ class TestIngresarMaterial(_ConRutaTemporal):
         self.assertIsNone(m["valor"])
         self.assertEqual(m["gasto_unitario"], 10000.0)
 
+    def test_el_alta_acepta_el_precio_de_venta(self):
+        # Desde 2026-10-01 el formulario de alta lo pide obligatorio, así que un
+        # material nace con su precio puesto (pedido de Bruno).
+        m = repo_mat.ingresar_material("Remache", 500, costo_unitario=90, valor=350)
+        self.assertEqual(m["valor"], 350.0)
+
+    def test_el_precio_del_alta_queda_en_el_historial(self):
+        m = repo_mat.ingresar_material("Remache", 500, costo_unitario=90, valor=350)
+        tipos = [h["tipo"] for h in m["historial"]]
+        # El restock primero y el precio después: el historial se lee en el orden
+        # en que pasaron las cosas, y la entrada de precio guarda la cantidad real.
+        self.assertEqual(tipos, ["restock", "precio"])
+        precio = m["historial"][-1]
+        self.assertIsNone(precio["valor_anterior"])
+        self.assertEqual(precio["valor_nuevo"], 350.0)
+        self.assertEqual(precio["cantidad_anterior"], 500.0)
+
+    def test_un_restock_no_pisa_el_precio_aunque_le_pasen_otro(self):
+        # El precio solo se aplica si el material es NUEVO: un restock no es el
+        # lugar para cambiarlo (para eso está el ajuste, que lo registra).
+        repo_mat.ingresar_material("Remache", 500, costo_unitario=90, valor=350)
+        m = repo_mat.ingresar_material("Remache", 200, costo_unitario=110, valor=9999)
+        self.assertEqual(m["valor"], 350.0)
+        self.assertEqual(len([h for h in m["historial"] if h["tipo"] == "precio"]), 1)
+
+    def test_el_alta_sin_precio_sigue_funcionando(self):
+        # El backend no lo exige: lo obligatorio es el formulario. Un material
+        # viejo o un script de carga pueden crear sin precio.
+        self.assertIsNone(repo_mat.ingresar_material("Remache", 500)["valor"])
+
     def test_material_nuevo_sin_costo_queda_sin_valor(self):
         m = repo_mat.ingresar_material("Estaca", 10)
         self.assertIsNone(m["valor"])
@@ -376,52 +406,190 @@ class TestInventarioApagado(_ConRutaTemporal):
         self.assertEqual(efectivos, catalogo_mock)  # el 99999 del material NO aparece
 
 
+def _pieza(ancho=1.0, alto=1.0, cantidad=1):
+    """Geometría mínima de un producto interno estándar, para las fórmulas."""
+    return {"producto": "X", "textil": "T", "ancho": ancho, "alto": alto,
+            "cantidad": cantidad, "estructuras": []}
+
+
 class TestCalcularConsumo(unittest.TestCase):
-    """calcular_consumo — las 3 fórmulas con parámetros (pedido de Bruno,
-    2026-09-27). Función pura, no toca disco."""
+    """calcular_consumo — las 4 fórmulas con parámetros (pedido de Bruno,
+    2026-09-27; "perimetro" agregada el 2026-10-01). Función pura, no toca disco.
+
+    Recibe el producto interno completo y saca de ahí la geometría que cada
+    fórmula necesita (alto, ancho, cantidad), en vez de una medida suelta: así
+    una fórmula nueva que mire otra dimensión no cambia la firma."""
 
     def test_fijo_por_producto(self):
         material = {"tipo_consumo": "fijo_por_producto", "consumo_parametros": {"n": 2}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=0.0, cantidad_producto=3), 6.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(cantidad=3)), 6.0)
 
     def test_fijo_por_producto_ignora_la_medida(self):
         material = {"tipo_consumo": "fijo_por_producto", "consumo_parametros": {"n": 1}}
         self.assertEqual(
-            repo_mat.calcular_consumo(material, medida=999.0, cantidad_producto=1),
-            repo_mat.calcular_consumo(material, medida=0.1, cantidad_producto=1),
+            repo_mat.calcular_consumo(material, _pieza(ancho=99, alto=999)),
+            repo_mat.calcular_consumo(material, _pieza(ancho=0.1, alto=0.1)),
         )
 
     def test_metro_lineal_directo(self):
         material = {"tipo_consumo": "metro_lineal_directo", "consumo_parametros": {}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=4.5, cantidad_producto=2), 9.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=4.5, cantidad=2)), 9.0)
 
     def test_metro_lineal_salto_redondea_para_arriba(self):
-        # paso=2, medida=5 -> 3 bloques (no 2.5) -> 3 * n * cantidad
+        # paso=2, alto=5 -> 3 bloques (no 2.5) -> 3 * n * cantidad
         material = {"tipo_consumo": "metro_lineal_salto", "consumo_parametros": {"paso": 2, "n": 1}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=5.0, cantidad_producto=1), 3.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=5.0)), 3.0)
 
     def test_metro_lineal_salto_bloque_exacto_no_redondea_de_mas(self):
         material = {"tipo_consumo": "metro_lineal_salto", "consumo_parametros": {"paso": 2, "n": 1}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=4.0, cantidad_producto=1), 2.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=4.0)), 2.0)
 
     def test_metro_lineal_salto_multiplica_por_n_y_cantidad(self):
         material = {"tipo_consumo": "metro_lineal_salto", "consumo_parametros": {"paso": 2, "n": 3}}
         # 5m -> 3 bloques * n=3 * cantidad=2 productos = 18
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=5.0, cantidad_producto=2), 18.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=5.0, cantidad=2)), 18.0)
 
     def test_metro_lineal_salto_sin_paso_da_cero(self):
         material = {"tipo_consumo": "metro_lineal_salto", "consumo_parametros": {"paso": 0, "n": 3}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=5.0, cantidad_producto=1), 0.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=5.0)), 0.0)
 
     def test_manual_da_cero_aca(self):
         # "manual" se resuelve en consumir_para_op vía consumos_manuales,
         # no en calcular_consumo.
         material = {"tipo_consumo": "manual", "consumo_parametros": {}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=5.0, cantidad_producto=1), 0.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=5.0)), 0.0)
 
     def test_sin_tipo_consumo_da_cero(self):
         material = {"tipo_consumo": None, "consumo_parametros": {}}
-        self.assertEqual(repo_mat.calcular_consumo(material, medida=5.0, cantidad_producto=1), 0.0)
+        self.assertEqual(repo_mat.calcular_consumo(material, _pieza(alto=5.0)), 0.0)
+
+    def test_cantidad_invalida_da_cero(self):
+        material = {"tipo_consumo": "metro_lineal_directo", "consumo_parametros": {}}
+        self.assertEqual(repo_mat.calcular_consumo(material, {"alto": 3.0, "cantidad": None}), 0.0)
+
+
+class TestPerimetro(unittest.TestCase):
+    """"perimetro" — para lo que se aplica por los BORDES de la pieza y no por su
+    largo: la silicona de un backlight va por los 4 lados del rectángulo, y
+    ninguna de las fórmulas anteriores podía expresarlo (problema que encontró
+    Bruno en testing, 2026-10-01)."""
+
+    PERIMETRO = {"tipo_consumo": "perimetro", "consumo_parametros": {"n": 1}}
+
+    def test_perimetro_unitario_es_dos_por_ancho_mas_alto(self):
+        self.assertEqual(repo_mat.perimetro_unitario(_pieza(ancho=1.5, alto=2.0)), 7.0)
+
+    def test_perimetro_unitario_no_depende_de_la_cantidad(self):
+        self.assertEqual(repo_mat.perimetro_unitario(_pieza(ancho=1.5, alto=2.0, cantidad=50)),
+                          repo_mat.perimetro_unitario(_pieza(ancho=1.5, alto=2.0, cantidad=1)))
+
+    def test_sin_una_de_las_dos_medidas_da_cero(self):
+        # Media pieza no tiene contorno: mejor 0 que un perímetro inventado con
+        # una sola dimensión.
+        self.assertEqual(repo_mat.perimetro_unitario(_pieza(ancho=0, alto=2.0)), 0.0)
+        self.assertEqual(repo_mat.perimetro_unitario({"ancho": 1.5, "cantidad": 1}), 0.0)
+
+    def test_consumo_es_el_contorno_por_la_cantidad(self):
+        # 2 × (1,48 + 2,25) = 7,46 m por pieza × 3 piezas
+        consumo = repo_mat.calcular_consumo(self.PERIMETRO, _pieza(1.48, 2.25, 3))
+        self.assertAlmostEqual(consumo, 22.38)
+
+    def test_las_pasadas_multiplican(self):
+        material = {"tipo_consumo": "perimetro", "consumo_parametros": {"n": 2}}
+        self.assertAlmostEqual(repo_mat.calcular_consumo(material, _pieza(1.0, 2.0, 1)), 12.0)
+
+    def test_sin_n_cargado_es_una_pasada(self):
+        # El caso normal es una sola pasada por el contorno: pedirle al usuario
+        # que escriba "1" para eso sería un trámite.
+        for parametros in ({}, {"n": None}, {"n": 0}, {"n": ""}):
+            material = {"tipo_consumo": "perimetro", "consumo_parametros": parametros}
+            self.assertEqual(repo_mat.calcular_consumo(material, _pieza(1.0, 2.0, 1)), 6.0,
+                              f"con parametros={parametros!r}")
+
+    def test_un_producto_sin_medidas_no_consume(self):
+        self.assertEqual(repo_mat.calcular_consumo(self.PERIMETRO, _pieza(0, 0, 5)), 0.0)
+
+
+class TestProductoBacklight(_ConRutaTemporal):
+    """"Backlight" es un nombre de producto RESERVADO: backlight no existe en el
+    catálogo de productos (es un tipo de producto), así que no había ningún nombre
+    al que asociar un material que se gasta en todos — el caso de la silicona
+    (problema que encontró Bruno en testing, 2026-10-01)."""
+
+    def test_un_backlight_se_reconoce_por_la_clave_tela(self):
+        self.assertTrue(repo_mat.es_backlight({"tela": "Popelina 155"}))
+        self.assertFalse(repo_mat.es_backlight({"textil": "Taslan", "producto": "Bandera"}))
+
+    def test_un_backlight_responde_al_nombre_reservado(self):
+        self.assertEqual(repo_mat.nombre_producto_para_consumo({"tela": "Popelina 155"}),
+                          repo_mat.PRODUCTO_BACKLIGHT)
+
+    def test_un_backlight_con_caja_tambien(self):
+        p = {"tela": "Popelina 155", "caja": {"perfil": "PERFIL 80 MM"}}
+        self.assertEqual(repo_mat.nombre_producto_para_consumo(p), repo_mat.PRODUCTO_BACKLIGHT)
+
+    def test_un_estandar_responde_a_su_propio_nombre(self):
+        p = {"textil": "Taslan", "producto": "Bandera 3x2"}
+        self.assertEqual(repo_mat.nombre_producto_para_consumo(p), "Bandera 3x2")
+
+    def _silicona(self):
+        m = repo_mat.ingresar_material("Silicona neutra", 500, tipo="metro", costo_unitario=900)
+        repo_mat.editar_material(
+            m["id"], "Silicona neutra", "metro", valor=2600,
+            tipo_consumo="perimetro", consumo_parametros={"n": 1},
+            productos_asociados=[repo_mat.PRODUCTO_BACKLIGHT],
+        )
+        return repo_mat.obtener_material(m["id"])
+
+    def _backlight(self, ancho, alto, cantidad, con_caja=False):
+        p = {"tela": "Popelina 155", "ancho": ancho, "alto": alto, "cantidad": cantidad}
+        p["caja"] = {"perfil": "PERFIL 80 MM"} if con_caja else "Sin caja"
+        return p
+
+    def test_la_silicona_la_encuentra_un_backlight_sin_caja(self):
+        self._silicona()
+        p = self._backlight(1.48, 2.25, 1)
+        encontrados = repo_mat.materiales_para_producto(
+            repo_mat.nombre_producto_para_consumo(p), [])
+        self.assertEqual([m["nombre"] for m in encontrados], ["Silicona neutra"])
+
+    def test_se_consume_en_un_backlight_con_caja(self):
+        mat = self._silicona()
+        repo_mat.consumir_para_op([self._backlight(1.48, 2.25, 2, con_caja=True)], 7001, "Cliente")
+        m = repo_mat.obtener_material(mat["id"])
+        # 2 × (1,48 + 2,25) = 7,46 m por pieza × 2 piezas = 14,92
+        self.assertAlmostEqual(m["cantidad"], 485.08, places=2)
+
+    def test_se_consume_en_un_backlight_sin_caja(self):
+        mat = self._silicona()
+        repo_mat.consumir_para_op([self._backlight(1.48, 2.25, 2)], 7002, "Cliente")
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertAlmostEqual(m["cantidad"], 485.08, places=2)
+
+    def test_no_se_consume_en_un_producto_estandar(self):
+        mat = self._silicona()
+        estandar = {"producto": "Bandera 3x2", "textil": "Taslan", "ancho": 1.0,
+                    "alto": 3.0, "cantidad": 5, "estructuras": []}
+        repo_mat.consumir_para_op([estandar], 7003, "Cliente")
+        self.assertEqual(repo_mat.obtener_material(mat["id"])["cantidad"], 500.0)
+
+    def test_una_op_mixta_solo_descuenta_por_los_backlight(self):
+        mat = self._silicona()
+        estandar = {"producto": "Bandera 3x2", "textil": "Taslan", "ancho": 1.0,
+                    "alto": 3.0, "cantidad": 5, "estructuras": []}
+        repo_mat.consumir_para_op(
+            [estandar, self._backlight(1.0, 2.0, 1)], 7004, "Cliente")
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["cantidad"], 494.0)   # solo 2×(1+2) = 6 m del backlight
+
+    def test_dos_backlight_de_la_misma_op_suman_en_una_sola_entrada(self):
+        mat = self._silicona()
+        repo_mat.consumir_para_op(
+            [self._backlight(1.0, 2.0, 1), self._backlight(1.0, 1.0, 1)], 7005, "Cliente")
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["cantidad"], 490.0)   # 6 + 4
+        consumos = [h for h in m["historial"] if h["tipo"] == "consumo"]
+        self.assertEqual(len(consumos), 1)
 
 
 class TestIndiceConsumo(_ConRutaTemporal):
@@ -789,6 +957,62 @@ class TestConsumirParaOpNoDuplicaLaCantidad(_ConRutaTemporal):
         self.assertEqual(m["cantidad"], 980.0)
 
 
+class TestConsumoEstimado(_ConRutaTemporal):
+    """consumo_estimado — la misma cuenta que consumir_para_op pero sin tocar
+    stock, para que el documento de la OP pueda listar los materiales que el
+    trabajo va a gastar (pedido de Bruno, 2026-10-01). Hasta entonces no
+    aparecían en la OP para ningún tipo de producto."""
+
+    def _silicona(self):
+        m = repo_mat.ingresar_material("Silicona", 500, tipo="metro", costo_unitario=900)
+        repo_mat.editar_material(m["id"], "Silicona", "metro", valor=2600,
+                                 tipo_consumo="perimetro", consumo_parametros={"n": 1},
+                                 productos_asociados=[repo_mat.PRODUCTO_BACKLIGHT])
+        return repo_mat.obtener_material(m["id"])
+
+    def test_suma_el_consumo_de_un_backlight(self):
+        self._silicona()
+        bl = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0,
+              "alto": 2.0, "cantidad": 2}
+        self.assertEqual(repo_mat.consumo_estimado([bl]),
+                          {"Silicona": {"consumo": 12.0, "tipo": "metro"}})
+
+    def test_suma_entre_varios_productos(self):
+        self._silicona()
+        p1 = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0, "alto": 2.0, "cantidad": 1}
+        p2 = {"tela": "Pearl 310", "caja": {"perfil": "P80"}, "ancho": 1.0, "alto": 1.0, "cantidad": 1}
+        self.assertEqual(repo_mat.consumo_estimado([p1, p2])["Silicona"]["consumo"], 10.0)
+
+    def test_no_toca_el_stock(self):
+        mat = self._silicona()
+        bl = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0, "alto": 2.0, "cantidad": 2}
+        repo_mat.consumo_estimado([bl])
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["cantidad"], 500.0)
+        self.assertEqual([h for h in m["historial"] if h["tipo"] == "consumo"], [])
+
+    def test_coincide_con_lo_que_descuenta_consumir_para_op(self):
+        mat = self._silicona()
+        bl = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.48, "alto": 2.25, "cantidad": 3}
+        estimado = repo_mat.consumo_estimado([bl])["Silicona"]["consumo"]
+        descontado = repo_mat.consumir_para_op([bl], 8001, "Cliente")[mat["id"]]
+        self.assertAlmostEqual(estimado, descontado, places=3)
+
+    def test_un_material_manual_no_aparece(self):
+        # Su consumo no se puede calcular desde la geometría: no hay cifra que
+        # mostrar en la hoja.
+        m = repo_mat.ingresar_material("Pegamento", 10, costo_unitario=500)
+        repo_mat.editar_material(m["id"], "Pegamento", "unidad", valor=900,
+                                 tipo_consumo="manual", consumo_parametros={},
+                                 productos_asociados=[repo_mat.PRODUCTO_BACKLIGHT])
+        bl = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0, "alto": 2.0, "cantidad": 1}
+        self.assertEqual(repo_mat.consumo_estimado([bl]), {})
+
+    def test_sin_materiales_asociados_da_vacio(self):
+        bl = {"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0, "alto": 2.0, "cantidad": 1}
+        self.assertEqual(repo_mat.consumo_estimado([bl]), {})
+
+
 class TestMetricasMaterial(_ConRutaTemporal):
 
     def test_las_nueve_cifras(self):
@@ -811,6 +1035,22 @@ class TestMetricasMaterial(_ConRutaTemporal):
         self.assertIsNone(met["valor_unitario"])
         self.assertIsNone(met["valor_restante"])
         self.assertIsNone(met["ganancia_unitaria"])
+
+    def test_sin_ningun_costo_registrado_los_gastos_son_none(self):
+        # Mismo criterio que un rollo sin precio de compra: "—" y no "$0", para
+        # que las dos tablas de Inventario muestren lo mismo en la misma celda.
+        creado = repo_mat.ingresar_material("Estaca", 10)
+        met = repo_mat.metricas_material(repo_mat.obtener_material(creado["id"]))
+        self.assertIsNone(met["gasto_unitario"])
+        self.assertIsNone(met["gasto_mes"])
+        self.assertIsNone(met["gasto_total"])
+
+    def test_con_costo_registrado_el_gasto_de_otro_mes_es_cero(self):
+        creado = repo_mat.ingresar_material("Estaca", 10, costo_total=10000,
+                                            fecha="12/01/2020")
+        met = repo_mat.metricas_material(repo_mat.obtener_material(creado["id"]))
+        self.assertEqual(met["gasto_mes"], 0.0)
+        self.assertEqual(met["gasto_total"], 10000.0)
 
     def test_sin_costo_la_ganancia_unitaria_es_none(self):
         creado = repo_mat.ingresar_material("Estaca", 10)
@@ -900,6 +1140,164 @@ class TestCobroMaterialesProducto(_ConRutaTemporal):
             cobro = repo_mat.cobro_materiales_producto(_producto(cantidad=10))
         self.assertEqual(cobro["estructuras"], {})
         self.assertEqual(cobro["materiales_producto"], {})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Con el módulo Inventario APAGADO, todo lo que materiales le hace al resto de la
+# app queda inerte (requisito de Bruno, 2026-10-01): "aún cabe la posibilidad de
+# un release anterior de emergencia, por lo que DEBE funcionar bien con el módulo
+# inhabilitado". No se descuenta stock, no se cuentan ventas ni ganancias, no se
+# piden consumos manuales, la OP no lista materiales, y las cotizaciones cobran
+# por el catálogo estático. Mismo criterio que rollos
+# (core.repositorio_inventario._inventario_habilitado), que ya lo cumplía.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class _ConInventarioApagado(_ConRutaTemporal):
+    """Carpeta temporal + el módulo Inventario deshabilitado."""
+
+    def setUp(self):
+        super().setUp()
+        from core import config as _config
+        parche = mock.patch.dict(_config.MODULOS_HABILITADOS, {"inventario": False})
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _material_completo(self):
+        """Material con todo cargado: stock, costo, precio de venta y fórmula,
+        asociado a un producto y a una estructura. Se crea con el módulo apagado
+        a propósito — el CRUD de Inventario sigue andando, lo que se apaga es lo
+        que cruza a Cotizaciones/OPs."""
+        m = repo_mat.ingresar_material("Silicona", 500, tipo="metro", costo_unitario=900)
+        repo_mat.editar_material(
+            m["id"], "Silicona", "metro", valor=2600,
+            tipo_consumo="perimetro", consumo_parametros={"n": 1},
+            productos_asociados=[repo_mat.PRODUCTO_BACKLIGHT, "Bandera 3x2"],
+            estructuras_asociadas=["Base auto"],
+        )
+        return repo_mat.obtener_material(m["id"])
+
+    def _backlight(self):
+        return {"tela": "Popelina 155", "caja": "Sin caja",
+                "ancho": 1.0, "alto": 2.0, "cantidad": 2}
+
+    def _estandar(self):
+        return {"producto": "Bandera 3x2", "textil": "Taslan", "ancho": 1.0,
+                "alto": 2.0, "cantidad": 2, "estructuras": ["Base auto"]}
+
+
+class TestModuloApagadoNoDescuentaStock(_ConInventarioApagado):
+
+    def test_consumir_para_op_no_toca_nada(self):
+        mat = self._material_completo()
+        movimientos = len(mat["historial"])
+        resultado = repo_mat.consumir_para_op(
+            [self._backlight(), self._estandar()], 9001, "Cliente")
+        self.assertEqual(resultado, {})
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["cantidad"], 500.0)
+        self.assertEqual(len(m["historial"]), movimientos)
+
+    def test_no_cuenta_ventas_ni_ganancias(self):
+        mat = self._material_completo()
+        repo_mat.consumir_para_op([self._backlight()], 9002, "Cliente")
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["vendido_acumulado"], 0.0)
+        self.assertEqual(m["ganancia_acumulada"], 0.0)
+        met = repo_mat.metricas_material(m)
+        self.assertEqual(met["valor_vendido"], 0.0)
+        self.assertEqual(met["ganancia_mes"], 0.0)
+        self.assertEqual(met["ganancia_total"], 0.0)
+
+    def test_ignora_los_consumos_manuales_que_le_pasen(self):
+        mat = self._material_completo()
+        repo_mat.editar_material(mat["id"], "Silicona", "metro", valor=2600,
+                                 tipo_consumo="manual", consumo_parametros={},
+                                 productos_asociados=[repo_mat.PRODUCTO_BACKLIGHT])
+        repo_mat.consumir_para_op([self._backlight()], 9003, "Cliente",
+                                  consumos_manuales={mat["id"]: 99.0})
+        self.assertEqual(repo_mat.obtener_material(mat["id"])["cantidad"], 500.0)
+
+
+class TestModuloApagadoNoAfectaPrecios(_ConInventarioApagado):
+
+    def test_no_hay_cobro_por_materiales(self):
+        self._material_completo()
+        cobro = repo_mat.cobro_materiales_producto(self._estandar())
+        self.assertEqual(cobro["estructuras"], {})
+        self.assertEqual(cobro["materiales_producto"], {})
+        self.assertEqual(cobro["detalle"], {})
+
+    def test_un_backlight_tampoco_cobra_materiales(self):
+        self._material_completo()
+        cobro = repo_mat.cobro_materiales_producto(self._backlight())
+        self.assertEqual(cobro["materiales_producto"], {})
+
+    def test_el_catalogo_estatico_no_se_pisa(self):
+        self._material_completo()
+        catalogo = {"Base auto": {"valorUNIT": 11000.0}, "Silicona": {"valorUNIT": 999.0}}
+        with mock.patch("core.repositorio.ESTRUCTURAS_LEGADO_VALORES", catalogo):
+            self.assertEqual(repo_mat.estructuras_legado_valores_efectivos(), catalogo)
+
+    def test_la_cotizacion_cobra_por_catalogo(self):
+        from core.precios import costo_producto
+        self._material_completo()
+        d = {"producto": "Bandera 3x2", "textil": "T", "impresion": "Cara única",
+             "ancho": 1.0, "alto": 2.0, "cantidad": 2,
+             "estructuras": ["Base auto"], "terminaciones": []}
+        catalogo = {"Base auto": {"valorUNIT": 11000.0}}
+        costo = costo_producto(d, textiles_valores={"T": 0.0}, textiles_anchos={"T": 1.2},
+                               estructuras_legado_valores=catalogo,
+                               cobro_materiales=repo_mat.cobro_materiales_producto)
+        self.assertEqual(costo["costo_estructuras"], 22000.0)   # 2 x 11.000, catálogo
+        self.assertEqual(costo["detalle_estructuras"], {"Base auto": 22000.0})
+
+    def test_un_backlight_no_suma_costo_materiales(self):
+        from core.precios import costo_producto
+        self._material_completo()
+        d = {"tela": "T", "caja": "Sin caja", "ancho": 1.0, "alto": 2.0,
+             "cantidad": 2, "tema": "", "obs": ""}
+        costo = costo_producto(d, textiles_valores={"T": 0.0}, textiles_anchos={"T": 1.2},
+                               cobro_materiales=repo_mat.cobro_materiales_producto)
+        self.assertEqual(costo["costo_materiales"], 0.0)
+        self.assertEqual(costo["total"], costo["costo_impresion"])
+
+
+class TestModuloApagadoNoAparecenEnLaOp(_ConInventarioApagado):
+
+    def test_consumo_estimado_da_vacio(self):
+        self._material_completo()
+        self.assertEqual(repo_mat.consumo_estimado([self._backlight(), self._estandar()]), {})
+
+    def test_materiales_para_producto_da_vacio(self):
+        self._material_completo()
+        self.assertEqual(repo_mat.materiales_para_producto("Bandera 3x2", ["Base auto"]), [])
+        self.assertEqual(repo_mat.materiales_para_producto(repo_mat.PRODUCTO_BACKLIGHT), [])
+
+
+class TestModuloApagadoElCrudSigueAndando(_ConInventarioApagado):
+    """Lo que se apaga es lo que CRUZA a Cotizaciones/OPs. El módulo en sí sigue
+    funcionando para quien lo tenga a la vista: si no, no se podría ir
+    arreglándolo con la marcha."""
+
+    def test_se_puede_crear_y_editar_un_material(self):
+        mat = self._material_completo()
+        self.assertEqual(mat["cantidad"], 500.0)
+        self.assertEqual(mat["valor"], 2600.0)
+
+    def test_se_puede_ajustar_stock_y_precio(self):
+        mat = self._material_completo()
+        repo_mat.ajustar_cantidad(mat["id"], 480, "recuento")
+        repo_mat.ajustar_valor(mat["id"], 2900)
+        m = repo_mat.obtener_material(mat["id"])
+        self.assertEqual(m["cantidad"], 480.0)
+        self.assertEqual(m["valor"], 2900.0)
+
+    def test_las_metricas_del_material_se_siguen_calculando(self):
+        mat = self._material_completo()
+        met = repo_mat.metricas_material(repo_mat.obtener_material(mat["id"]))
+        self.assertEqual(met["gasto_unitario"], 900.0)
+        self.assertEqual(met["valor_unitario"], 2600.0)
+        self.assertEqual(met["ganancia_unitaria"], 1700.0)
 
 
 if __name__ == "__main__":

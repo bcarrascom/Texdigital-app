@@ -1248,6 +1248,15 @@ dialog p { margin-top: var(--e-2); color: var(--c-texto-suave); font-size: var(-
          confundiría, como si faltara información en vez de no aplicar. */
       if ((!c.materiales || !c.materiales.length) && p.perfil && p.perfil !== "Sin caja")
         linea("Materiales", "—");
+      /* Materiales de Inventario que gasta este backlight (la silicona de los 4
+         bordes es el caso que lo motivó — pedido de Bruno, 2026-10-01): cuánto
+         se usa Y cuánto se cobra en la misma línea, porque las dos cifras se
+         revisan juntas. Aplican con caja y sin caja, a diferencia de los
+         materiales de caja de arriba. */
+      (c.materiales_inventario || []).forEach((m) => {
+        linea(m.nombre,
+              `${TD.fmt.cantidad(m.consumo)} ${m.unidad} · ${TD.fmt.pesos(m.monto)}`);
+      });
       if (c.valor_unitario != null) linea("Valor unitario", TD.fmt.pesos(c.valor_unitario));
       if (c.total != null) linea("Total producto", TD.fmt.pesos(c.total), "cifra--total");
     }
