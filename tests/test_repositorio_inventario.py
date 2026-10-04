@@ -859,5 +859,106 @@ class TestInventarioApagado(_ConRutaTemporalYCatalogo):
             self.assertTrue(repo_inv._inventario_habilitado())
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# metricas_rollo — las mismas 9 cifras que la tabla de materiales no textiles,
+# para un rollo (pedido de Bruno, 2026-10-01: igualar las dos tablas de
+# Inventario). Las diferencias vienen de que un rollo es un LOTE con una compra
+# única y un material una bodega con promedio móvil.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _rollo(precio_compra=300000.0, iniciales=200.0, restantes=200.0,
+           valor=10500.0, fecha="12/09/2026", usos=None):
+    return {"id": "0001", "nombre_textil": "Jersey", "ancho": 1.6,
+            "metros_iniciales": iniciales, "metros_restantes": restantes,
+            "fecha": fecha, "precio_compra": precio_compra, "valor": valor,
+            "proveedor": "Proveedor X", "estado": "activo", "usos": usos or []}
+
+
+class TestCostoUnitarioRollo(unittest.TestCase):
+
+    def test_es_el_precio_dividido_por_los_metros(self):
+        self.assertEqual(repo_inv.costo_unitario_rollo(_rollo()), 1500.0)
+
+    def test_sin_precio_de_compra_da_none(self):
+        self.assertIsNone(repo_inv.costo_unitario_rollo(_rollo(precio_compra=None)))
+
+    def test_precio_en_cero_cuenta_como_no_cargado(self):
+        # crear_rollo guarda 0.0 cuando el campo viene vacío (es opcional): un 0
+        # significa "no se sabe", no "salió gratis". Con un costo de 0 inventado,
+        # la ganancia por metro saldría igual al precio de venta entero.
+        self.assertIsNone(repo_inv.costo_unitario_rollo(_rollo(precio_compra=0.0)))
+
+    def test_sin_metros_iniciales_da_none(self):
+        self.assertIsNone(repo_inv.costo_unitario_rollo(_rollo(iniciales=0.0)))
+
+
+class TestMetricasRollo(unittest.TestCase):
+
+    def test_las_nueve_cifras_de_un_rollo_entero(self):
+        met = repo_inv.metricas_rollo(_rollo(restantes=140.0))
+        self.assertEqual(met["gasto_unitario"], 1500.0)
+        self.assertEqual(met["gasto_total"], 300000.0)
+        self.assertEqual(met["valor_unitario"], 10500.0)
+        self.assertEqual(met["valor_restante"], 1470000.0)     # 140 x 10.500
+        self.assertEqual(met["valor_vendido"], 630000.0)       # 60 gastados x 10.500
+        self.assertEqual(met["ganancia_unitaria"], 9000.0)     # 10.500 - 1.500
+        self.assertEqual(met["ganancia_total"], 540000.0)      # 60 x 9.000
+
+    def test_el_gasto_del_mes_es_la_compra_solo_si_fue_este_mes(self):
+        hoy = datetime.now().strftime("%d/%m/%Y")
+        self.assertEqual(repo_inv.metricas_rollo(_rollo(fecha=hoy))["gasto_mes"], 300000.0)
+        self.assertEqual(repo_inv.metricas_rollo(_rollo(fecha="12/01/2020"))["gasto_mes"], 0.0)
+
+    def test_sin_precio_de_compra_los_gastos_son_none_no_cero(self):
+        # El rollo costó algo, solo que no se cargó: "—" y no "$0", igual que en
+        # la tabla de materiales.
+        met = repo_inv.metricas_rollo(_rollo(precio_compra=0.0))
+        self.assertIsNone(met["gasto_unitario"])
+        self.assertIsNone(met["gasto_mes"])
+        self.assertIsNone(met["gasto_total"])
+        self.assertIsNone(met["ganancia_unitaria"])
+        self.assertIsNone(met["ganancia_total"])
+
+    def test_sin_valor_lo_de_venta_es_none(self):
+        met = repo_inv.metricas_rollo(_rollo(valor=None))
+        self.assertIsNone(met["valor_unitario"])
+        self.assertIsNone(met["valor_restante"])
+        self.assertIsNone(met["valor_vendido"])
+        self.assertIsNone(met["ganancia_unitaria"])
+
+    def test_un_rollo_sin_gastar_no_vendio_nada(self):
+        met = repo_inv.metricas_rollo(_rollo(restantes=200.0))
+        self.assertEqual(met["valor_vendido"], 0.0)
+        self.assertEqual(met["ganancia_total"], 0.0)
+
+    def test_la_ganancia_del_mes_sale_de_los_consumos_del_mes(self):
+        hoy = datetime.now().strftime("%d/%m/%Y")
+        usos = [
+            {"tipo": "consumo", "fecha": hoy,
+             "metros_restantes_anterior": 200.0, "metros_restantes_nuevo": 180.0},
+            {"tipo": "consumo", "fecha": "12/01/2020",
+             "metros_restantes_anterior": 180.0, "metros_restantes_nuevo": 140.0},
+        ]
+        met = repo_inv.metricas_rollo(_rollo(restantes=140.0, usos=usos))
+        self.assertEqual(met["ganancia_mes"], 180000.0)    # 20 m de este mes x 9.000
+        self.assertEqual(met["ganancia_total"], 540000.0)  # los 60 gastados
+
+    def test_los_ajustes_manuales_no_cuentan_como_venta_del_mes(self):
+        hoy = datetime.now().strftime("%d/%m/%Y")
+        usos = [{"tipo": "ajuste", "fecha": hoy,
+                 "metros_restantes_anterior": 200.0, "metros_restantes_nuevo": 140.0}]
+        self.assertEqual(repo_inv.metricas_rollo(_rollo(restantes=140.0, usos=usos))["ganancia_mes"], 0.0)
+
+    def test_tiene_las_mismas_claves_que_un_material(self):
+        # Es lo que permite que las dos tablas usen el mismo render (celdasPlata
+        # en menu.html): si una de las dos cambia de nombre una clave, se rompe.
+        import core.repositorio_materiales as repo_mat
+        material = {"valor": 100.0, "gasto_unitario": 50.0, "cantidad": 10.0,
+                    "gasto_acumulado": 500.0, "vendido_acumulado": 0.0,
+                    "ganancia_acumulada": 0.0, "historial": []}
+        self.assertEqual(sorted(repo_inv.metricas_rollo(_rollo())),
+                          sorted(repo_mat.metricas_material(material)))
+
+
 if __name__ == "__main__":
     unittest.main()

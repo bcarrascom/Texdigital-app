@@ -276,6 +276,10 @@ def costo_producto(
         exactamente como antes.
       - Los materiales asociados al PRODUCTO (no a una de sus estructuras)
         se suman también, a la misma línea de Estructuras del desglose.
+      - En un producto BACKLIGHT no hay línea de Estructuras: los materiales que
+        gasta (asociados al nombre reservado "Backlight", ver
+        core.repositorio_materiales.PRODUCTO_BACKLIGHT) van a su propia línea,
+        "costo_materiales", y suman al total igual que la caja.
       - Un monto escrito a mano ("$10.000", ver parsear_valor_manual) le gana
         a todo: es un precio que alguien decidió para ESTE producto.
     En None (default) nada de esto corre y el cálculo es el de siempre — es
@@ -310,16 +314,28 @@ def costo_producto(
             )
             costo_caja = detalle_caja["valor_total"]
 
+        # Materiales de Inventario que gasta este backlight (la silicona de los
+        # 4 bordes es el caso que lo motivó — pedido de Bruno, 2026-10-01). Van
+        # en su propia línea y no sumados a "estructuras" como en los productos
+        # estándar: un backlight no tiene línea de Estructuras, su desglose es
+        # impresión + caja, así que meterlos ahí sería inventar una categoría que
+        # en este producto no existe.
+        cobro_bl = cobro_materiales(d) if cobro_materiales is not None else None
+        detalle_materiales_bl = (cobro_bl or {}).get("detalle", {})
+        costo_materiales = sum((cobro_bl or {}).get("materiales_producto", {}).values())
+
         resultado = {
             "ml_o_area":          area,
             "costo_impresion":    costo_impresion,
             "costo_terminaciones": 0.0,
             "costo_estructuras":   0.0,
             "costo_caja":         costo_caja,
+            "costo_materiales":   costo_materiales,
             "detalle_estructuras":  {},
             "detalle_terminaciones": {},
             "detalle_caja":       detalle_caja,
-            "total":               costo_impresion + costo_caja,
+            "detalle_materiales": detalle_materiales_bl,
+            "total":               costo_impresion + costo_caja + costo_materiales,
         }
     else:
         ancho_tela = textiles_anchos.get(d.get("textil", ""))
@@ -416,6 +432,11 @@ def costo_producto(
             "costo_impresion":      costo_impresion,
             "costo_terminaciones":  costo_terminaciones,
             "costo_estructuras":    costo_estructuras,
+            # En los estándar el cobro por materiales ya está sumado dentro de
+            # costo_estructuras (decisión de Bruno: "a la línea de Estructuras"),
+            # así que esta clave va en 0 para no contarlo dos veces. Existe igual
+            # para que el dict de salida sea el mismo en los dos tipos de producto.
+            "costo_materiales":     0.0,
             "detalle_estructuras":  detalle_estructuras,
             "detalle_terminaciones": detalle_terminaciones,
             # {nombre_material: {consumo, valor, monto, origen}} de lo que se

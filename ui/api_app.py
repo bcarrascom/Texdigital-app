@@ -673,12 +673,12 @@ class ApiApp:
         costo_total=None, costo_unitario=None,
         tipo_consumo=None, consumo_parametros=None,
         productos_asociados=None, estructuras_asociadas=None,
-        fecha=None,
+        fecha=None, valor=None,
     ) -> dict:
         return self._inventario.ingresar_material(
             nombre, cantidad, tipo, proveedor, costo_total, costo_unitario,
             tipo_consumo, consumo_parametros, productos_asociados, estructuras_asociadas,
-            fecha,
+            fecha, valor,
         )
 
     def editar_material(

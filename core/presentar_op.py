@@ -348,6 +348,28 @@ def _html_caja(caja: dict) -> str:
     return _bloque_valores("Materiales de caja", filas)
 
 
+def _html_materiales_inventario(productos_internos: list[dict]) -> str:
+    """Bloque "Materiales": los materiales no textiles de Inventario que este
+    trabajo va a gastar, con la cantidad (pedido de Bruno, 2026-10-01).
+
+    Antes no aparecían en la OP para NINGÚN tipo de producto —ni backlight ni
+    estándar— aunque sí se descontaban del stock al aprobar: el taller no tenía
+    forma de saber desde la hoja que ese trabajo lleva silicona u ojalillos. La
+    cuenta es la misma que descuenta el stock (core.repositorio_materiales.
+    consumo_estimado), no una aproximación aparte.
+
+    Import adentro de la función: este módulo no depende de Inventario para
+    armar el resto del documento, y así una instalación sin esa carpeta sigue
+    imprimiendo OPs."""
+    from core.repositorio_materiales import consumo_estimado
+
+    filas = []
+    for nombre, det in sorted(consumo_estimado(productos_internos).items()):
+        unidad = "ML" if det["tipo"] == "metro" else "un."
+        filas.append((nombre, f"{_fmt_cantidad(det['consumo'])} {unidad}"))
+    return _bloque_valores("Materiales", filas)
+
+
 def _encabezado_productos(es_backlight: bool) -> str:
     """<thead> de la tabla de productos. Backlight suma 2 columnas de
     corte de tela (ver _corte) — el resto de las columnas se angostan
@@ -453,6 +475,7 @@ def generar_html(op: dict) -> Path:
         _html_estructuras(estructuras),
         _html_terminaciones(terminaciones),
         _html_caja(caja),
+        _html_materiales_inventario(productos_internos),
     ]
     bloques = [b for b in bloques if b]  # solo los tipos de material que la OP realmente usa
     seccion_materiales = (

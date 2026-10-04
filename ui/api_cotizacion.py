@@ -457,10 +457,23 @@ class ApiCotizacion:
                 watts = tabla["watts"]
             else:
                 watts = 0
+            # Materiales de Inventario que gasta este backlight (la silicona
+            # de los 4 bordes, ver core.repositorio_materiales), con cuánto se
+            # usa y cuánto se cobra: el panel derecho los muestra en una línea
+            # cada uno (pedido de Bruno, 2026-10-01). Es lista y no dict para
+            # que el orden que ve el usuario sea estable.
+            materiales_inventario = [
+                {"nombre": nombre, "consumo": det["consumo"],
+                 "unidad": "m" if det.get("tipo") == "metro" else "un.",
+                 "monto": det["monto"]}
+                for nombre, det in sorted(costo.get("detalle_materiales", {}).items())
+            ]
             return {
                 "m2": costo["ml_o_area"],
                 "watts": watts,
                 "materiales": materiales,
+                "materiales_inventario": materiales_inventario,
+                "costo_materiales": costo.get("costo_materiales", 0.0),
                 "ancho_max": ancho_max,
                 "error": error,
                 "valor_unitario": costo["valor_unitario"],

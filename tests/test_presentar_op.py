@@ -560,6 +560,67 @@ class TestTerminacionesCajaSegunPerfil(unittest.TestCase):
         self.assertEqual(interno["terminaciones_caja"], "AREA VISUAL")
 
 
+class TestBloqueMaterialesDeInventario(_ConCarpetaTemporal):
+    """La OP lista los materiales no textiles que el trabajo va a gastar (pedido
+    de Bruno, 2026-10-01). Antes no aparecían para NINGÚN tipo de producto, ni
+    backlight ni estándar, aunque sí se descontaban del stock al aprobar."""
+
+    def setUp(self):
+        super().setUp()
+        # Inventario en carpeta temporal: el bloque se arma desde ahí.
+        import core.repositorio_materiales as repo_mat
+        self._repo_mat = repo_mat
+        self._tmp_inv = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_inv.cleanup)
+        parche = mock.patch.object(repo_mat, "_ruta_base",
+                                   lambda: Path(self._tmp_inv.name))
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _silicona(self):
+        m = self._repo_mat.ingresar_material("Silicona", 500, tipo="metro", costo_unitario=900)
+        self._repo_mat.editar_material(
+            m["id"], "Silicona", "metro", valor=2600,
+            tipo_consumo="perimetro", consumo_parametros={"n": 1},
+            productos_asociados=[self._repo_mat.PRODUCTO_BACKLIGHT])
+
+    def _materiales(self, op):
+        from core.presentar_op import generar_html
+        html = Path(generar_html(op)).read_text(encoding="utf-8")
+        if '<div class="materiales"' not in html:
+            return ""
+        sec = html[html.index('<div class="materiales"'):]
+        return sec[:sec.index("<button")]
+
+    def test_un_backlight_lista_la_silicona_con_su_cantidad(self):
+        self._silicona()
+        op = _op_backlight(9401, ancho=1.0, alto=2.0, cantidad=2)
+        sec = self._materiales(op)
+        self.assertIn("<h3>Materiales</h3>", sec)
+        self.assertIn("Silicona", sec)
+        self.assertIn("12 ML", sec)   # 2 x (1 + 2) = 6 m por pieza x 2
+
+    def test_sin_materiales_asociados_no_hay_bloque(self):
+        op = _op_backlight(9402, ancho=1.0, alto=2.0, cantidad=2)
+        self.assertNotIn("<h3>Materiales</h3>", self._materiales(op))
+
+    def test_un_producto_estandar_tambien_lo_lista(self):
+        m = self._repo_mat.ingresar_material("Ojalillo", 5000, costo_unitario=40)
+        self._repo_mat.editar_material(
+            m["id"], "Ojalillo", "unidad", valor=120,
+            tipo_consumo="fijo_por_producto", consumo_parametros={"n": 6},
+            productos_asociados=["Bandera"])
+        op = _op_normal(9403)
+        op["productos"][0]["Cantidad"] = 10
+        sec = self._materiales(op)
+        self.assertIn("<h3>Materiales</h3>", sec)
+        self.assertIn("60 un.", sec)   # 6 por pieza x 10
+
+    def test_la_unidad_sale_del_tipo_del_material(self):
+        self._silicona()
+        self.assertIn("ML", self._materiales(_op_backlight(9404, ancho=1.0, alto=2.0)))
+
+
 class TestCajaNuestraFuerzaElMargen(unittest.TestCase):
     """Un producto con caja nuestra se corta siempre con el margen de caja
     terminada, sin importar lo que diga el JSON guardado: el ancho×alto cotizado
