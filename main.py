@@ -173,7 +173,11 @@ def _iniciar_app():
     from ui.api_app import ApiApp
 
     preparar_panel_oculto()
-    ApiApp().crear_ventana()
+    # --react: interfaz nueva en React (rama refactor/react, ver ui/api_app.py).
+    # --dev: además, cargarla desde el servidor de Vite (npm run dev).
+    modo_react = "--react" in sys.argv
+    url_dev = "http://localhost:5173" if modo_react and "--dev" in sys.argv else None
+    ApiApp(modo_react=modo_react, url_dev=url_dev).crear_ventana()
     webview.start()
 
 

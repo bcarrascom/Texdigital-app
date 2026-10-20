@@ -65,6 +65,19 @@ ApiVerCotizacion, ApiVerOp, ApiHistorialOps, ApiCotizacion, cada una en
 su propio archivo, sin cambios de fondo) — esta clase las instancia UNA
 vez y les delega; lo único que se centraliza acá es la navegación (antes
 repartida como self._navegar()/_destino_volver por cada clase).
+
+Modo React (rama refactor/react, `python main.py --react`): la ventana
+carga la app de React (frontend/dist/index.html, servida por el servidor
+HTTP interno de pywebview — los módulos ES no cargan sobre file://) y la
+navegación pasa a ser 100% del cliente (React Router). En ese modo
+_cargar() no navega nunca: solo deja registrado el estado, para que los
+métodos que hoy terminan en _ir() (eliminar_cotizacion, aprobar_cotizacion,
+etc.) sigan sirviendo sin cambios mientras la pantalla de React decide
+adónde ir. Cada pantalla de React pide su contexto con
+obtener_contexto(pantalla, argumentos) en vez de depender de
+self._pantalla_actual. Con `--dev` carga el servidor de Vite
+(http://localhost:5173) en vez del build, para tener recarga en caliente
+dentro de la app real.
 """
 
 import json
@@ -77,7 +90,7 @@ from core import config as _config
 from core.config import MODULOS_HABILITADOS
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
-from core.rutas import RECURSOS, DOCS as _DOCS
+from core.rutas import RECURSOS, DOCS as _DOCS, FRONTEND
 from core.version import VERSION
 
 from ui.api_menu import ApiMenu
@@ -142,8 +155,15 @@ def _abrir_manual_usuario() -> None:
 
 class ApiApp:
 
-    def __init__(self):
+    def __init__(self, modo_react: bool = False, url_dev: str | None = None):
         self._ventana = None
+        # Ver "Modo React" en el docstring del módulo. url_dev solo tiene
+        # sentido con modo_react (servidor de Vite en vez del build).
+        self._modo_react = modo_react
+        self._url_dev = url_dev
+        # Ruta actual de React Router (ver notificar_ruta) — la usa la X
+        # nativa para decidir entre "Volver" y cerrar la app.
+        self._ruta_react = "/"
         self._pantalla_actual = "menu"
         self._args_actuales: dict = {}
         # Pila de navegación real — cada _ir() apila de dónde se viene,
@@ -170,9 +190,19 @@ class ApiApp:
         UNA vez, antes de webview.start() (ver main.py) — junto con
         ui.panel_produccion.preparar_panel_oculto()."""
         import webview
+        if self._modo_react:
+            # Ruta pelada, sin file:// a propósito: pywebview la sirve con su
+            # servidor HTTP interno (ver webview/util.py::is_local_url).
+            url = self._url_dev or str(FRONTEND / "index.html")
+            if not self._url_dev and not (FRONTEND / "index.html").exists():
+                raise FileNotFoundError(
+                    f"No existe {FRONTEND / 'index.html'} — correr `npm run build` en frontend/."
+                )
+        else:
+            url = (RUTA_PANTALLAS / _ARCHIVOS["menu"]).as_uri()
         self._ventana = webview.create_window(
             _TITULOS["menu"],
-            url=(RUTA_PANTALLAS / _ARCHIVOS["menu"]).as_uri(),
+            url=url,
             js_api=self,
             width=1360,
             height=860,
@@ -198,6 +228,8 @@ class ApiApp:
 
         self._pantalla_actual = pantalla
         self._args_actuales = argumentos
+        if self._modo_react:
+            return  # React Router navega solo (ver docstring del módulo)
         self._ventana.set_title(_TITULOS.get(pantalla, "TexDigital"))
         # file:// explícito (no una ruta pelada — pywebview la trataría
         # como "local, levantar el servidor HTTP interno") + argumentos
@@ -273,6 +305,15 @@ class ApiApp:
         de una navegación normal: como load_url() no destruye la
         ventana, "closing" solo se dispara con un cierre nativo de
         verdad."""
+        if self._modo_react:
+            if self._ruta_react in ("", "/"):
+                from ui.panel_produccion import salir_app
+                salir_app()
+                return None
+            # En un hilo aparte, igual que _cargar(): no bloquear el evento
+            # nativo de cierre esperando a la página.
+            threading.Timer(0, lambda: self._ventana.run_js("window.TD && TD.volver && TD.volver()")).start()
+            return False
         if self._pantalla_actual == "menu":
             from ui.panel_produccion import salir_app
             salir_app()
@@ -282,7 +323,11 @@ class ApiApp:
 
     # ── Contrato común (ver app.js) ──────────────────────────────────────────
 
-    def obtener_contexto(self) -> dict:
+    def obtener_contexto(self, pantalla: str | None = None, argumentos: dict | None = None) -> dict:
+        """Sin argumentos (pantallas HTML viejas): contexto de la pantalla
+        a la que navegó Python. Con `pantalla` (React, ver docstring del
+        módulo): la pantalla dice cuál es y con qué argumentos de su ruta,
+        sin depender de self._pantalla_actual."""
         preferencias = cargar_preferencias()
         hoy = datetime.now()
         ctx = {
@@ -293,7 +338,10 @@ class ApiApp:
             "modulos_habilitados": MODULOS_HABILITADOS,
             "stock_minimo_ml":     _config.STOCK_MINIMO_ML,
         }
-        pantalla, args = self._pantalla_actual, self._args_actuales
+        if pantalla is None:
+            pantalla, args = self._pantalla_actual, self._args_actuales
+        else:
+            args = argumentos or {}
         if pantalla == "ver-cotizacion":
             ctx.update(self._ver_cotizacion.contexto_extra(args.get("numero")))
         elif pantalla == "ver-op":
@@ -324,6 +372,18 @@ class ApiApp:
     def volver(self) -> None:
         pantalla, argumentos = self._historial.pop() if self._historial else ("menu", {})
         self._cargar(pantalla, argumentos)
+
+    def notificar_ruta(self, ruta: str) -> None:
+        """React avisa en cada cambio de ruta (ver frontend/src/router) —
+        solo para que la X nativa sepa si está en el inicio o no (ver
+        _al_cerrar_nativo)."""
+        self._ruta_react = ruta or "/"
+
+    def poner_titulo(self, titulo: str) -> None:
+        """Título de la ventana nativa — pywebview no lo sincroniza solo
+        con document.title, y en modo React ya no pasa por _cargar()."""
+        if self._ventana is not None:
+            self._ventana.set_title(titulo or "TexDigital")
 
     def recordar_vista_inventario(self, vista: str) -> None:
         """menu.html llama acá cada vez que el usuario cambia de sub-vista

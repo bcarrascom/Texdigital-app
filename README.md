@@ -37,6 +37,36 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Interfaz en React (en migración, rama `refactor/react`)
+
+La interfaz nueva vive en `frontend/` (Vite + React + React Router + Motion).
+Requiere Node.js 20+.
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173 en el navegador, con datos de prueba (mocks)
+npm run build      # genera frontend/dist/, lo que carga la app
+```
+
+```bash
+python main.py --react         # la app con la interfaz nueva (usa frontend/dist/)
+python main.py --react --dev   # ídem, pero cargando `npm run dev` (recarga en caliente)
+python main.py                 # la interfaz anterior, sin cambios
+```
+
+```
+frontend/src/
+  pages/        una carpeta por pantalla (Pagina.jsx + Pagina.css)
+  components/   piezas reutilizables (Cabecera, Pagina, Cargando, ...)
+  hooks/        useDatos, useAtajo, useVolver
+  context/      estado global: contexto de la app, escala de texto, avisos
+  services/     api.js (puente a Python) y mocks/ (datos de prueba)
+  router/       rutas.js (todas las URLs) y RutasAnimadas.jsx (transiciones)
+  utils/        formato.js (pesos, medidas, fechas)
+  assets/       styles/base.css (sistema de diseño) y svg/ (íconos Lucide)
+```
+
 ## Generar build de macOS
 
 ```bash

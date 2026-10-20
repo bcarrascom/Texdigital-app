@@ -1,0 +1,14 @@
+.pag-inicio {
+  .indice { display: grid; gap: var(--e-5); }
+  .indice__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-2); }
+  .indice__item {
+    display: flex; align-items: center; gap: var(--e-3);
+    padding: var(--e-3) var(--e-4);
+    background: var(--c-tema-relleno);
+    border: 1.5px solid var(--c-tema-borde);
+    border-radius: var(--r-lg);
+  }
+  .indice__nombre { flex: 1; font-weight: var(--peso-medio); color: var(--c-tema-tinta); }
+  .indice__item .entrada { width: 9rem; }
+  .indice__btn--off { opacity: .4; pointer-events: none; }
+}

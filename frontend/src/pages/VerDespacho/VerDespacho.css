@@ -1,0 +1,57 @@
+/* Estilos propios de VerDespacho — anidados bajo .pag-ver-despacho para que
+   .hoja, .datos, etc. no choquen con clases del mismo nombre en otras páginas. */
+.pag-ver-despacho {
+  .vista-despacho {
+    width: min(100%, 68rem); margin-inline: auto;
+    display: grid; gap: var(--e-4);
+  }
+
+  .hoja {
+    display: grid; gap: var(--e-4);
+    padding: var(--e-5);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+  .hoja__cab { display: flex; align-items: baseline; gap: var(--e-3); flex-wrap: wrap; }
+  .hoja__num {
+    font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+    line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+  }
+  .hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+  .hoja__badges { display: flex; gap: var(--e-2); margin-left: auto; }
+
+  .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+  .dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+  .dato__et {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+
+  .tabla-productos input[type="number"] { width: 6rem; text-align: right; }
+  .tabla-productos .direccion-celda { font-size: var(--t-xs); color: var(--c-texto-suave); }
+  /* Filas cuyos productos NO comparten la dirección del grupo que se está
+     armando quedan atenuadas. */
+  .tabla-productos tr.fuera-de-grupo { opacity: .45; transition: opacity var(--m-rapida) var(--ease-salida); }
+
+  .guias { display: grid; gap: var(--e-2); list-style: none; padding: 0; margin: 0; }
+  .guia-item {
+    display: flex; align-items: center; gap: var(--e-3);
+    padding: var(--e-3); border: 1px solid var(--c-borde); border-radius: var(--r-md);
+    background: var(--c-superficie);
+  }
+  .guia-item__n { font-family: var(--f-mono); font-weight: var(--peso-fuerte); color: var(--c-tema-fuerte); }
+  .guia-item__resumen { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--c-texto-suave);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .guias-vacio, .vacio { font-size: var(--t-sm); color: var(--c-texto-tenue); }
+
+  .generar { display: grid; gap: var(--e-3); }
+  .generar__acciones { display: flex; justify-content: flex-end; gap: var(--e-2); }
+  .completo-aviso {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: var(--e-4); border-radius: var(--r-md);
+    background: var(--c-ok-suave); color: var(--c-ok); font-weight: var(--peso-medio);
+  }
+}
