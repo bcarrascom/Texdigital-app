@@ -12,12 +12,19 @@ import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
 import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
+/* Rutas que, entre sí, son la MISMA página: pasar de una a otra no desmonta
+   la página (no hay transición del router), la página anima su propio
+   contenido. Es lo que permite el slide entre cotizaciones con ←/→, donde
+   la vieja y la nueva tienen que estar montadas al mismo tiempo. */
+const MISMA_PAGINA = [/^\/cotizaciones\/\d+$/];
+
 /* Las rutas, con transición entre páginas: <AnimatePresence mode="wait">
    deja que la página que se va termine su animación de salida (ver
    components/Pagina) antes de montar la que llega. El `key` por pathname
    es lo que le hace notar que cambió de página. */
 export default function RutasAnimadas() {
   const location = useLocation();
+  const clave = MISMA_PAGINA.find((patron) => patron.test(location.pathname))?.source ?? location.pathname;
   const volver = useVolver();
 
   // La X nativa de la ventana: Python pregunta en qué ruta estamos para
@@ -30,7 +37,7 @@ export default function RutasAnimadas() {
 
   return (
     <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+      <Routes location={location} key={clave}>
         <Route path="/" element={<Menu />} />
         <Route path="/dev" element={<IndiceDesarrollo />} />
 

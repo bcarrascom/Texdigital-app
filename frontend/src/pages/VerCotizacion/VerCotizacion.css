@@ -217,3 +217,23 @@
   .material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
   .material-falta__btn { flex: 0 0 auto; }
 }
+
+/* ── Slide entre cotizaciones (ver VerCotizacion.jsx) ─────────────────────── */
+.pag-ver-cotizacion {
+  /* La que sale y la que entra viajan por fuera del ancho visible: sin esto
+     aparecería una barra de scroll horizontal durante el slide. */
+  .contenido { overflow-x: hidden; }
+  /* La pista pone las cotizaciones en fila, cada una del ancho visible; el
+     slide la corre entera (ver VerCotizacion.jsx). */
+  .pista { display: flex; align-items: flex-start; }
+  .diapositiva { flex: 0 0 100%; min-width: 0; }
+  .vista[data-sin-aparecer] .ficha-prod { animation: none; }
+}
+
+/* El título de la cabecera es un bloque propio para poder moverlo en
+   vertical; el recorte del contenedor (.cabecera__titulo, overflow:hidden)
+   hace que salga y entre "por el borde". */
+.cabecera__titulo-texto {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

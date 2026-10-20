@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
+import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { api } from "@/services/api";
 import { useAtajo } from "@/hooks/useAtajo";
 import { useCarrusel } from "@/hooks/useCarrusel";
-import { useDatos } from "@/hooks/useDatos";
 import { rutas } from "@/router/rutas";
 import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
@@ -28,19 +28,93 @@ import "./VerCotizacion.css";
 
    ←/→ pasan a la cotización siguiente/anterior (más nueva → más antigua, con
    vuelta) REEMPLAZANDO esta en el historial: "Volver" desde cualquiera de
-   ellas vuelve adonde se entró, no retrocede de a una. */
+   ellas vuelve adonde se entró, no retrocede de a una.
+
+   Ese paso es un slide de verdad, como si una cotización estuviera al lado
+   de la otra: la página NO se desmonta (ver MISMA_PAGINA en
+   router/RutasAnimadas.jsx), la vieja sale por un costado mientras la nueva
+   entra por el otro, pegadas. Mientras tanto la cabecera se atenúa y el
+   título sale hacia arriba; cuando el slide termina, la cabecera vuelve y el
+   título nuevo entra bajando. Los datos de la vecina se piden ANTES de
+   arrancar, para que entre ya llena. */
+
+const SLIDE = { duration: 0.55, ease: [0.65, 0, 0.35, 1] };   // simétrica: arranca y frena suave
+const TITULO_SALE = { duration: 0.16, ease: [0.55, 0, 1, 0.45] };
+const TITULO_ENTRA = { duration: 0.28, ease: [0.22, 1, 0.36, 1] };
 
 async function cargarCotizacion(numero) {
   const cot = await api.obtener_cotizacion(numero);
   return cot && { ...cot, productos: cot.productos || [] };
 }
 
+const tituloDe = (cot, numero) =>
+  `Cotización ${fmt.numero(cot?.numero ?? numero)}` + (cot?.empresa ? ` · ${cot.empresa}` : "");
+
 export default function VerCotizacion() {
   const numero = Number(useParams().numero);
   const navigate = useNavigate();
   const location = useLocation();
-  const { datos: cot, cargando } = useDatos(() => cargarCotizacion(numero), [numero]);
-  const carrusel = useCarrusel(cot?.productos.length ?? 0);
+  const direccion = location.state?.deslizar ?? 1;
+
+  /* Cotizaciones ya pedidas a Python, por número: paginar() deja acá la
+     vecina antes de navegar, así el slide arranca con los datos listos. */
+  const cache = useRef(new Map());
+  const [cot, setCot] = useState(undefined);   // undefined: cargando · null: no existe
+  const [deslizando, setDeslizando] = useState(false);
+  const pidiendo = useRef(false);
+
+  /* El slide: durante el paso, la pista tiene las DOS cotizaciones lado a
+     lado ([vieja, nueva] hacia la derecha, [nueva, vieja] hacia la
+     izquierda) y lo que se anima es la pista entera, no cada una por su
+     lado — así viajan pegadas, sin que una arranque un cuadro antes que la
+     otra. Al terminar queda solo la nueva. */
+  const [anterior, setAnterior] = useState(null);
+  const enPar = !!(anterior && cot && anterior.numero !== cot.numero);
+  const [pista, animar] = useAnimate();
+
+  useLayoutEffect(() => {
+    if (!enPar) return;
+    const ida = direccion > 0;
+    const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // La posición de partida se fija a mano ANTES del primer cuadro: si no,
+    // yendo hacia la izquierda se vería un instante la pista sin correr.
+    pista.current.style.transform = `translateX(${ida ? 0 : -100}%)`;
+    const animacion = animar(pista.current, { x: ida ? ["0%", "-100%"] : ["-100%", "0%"] },
+                             reducido ? { duration: 0 } : SLIDE);
+    animacion.then(() => {
+      setAnterior(null);
+      setDeslizando(false);
+    });
+    return () => animacion.stop();
+  }, [enPar]);  // solo al empezar un paso, no en cada render del mismo
+
+  // Ya sin la vieja, la pista vuelve a su lugar en el mismo cuadro en que se
+  // saca la vieja (useLayoutEffect: antes de pintar). Las dos cosas hacen
+  // falta: motion recuerda el último `x` que animó y lo volvería a escribir
+  // encima si solo se toca el estilo, pero su reset recién llega al cuadro
+  // siguiente — y ese único cuadro mostraba la cotización fuera de lugar.
+  useLayoutEffect(() => {
+    if (anterior || !pista.current) return;
+    animar(pista.current, { x: "0%" }, { duration: 0 });
+    pista.current.style.transform = "none";
+  }, [anterior, pista, animar]);
+  // Solo la primera cotización que se abre hace la aparición en escalón de
+  // sus fichas; las que llegan de costado entran ya armadas.
+  const primera = useRef(null);
+  if (cot && primera.current === null) primera.current = cot.numero;
+
+  useEffect(() => {
+    if (cache.current.has(numero)) {
+      setCot(cache.current.get(numero));
+      return;
+    }
+    let vigente = true;
+    cargarCotizacion(numero).then((c) => {
+      cache.current.set(numero, c);
+      if (vigente) setCot(c);
+    });
+    return () => { vigente = false; };
+  }, [numero]);
 
   // "eliminar" | "bloqueado" | "aprobar" | null
   const [dialogo, setDialogo] = useState(null);
@@ -48,13 +122,22 @@ export default function VerCotizacion() {
   const [manuales, setManuales] = useState([]);
   const cerrarDialogo = () => setDialogo(null);
 
-  async function paginar(direccion) {
-    const vecina = await api.cotizacion_adyacente(numero, direccion);
-    if (vecina == null) return;
-    navigate(rutas.verCotizacion(vecina), {
-      replace: true,
-      state: { ...location.state, deslizar: direccion === "siguiente" ? 1 : -1 },
-    });
+  async function paginar(sentido) {
+    if (deslizando || pidiendo.current || !cot) return;  // una a la vez
+    pidiendo.current = true;
+    try {
+      const vecina = await api.cotizacion_adyacente(numero, sentido);
+      if (vecina == null || vecina === numero) return;
+      if (!cache.current.has(vecina)) cache.current.set(vecina, await cargarCotizacion(vecina));
+      setAnterior(cot);
+      setDeslizando(true);
+      navigate(rutas.verCotizacion(vecina), {
+        replace: true,
+        state: { ...location.state, deslizar: sentido === "siguiente" ? 1 : -1 },
+      });
+    } finally {
+      pidiendo.current = false;
+    }
   }
   useAtajo("arrowleft", () => paginar("anterior"));
   useAtajo("arrowright", () => paginar("siguiente"));
@@ -87,13 +170,11 @@ export default function VerCotizacion() {
   }
 
   const editar = () => navigate(rutas.editarCotizacion(numero));
-  const titulo = cot
-    ? `Cotización ${fmt.numero(cot.numero)}` + (cot.empresa ? ` · ${cot.empresa}` : "")
-    : `Cotización ${fmt.numero(numero)}`;
+  const titulo = tituloDe(cot, numero);
 
   return (
     <Pagina tema="cotizaciones" titulo={titulo} className="pag-ver-cotizacion">
-      <Cabecera titulo={titulo}>
+      <Cabecera titulo={<TituloDeslizante texto={titulo} clave={cot?.numero ?? numero} />} atenuada={deslizando}>
         {cot && (
           <>
             <button className="cab-btn" onClick={() => setDialogo("eliminar")}>Eliminar</button>
@@ -105,30 +186,17 @@ export default function VerCotizacion() {
       </Cabecera>
 
       <main className="contenido">
-        {cargando ? <Cargando /> : !cot ? (
+        {cot === undefined ? <Cargando /> : cot === null ? (
           <p className="seccion-titulo">No se pudo cargar la cotización {fmt.numero(numero)}.</p>
         ) : (
-          <div className="vista">
-            <div className="vista__izq">
-              <Hoja cot={cot} />
-              <section>
-                <h2 className="seccion-titulo">Productos · {cot.productos.length}</h2>
-                <div className="productos">
-                  {cot.productos.map((p, i) => (
-                    <FichaProducto key={i} p={p} i={i} mirando={i === carrusel.indice}
-                                   onMirar={() => carrusel.mirar(i)} onSoltar={carrusel.soltar} />
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            <aside className="vista__der">
-              <div className="lateral">
-                <VisorProducto producto={cot.productos[carrusel.indice]} indice={carrusel.indice}
-                               total={cot.productos.length} />
-                <Plata t={cot.totales || {}} />
+          <div ref={pista} className="pista">
+            {(enPar ? (direccion > 0 ? [anterior, cot] : [cot, anterior]) : [cot]).map((c) => (
+              // key por número: la nueva conserva su estado (carrusel) al
+              // quedar sola en la pista cuando termina el paso.
+              <div key={c.numero} className="diapositiva" aria-hidden={c === anterior || undefined}>
+                <VistaCotizacion cot={c} aparecer={c.numero === primera.current} />
               </div>
-            </aside>
+            ))}
           </div>
         )}
       </main>
@@ -146,6 +214,57 @@ export default function VerCotizacion() {
         </>
       )}
     </Pagina>
+  );
+}
+
+/* El título de la cabecera: al cambiar de cotización sale hacia arriba
+   desvaneciéndose, y el nuevo entra bajando recién cuando el slide del
+   contenido ya terminó. `clave` es lo que cambia entre cotizaciones (el
+   texto solo, no: al terminar de cargar la primera, el texto se completa con
+   la empresa y eso no tiene que animarse). */
+function TituloDeslizante({ texto, clave }) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={clave}
+        className="cabecera__titulo-texto"
+        initial={{ y: "-110%", opacity: 0 }}
+        animate={{ y: 0, opacity: 1, transition: { ...TITULO_ENTRA, delay: SLIDE.duration - TITULO_SALE.duration } }}
+        exit={{ y: "-110%", opacity: 0, transition: TITULO_SALE }}
+      >
+        {texto}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+/* Una cotización entera (lo que se desliza): cada una tiene su propio visor
+   y su propio carrusel, así la que sale sigue mostrando lo suyo hasta irse. */
+function VistaCotizacion({ cot, aparecer }) {
+  const carrusel = useCarrusel(cot.productos.length);
+  return (
+    <div className="vista" data-sin-aparecer={aparecer ? undefined : ""}>
+      <div className="vista__izq">
+        <Hoja cot={cot} />
+        <section>
+          <h2 className="seccion-titulo">Productos · {cot.productos.length}</h2>
+          <div className="productos">
+            {cot.productos.map((p, i) => (
+              <FichaProducto key={i} p={p} i={i} mirando={i === carrusel.indice}
+                             onMirar={() => carrusel.mirar(i)} onSoltar={carrusel.soltar} />
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <aside className="vista__der">
+        <div className="lateral">
+          <VisorProducto producto={cot.productos[carrusel.indice]} indice={carrusel.indice}
+                         total={cot.productos.length} />
+          <Plata t={cot.totales || {}} />
+        </div>
+      </aside>
+    </div>
   );
 }
 
