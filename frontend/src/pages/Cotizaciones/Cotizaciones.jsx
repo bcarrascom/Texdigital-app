@@ -29,7 +29,7 @@ export default function Cotizaciones() {
     <PaginaModulo tema="cotizaciones" titulo="Cotizaciones">
       <Acciones>
         <Accion titulo="Nueva cotización" desc="Empezar un trabajo nuevo, de cualquier tipo de producto."
-                onClick={() => navigate(rutas.nuevaCotizacion())} />
+                onClick={() => navigate(rutas.nuevaCotizacion(), { state: { desde: rutas.cotizaciones() } })} />
         {/* Las incompletas, sueltas junto a "Nueva cotización": acá no son
             un listado, son el aviso de "esto quedó a medio hacer". Sin
             ninguna, no dejan rastro. */}

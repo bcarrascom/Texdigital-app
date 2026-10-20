@@ -9,6 +9,7 @@ import Menu from "@/pages/Menu/Menu";
 import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
 import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
+import NuevaCotizacion from "@/pages/NuevaCotizacion/NuevaCotizacion";
 import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
@@ -51,6 +52,9 @@ export default function RutasAnimadas() {
         <Route path="/despachos" element={
           <RequiereModulo clave="despachos"><PendienteMigrar tema="despachos" titulo="Despachos" /></RequiereModulo>} />
 
+        <Route path="/cotizaciones/nueva" element={<NuevaCotizacion />} />
+        <Route path="/cotizaciones/:numero/editar" element={<NuevaCotizacion modo="editar" />} />
+        <Route path="/cotizaciones/pendientes/:id" element={<NuevaCotizacion modo="pendiente" />} />
         <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />

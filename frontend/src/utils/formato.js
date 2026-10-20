@@ -27,6 +27,20 @@ export function aNumero(v) {
   return isNaN(x) ? 0 : x;
 }
 
+export const soloDigitos = (v) => String(v ?? "").replace(/\D/g, "");
+
+/* Formato chileno del RUT mientras se escribe ("12.345.678-9"). La versión
+   canónica es core.repositorio.formatear_rut — esta es la misma regla del
+   lado del navegador para no cruzar el puente en cada tecla: si allá
+   cambia, hay que cambiarla acá también. */
+export function rut(raw) {
+  const s = String(raw ?? "").replace(/[^\dkK]/g, "").toUpperCase();
+  if (!s) return "";
+  const cuerpo = s.slice(0, -1), dv = s.slice(-1);
+  if (!cuerpo) return dv;
+  return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
+}
+
 /* plural(3, "rollo", "rollos") → "3 rollos" */
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
