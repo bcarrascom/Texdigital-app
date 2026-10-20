@@ -247,7 +247,7 @@ function avisoProduccion(avisos, abrirOp) {
     titulo: "Aviso de producción",
     color: "var(--c-error)",
     items: avisos.slice().sort((a, b) => fechaDMAaTime(a.fecha_entrega) - fechaDMAaTime(b.fecha_entrega)),
-    texto: "Hay una OP atrasada.",
+    texto: avisos.length === 1 ? "Hay una OP atrasada." : `Hay ${avisos.length} OPs atrasadas.`,
     render: (o) => (
       <>
         <p className="aviso-menu__op">OP {o.numero}</p>

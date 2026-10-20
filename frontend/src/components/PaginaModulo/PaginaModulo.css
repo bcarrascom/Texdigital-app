@@ -1,0 +1,62 @@
+/* Estructura común de las páginas de módulo — portado de ".panel" de
+   recursos/pantallas/menu.html. */
+.pagina-modulo {
+  color: var(--c-tema-tinta);
+
+  .modulo-cab {
+    display: flex; align-items: center; gap: var(--e-4);
+    padding: var(--e-5) var(--e-6) 0;
+  }
+  .modulo-cab .cabecera__sep { flex: 1; }
+
+  /* Columna flex + margin:auto en el cuerpo: centrado vertical mientras
+     entra, y alineado arriba (con scroll) cuando no. */
+  .modulo-contenido {
+    min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column;
+    padding: 0 var(--e-6) var(--e-6);
+  }
+  .modulo-cuerpo {
+    width: min(100%, var(--ancho-modulo, 62rem)); margin: auto;
+    display: grid; gap: var(--e-6); padding: var(--e-6) 0;
+  }
+  /* min-width:0: sin esto un hijo ancho (una tabla con muchas columnas)
+     estira la única columna del grid más allá del ancho del cuerpo, en vez
+     de que su .tabla-caja scrollee por su cuenta. */
+  .modulo-seccion { min-width: 0; }
+  .modulo-seccion > .seccion-titulo { color: var(--c-tema-fuerte); opacity: .8; }
+
+  .modulo-cuerpo__titulo {
+    font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+    letter-spacing: -.035em; line-height: 1;
+  }
+
+  /* ── Acciones ─────────────────────────────────────────────────────────── */
+  .acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
+
+  .accion {
+    display: grid; gap: var(--e-1); align-content: start;
+    padding: var(--e-5); text-align: left; cursor: pointer;
+    background: var(--c-superficie);
+    border: 1.5px solid color-mix(in srgb, var(--c-tema-borde) 55%, transparent);
+    border-radius: var(--r-lg);
+    transition: transform var(--m-rapida) var(--ease-salida),
+                box-shadow var(--m-rapida) var(--ease-salida),
+                border-color var(--m-rapida) var(--ease-salida),
+                background var(--m-rapida) var(--ease-salida);
+  }
+  .accion:hover { transform: translateY(-3px); box-shadow: var(--s-2); border-color: var(--c-tema-fuerte); }
+  .accion:active { transform: translateY(-1px) scale(.99); }
+  .accion__titulo { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta);
+                    transition: color var(--m-rapida) var(--ease-salida); }
+  .accion__desc { font-size: var(--t-sm); color: var(--c-texto-suave);
+                  transition: color var(--m-rapida) var(--ease-salida); }
+
+  /* ── Rejilla de tarjetas (.reg) ───────────────────────────────────────── */
+  .rejilla-tarjetas {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--ancho-tarjeta, 9.5rem), 1fr));
+    gap: var(--e-3); align-content: start;
+  }
+  .rejilla-tarjetas .reg { height: auto; }
+  .rejilla-tarjetas__vacio { font-size: var(--t-sm); color: var(--c-tema-fuerte); opacity: .7; }
+}

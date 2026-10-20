@@ -17,11 +17,9 @@ export default {
     pendientes: [
       { id: "p-1", nombre_trabajo: "Vitrinas navidad", completos: 2, total: 5 },
     ],
-    cotizaciones: [
-      { numero: 9015, empresa: "Tiendas Ejemplo SpA", fecha: "18/10/2026" },
-      { numero: 9014, empresa: "Café del Puerto", fecha: "17/10/2026" },
-      { numero: 9013, empresa: "Gimnasio Activo", fecha: "15/10/2026" },
-    ],
+    cotizaciones: ["Tiendas Ejemplo SpA", "Café del Puerto", "Gimnasio Activo", "Clínica Norte",
+      "Librería Central", "Hotel Mirador", "Constructora Andes", "Pastelería Dulce", "Óptica Visión", "Colegio San Marcos"]
+      .map((empresa, i) => ({ numero: 9015 - i, empresa, fecha: `${18 - i}/10/2026` })),
     ops,
     despachos: [
       { numero: 42, nombre: "Campaña verano", asignados: 1, total: 3 },

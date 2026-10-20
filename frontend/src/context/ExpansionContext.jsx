@@ -33,8 +33,11 @@ function rectDe(caja) {
   return {
     geometria: { top: r.top, left: r.left, width: r.width, height: r.height,
                  borderRadius: parseFloat(est.borderTopLeftRadius) || 0 },
-    colores: { background: est.backgroundColor, borderColor: est.borderTopColor,
-               borderWidth: est.borderTopWidth },
+    colores: { borderColor: est.borderTopColor, borderWidth: est.borderTopWidth },
+    fondo: est.backgroundColor,
+    // El relleno del tema del módulo: el fondo de la página a la que se
+    // llega (html[data-tema] body, ver base.css).
+    relleno: est.getPropertyValue("--c-tema-relleno").trim() || est.backgroundColor,
   };
 }
 
@@ -67,10 +70,15 @@ export function ExpansionProvider({ children }) {
 
   const abrir = useCallback((caja, modulo, ruta) => {
     if (anim) return;  // una a la vez: un doble click no arranca otra encima
-    const { geometria, colores } = rectDe(caja);
+    const { geometria, colores, fondo, relleno } = rectDe(caja);
     moduloAbierto.current = { modulo };
+    // Arranca con el color de la caja (en hover es más claro) y termina en el
+    // relleno del tema, que es el fondo de la página del módulo: así al
+    // desvanecerse no se nota ningún cambio de color.
     setAnim({
-      id: siguienteId.current++, tipo: "abrir", colores, desde: geometria, hasta: pantallaCompleta(), fase: "moviendo",
+      id: siguienteId.current++, tipo: "abrir", colores,
+      desde: { ...geometria, backgroundColor: fondo }, hasta: { ...pantallaCompleta(), backgroundColor: relleno },
+      fase: "moviendo",
       alTerminar: () => {
         temaInstantaneo(modulo);
         navigate(ruta);
@@ -80,10 +88,12 @@ export function ExpansionProvider({ children }) {
   }, [anim, navigate, desvanecer]);
 
   const contraer = useCallback((caja, alTerminar) => {
-    const { geometria, colores } = rectDe(caja);
+    const { geometria, colores, fondo, relleno } = rectDe(caja);
     moduloAbierto.current = null;
     setAnim({
-      id: siguienteId.current++, tipo: "contraer", colores, desde: pantallaCompleta(), hasta: geometria, fase: "moviendo",
+      id: siguienteId.current++, tipo: "contraer", colores,
+      desde: { ...pantallaCompleta(), backgroundColor: relleno }, hasta: { ...geometria, backgroundColor: fondo },
+      fase: "moviendo",
       alTerminar: () => {
         desvanecer();
         alTerminar?.();

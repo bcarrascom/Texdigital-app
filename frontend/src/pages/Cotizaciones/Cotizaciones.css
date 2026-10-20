@@ -1,0 +1,9 @@
+.pag-cotizaciones {
+  /* Las incompletas sueltas junto a "Nueva cotización": mismas tarjetas y
+     mismo tamaño de grilla que las de abajo, pero sin título ni caja propia. */
+  .incompletas-sueltas {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: var(--e-3); align-content: start;
+  }
+  .incompletas-sueltas .reg { height: auto; }
+}

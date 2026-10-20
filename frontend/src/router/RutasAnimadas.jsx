@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { useVolver } from "@/hooks/useVolver";
 
 import Menu from "@/pages/Menu/Menu";
+import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
 import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
@@ -32,11 +33,11 @@ export default function RutasAnimadas() {
         <Route path="/" element={<Menu />} />
         <Route path="/dev" element={<IndiceDesarrollo />} />
 
-        {/* Módulos — todavía sin migrar */}
+        {/* Módulos */}
         <Route path="/inventario" element={
           <RequiereModulo clave="inventario"><PendienteMigrar tema="inventario" titulo="Inventario" /></RequiereModulo>} />
         <Route path="/cotizaciones" element={
-          <RequiereModulo clave="cotizaciones"><PendienteMigrar tema="cotizaciones" titulo="Cotizaciones" /></RequiereModulo>} />
+          <RequiereModulo clave="cotizaciones"><Cotizaciones /></RequiereModulo>} />
         <Route path="/ops" element={
           <RequiereModulo clave="ops"><PendienteMigrar tema="ops" titulo="Órdenes de Producción" /></RequiereModulo>} />
         <Route path="/despachos" element={
