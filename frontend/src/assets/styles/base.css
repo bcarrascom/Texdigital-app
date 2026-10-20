@@ -257,10 +257,9 @@ button { font: inherit; color: inherit; background: none; border: 0; }
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cabecera__sep { flex: 1; }
-/* Atenuada (ver components/Cabecera): todo menos el título se desvanece y no
-   se puede usar mientras el contenido de la página cambia por debajo. */
-.cabecera > :not(.cabecera__titulo) { transition: opacity var(--m-media) var(--ease-salida); }
-.cabecera--atenuada > :not(.cabecera__titulo) { opacity: 0; pointer-events: none; }
+/* Bloqueada (ver components/Cabecera): los botones no responden mientras el
+   contenido de la página cambia por debajo. */
+.cabecera--bloqueada > :not(.cabecera__titulo) { pointer-events: none; }
 .cabecera__version { font-size: var(--t-xs); color: currentColor; opacity: .55; font-variant-numeric: tabular-nums; }
 
 .cab-btn {

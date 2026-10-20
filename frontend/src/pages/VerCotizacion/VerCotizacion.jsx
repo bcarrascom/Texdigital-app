@@ -33,12 +33,12 @@ import "./VerCotizacion.css";
    Ese paso es un slide de verdad, como si una cotización estuviera al lado
    de la otra: la página NO se desmonta (ver MISMA_PAGINA en
    router/RutasAnimadas.jsx), la vieja sale por un costado mientras la nueva
-   entra por el otro, pegadas. Mientras tanto la cabecera se atenúa y el
-   título sale hacia arriba; cuando el slide termina, la cabecera vuelve y el
-   título nuevo entra bajando. Los datos de la vecina se piden ANTES de
-   arrancar, para que entre ya llena. */
+   entra por el otro, pegadas. Mientras tanto los botones de la cabecera no
+   responden, y el título sale hacia arriba desvaneciéndose; cuando el slide
+   termina, el título nuevo aparece subiendo desde abajo. Los datos de la
+   vecina se piden ANTES de arrancar, para que entre ya llena. */
 
-const SLIDE = { duration: 0.55, ease: [0.65, 0, 0.35, 1] };   // simétrica: arranca y frena suave
+const SLIDE = { duration: 0.35, ease: [0.65, 0, 0.35, 1] };   // simétrica: arranca y frena suave
 const TITULO_SALE = { duration: 0.16, ease: [0.55, 0, 1, 0.45] };
 const TITULO_ENTRA = { duration: 0.28, ease: [0.22, 1, 0.36, 1] };
 
@@ -174,7 +174,7 @@ export default function VerCotizacion() {
 
   return (
     <Pagina tema="cotizaciones" titulo={titulo} className="pag-ver-cotizacion">
-      <Cabecera titulo={<TituloDeslizante texto={titulo} clave={cot?.numero ?? numero} />} atenuada={deslizando}>
+      <Cabecera titulo={<TituloDeslizante texto={titulo} clave={cot?.numero ?? numero} />} bloqueada={deslizando}>
         {cot && (
           <>
             <button className="cab-btn" onClick={() => setDialogo("eliminar")}>Eliminar</button>
@@ -218,17 +218,18 @@ export default function VerCotizacion() {
 }
 
 /* El título de la cabecera: al cambiar de cotización sale hacia arriba
-   desvaneciéndose, y el nuevo entra bajando recién cuando el slide del
-   contenido ya terminó. `clave` es lo que cambia entre cotizaciones (el
-   texto solo, no: al terminar de cargar la primera, el texto se completa con
-   la empresa y eso no tiene que animarse). */
+   desvaneciéndose, y el nuevo aparece subiendo desde abajo (todo el
+   movimiento en un solo sentido, como un contador que gira) recién cuando
+   el slide del contenido ya terminó. `clave` es lo que cambia entre
+   cotizaciones (el texto solo, no: al terminar de cargar la primera, el
+   texto se completa con la empresa y eso no tiene que animarse). */
 function TituloDeslizante({ texto, clave }) {
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.span
         key={clave}
         className="cabecera__titulo-texto"
-        initial={{ y: "-110%", opacity: 0 }}
+        initial={{ y: "110%", opacity: 0 }}
         animate={{ y: 0, opacity: 1, transition: { ...TITULO_ENTRA, delay: SLIDE.duration - TITULO_SALE.duration } }}
         exit={{ y: "-110%", opacity: 0, transition: TITULO_SALE }}
       >

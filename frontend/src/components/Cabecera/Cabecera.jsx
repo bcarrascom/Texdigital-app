@@ -14,15 +14,16 @@ import { useVolver } from "@/hooks/useVolver";
    Escape hace lo mismo que el botón Volver.
 
    `titulo` puede ser texto o un nodo (p. ej. un título animado).
-   `atenuada`: todo menos el título se desvanece y deja de responder — para
-   mientras la página cambia de contenido por debajo (ver VerCotizacion). */
-export default function Cabecera({ titulo, onVolver, atenuada = false, children }) {
+   `bloqueada`: los botones siguen a la vista pero no responden — para
+   mientras la página cambia de contenido por debajo (ver VerCotizacion),
+   así nadie aprueba ni elimina la que se está yendo. */
+export default function Cabecera({ titulo, onVolver, bloqueada = false, children }) {
   const volverAtras = useVolver();
   const volver = onVolver || volverAtras;
-  useAtajo("escape", volver, !atenuada);
+  useAtajo("escape", volver, !bloqueada);
 
   return (
-    <header className={`cabecera${atenuada ? " cabecera--atenuada" : ""}`}>
+    <header className={`cabecera${bloqueada ? " cabecera--bloqueada" : ""}`}>
       <button className="cab-btn cab-btn--fantasma" onClick={volver}>← Volver</button>
       <span className="cabecera__titulo">{titulo}</span>
       <span className="cabecera__sep" />
