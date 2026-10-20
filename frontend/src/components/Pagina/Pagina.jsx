@@ -13,11 +13,15 @@ import { api } from "@/services/api";
 
    tema: "cotizaciones" | "ops" | "despachos" | "inventario" | undefined.
    Va en <html data-tema>, igual que en las pantallas viejas: así el fondo
-   de body cambia con su propia transición de color (ver base.css). */
+   de body cambia con su propia transición de color (ver base.css).
+
+   animarEntrada={false}: la página aparece ya en su lugar — la usa el menú
+   cuando vuelve de un módulo, porque ahí la entrada la hace la contracción
+   del color (context/ExpansionContext) y tiene que medir la caja quieta. */
 
 const transicion = { duration: 0.28, ease: [0.22, 1, 0.36, 1] }; // --m-media, --ease-salida
 
-export default function Pagina({ tema, titulo, className = "", children }) {
+export default function Pagina({ tema, titulo, className = "", animarEntrada = true, children }) {
   useEffect(() => {
     if (tema) document.documentElement.dataset.tema = tema;
     else delete document.documentElement.dataset.tema;
@@ -32,7 +36,7 @@ export default function Pagina({ tema, titulo, className = "", children }) {
   return (
     <motion.div
       className={`app ${className}`}
-      initial={{ opacity: 0, y: 16 }}
+      initial={animarEntrada ? { opacity: 0, y: 16 } : false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8, transition: { ...transicion, duration: 0.16 } }}
       transition={transicion}

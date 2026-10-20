@@ -1,0 +1,273 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Menú principal — portado de recursos/pantallas/menu.html, sin los paneles
+   de cada módulo (ahora son páginas aparte, ver router/rutas.js).
+
+   Estructura de un módulo (el orden importa, ver z-index):
+     .menu__columna     posicionador del módulo y su aviso (sin z-index: no
+                        crea contexto de apilamiento, así los módulos y avisos
+                        de columnas vecinas compiten entre sí)
+       .aviso-menu      el círculo de aviso, ARRIBA de la caja
+       .modulo          posicionador, sin pintura
+         .modulo__caja  la pieza visual: relleno, borde, título    (z-index 2)
+         .modulo__lista las tarjetas, que viven DETRÁS de la caja  (z-index 1)
+
+   El aviso es hermano de .modulo, no descendiente, a propósito: .modulo
+   entero es la zona de :hover que despliega el mazo, y si el aviso viviera
+   adentro, pasar el mouse por el ícono también lo desplegaría.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pag-menu {
+  .menu {
+    /* ── Escala del menú ──────────────────────────────────────────────────
+       La geometría (logo, ancho de los módulos) se deriva de este número:
+       cambiarlo re-escala el menú entero de forma coherente. Las
+       tipografías NO, a propósito. */
+    --menu-escala: .5;
+    --logo-ancho:  calc(32rem * var(--menu-escala));
+    /* Ancho para 4 módulos EN UNA FILA, cada uno del mismo tamaño. */
+    --modulos-ancho: calc(125.7rem * var(--menu-escala));
+
+    /* ── Tarjetas ─────────────────────────────────────────────────────────
+       UN solo gap manda: entre tarjeta y tarjeta Y entre la caja del módulo
+       y la primera fila. --reg-alto es de respaldo: lo recalcula Modulo.jsx
+       para que cada tarjeta tenga el mismo ratio que la caja. */
+    --reg-alto: 3.2rem;
+    --reg-gap:  var(--e-2);
+
+    position: relative; z-index: 2;
+    /* Dos filas elásticas de distinto peso (1fr arriba, 2.4fr abajo): el
+       bloque logo+módulos queda por encima del centro óptico y el mazo
+       desplegado tiene lugar de sobra. La fila fija de 15vh empuja el logo y
+       los módulos hacia abajo sin mover el pie. */
+    display: grid;
+    grid-template-rows: 1fr 15vh auto auto 2.4fr auto;
+    justify-items: center;
+    row-gap: var(--e-5);
+    height: 100vh; padding: var(--e-6) var(--e-6) var(--e-5);
+    overflow: auto;
+    transition: opacity var(--m-media) var(--ease-entrada),
+                transform var(--m-media) var(--ease-entrada),
+                filter var(--m-media) var(--ease-entrada);
+  }
+  /* Mientras el color del módulo se expande, el resto del menú se aparta. */
+  .menu[data-saliendo] {
+    opacity: 0; transform: scale(.97); filter: blur(3px); pointer-events: none;
+  }
+  /* Volviendo de un módulo, la entrada la hace la contracción del color: sin
+     las animaciones de aparecer, para que la caja ya esté quieta en su lugar
+     cuando se la mide. */
+  .menu[data-regreso] :is(.menu__marca, .modulo, .menu__pie) { animation: none; }
+
+  .menu__marca {
+    grid-row: 3;
+    display: grid; justify-items: center; gap: var(--e-2);
+    animation: aparecer var(--m-lenta) var(--ease-salida) both;
+  }
+  .menu__logo { width: min(var(--logo-ancho), 60vw); height: auto; display: block; }
+  .menu__sub {
+    font-size: var(--t-sm); font-weight: var(--peso-medio);
+    letter-spacing: .3em; text-transform: uppercase;
+    color: var(--c-texto-tenue);
+    padding-left: .3em;   /* compensa el letter-spacing del último carácter */
+  }
+
+  .menu__modulos {
+    grid-row: 4;
+    display: grid;
+    /* Fijas en 4 columnas, no auto-fit: con auto-fit cada módulo nuevo
+       encogía a TODOS. */
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--e-4);
+    /* stretch: los módulos quedan del mismo alto aunque un título use dos
+       líneas, y así los mazos arrancan a la misma altura. */
+    align-items: stretch;
+    width: min(100%, var(--modulos-ancho));
+  }
+  .menu__columna { position: relative; display: grid; }
+
+  /* ── El módulo: solo posiciona ─────────────────────────────────────────── */
+  .modulo {
+    position: relative; z-index: 1;
+    animation: aparecer var(--m-lenta) var(--ease-salida) both;
+    animation-delay: calc(var(--i) * 90ms + 120ms);
+  }
+  .modulo:hover, .modulo:focus-within { z-index: 3; }
+
+  /* Módulo pausado (core/config.py::MODULOS_HABILITADOS): visible pero
+     inutilizable. pointer-events:none va en la SECCIÓN entera, no en la
+     caja: un disabled en el botón no alcanza para cortar el :hover que
+     despliega el mazo por detrás. */
+  .modulo[data-deshabilitado] { pointer-events: none; opacity: .5; filter: grayscale(.6); }
+
+  /* ── La caja: la pieza visual ──────────────────────────────────────────── */
+  .modulo__caja {
+    position: relative; z-index: 2;
+    display: grid; grid-template-columns: 1fr auto; align-items: center;
+    gap: var(--e-1) var(--e-3);
+    width: 100%; height: 100%; padding: var(--e-3); text-align: left; cursor: pointer;
+    align-content: center;
+    background: var(--c-tema-relleno);
+    border: 2px solid var(--c-tema-borde);
+    border-radius: var(--r-lg);
+    transition: background var(--m-media) var(--ease-salida),
+                border-color var(--m-media) var(--ease-salida),
+                box-shadow var(--m-media) var(--ease-salida),
+                transform var(--m-media) var(--ease-salida);
+  }
+  .modulo:hover .modulo__caja, .modulo:focus-within .modulo__caja {
+    background: color-mix(in srgb, var(--c-tema-relleno) 55%, var(--c-superficie));
+    border-color: var(--c-tema-fuerte);
+    box-shadow: var(--s-3);
+    transform: translateY(-3px);
+  }
+
+  .modulo__titulo {
+    grid-column: 1; font-size: var(--t-lg); font-weight: var(--peso-fuerte);
+    letter-spacing: -.03em; color: var(--c-tema-tinta); line-height: 1.1;
+  }
+  .modulo__meta {
+    grid-column: 1; font-size: var(--t-xs); color: var(--c-tema-fuerte); opacity: .85;
+    font-variant-numeric: tabular-nums;
+  }
+  .modulo__flecha {
+    grid-column: 2; grid-row: 1 / span 2;
+    display: grid; place-items: center;
+    width: 1.75rem; height: 1.75rem; border-radius: var(--r-full);
+    background: var(--c-tema-fuerte); color: var(--c-texto-inv);
+    font-size: var(--t-sm); line-height: 1;
+    transition: transform var(--m-media) var(--ease-salida);
+  }
+  .modulo:hover .modulo__flecha, .modulo:focus-within .modulo__flecha { transform: translateX(3px) scale(1.08); }
+
+  /* ── La lista: vive DETRÁS de la caja ─────────────────────────────────────
+     En reposo las tarjetas están escondidas detrás de la caja; al hacer
+     hover salen de ahí a su lugar en la rejilla. El gap con la caja es
+     PADDING (no un `top` más grande): así el área de hover arranca pegada a
+     la caja y no se corta al bajar el mouse hacia una tarjeta. */
+  .modulo__lista {
+    position: absolute; z-index: 1;
+    top: 100%; left: 0; right: 0;
+    padding-top: var(--reg-gap);
+    pointer-events: none;             /* en reposo no se puede clickear lo escondido */
+    transition: transform var(--m-media) var(--ease-salida);
+  }
+  .modulo:hover .modulo__lista, .modulo:focus-within .modulo__lista {
+    pointer-events: auto;
+    transform: translateY(-3px);      /* acompaña el lift de la caja */
+  }
+
+  .modulo__rejilla {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);   /* dos tarjetas por fila */
+    gap: var(--reg-gap);
+  }
+
+  /* Reposo: TODAS las tarjetas se esconden en el mismo lugar — justo detrás
+     del borde inferior de la caja — y de ahí salen repartiéndose a su fila.
+       posición natural (fila f) = gap + f·(alto + gap)
+       posición de reposo         = −alto                 (tapada por la caja) */
+  .modulo__rejilla > * {
+    height: var(--reg-alto);
+    opacity: 0;
+    z-index: calc(50 - var(--i));
+    transform: translateY(calc(-1 * (var(--fila, 0) + 1) * (var(--reg-alto) + var(--reg-gap))));
+    transition: transform var(--m-media) var(--ease-salida),
+                opacity var(--m-rapida) var(--ease-salida),
+                box-shadow var(--m-rapida) var(--ease-salida),
+                border-color var(--m-rapida) var(--ease-salida);
+    transition-delay: 0ms;
+  }
+  .modulo:hover .modulo__rejilla > *,
+  .modulo:focus-within .modulo__rejilla > * {
+    transform: none; opacity: 1;
+    /* Ordenado: sale primero la de más arriba. */
+    transition-delay: calc(var(--i, 0) * var(--m-escalon));
+  }
+  /* Más específica que la de arriba: si no, el hover de una tarjeta suelta
+     no puede sobreescribir el transform del mazo. */
+  .modulo:hover .modulo__rejilla > *:hover,
+  .modulo:focus-within .modulo__rejilla > *:hover {
+    transform: translateY(-3px); opacity: 1;
+    transition-delay: 0ms;
+  }
+
+  .modulo__vacio {
+    grid-column: 1 / -1; height: auto !important; transform: none !important;
+    font-size: var(--t-xs); color: var(--c-tema-fuerte); opacity: 0;
+    padding-top: var(--e-2);
+  }
+  .modulo:hover .modulo__vacio, .modulo:focus-within .modulo__vacio { opacity: .7; }
+
+  /* ── Avisos de menú (círculo arriba de la caja de un módulo) ───────────────
+     --color-aviso lo fija Menu.jsx según la gravedad. z-index alto: tiene
+     que quedar por encima de la caja y del mazo de CUALQUIER módulo
+     vecino, incluso en pleno hover (.modulo:hover sube a z-index 3). */
+  .aviso-menu {
+    position: absolute; left: 50%; bottom: calc(100% + var(--e-2));
+    transform: translateX(-50%); z-index: 5;
+  }
+  .aviso-menu__icono {
+    display: grid; place-items: center;
+    width: 2.15rem; height: 2.15rem; padding: 0;
+    border: 2px solid var(--c-superficie); border-radius: var(--r-full);
+    background: var(--color-aviso, var(--c-aviso)); color: #FFF;
+    cursor: pointer; box-shadow: var(--s-2);
+    transition: transform var(--m-rapida) var(--ease-salida), box-shadow var(--m-rapida) var(--ease-salida);
+  }
+  .aviso-menu__icono svg { width: 1.05rem; height: 1.05rem; }
+  /* "se levanta muy levemente y emite un brillo" — un halo del mismo color
+     que el ícono, no una sombra genérica. */
+  .aviso-menu__icono:hover, .aviso-menu__icono:focus-visible {
+    transform: translateY(-3px);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-aviso, var(--c-aviso)) 35%, transparent), var(--s-3);
+  }
+
+  .aviso-menu__tarjeta {
+    position: absolute; bottom: calc(100% + var(--e-2)); left: 50%;
+    width: 19rem; padding: var(--e-4);
+    display: grid; gap: var(--e-2);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--color-aviso, var(--c-aviso));
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-3);
+    opacity: 0; pointer-events: none;
+    transform: translate(-50%, 6px) scale(.94);
+    transform-origin: bottom center;
+    transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+  }
+  .aviso-menu[data-abierto] .aviso-menu__tarjeta {
+    opacity: 1; pointer-events: auto;
+    transform: translate(-50%, 0) scale(1);
+  }
+  .aviso-menu__texto { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .aviso-menu__contenido { display: grid; gap: var(--e-2); }
+  .aviso-menu__puntos { display: flex; gap: .35rem; }
+  .aviso-menu__punto { width: .4rem; height: .4rem; border-radius: var(--r-full); background: var(--c-borde-fuerte); }
+  .aviso-menu__punto[data-activo] { background: var(--color-aviso, var(--c-aviso)); }
+  .aviso-menu__accion { justify-self: start; }
+
+  /* Contenido propio de cada aviso */
+  .aviso-menu__textil, .aviso-menu__op {
+    font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--color-aviso, var(--c-aviso));
+  }
+  .aviso-menu__datos {
+    display: grid; grid-template-columns: auto 1fr; gap: var(--e-1) var(--e-2);
+    margin: 0; font-size: var(--t-sm);
+  }
+  .aviso-menu__datos dt { color: var(--c-texto-tenue); }
+  .aviso-menu__datos dd { margin: 0; color: var(--c-texto-suave); font-weight: var(--peso-medio); }
+
+  /* ── Pie ──────────────────────────────────────────────────────────────── */
+  .menu__pie {
+    grid-row: 6;
+    display: flex; align-items: center; gap: var(--e-4);
+    font-size: var(--t-xs); color: var(--c-texto-tenue);
+    animation: aparecer var(--m-lenta) var(--ease-salida) both; animation-delay: 320ms;
+    transition: opacity var(--m-rapida) var(--ease-salida);
+  }
+  .menu__pie .cab-btn { color: var(--c-texto-suave); text-decoration: none; }
+  /* Con un mazo desplegado la lista puede llegar hasta acá abajo: el pie se
+     aparta en vez de quedar tapado a medias. */
+  .menu:has(.modulo:hover) .menu__pie,
+  .menu:has(.modulo:focus-within) .menu__pie { opacity: 0; pointer-events: none; }
+}

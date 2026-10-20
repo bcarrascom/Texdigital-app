@@ -1,35 +1,29 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import Pagina from "@/components/Pagina/Pagina";
-import { ControlTexto } from "@/components/Cabecera/Cabecera";
-import { useApp } from "@/context/AppContext";
+import Cabecera from "@/components/Cabecera/Cabecera";
 import { rutas } from "@/router/rutas";
-import "./Inicio.css";
+import "./IndiceDesarrollo.css";
 
-/* TEMPORAL: índice de desarrollo mientras el menú principal no esté migrado
-   (es la última pantalla del plan). Permite abrir cada página ya migrada con
-   un número/ID a mano. Se reemplaza por pages/Menu en esa etapa. */
+/* TEMPORAL (solo mientras dura la migración): abre cada página ya migrada
+   con un número/ID a mano, para las que todavía no tienen cómo llegarse
+   desde la app (su módulo no está migrado). Se entra desde el botón "dev"
+   del pie del menú, que solo aparece con `npm run dev`. */
 
 const MIGRADAS = [
   { nombre: "Ver despacho", tema: "despachos", ruta: rutas.verDespacho, etiqueta: "N° de OP" },
 ];
 
-export default function Inicio() {
-  const { contexto } = useApp();
+export default function IndiceDesarrollo() {
   return (
-    <Pagina titulo="TexDigital" className="pag-inicio">
-      <header className="cabecera">
-        <img className="cabecera__logo" src="./img/logo_texdigital.png" alt="TexDigital" />
-        <span className="cabecera__version">v{contexto.version}</span>
-        <span className="cabecera__sep" />
-        <ControlTexto />
-      </header>
+    <Pagina titulo="Desarrollo" className="pag-indice-desarrollo">
+      <Cabecera titulo="Pantallas migradas" />
       <main className="contenido">
         <div className="limite--sm indice">
           <div>
             <p className="antetitulo">Migración a React · temporal</p>
             <h1 className="titulo">Pantallas migradas</h1>
-            <p className="subtitulo">El menú principal llega al final; mientras tanto, se entra por acá.</p>
+            <p className="subtitulo">Para abrir las que todavía no se alcanzan desde su módulo.</p>
           </div>
           <ul className="indice__lista">
             {MIGRADAS.map((p) => <Entrada key={p.nombre} {...p} />)}

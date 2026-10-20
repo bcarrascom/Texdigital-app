@@ -838,6 +838,16 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 
 .oculto { display: none !important; }
 
+/* La expansión de color al entrar a un módulo (ver context/ExpansionContext).
+   Por encima de todas las páginas: a medida que crece va tapando el menú,
+   que es lo que hace que se lea como entrar DENTRO del módulo. La geometría
+   y la opacidad las anima motion. */
+.expansion {
+  position: fixed; z-index: 50;
+  border-style: solid;
+  pointer-events: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Cargando — tres puntos en onda, mientras se espera la respuesta de Python.
    El color sale de --c-tema-fuerte: en la pantalla de una OP salen azules,

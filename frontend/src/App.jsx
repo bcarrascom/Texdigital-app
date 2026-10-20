@@ -2,6 +2,7 @@ import { HashRouter } from "react-router";
 import { MotionConfig } from "motion/react";
 import { AvisosProvider } from "@/context/AvisosContext";
 import { AppProvider } from "@/context/AppContext";
+import { ExpansionProvider } from "@/context/ExpansionContext";
 import RutasAnimadas from "@/router/RutasAnimadas";
 
 /* HashRouter (#/despachos/42) y no BrowserRouter: el servidor interno de
@@ -16,7 +17,9 @@ export default function App() {
       <HashRouter>
         <AvisosProvider>
           <AppProvider>
-            <RutasAnimadas />
+            <ExpansionProvider>
+              <RutasAnimadas />
+            </ExpansionProvider>
           </AppProvider>
         </AvisosProvider>
       </HashRouter>

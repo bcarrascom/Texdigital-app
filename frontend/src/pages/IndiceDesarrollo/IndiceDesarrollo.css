@@ -1,4 +1,4 @@
-.pag-inicio {
+.pag-indice-desarrollo {
   .indice { display: grid; gap: var(--e-5); }
   .indice__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-2); }
   .indice__item {

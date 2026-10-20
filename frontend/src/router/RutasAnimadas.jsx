@@ -1,10 +1,12 @@
 import { useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { AnimatePresence } from "motion/react";
 import { api } from "@/services/api";
+import { useApp } from "@/context/AppContext";
 import { useVolver } from "@/hooks/useVolver";
 
-import Inicio from "@/pages/Inicio/Inicio";
+import Menu from "@/pages/Menu/Menu";
+import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
@@ -27,10 +29,31 @@ export default function RutasAnimadas() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<Inicio />} />
+        <Route path="/" element={<Menu />} />
+        <Route path="/dev" element={<IndiceDesarrollo />} />
+
+        {/* Módulos — todavía sin migrar */}
+        <Route path="/inventario" element={
+          <RequiereModulo clave="inventario"><PendienteMigrar tema="inventario" titulo="Inventario" /></RequiereModulo>} />
+        <Route path="/cotizaciones" element={
+          <RequiereModulo clave="cotizaciones"><PendienteMigrar tema="cotizaciones" titulo="Cotizaciones" /></RequiereModulo>} />
+        <Route path="/ops" element={
+          <RequiereModulo clave="ops"><PendienteMigrar tema="ops" titulo="Órdenes de Producción" /></RequiereModulo>} />
+        <Route path="/despachos" element={
+          <RequiereModulo clave="despachos"><PendienteMigrar tema="despachos" titulo="Despachos" /></RequiereModulo>} />
+
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />
       </Routes>
     </AnimatePresence>
   );
+}
+
+/* Un módulo apagado en core/config.py::MODULOS_HABILITADOS (típicamente uno
+   sin terminar al sacar un release) no se abre ni llegando por URL: vuelve
+   al menú. Un dato que no llegó nunca apaga un módulo (`!== false`). */
+function RequiereModulo({ clave, children }) {
+  const { contexto } = useApp();
+  if (contexto.modulos_habilitados?.[clave] === false) return <Navigate to="/" replace />;
+  return children;
 }

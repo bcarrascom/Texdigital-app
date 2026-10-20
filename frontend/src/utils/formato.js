@@ -20,3 +20,13 @@ export function fecha(iso) {
 
 /* Número de cotización/OP con ceros a la izquierda: 42 → "0042" */
 export const numero = (n) => String(n).padStart(4, "0");
+
+/* plural(3, "rollo", "rollos") → "3 rollos" */
+export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+
+/* "20/10/2026" (o con guiones) → timestamp, 0 si no se puede leer. */
+export function fechaDMAaTime(fechaDMA) {
+  const [d, m, a] = String(fechaDMA || "").split(/[/-]/).map(Number);
+  if (!d || !m || !a) return 0;
+  return new Date(a, m - 1, d).getTime();
+}
