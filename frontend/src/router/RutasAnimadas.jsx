@@ -9,6 +9,7 @@ import Menu from "@/pages/Menu/Menu";
 import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
 import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
+import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
 /* Las rutas, con transición entre páginas: <AnimatePresence mode="wait">
@@ -43,6 +44,7 @@ export default function RutasAnimadas() {
         <Route path="/despachos" element={
           <RequiereModulo clave="despachos"><PendienteMigrar tema="despachos" titulo="Despachos" /></RequiereModulo>} />
 
+        <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />
       </Routes>

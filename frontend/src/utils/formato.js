@@ -21,6 +21,12 @@ export function fecha(iso) {
 /* Número de cotización/OP con ceros a la izquierda: 42 → "0042" */
 export const numero = (n) => String(n).padStart(4, "0");
 
+/* "1,5" / "1.5" / 1.5 → 1.5; lo que no se pueda leer, 0. */
+export function aNumero(v) {
+  const x = parseFloat(String(v ?? "").replace(",", "."));
+  return isNaN(x) ? 0 : x;
+}
+
 /* plural(3, "rollo", "rollos") → "3 rollos" */
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 

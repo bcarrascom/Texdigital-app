@@ -1,0 +1,20 @@
+/* Diálogos modales (<dialog> nativo, ver Dialogo.jsx) — los estilos que
+   antes repetía cada pantalla. */
+
+dialog {
+  border: 1.5px solid var(--c-borde); border-radius: var(--r-xl);
+  padding: var(--e-5); max-width: min(90vw, 26rem);
+  background: var(--c-superficie); color: var(--c-texto);
+  box-shadow: var(--s-3);
+}
+dialog::backdrop { background: rgba(22,22,26,.35); backdrop-filter: blur(2px); }
+.dlg__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+.dlg__texto { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+.dlg__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+.dlg__acciones { display: flex; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+
+/* Entrada suave: el diálogo se asienta en vez de aparecer de golpe. */
+dialog[open] { animation: dialogo-entrar var(--m-media) var(--ease-salida); }
+dialog[open]::backdrop { animation: dialogo-fondo var(--m-media) var(--ease-salida); }
+@keyframes dialogo-entrar { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes dialogo-fondo { from { opacity: 0; } }

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { rutas } from "@/router/rutas";
 import * as fmt from "@/utils/formato";
 
@@ -22,31 +22,40 @@ export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, on
   );
 }
 
+/* Navega a la ficha recordando desde qué página se la abrió (state.desde):
+   así la ficha sabe, por ejemplo, si después de eliminar puede simplemente
+   volver al listado o tiene que ir a buscarlo (ver VerCotizacion). */
+function useAbrir() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  return (ruta) => navigate(ruta, { state: { desde: pathname } });
+}
+
 const porcentaje = (parte, total) => (total ? Math.round((parte / total) * 100) : 0);
 
 export function TarjetaCotizacion({ c, style }) {
-  const navigate = useNavigate();
+  const abrir = useAbrir();
   return <Tarjeta num={c.numero} sub={c.empresa || "—"} style={style}
-                  onClick={() => navigate(rutas.verCotizacion(c.numero))} />;
+                  onClick={() => abrir(rutas.verCotizacion(c.numero))} />;
 }
 
 /* Las incompletas no tienen número: muestran "3/7". */
 export function TarjetaPendiente({ p, style }) {
-  const navigate = useNavigate();
+  const abrir = useAbrir();
   return (
     <Tarjeta incompleta num={`${p.completos}/${p.total}`} sub={p.nombre_trabajo || "Sin nombre"}
              progreso={porcentaje(p.completos, p.total)} style={style}
              title={`Incompleta · ${p.completos} de ${p.total} productos · ${p.nombre_trabajo || ""}`}
-             onClick={() => navigate(rutas.retomarPendiente(p.id))} />
+             onClick={() => abrir(rutas.retomarPendiente(p.id))} />
   );
 }
 
 export function TarjetaOp({ o, style }) {
-  const navigate = useNavigate();
+  const abrir = useAbrir();
   return (
     <Tarjeta num={o.numero} sub={o.empresa || "—"} style={style}
              title={`OP ${o.numero} · ${o.empresa || ""} · entrega ${o.fecha_entrega || "—"}`}
-             onClick={() => navigate(rutas.verOp(o.numero))} />
+             onClick={() => abrir(rutas.verOp(o.numero))} />
   );
 }
 
@@ -54,22 +63,22 @@ export function TarjetaOp({ o, style }) {
    una cotización incompleta — la dirección es POR PRODUCTO (ver
    core/repositorio_despachos.py), así que se muestra cuánto falta. */
 export function TarjetaDespacho({ d, style }) {
-  const navigate = useNavigate();
+  const abrir = useAbrir();
   return (
     <Tarjeta incompleta num={`${d.asignados}/${d.total}`} sub={d.nombre || `OP ${d.numero}`}
              progreso={porcentaje(d.asignados, d.total)} style={style}
              title={`OP ${d.numero} · ${d.asignados} de ${d.total} productos con dirección · ${d.nombre || ""}`}
-             onClick={() => navigate(rutas.asignarDespacho(d.numero))} />
+             onClick={() => abrir(rutas.asignarDespacho(d.numero))} />
   );
 }
 
 /* Acá la barra es "cuánta tela queda": metros_restantes sobre metros_iniciales. */
 export function TarjetaRollo({ r, style }) {
-  const navigate = useNavigate();
+  const abrir = useAbrir();
   return (
     <Tarjeta incompleta num={r.id} sub={r.nombre_textil || "Sin nombre"}
              progreso={porcentaje(r.metros_restantes, r.metros_iniciales)} style={style}
              title={`Rollo ${r.id} · ${r.nombre_textil || ""} · ${fmt.cantidad(r.metros_restantes)} de ${fmt.cantidad(r.metros_iniciales)} m`}
-             onClick={() => navigate(rutas.verRollo(r.id))} />
+             onClick={() => abrir(rutas.verRollo(r.id))} />
   );
 }

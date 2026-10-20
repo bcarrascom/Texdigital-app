@@ -482,6 +482,12 @@ class ApiApp:
     def obtener_cotizacion(self, numero) -> dict | None:
         return self._ver_cotizacion.obtener_cotizacion(numero)
 
+    def cotizacion_adyacente(self, numero, direccion: str) -> int | None:
+        """Versión de paginar() para React: solo dice CUÁL es la cotización
+        vecina (ver ApiVerCotizacion.numero_adyacente) — la navegación la
+        hace React Router."""
+        return self._ver_cotizacion.numero_adyacente(numero, direccion)
+
     def eliminar_cotizacion(self, numero) -> None:
         self._ver_cotizacion.eliminar_cotizacion(numero)
         self._ir("menu", panel="cotizaciones")

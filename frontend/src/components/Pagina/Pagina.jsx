@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router";
 import { motion } from "motion/react";
 import { api } from "@/services/api";
 
@@ -22,6 +23,11 @@ import { api } from "@/services/api";
 const transicion = { duration: 0.28, ease: [0.22, 1, 0.36, 1] }; // --m-media, --ease-salida
 
 export default function Pagina({ tema, titulo, className = "", animarEntrada = true, children }) {
+  // navigate(ruta, { state: { deslizar: 1 | -1 } }): la página entra de
+  // costado en vez de desde abajo — para pasar a la ficha siguiente/anterior.
+  const deslizar = useLocation().state?.deslizar;
+  const entrada = deslizar ? { opacity: 0, x: 48 * deslizar } : { opacity: 0, y: 16 };
+
   useEffect(() => {
     if (tema) document.documentElement.dataset.tema = tema;
     else delete document.documentElement.dataset.tema;
@@ -36,8 +42,8 @@ export default function Pagina({ tema, titulo, className = "", animarEntrada = t
   return (
     <motion.div
       className={`app ${className}`}
-      initial={animarEntrada ? { opacity: 0, y: 16 } : false}
-      animate={{ opacity: 1, y: 0 }}
+      initial={animarEntrada ? entrada : false}
+      animate={{ opacity: 1, x: 0, y: 0 }}
       exit={{ opacity: 0, y: -8, transition: { ...transicion, duration: 0.16 } }}
       transition={transicion}
     >

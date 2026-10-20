@@ -1,0 +1,219 @@
+/* Estilos propios de VerCotizacion — portados de recursos/pantallas/ver-cotizacion.html.
+   El visor (components/VisorProducto) y la base de los diálogos
+   (components/Dialogo) viven en sus componentes. */
+
+.pag-ver-cotizacion {
+  .vista {
+    /* Todo el contenido —hoja, tarjetas de producto y el panel lateral— al
+       93%: `zoom` escala también tipografías y espaciados, así que el 7% de
+       menos es parejo en todo, no solo en el alto de una pieza suelta. */
+    zoom: .93;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+    gap: var(--e-4);
+    width: min(100%, 82rem); margin-inline: auto;
+    align-items: start;
+  }
+  .vista__izq { display: grid; gap: var(--e-4); min-width: 0; }
+  /* `align-items: start` en .vista deja el <aside> del alto de su contenido, y
+     entonces el sticky no tiene recorrido dónde pegarse: hay que estirarlo. */
+  .vista__der { align-self: stretch; min-width: 0; }
+  
+  /* ── La tarjeta lateral: acompaña el scroll ─────────────────────────────── */
+  .lateral {
+    position: sticky; top: 0;
+    display: grid; gap: var(--e-4);
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+  
+
+  /* Módulo 2 · el desglose de plata, sin panel propio */
+  .plata { display: grid; gap: var(--e-1); }
+  .plata__linea {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    font-size: var(--t-sm); color: var(--c-texto-suave);
+  }
+  .plata__linea b { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+                    font-weight: var(--peso-normal); color: var(--c-texto); }
+  .plata__linea--total {
+    margin-top: var(--e-2); padding-top: var(--e-2);
+    border-top: 1.5px solid var(--c-borde);
+    font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta);
+  }
+  .plata__linea--total b { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+  .plata__nota { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  
+  /* ── La hoja de datos ───────────────────────────────────────────────────── */
+  .hoja {
+    display: grid; gap: var(--e-4);
+    padding: var(--e-5);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+  .hoja__cab { display: grid; gap: var(--e-1); }
+  .hoja__num {
+    font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+    line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+  }
+  .hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+  .hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  
+  .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+  /* align-content: start, si no el valor se va al fondo de la fila cuando otro
+     dato de la misma fila ocupa varias líneas (la descripción, casi siempre). */
+  .dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+  .dato--ancho { grid-column: 1 / -1; }
+  .dato__et {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+  .dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  
+  /* Los montos por concepto, en una fila. Etiqueta arriba, cifra abajo. */
+  .conceptos {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--e-3);
+    padding-top: var(--e-4); border-top: 1px solid var(--c-borde);
+  }
+  .concepto { display: grid; gap: var(--e-1); min-width: 0; }
+  .concepto__et {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .concepto__val {
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+    font-size: var(--t-lg); font-weight: var(--peso-medio); color: var(--c-texto);
+    white-space: nowrap;
+  }
+  
+  /* ── Tarjetas de producto ───────────────────────────────────────────────── */
+  .productos {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--e-3);
+  }
+  @container vista (max-width: 62rem) { .productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container vista (max-width: 40rem) { .productos { grid-template-columns: 1fr; } }
+  /* min-width: 0 es obligatorio: .contenido es item de la grilla .app y sin esto
+     su pista se estira al min-content del contenido, la columna se pasa del
+     ancho de la ventana y las container queries de abajo nunca se cumplen. */
+  .contenido { container: vista / inline-size; min-width: 0; }
+  
+  /* Ventana angosta: la tarjeta lateral deja de acompañar el scroll y pasa
+     arriba de los productos, en vez de comerse media pantalla. */
+  @container vista (max-width: 46rem) {
+    .vista { grid-template-columns: minmax(0, 1fr); }
+    .vista__der { order: -1; }
+    .lateral { position: static; }
+    /* Sigue siendo cuadrado —el dibujo depende de eso— pero acotado: a todo el
+       ancho de la ventana sería media pantalla de gris. */
+    .visor__marco { width: min(100%, 16rem); margin-inline: auto; }
+  }
+  
+  /* Columna flex, no grilla: así el pie con el total se puede empujar al fondo
+     con margin-top: auto y todas las tarjetas de una fila cierran a la misma
+     altura, en vez de dejar el total flotando a media tarjeta. */
+  .ficha-prod {
+    display: flex; flex-direction: column; gap: var(--e-2);
+    /* Sin min-width: 0 la tarjeta se ensancha hasta el min-content de su nombre
+       o de una etiqueta larga, se sale de su columna y le pisa el monto a la
+       tarjeta de al lado. */
+    min-width: 0;
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-1);
+    cursor: default;
+    animation: aparecer var(--m-media) var(--ease-salida) both;
+    animation-delay: calc(var(--i) * var(--m-escalon));
+    transition: border-color var(--m-rapida) var(--ease-salida),
+                box-shadow var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida);
+  }
+  .ficha-prod:hover { border-color: var(--c-tema-borde); box-shadow: var(--s-2); transform: translateY(-2px); }
+  .ficha-prod[data-mirando] { border-color: var(--c-tema-fuerte); }
+  
+  .ficha-prod__cab { display: flex; align-items: baseline; gap: var(--e-2); min-width: 0; }
+  .ficha-prod__n {
+    font-family: var(--f-mono); font-size: var(--t-md); font-weight: var(--peso-fuerte);
+    color: var(--c-tema-fuerte);
+  }
+  .ficha-prod__nombre {
+    font-weight: var(--peso-medio); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ficha-prod__linea {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    font-size: var(--t-sm); color: var(--c-texto-suave);
+  }
+  .ficha-prod__linea b {
+    margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  .ficha-prod__etiquetas { display: flex; flex-wrap: wrap; gap: var(--e-1); min-width: 0; }
+  .ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .ficha-prod__tipo { align-self: flex-start; }
+  .ficha-prod__pie {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    margin-top: auto; padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+    font-size: var(--t-sm);
+  }
+  .ficha-prod__pie b { margin-left: auto; font-family: var(--f-mono); color: var(--c-tema-tinta); }
+  
+
+  /* Bloqueo por stock insuficiente (ver TD.api.aprobar_cotizacion) — red de
+     seguridad por si el stock cambió mientras el diálogo de fechas estaba
+     abierto: no se cierra el diálogo, se muestra qué falta debajo de las
+     fechas. El chequeo real de entrada es .dlg-materiales-bloqueado, más
+     abajo, que corre ANTES de llegar a elegir fechas. */
+  .dlg-faltantes {
+    display: grid; gap: var(--e-2); margin-top: var(--e-4);
+    padding: var(--e-3); border-radius: var(--r-md);
+    background: var(--c-aviso-suave); color: var(--c-aviso);
+  }
+  .dlg-faltantes__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+  .dlg-faltantes__item { font-size: var(--t-xs); }
+  
+  /* Materiales "manual" (core.repositorio_materiales, tipo_consumo=="manual")
+     asociados a los productos de la cotización — se piden ACÁ, dentro del
+     mismo diálogo de aprobar, porque recién ahí se sabe que la cotización
+     efectivamente se va a convertir en OP (ver
+     TD.api.materiales_manuales_pendientes). Dejar un monto vacío es válido:
+     ese material simplemente no se descuenta (no bloquea, ver
+     core.repositorio_materiales.consumir_para_op). */
+  .dlg-materiales-manuales { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+  .dlg-materiales-manuales__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+  
+  /* ── Materiales insuficientes: aviso al apretar "Aprobar →" ──────────────
+     Mismo tratamiento que #dlg-materiales de nueva-cotizacion.html (dropshadow
+     marcado + fondo desenfocado, efecto "3D") — acá es un bloqueo de verdad
+     (no hay forma de "aprobar igual" desde este diálogo), así que solo tiene
+     un botón de salida y los atajos por textil. */
+  .aviso-materiales__icono {
+    display: inline-grid; place-items: center; flex: 0 0 auto;
+    width: 1.2rem; height: 1.2rem; border-radius: var(--r-full);
+    background: var(--c-aviso); color: var(--c-texto-inv);
+    font-size: .75rem; font-weight: var(--peso-fuerte);
+  }
+  .dlg-materiales-bloqueado {
+    max-width: min(92vw, 34rem);
+    box-shadow: 0 20px 50px rgba(22, 22, 26, .25), 0 4px 12px rgba(22, 22, 26, .12);
+  }
+  .dlg-materiales-bloqueado::backdrop { background: rgba(22, 22, 26, .45); backdrop-filter: blur(6px); }
+  .materiales-faltantes { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+  .material-falta {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--e-3);
+    padding: var(--e-3); border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+  }
+  .material-falta__info { display: grid; gap: .15rem; }
+  .material-falta__info strong { font-size: var(--t-sm); }
+  .material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
+  .material-falta__btn { flex: 0 0 auto; }
+}
