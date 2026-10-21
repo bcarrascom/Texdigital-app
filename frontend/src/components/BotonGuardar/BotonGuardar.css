@@ -1,0 +1,52 @@
+/* Ver BotonGuardar.jsx. Todas las medidas en rem y tokens: el botón crece con
+   la escala de texto A− / A+ como el resto de la app. */
+.boton-guardar {
+  --alto: 3rem;            /* el de .btn y .entrada: queda alineado con el campo de al lado */
+  --inset: .375rem;        /* aire entre el círculo y el borde del botón */
+  --circulo: calc(var(--alto) - 2 * var(--inset) - 3px);
+
+  position: relative;
+  display: flex; align-items: center;
+  width: 100%; height: var(--alto);
+  padding: 0 var(--inset);
+  border: 1.5px solid var(--c-borde-fuerte);
+  border-radius: var(--r-full);
+  background: var(--c-superficie);
+  color: var(--c-tema-fuerte);
+  font-size: var(--t-md); font-weight: var(--peso-medio);
+  cursor: pointer; overflow: hidden;
+  transition: border-color var(--m-media) var(--ease-salida),
+              box-shadow var(--m-media) var(--ease-salida),
+              transform var(--m-media) var(--ease-salida);
+}
+.boton-guardar:hover:not(:disabled) { border-color: var(--c-tema-fuerte); box-shadow: var(--s-2); }
+.boton-guardar:active:not(:disabled) { transform: scale(.95); }
+.boton-guardar:disabled { opacity: .5; cursor: not-allowed; }
+
+/* El círculo: en reposo, del alto del botón; en hover se estira hasta
+   cubrirlo entero (100% del ancho disponible). */
+.boton-guardar__icono {
+  position: relative; z-index: 2;
+  flex: 0 0 auto;
+  display: grid; place-items: center;
+  width: var(--circulo); height: var(--circulo);
+  border-radius: var(--r-full);
+  background: linear-gradient(to bottom, var(--c-tema-borde), var(--c-tema-fuerte));
+  color: var(--c-texto-inv);
+  transition: width var(--m-media) var(--ease-salida);
+}
+.boton-guardar__icono svg { height: .9em; width: auto; display: block; }
+.boton-guardar:hover:not(:disabled) .boton-guardar__icono { width: 100%; }
+
+/* El texto vive DETRÁS del círculo, centrado en el espacio que le queda al
+   lado: cuando el círculo crece, se corre un poco y se desvanece. */
+.boton-guardar__texto {
+  position: absolute; z-index: 1;
+  inset: 0 0 0 calc(var(--circulo) + var(--inset));
+  display: grid; place-items: center;
+  padding-right: var(--inset);
+  white-space: nowrap;
+  transition: opacity var(--m-media) var(--ease-salida),
+              transform var(--m-media) var(--ease-salida);
+}
+.boton-guardar:hover:not(:disabled) .boton-guardar__texto { opacity: 0; transform: translateX(.6rem); }

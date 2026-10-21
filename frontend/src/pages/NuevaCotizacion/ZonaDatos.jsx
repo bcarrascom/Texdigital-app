@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import BotonGuardar from "@/components/BotonGuardar/BotonGuardar";
 import * as fmt from "@/utils/formato";
 
 /* Zona de arriba de la pizarra: el trabajo (nombre, cuántos productos,
@@ -121,7 +122,7 @@ const ZonaDatos = forwardRef(function ZonaDatos({
                 <label className="campo__etiqueta" htmlFor="razon">Razón social</label>
                 <input className="entrada" id="razon" type="text" autoComplete="off" {...campo("razon_social")} />
               </div>
-              <button className="btn btn--secundario" type="button" onClick={onGuardarCliente}>Guardar datos</button>
+              <BotonGuardar onClick={onGuardarCliente}>Guardar datos</BotonGuardar>
             </div>
           </div>
 
@@ -144,7 +145,7 @@ const ZonaDatos = forwardRef(function ZonaDatos({
                 <input className="entrada entrada--num" id="descuento" type="text" inputMode="decimal" autoComplete="off"
                        {...campo("descuento")} />
               </div>
-              <button className="btn btn--secundario" type="button" onClick={onGuardarContacto}>Guardar contacto</button>
+              <BotonGuardar onClick={onGuardarContacto}>Guardar contacto</BotonGuardar>
             </div>
           </div>
         </article>
