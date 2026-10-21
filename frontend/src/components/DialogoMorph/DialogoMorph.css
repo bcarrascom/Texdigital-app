@@ -1,0 +1,42 @@
+/* Ver DialogoMorph.jsx — portado de #dlg-rollo / #dlg-material de
+   recursos/pantallas/menu.html. El tamaño y la posición los pone el JS. */
+.dlg-morph {
+  position: fixed; margin: 0;
+  overflow: hidden;
+  /* El max-width genérico de components/Dialogo recortaría el ancho que
+     calcula el JS: acá manda el JS. */
+  max-width: none;
+  /* El fondo viaja en la misma transición: arranca del color del botón de
+     origen y termina en el blanco del diálogo — un solo gesto. */
+  transition: top var(--m-expansion) var(--ease-salida),
+              left var(--m-expansion) var(--ease-salida),
+              width var(--m-expansion) var(--ease-salida),
+              height var(--m-expansion) var(--ease-salida),
+              border-radius var(--m-expansion) var(--ease-salida),
+              background var(--m-expansion) var(--ease-salida);
+}
+/* Sin la entrada genérica de components/Dialogo: acá la entrada ES el morph. */
+.dlg-morph[open] { animation: none; }
+.dlg-morph[data-abierto] { border-radius: var(--r-xl); }
+.dlg-morph::backdrop {
+  background: rgba(22, 22, 26, 0);
+  animation: none;
+  transition: background var(--m-expansion) var(--ease-entrada);
+}
+.dlg-morph[data-abierto]::backdrop { background: rgba(22, 22, 26, .35); }
+
+.dlg-morph__contenido {
+  opacity: 0;
+  max-height: 100%; overflow-y: auto;
+  /* "stable": reserva el ancho de la scrollbar SIEMPRE. Si no, la medida del
+     alto (con el ancho completo) y lo que se ve (con la scrollbar comiéndose
+     ~10px) no coinciden, el texto envuelve una línea de más y aparece la
+     barra aunque "entraba todo". */
+  scrollbar-gutter: stable;
+  transition: opacity var(--m-rapida) var(--ease-salida);
+}
+/* El contenido aparece recién cuando el diálogo terminó de crecer. */
+.dlg-morph[data-abierto] .dlg-morph__contenido {
+  opacity: 1;
+  transition-delay: var(--m-expansion);
+}

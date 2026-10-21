@@ -1,0 +1,154 @@
+/* Estilos propios del módulo Inventario — portados del panel de Inventario de
+   recursos/pantallas/menu.html. Los switches de íconos (components/
+   SwitchIconos) y el diálogo que nace del "+" (components/DialogoMorph)
+   viven en sus componentes. */
+
+.pagina-modulo {
+  .modulo-cuerpo__titulo-fila { display: flex; align-items: center; gap: var(--e-3); }
+  .modulo-cuerpo__titulo-fila .cabecera__sep { flex: 1; }
+  .modulo-cuerpo__bajada { font-size: var(--t-md); opacity: .7; margin-top: var(--e-2); }
+
+  /* ── La barra de cada tabla: búsqueda, orden, inactivos y "+" ─────────── */
+  .barra-inventario { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; margin-bottom: var(--e-4); }
+  .barra-inventario .entrada { flex: 1 1 16rem; min-width: 0; }
+
+  /* El "+" redondo de alta: de acá nace el diálogo (ver DialogoMorph). */
+  .btn-nuevo {
+    flex: 0 0 auto; margin-left: auto;
+    display: grid; place-items: center;
+    width: 2.5rem; height: 2.5rem; border-radius: 50%;
+    border: none; background: var(--c-tema-fuerte); color: var(--c-texto-inv);
+    font-size: 1.4rem; line-height: 1; font-weight: var(--peso-medio);
+    cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida);
+  }
+  .btn-nuevo:hover { background: color-mix(in srgb, var(--c-tema-fuerte) 85%, black); }
+
+  /* Toggle de los inactivos: un solo botón-"ventana" que recorta el ícono que
+     sale por abajo y el que entra por arriba (la animación es de motion, ver
+     TablaRollos.jsx::ToggleInactivos). */
+  .toggle-inactivos {
+    position: relative; flex: 0 0 auto;
+    width: 2.31rem; height: 2.31rem;
+    border: 1px solid var(--c-borde); border-radius: var(--r-md);
+    background: var(--c-superficie-2);
+    overflow: hidden; cursor: pointer;
+    transition: border-color var(--m-rapida) var(--ease-salida);
+  }
+  .toggle-inactivos:hover { border-color: var(--c-tema-borde); }
+  .toggle-inactivos__icono { position: absolute; inset: 0; display: grid; place-items: center; color: var(--c-tema-fuerte); }
+  .toggle-inactivos__icono svg { width: 1.15rem; height: 1.15rem; }
+
+  /* ── Las tablas ───────────────────────────────────────────────────────────
+     Columnas combinadas: un dato "principal" + detalle chico abajo por celda
+     resuelve el ancho sin perder ningún dato — una columna por dato no
+     entraba ni partiendo la tabla en dos. */
+  .celda-combo { display: grid; gap: .15rem; }
+  .celda-combo__principal { font-weight: var(--peso-medio); display: flex; align-items: center; gap: .45em; }
+  .celda-combo__detalle { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  .celda-combo__id { color: var(--c-texto); }
+
+  /* La fila entera lleva al rollo/material: hover celeste, no el verde de
+     Inventario, para que se lea como "esto navega" — el verde ya significa
+     "activo" en el resto del módulo. */
+  .tabla-rollos tbody tr, .tabla-materiales tbody tr { cursor: pointer; }
+  .tabla-rollos tbody tr:hover, .tabla-materiales tbody tr:hover {
+    background: color-mix(in srgb, var(--c-foco) 14%, var(--c-superficie));
+  }
+
+  /* Columna "Rollo" de ancho fijo: el nombre del textil puede ser largo y,
+     sin este tope, la columna se ensancharía en vez de pasar a una segunda
+     línea (la fila casi siempre ya tiene alto de sobra para ella). */
+  .tabla-rollos th:first-child, .tabla-rollos td:first-child { width: 11rem; max-width: 11rem; }
+  .tabla-rollos td:first-child .celda-combo__principal { white-space: normal; overflow-wrap: anywhere; }
+
+  /* Estado del rollo: un punto de color antes del textil (verde = activo,
+     gris = inactivo), clickeable para alternarlo. */
+  .estado-punto {
+    flex: 0 0 auto;
+    width: .6rem; height: .6rem; border-radius: 50%;
+    border: none; padding: 0; cursor: pointer;
+    transition: transform var(--m-rapida) var(--ease-salida);
+  }
+  .estado-punto:hover { transform: scale(1.25); }
+  .estado-punto--activo { background: var(--c-tema-fuerte); }
+  .estado-punto--inactivo { background: var(--c-texto-suave); }
+
+  /* Separador "Inactivos" del modo "No priorizar". */
+  .fila-separador-inactivos td {
+    padding: var(--e-2) var(--e-3); border-top: 1px solid var(--c-borde);
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+    background: var(--c-superficie-2);
+  }
+  .tabla-rollos tbody tr.fila-separador-inactivos { cursor: default; }
+  .tabla-rollos tbody tr.fila-separador-inactivos:hover { background: none; }
+
+  .stock { display: grid; gap: .2rem; min-width: 8rem; }
+  .stock__texto { font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+  .stock__barra {
+    height: .3rem; border-radius: var(--r-full); overflow: hidden;
+    background: color-mix(in srgb, var(--c-tema-borde) 30%, transparent);
+  }
+  .stock__barra > i { display: block; height: 100%; background: var(--c-tema-fuerte); }
+
+  /* Las cifras de plata apiladas: monoespaciadas y a la derecha — si no, tres
+     cifras una sobre otra no se pueden comparar entre filas. */
+  .celda-combo--plata {
+    text-align: right; justify-items: end; white-space: nowrap;
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  /* "—" (dato que todavía no existe) se lee como ausencia, no como un monto. */
+  .sin-dato { color: var(--c-texto-tenue); }
+  .negativo, .celda-combo__detalle.negativo { color: var(--c-error); }
+
+  /* Encabezados ordenables de la tabla de materiales: un solo activo a la vez,
+     con la flecha que aparece y gira 180° para el descendente. */
+  .tabla-materiales th[role="button"] {
+    cursor: pointer; user-select: none;
+    transition: color var(--m-rapida) var(--ease-salida);
+  }
+  .tabla-materiales th[role="button"]:hover { color: var(--c-tema-fuerte); }
+  .th-orden__flecha {
+    width: .7em; height: .7em; margin-left: .3em; vertical-align: middle;
+    opacity: 0;
+    transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+  }
+  [data-orden-activa] .th-orden__flecha { opacity: 1; }
+  [data-orden-activa][data-orden-dir="desc"] .th-orden__flecha { transform: rotate(180deg); }
+
+  .estado-vacio { padding: var(--e-5); text-align: center; color: var(--c-texto-tenue); font-size: var(--t-sm); }
+
+  /* ── Formularios de alta ────────────────────────────────────────────────── */
+  .dlg-inventario__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+  .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+  /* Proveedor al doble de ancho que el precio de compra; el valor de abajo a
+     la mitad, así el espacio total entre las dos filas queda parejo. */
+  .fila--proveedor { grid-template-columns: 2fr 1fr; }
+  .campo--mitad { max-width: 50%; }
+
+  /* ── Proveedores ───────────────────────────────────────────────────────── */
+  .dlg-proveedores { width: min(90vw, 28rem); }
+  .proveedores-lista { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+  .fila-proveedor {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: var(--e-2) var(--e-3);
+    border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+  }
+  .fila-proveedor__nombre { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
+  .fila-proveedor__nombre .entrada { min-height: 2.2rem; padding: var(--e-1) var(--e-2); }
+  .fila-proveedor__acciones { display: flex; gap: var(--e-1); flex: 0 0 auto; }
+  .btn-fila-icono {
+    display: inline-grid; place-items: center;
+    width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+    border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+    color: var(--c-tema-fuerte); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
+  }
+  .btn-fila-icono svg { width: 1rem; height: 1rem; }
+  .btn-fila-icono:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+  .btn-fila-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+  .btn-fila-icono--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+  .proveedores-vacio { padding: var(--e-4) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
+  .proveedores-alta { margin-top: var(--e-4); padding-top: var(--e-4); border-top: 1.5px solid var(--c-borde); }
+}

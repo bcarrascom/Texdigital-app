@@ -11,6 +11,23 @@ export function cantidad(v) {
 
 export const pesos = (v) => "$" + Math.round(Number(v)).toLocaleString("es-CL");
 
+/* Como pesos(), pero con el signo ANTES del $ ("-$5.000", no "$-5.000"): para
+   donde una cifra negativa de verdad pasa (una ganancia en rojo). pesos() no
+   se cambia a propósito: tiene que dar lo mismo que los documentos generados. */
+export const pesosConSigno = (v) => (v < 0 ? "-" + pesos(-v) : pesos(v));
+
+/* Montos en pesos mientras se escriben (siempre enteros): se guarda solo el
+   número, el "$" y los puntos de miles son de despliegue.
+       leerClp("$12.500") → 12500     clp("12500") → "$12.500" */
+export function leerClp(texto) {
+  const limpio = String(texto ?? "").replace(/[^\d]/g, "");
+  return limpio ? parseInt(limpio, 10) : null;
+}
+export function clp(texto) {
+  const n = leerClp(texto);
+  return n == null ? "" : "$" + n.toLocaleString("es-CL");
+}
+
 /* "2026-10-20" o "2026/10/20" → "20-10-2026" */
 export function fecha(iso) {
   if (!iso) return "";

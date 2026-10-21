@@ -11,6 +11,7 @@ import Cargando from "@/components/Cargando/Cargando";
 import Pista from "@/components/Pista/Pista";
 import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
 import Ops from "@/pages/Ops/Ops";
+import Inventario, { cargarInventario } from "@/pages/Inventario/Inventario";
 import ModuloPendiente from "./ModuloPendiente";
 import "@/components/CuerpoModulo/CuerpoModulo.css";
 
@@ -28,10 +29,17 @@ import "@/components/CuerpoModulo/CuerpoModulo.css";
    contrae hacia la caja del módulo en que se está.
 
    Cada módulo declara cómo carga sus datos y qué pinta con ellos. Los datos
-   del vecino se piden ANTES de deslizar, para que entre ya lleno. */
+   del vecino se piden ANTES de deslizar, para que entre ya lleno.
+
+     cargar         () → datos del módulo
+     Contenido      el cuerpo; recibe { datos, recargar }
+     tituloPropio   el contenido pinta su título (p. ej. con un switch al lado)
+     ancho          ancho máximo del cuerpo, si necesita más que el de siempre */
 
 const CONTENIDOS = {
-  inventario:   { cargar: async () => null, Contenido: ModuloPendiente },
+  // Sus dos tablas tienen 6 columnas, tres con cifras apiladas: más ancho que
+  // el resto, en vez de que las tablas scrolleen de costado todo el tiempo.
+  inventario:   { cargar: cargarInventario, Contenido: Inventario, tituloPropio: true, ancho: "86rem" },
   cotizaciones: { cargar: () => api.obtener_resumen(), Contenido: Cotizaciones },
   ops:          { cargar: () => api.obtener_resumen(), Contenido: Ops },
   despachos:    { cargar: async () => null, Contenido: ModuloPendiente },
@@ -110,20 +118,20 @@ export default function Modulos() {
         {!vista ? <Cargando /> : (
           <Pista elemento={vista} clave={(v) => v.clave} direccion={state?.deslizar ?? 1}
                  onTerminar={() => setDeslizando(false)}
-                 render={(v) => <CuerpoDe vista={v} />} />
+                 render={(v) => <CuerpoDe vista={v} recargar={recargar} />} />
         )}
       </main>
     </Pagina>
   );
 }
 
-function CuerpoDe({ vista }) {
-  const { Contenido } = CONTENIDOS[vista.clave];
+function CuerpoDe({ vista, recargar }) {
+  const { Contenido, tituloPropio, ancho } = CONTENIDOS[vista.clave];
   const { titulo } = MODULOS.find((m) => m.clave === vista.clave);
   return (
-    <div className="modulo-cuerpo" data-tema={vista.clave}>
-      <h1 className="modulo-cuerpo__titulo">{titulo}</h1>
-      <Contenido datos={vista.datos} />
+    <div className="modulo-cuerpo" data-tema={vista.clave} style={ancho ? { "--ancho-modulo": ancho } : undefined}>
+      {!tituloPropio && <h1 className="modulo-cuerpo__titulo">{titulo}</h1>}
+      <Contenido datos={vista.datos} recargar={recargar} />
     </div>
   );
 }
