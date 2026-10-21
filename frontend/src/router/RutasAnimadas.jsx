@@ -11,6 +11,8 @@ import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
 import NuevaCotizacion from "@/pages/NuevaCotizacion/NuevaCotizacion";
 import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
+import VerOp from "@/pages/VerOp/VerOp";
+import HistorialOps from "@/pages/HistorialOps/HistorialOps";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
 /* Rutas que, entre sí, son la MISMA página: pasar de una a otra no desmonta
@@ -19,6 +21,7 @@ import VerDespacho from "@/pages/VerDespacho/VerDespacho";
    la vieja y la nueva tienen que estar montadas al mismo tiempo. */
 const MISMA_PAGINA = [
   /^\/cotizaciones\/\d+$/,                      // entre cotizaciones (VerCotizacion)
+  /^\/ops\/\d+$/,                               // entre OPs (VerOp)
   /^\/(inventario|cotizaciones|ops|despachos)$/,  // entre módulos (Modulos)
 ];
 
@@ -52,6 +55,8 @@ export default function RutasAnimadas() {
         <Route path="/cotizaciones/:numero/editar" element={<NuevaCotizacion modo="editar" />} />
         <Route path="/cotizaciones/pendientes/:id" element={<NuevaCotizacion modo="pendiente" />} />
         <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
+        <Route path="/ops/historial" element={<HistorialOps />} />
+        <Route path="/ops/:numero" element={<VerOp />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />
       </Routes>

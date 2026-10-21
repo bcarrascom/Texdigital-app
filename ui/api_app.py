@@ -515,20 +515,31 @@ class ApiApp:
     def obtener_op(self, numero) -> dict | None:
         return self._ver_op.obtener_op(numero)
 
+    def op_adyacente(self, numero, direccion: str) -> int | None:
+        """Versión de paginar() para React (ver cotizacion_adyacente)."""
+        return self._ver_op.numero_adyacente(numero, direccion)
+
     def imprimir_op(self, numero) -> None:
         self._ver_op.imprimir_op(numero)
 
-    def recotizar_op(self, numero) -> None:
-        if self._ver_op.recotizar_op(numero):
+    # recotizar_op/completar_op devuelven si se pudo: en modo React _ir() no
+    # navega (ver docstring del módulo) y es la pantalla la que decide
+    # adónde ir. Las pantallas viejas ignoran el valor, como antes.
+    def recotizar_op(self, numero) -> bool:
+        ok = self._ver_op.recotizar_op(numero)
+        if ok:
             self._ir("menu", panel="cotizaciones")
         else:
             self._aviso("No se pudo recotizar: la OP ya no está activa.", "error")
+        return ok
 
-    def completar_op(self, numero) -> None:
-        if self._ver_op.completar_op(numero):
+    def completar_op(self, numero) -> bool:
+        ok = self._ver_op.completar_op(numero)
+        if ok:
             self._ir("menu", panel="ops")
         else:
             self._aviso("No se pudo completar: la OP ya no está activa.", "error")
+        return ok
 
     def guardar_op_inser(self, numero, marcado) -> bool:
         return self._ver_op.guardar_op_inser(numero, marcado)

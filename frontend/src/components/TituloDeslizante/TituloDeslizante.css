@@ -1,0 +1,7 @@
+/* El título es un bloque propio para poder moverlo en vertical; el recorte
+   del contenedor (.cabecera__titulo, overflow:hidden) hace que salga y
+   entre "por el borde". */
+.cabecera__titulo-texto {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

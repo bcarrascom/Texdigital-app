@@ -16,4 +16,9 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: { port: 5173, strictPort: true },
+  // El aviso de 500 kB es para sitios web que se bajan por red: acá el
+  // bundle se lee del disco (pywebview), su tamaño no se nota. Si algún día
+  // hay versión web, conviene partirlo con import() por página en vez de
+  // subir este número.
+  build: { chunkSizeWarningLimit: 1500 },
 });

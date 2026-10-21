@@ -1,0 +1,143 @@
+/* Pantallas de detalle de una ficha con productos — ver-cotización y ver-OP
+   (son la MISMA cotización, mirada del lado comercial o del de producción):
+   dos columnas (la hoja + las fichas de producto a la izquierda, un panel
+   lateral fijo a la derecha), portadas de recursos/pantallas/ver-cotizacion.html
+   y ver-op.html. Cada página agrega lo suyo con su propia clase. */
+
+.pag-detalle {
+  .vista {
+    /* Todo el contenido —hoja, tarjetas de producto y el panel lateral— al
+       93%: `zoom` escala también tipografías y espaciados, así que el 7% de
+       menos es parejo en todo, no solo en el alto de una pieza suelta. */
+    zoom: .93;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+    gap: var(--e-4);
+    width: min(100%, 82rem); margin-inline: auto;
+    align-items: start;
+  }
+  .vista__izq { display: grid; gap: var(--e-4); min-width: 0; }
+  /* `align-items: start` en .vista deja el <aside> del alto de su contenido, y
+     entonces el sticky no tiene recorrido dónde pegarse: hay que estirarlo. */
+  .vista__der { align-self: stretch; min-width: 0; }
+  
+  /* ── La tarjeta lateral: acompaña el scroll ─────────────────────────────── */
+  .lateral {
+    position: sticky; top: 0;
+    display: grid; gap: var(--e-4);
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+
+  /* ── La hoja de datos ───────────────────────────────────────────────────── */
+  .hoja {
+    display: grid; gap: var(--e-4);
+    padding: var(--e-5);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+
+  .hoja__num {
+    font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+    line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+  }
+  .hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+  .hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  
+  .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--e-3) var(--e-4); }
+  /* align-content: start, si no el valor se va al fondo de la fila cuando otro
+     dato de la misma fila ocupa varias líneas (la descripción, casi siempre). */
+  .dato { display: grid; gap: 1px; min-width: 0; align-content: start; }
+  .dato--ancho { grid-column: 1 / -1; }
+  .dato__et {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .dato__val { font-size: var(--t-sm); overflow-wrap: anywhere; }
+  .dato__val--mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  /* ── Tarjetas de producto ───────────────────────────────────────────────── */
+  .productos {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--e-3);
+  }
+  @container vista (max-width: 62rem) { .productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container vista (max-width: 40rem) { .productos { grid-template-columns: 1fr; } }
+  /* min-width: 0 es obligatorio: .contenido es item de la grilla .app y sin esto
+     su pista se estira al min-content del contenido, la columna se pasa del
+     ancho de la ventana y las container queries de abajo nunca se cumplen. */
+  .contenido { container: vista / inline-size; min-width: 0; }
+  
+  /* Ventana angosta: la tarjeta lateral deja de acompañar el scroll y pasa
+     arriba de los productos, en vez de comerse media pantalla. */
+  @container vista (max-width: 46rem) {
+    .vista { grid-template-columns: minmax(0, 1fr); }
+    .vista__der { order: -1; }
+    .lateral { position: static; }
+    /* Sigue siendo cuadrado —el dibujo depende de eso— pero acotado: a todo el
+       ancho de la ventana sería media pantalla de gris. */
+    .visor__marco { width: min(100%, 16rem); margin-inline: auto; }
+  }
+  
+  /* Columna flex, no grilla: así el pie con el total se puede empujar al fondo
+     con margin-top: auto y todas las tarjetas de una fila cierran a la misma
+     altura, en vez de dejar el total flotando a media tarjeta. */
+  .ficha-prod {
+    display: flex; flex-direction: column; gap: var(--e-2);
+    /* Sin min-width: 0 la tarjeta se ensancha hasta el min-content de su nombre
+       o de una etiqueta larga, se sale de su columna y le pisa el monto a la
+       tarjeta de al lado. */
+    min-width: 0;
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-1);
+    cursor: default;
+    animation: aparecer var(--m-media) var(--ease-salida) both;
+    animation-delay: calc(var(--i) * var(--m-escalon));
+    transition: border-color var(--m-rapida) var(--ease-salida),
+                box-shadow var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida);
+  }
+  .ficha-prod:hover { border-color: var(--c-tema-borde); box-shadow: var(--s-2); transform: translateY(-2px); }
+  .ficha-prod[data-mirando] { border-color: var(--c-tema-fuerte); }
+  
+  .ficha-prod__cab { display: flex; align-items: baseline; gap: var(--e-2); min-width: 0; }
+  .ficha-prod__n {
+    font-family: var(--f-mono); font-size: var(--t-md); font-weight: var(--peso-fuerte);
+    color: var(--c-tema-fuerte);
+  }
+  .ficha-prod__nombre {
+    font-weight: var(--peso-medio); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ficha-prod__linea {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    font-size: var(--t-sm); color: var(--c-texto-suave);
+  }
+  .ficha-prod__linea b {
+    margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  .ficha-prod__etiquetas { display: flex; flex-wrap: wrap; gap: var(--e-1); min-width: 0; }
+  .ficha-prod__etiquetas .etiqueta { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .ficha-prod__tipo { align-self: flex-start; }
+  .ficha-prod__pie {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    margin-top: auto; padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+    font-size: var(--t-sm);
+  }
+  .ficha-prod__pie b { margin-left: auto; font-family: var(--f-mono); color: var(--c-tema-tinta); }
+
+  /* La que sale y la que entra viajan por fuera del ancho visible durante el
+     paso con ←/→ (components/Pista): sin esto aparecería una barra de scroll
+     horizontal. Las que llegan de costado entran ya armadas, sin el escalón. */
+  .contenido { overflow-x: hidden; }
+  .vista[data-sin-aparecer] .ficha-prod { animation: none; }
+}

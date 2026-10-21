@@ -1,0 +1,83 @@
+/* Estilos propios de VerOp — portados de recursos/pantallas/ver-op.html. Lo
+   que comparte con ver-cotización vive en components/Detalle. */
+
+.pag-ver-op {
+  /* Módulo 2 del panel lateral · logística: reemplaza al desglose de plata
+     de la cotización, con el mismo .dato de la hoja. */
+  .produccion { display: grid; gap: var(--e-3); }
+
+  /* Número de OP a la izquierda, fecha de entrega a la derecha, las dos
+     arriba del todo — por eso `align-items: start` y no el `gap` simple de
+     antes: son dos columnas, no una pila. */
+  .hoja__cab { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--e-4); }
+  .hoja__cab-izq { display: grid; gap: var(--e-1); min-width: 0; }
+
+  /* Fecha de entrega: mismo tamaño y peso que el número de OP, a la misma
+     altura pero a la derecha — es el dato que más importa de la pantalla, no
+     compite por atención con nada más chico. El subtítulo de abajo dice
+     cuánto falta; los cuatro colores calcan la escala del calendario del
+     panel de producción (negro → amarillo → naranjo → rojo), cada uno
+     elegido con suficiente contraste sobre el blanco de la tarjeta. */
+  .entrega { display: grid; gap: 2px; justify-items: end; text-align: right; }
+  .entrega__fecha {
+    font-family: var(--f-mono); font-size: var(--t-3xl); font-weight: var(--peso-fuerte);
+    line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+  }
+  .entrega__estado { font-size: var(--t-sm); font-weight: var(--peso-medio); white-space: nowrap; }
+  .entrega__estado[data-urgencia="futuro"]   { color: var(--c-texto); }
+  .entrega__estado[data-urgencia="manana"]   { color: #8A6D00; }
+  .entrega__estado[data-urgencia="hoy"]      { color: #B54708; }
+  .entrega__estado[data-urgencia="atrasada"] { color: var(--c-error); }
+
+
+  /* "OP Inser" (solo OPs con backlight, ver datoOpInser) es el único dato
+     editable de esta pantalla. Era un campo de texto para cargar el N° de
+     ingreso en Inser, pero ese número no se conoce acá: se escribe con lápiz
+     sobre la hoja ya impresa (pedido de Bruno, 2026-10-01). Ahora es una
+     casilla que decide si el documento lleva el recuadro vacío donde
+     escribirlo — se reusa .chip-casilla de base.css, el mismo control que el
+     "Forzar igual" del cotizador, para no inventar un checkbox propio. */
+  .dato__casilla { margin-top: .35rem; }
+  .dato__ayuda { font-size: var(--t-xs); color: var(--c-texto-tenue); margin-top: .3rem; }
+
+  /* Materiales: cuánto de qué lleva el trabajo, sumado entre todos los
+     productos. Tres columnas fijas —Textiles, Materiales de caja,
+     Estructuras— en vez de tres bloques apilados: apiladas desperdiciaban
+     todo el ancho de la hoja para listas que casi siempre son de una o dos
+     líneas. Una columna sin nada que listar queda en blanco, no se le pasa su
+     lugar a la de al lado — así la posición de cada categoría es siempre la
+     misma, de un vistazo. */
+  .materiales {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    column-gap: 0; row-gap: var(--e-4);
+    padding-top: var(--e-4); border-top: 1px solid var(--c-borde);
+  }
+  /* La línea separadora vive en el padding, no en un gap: así queda a mitad
+     de camino entre columnas en vez de pegada a una de las dos. */
+  .materiales__grupo {
+    display: grid; gap: var(--e-1); align-content: start; min-width: 0;
+    padding-inline: var(--e-4);
+  }
+  .materiales__grupo:first-child { padding-left: 0; }
+  .materiales__grupo:last-child { padding-right: 0; }
+  .materiales__grupo:not(:first-child) { border-left: 1px solid var(--c-borde); }
+  .materiales__titulo {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .materiales__fila {
+    display: flex; align-items: baseline; gap: var(--e-2); min-width: 0;
+    font-size: var(--t-sm); color: var(--c-texto-suave);
+  }
+  .materiales__fila span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .materiales__fila b {
+    flex: 0 0 auto; margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto);
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  @container vista (max-width: 40rem) {
+    .materiales { grid-template-columns: 1fr; }
+    .materiales__grupo { padding-inline: 0; border-left: none; }
+  }
+}

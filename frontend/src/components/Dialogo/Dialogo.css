@@ -18,3 +18,8 @@ dialog[open] { animation: dialogo-entrar var(--m-media) var(--ease-salida); }
 dialog[open]::backdrop { animation: dialogo-fondo var(--m-media) var(--ease-salida); }
 @keyframes dialogo-entrar { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 @keyframes dialogo-fondo { from { opacity: 0; } }
+
+/* Variante para confirmaciones que cambian el estado de algo (recotizar,
+   completar una OP): el resto de la ventana se DESENFOCA además de
+   oscurecerse — el diálogo queda nítido y todo lo demás retrocede. */
+.dlg--desenfoque::backdrop { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }

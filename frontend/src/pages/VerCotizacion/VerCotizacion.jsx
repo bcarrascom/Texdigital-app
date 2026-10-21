@@ -1,23 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
-import { useAtajo } from "@/hooks/useAtajo";
-import { useCarrusel } from "@/hooks/useCarrusel";
+import { useFichaPaginada } from "@/hooks/useFichaPaginada";
 import { rutas } from "@/router/rutas";
 import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
 import Cargando from "@/components/Cargando/Cargando";
-import Etiqueta from "@/components/Etiqueta/Etiqueta";
 import Pista from "@/components/Pista/Pista";
-import VisorProducto from "@/components/VisorProducto/VisorProducto";
+import TituloDeslizante from "@/components/TituloDeslizante/TituloDeslizante";
+import { Datos, VistaDetalle } from "@/components/Detalle/Detalle";
 import { DialogoAprobar, DialogoEliminar, DialogoMaterialesBloqueado } from "./DialogosCotizacion";
 import * as fmt from "@/utils/formato";
 import "./VerCotizacion.css";
 
 /* Ver una cotización guardada.
 
-   Dos columnas:
+   Dos columnas (components/Detalle, las mismas de ver-OP):
      · izquierda, scrollea: la hoja con los datos + los montos por concepto, y
        debajo las tarjetas de producto (3 por fila).
      · derecha, fija: la figura del producto —que va ciclando— y el desglose
@@ -28,20 +26,12 @@ import "./VerCotizacion.css";
    neutra — el color se reserva para el total.
 
    ←/→ pasan a la cotización siguiente/anterior (más nueva → más antigua, con
-   vuelta) REEMPLAZANDO esta en el historial: "Volver" desde cualquiera de
-   ellas vuelve adonde se entró, no retrocede de a una.
-
-   Ese paso es un slide de verdad, como si una cotización estuviera al lado
-   de la otra (components/Pista): la página NO se desmonta (ver MISMA_PAGINA
-   en router/RutasAnimadas.jsx), la vieja sale por un costado mientras la
-   nueva entra por el otro, pegadas. Mientras tanto los botones de la cabecera no
-   responden, y el título sale hacia arriba desvaneciéndose; cuando el slide
-   termina, el título nuevo aparece subiendo desde abajo. Los datos de la
-   vecina se piden ANTES de arrancar, para que entre ya llena. */
+   vuelta) con un slide de verdad, como si una estuviera al lado de la otra
+   (hooks/useFichaPaginada + components/Pista). Mientras tanto los botones de
+   la cabecera no responden, y el título sale hacia arriba y el nuevo entra
+   subiendo cuando termina el slide (components/TituloDeslizante). */
 
 const SLIDE = { duration: 0.35, ease: [0.65, 0, 0.35, 1] };   // simétrica: arranca y frena suave
-const TITULO_SALE = { duration: 0.16, ease: [0.55, 0, 1, 0.45] };
-const TITULO_ENTRA = { duration: 0.28, ease: [0.22, 1, 0.36, 1] };
 
 async function cargarCotizacion(numero) {
   const cot = await api.obtener_cotizacion(numero);
@@ -55,57 +45,20 @@ export default function VerCotizacion() {
   const numero = Number(useParams().numero);
   const navigate = useNavigate();
   const location = useLocation();
-  const direccion = location.state?.deslizar ?? 1;
-
-  /* Cotizaciones ya pedidas a Python, por número: paginar() deja acá la
-     vecina antes de navegar, así el slide arranca con los datos listos. */
-  const cache = useRef(new Map());
-  const [cot, setCot] = useState(undefined);   // undefined: cargando · null: no existe
-  const [deslizando, setDeslizando] = useState(false);
-  const pidiendo = useRef(false);
+  const { ficha: cot, direccion, deslizando, alTerminarSlide } = useFichaPaginada({
+    numero, cargar: cargarCotizacion, adyacente: api.cotizacion_adyacente, ruta: rutas.verCotizacion,
+  });
 
   // Solo la primera cotización que se abre hace la aparición en escalón de
   // sus fichas; las que llegan de costado entran ya armadas.
   const primera = useRef(null);
   if (cot && primera.current === null) primera.current = cot.numero;
 
-  useEffect(() => {
-    if (cache.current.has(numero)) {
-      setCot(cache.current.get(numero));
-      return;
-    }
-    let vigente = true;
-    cargarCotizacion(numero).then((c) => {
-      cache.current.set(numero, c);
-      if (vigente) setCot(c);
-    });
-    return () => { vigente = false; };
-  }, [numero]);
-
   // "eliminar" | "bloqueado" | "aprobar" | null
   const [dialogo, setDialogo] = useState(null);
   const [faltantes, setFaltantes] = useState([]);
   const [manuales, setManuales] = useState([]);
   const cerrarDialogo = () => setDialogo(null);
-
-  async function paginar(sentido) {
-    if (deslizando || pidiendo.current || !cot) return;  // una a la vez
-    pidiendo.current = true;
-    try {
-      const vecina = await api.cotizacion_adyacente(numero, sentido);
-      if (vecina == null || vecina === numero) return;
-      if (!cache.current.has(vecina)) cache.current.set(vecina, await cargarCotizacion(vecina));
-      setDeslizando(true);
-      navigate(rutas.verCotizacion(vecina), {
-        replace: true,
-        state: { ...location.state, deslizar: sentido === "siguiente" ? 1 : -1 },
-      });
-    } finally {
-      pidiendo.current = false;
-    }
-  }
-  useAtajo("arrowleft", () => paginar("anterior"));
-  useAtajo("arrowright", () => paginar("siguiente"));
 
   /* Después de eliminar: si se llegó desde el listado del módulo, alcanza con
      volver a él; si no (p. ej. desde el mazo del menú), se lo reemplaza por
@@ -138,8 +91,9 @@ export default function VerCotizacion() {
   const titulo = tituloDe(cot, numero);
 
   return (
-    <Pagina tema="cotizaciones" titulo={titulo} className="pag-ver-cotizacion">
-      <Cabecera titulo={<TituloDeslizante texto={titulo} clave={cot?.numero ?? numero} />} bloqueada={deslizando}>
+    <Pagina tema="cotizaciones" titulo={titulo} className="pag-detalle pag-ver-cotizacion">
+      <Cabecera titulo={<TituloDeslizante texto={titulo} clave={cot?.numero ?? numero} esperar={SLIDE.duration} />}
+                bloqueada={deslizando}>
         {cot && (
           <>
             <button className="cab-btn" onClick={() => setDialogo("eliminar")}>Eliminar</button>
@@ -155,8 +109,12 @@ export default function VerCotizacion() {
           <p className="seccion-titulo">No se pudo cargar la cotización {fmt.numero(numero)}.</p>
         ) : (
           <Pista elemento={cot} clave={(c) => c.numero} direccion={direccion} transicion={SLIDE}
-                 onTerminar={() => setDeslizando(false)}
-                 render={(c) => <VistaCotizacion cot={c} aparecer={c.numero === primera.current} />} />
+                 onTerminar={alTerminarSlide}
+                 render={(c) => (
+                   <VistaDetalle productos={c.productos} aparecer={c.numero === primera.current}
+                                 hoja={<Hoja cot={c} />} lateral={<Plata t={c.totales || {}} />}
+                                 pieFicha={(p) => <><span>Total</span><b>{p.total != null ? fmt.pesos(p.total) : "—"}</b></>} />
+                 )} />
         )}
       </main>
 
@@ -176,73 +134,10 @@ export default function VerCotizacion() {
   );
 }
 
-/* El título de la cabecera: al cambiar de cotización sale hacia arriba
-   desvaneciéndose, y el nuevo aparece subiendo desde abajo (todo el
-   movimiento en un solo sentido, como un contador que gira) recién cuando
-   el slide del contenido ya terminó. `clave` es lo que cambia entre
-   cotizaciones (el texto solo, no: al terminar de cargar la primera, el
-   texto se completa con la empresa y eso no tiene que animarse). */
-function TituloDeslizante({ texto, clave }) {
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.span
-        key={clave}
-        className="cabecera__titulo-texto"
-        initial={{ y: "110%", opacity: 0 }}
-        animate={{ y: 0, opacity: 1, transition: { ...TITULO_ENTRA, delay: SLIDE.duration - TITULO_SALE.duration } }}
-        exit={{ y: "-110%", opacity: 0, transition: TITULO_SALE }}
-      >
-        {texto}
-      </motion.span>
-    </AnimatePresence>
-  );
-}
-
-/* Una cotización entera (lo que se desliza): cada una tiene su propio visor
-   y su propio carrusel, así la que sale sigue mostrando lo suyo hasta irse. */
-function VistaCotizacion({ cot, aparecer }) {
-  const carrusel = useCarrusel(cot.productos.length);
-  return (
-    <div className="vista" data-sin-aparecer={aparecer ? undefined : ""}>
-      <div className="vista__izq">
-        <Hoja cot={cot} />
-        <section>
-          <h2 className="seccion-titulo">Productos · {cot.productos.length}</h2>
-          <div className="productos">
-            {cot.productos.map((p, i) => (
-              <FichaProducto key={i} p={p} i={i} mirando={i === carrusel.indice}
-                             onMirar={() => carrusel.mirar(i)} onSoltar={carrusel.soltar} />
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <aside className="vista__der">
-        <div className="lateral">
-          <VisorProducto producto={cot.productos[carrusel.indice]} indice={carrusel.indice}
-                         total={cot.productos.length} />
-          <Plata t={cot.totales || {}} />
-        </div>
-      </aside>
-    </div>
-  );
-}
-
 /* ── La hoja de datos ───────────────────────────────────────────────────── */
 
 function Hoja({ cot }) {
   const t = cot.totales || {};
-  const datos = [
-    ["Empresa", cot.empresa],
-    ["RUT", cot.rut, { mono: true }],
-    ["Razón social", cot.razon_social],
-    ["Contacto", cot.contacto],
-    ["Email", cot.email],
-    ["Condición de pago", cot.condicion],
-    ["Fecha", cot.fecha, { mono: true }],
-    ["Descripción", cot.descripcion, { ancho: true }],
-  ].filter(([, val]) => val || val === 0);
-
   /* Despacho e instalación solo aparecen si la cotización los lleva: un "$0"
      es ruido, no información. */
   const conceptos = [
@@ -260,14 +155,16 @@ function Hoja({ cot }) {
         <span className="hoja__nombre">{cot.nombre}</span>
         <span className="hoja__meta">{[cot.empresa, cot.fecha].filter(Boolean).join(" · ")}</span>
       </div>
-      <div className="datos">
-        {datos.map(([et, val, { mono, ancho } = {}]) => (
-          <div key={et} className={`dato${ancho ? " dato--ancho" : ""}`}>
-            <span className="dato__et">{et}</span>
-            <span className={`dato__val${mono ? " dato__val--mono" : ""}`}>{val}</span>
-          </div>
-        ))}
-      </div>
+      <Datos lista={[
+        ["Empresa", cot.empresa],
+        ["RUT", cot.rut, { mono: true }],
+        ["Razón social", cot.razon_social],
+        ["Contacto", cot.contacto],
+        ["Email", cot.email],
+        ["Condición de pago", cot.condicion],
+        ["Fecha", cot.fecha, { mono: true }],
+        ["Descripción", cot.descripcion, { ancho: true }],
+      ]} />
       <div className="conceptos">
         {conceptos.map(([et, v]) => (
           <div key={et} className="concepto">
@@ -300,47 +197,5 @@ function Plata({ t }) {
       <Linea et={`IVA (${t.iva_pct ?? 19}%)`} val={fmt.pesos(t.iva || 0)} />
       <Linea et="Total" val={fmt.pesos(t.total || 0)} total />
     </div>
-  );
-}
-
-/* ── Tarjeta de producto ──────────────────────────────────────────────────
-   Mirarla (mouse o foco) congela el visor en ese producto. El JSON guardado
-   NO trae lo mismo en los dos tipos: backlight trae Tela + Caja, el estándar
-   trae producto + Estructuras + Terminaciones + Impresión (ver
-   ui/api_ver_cotizacion.py::_producto_a_json_pantalla). */
-
-function FichaProducto({ p, i, mirando, onMirar, onSoltar }) {
-  const bl = p.tipo === "backlight";
-  const etiquetas = [
-    p.tema && "Tema: " + p.tema,
-    ...(bl
-      ? [p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja"]
-      : [p.textil || p.tela, p.impresion, ...(p.estructuras || []), ...(p.terminaciones || [])]),
-    p.obs && "Obs: " + p.obs,
-  ].filter(Boolean);
-
-  return (
-    <article className="ficha-prod" style={{ "--i": i }} data-mirando={mirando || undefined}
-             onMouseEnter={onMirar} onMouseLeave={onSoltar} onFocus={onMirar} onBlur={onSoltar}>
-      <div className="ficha-prod__cab">
-        <span className="ficha-prod__n">{i + 1}.</span>
-        <span className="ficha-prod__nombre">{bl ? p.tela || "Backlight" : p.producto || "—"}</span>
-      </div>
-      <span className="ficha-prod__tipo">
-        <Etiqueta tipo={bl ? "neutra" : "tema"}>{bl ? "Backlight" : "Estándar"}</Etiqueta>
-      </span>
-      <div className="ficha-prod__linea">
-        <span>Medidas</span><b>{fmt.medida(fmt.aNumero(p.ancho))} × {fmt.medida(fmt.aNumero(p.alto))} m</b>
-      </div>
-      <div className="ficha-prod__linea"><span>Cantidad</span><b>{parseInt(p.cantidad, 10) || 0}</b></div>
-      <div className="ficha-prod__linea">
-        <span>Superficie</span>
-        <b>{p.ml != null ? `${fmt.cantidad(p.ml)} ML` : p.m2 != null ? `${fmt.cantidad(p.m2)} M²` : "—"}</b>
-      </div>
-      <div className="ficha-prod__etiquetas">
-        {etiquetas.map((e, k) => <Etiqueta key={k}>{e}</Etiqueta>)}
-      </div>
-      <div className="ficha-prod__pie"><span>Total</span><b>{p.total != null ? fmt.pesos(p.total) : "—"}</b></div>
-    </article>
   );
 }
