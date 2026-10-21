@@ -11,7 +11,7 @@ import Dialogo from "@/components/Dialogo/Dialogo";
 import Etiqueta from "@/components/Etiqueta/Etiqueta";
 import { Dato, Datos } from "@/components/Detalle/Detalle";
 import Historial, { EnlaceOp } from "@/pages/Inventario/Historial";
-import { Campo, enterGuarda } from "@/pages/Inventario/DialogosInventario";
+import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import * as fmt from "@/utils/formato";
 import "@/pages/Inventario/Ficha.css";
 

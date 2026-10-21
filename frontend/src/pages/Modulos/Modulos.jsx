@@ -12,7 +12,7 @@ import Pista from "@/components/Pista/Pista";
 import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
 import Ops from "@/pages/Ops/Ops";
 import Inventario, { cargarInventario } from "@/pages/Inventario/Inventario";
-import ModuloPendiente from "./ModuloPendiente";
+import Despachos from "@/pages/Despachos/Despachos";
 import "@/components/CuerpoModulo/CuerpoModulo.css";
 
 /* La página de los módulos (/inventario, /cotizaciones, /ops, /despachos) —
@@ -42,7 +42,7 @@ const CONTENIDOS = {
   inventario:   { cargar: cargarInventario, Contenido: Inventario, tituloPropio: true, ancho: "86rem" },
   cotizaciones: { cargar: () => api.obtener_resumen(), Contenido: Cotizaciones },
   ops:          { cargar: () => api.obtener_resumen(), Contenido: Ops },
-  despachos:    { cargar: async () => null, Contenido: ModuloPendiente },
+  despachos:    { cargar: () => api.obtener_resumen(), Contenido: Despachos },
 };
 
 const claveDe = (pathname) => MODULOS.find((m) => pathname === m.ruta().split("?")[0])?.clave;

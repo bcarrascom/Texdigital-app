@@ -1,0 +1,8 @@
+/* El formulario de dirección (FormularioDireccion.jsx). */
+.form-direccion {
+  .form-direccion__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+  .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+  /* margin-right:auto en la referencia empuja Guardar hacia la derecha. */
+  .form-direccion__acciones { display: flex; align-items: flex-end; gap: var(--e-2); justify-content: flex-end; margin-top: var(--e-5); }
+  .form-direccion__acciones .campo--referencia { flex: 1 1 14rem; margin-right: auto; }
+}

@@ -6,10 +6,11 @@ import * as fmt from "@/utils/formato";
    adelante, los listados de cada módulo. Cada tipo sabe adónde lleva al
    hacer click; `style` deja pasar las variables del mazo (--i, --fila). */
 
-export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, onClick, style, children }) {
+/* `className` y el resto de las props (onDoubleClick, data-*...) pasan al botón. */
+export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, onClick, style, className = "", children, ...resto }) {
   return (
-    <button type="button" className={`reg${incompleta ? " reg--incompleta" : ""}`}
-            title={title} onClick={onClick} style={style}>
+    <button type="button" className={`reg${incompleta ? " reg--incompleta" : ""}${className ? ` ${className}` : ""}`}
+            title={title} onClick={onClick} style={style} {...resto}>
       <span className="reg__num">{num}</span>
       <span className="reg__sub">{sub}</span>
       {pie && <span className="reg__pie">{pie}</span>}

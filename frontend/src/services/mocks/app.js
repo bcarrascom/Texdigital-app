@@ -14,7 +14,7 @@ export default {
     escala_ui: 1,
     hoy_iso: new Date().toISOString().slice(0, 10),
     fecha: new Date().toLocaleDateString("es-CL").replace(/\//g, "-"),
-    modulos_habilitados: { inventario: true, cotizaciones: true, ops: true, despachos: false },  // igual que core/config.py
+    modulos_habilitados: { inventario: true, cotizaciones: true, ops: true, despachos: true },  // en core/config.py, Despachos sigue apagado hasta el release
     stock_minimo_ml: 25,
     ...(CONTEXTO_PANTALLA[pantalla]?.(argumentos) || {}),
   }),

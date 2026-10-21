@@ -598,9 +598,6 @@ class ApiApp:
     def eliminar_despachos(self, numeros: list) -> int:
         return self._menu.eliminar_despachos(numeros)
 
-    def generar_guia_despacho(self, numero) -> None:
-        return self._menu.generar_guia_despacho(numero)
-
     # ── Direcciones (compartido por asignar-despacho y ver-despacho) ──────────
 
     def cargar_todas_direcciones(self) -> list[dict]:

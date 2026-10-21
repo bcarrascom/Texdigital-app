@@ -1,0 +1,31 @@
+/* La caja de envío (CajaEnvio.jsx). Sin scope de página: vive en <body>. Los
+   colores salen del tema que la página puso en <html data-tema>. */
+.caja-envio {
+  position: fixed; top: 50%; right: 2.5rem; z-index: 80;
+  width: 4.5rem; height: 4.5rem;
+  display: grid; place-items: center;
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-tema-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-3);
+  color: var(--c-tema-fuerte);
+  opacity: 0;
+  transform: translateY(-50%);
+  /* La salida solo acelera, sin frenar: algo que se va, no que llega. */
+  transition: opacity var(--m-media) var(--ease-salida),
+              transform var(--m-lenta) var(--ease-acelerar);
+}
+.caja-envio[data-mostrar] { opacity: 1; }
+/* 100vw: sale entera sin importar el ancho de la ventana. */
+.caja-envio[data-salir] { transform: translateY(-50%) translateX(100vw); }
+
+.caja-envio__icono { position: relative; width: 2.25rem; height: 2.25rem; }
+/* Dos íconos superpuestos en crossfade, no un morph: las dos cajas no tienen
+   la misma geometría, interpolarlas no se ve bien. */
+.caja-envio .icono-caja {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+}
+.caja-envio .icono-caja--cerrada { opacity: 0; transform: scale(.85); }
+.caja-envio[data-cerrada] .icono-caja--abierta { opacity: 0; transform: scale(.85); }
+.caja-envio[data-cerrada] .icono-caja--cerrada { opacity: 1; transform: scale(1); }

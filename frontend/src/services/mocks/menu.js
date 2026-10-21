@@ -1,4 +1,7 @@
-/* Mocks del menú principal (ui/api_menu.py::ApiMenu.obtener_resumen). */
+/* Mocks del menú principal (ui/api_menu.py::ApiMenu.obtener_resumen). Las
+   listas de Despachos salen del estado de mocks/despachos.js. */
+
+import { resumenDespachos } from "./despachos";
 
 const hoyMas = (dias) => {
   const d = new Date();
@@ -21,10 +24,7 @@ export default {
       "Librería Central", "Hotel Mirador", "Constructora Andes", "Pastelería Dulce", "Óptica Visión", "Colegio San Marcos"]
       .map((empresa, i) => ({ numero: 9015 - i, empresa, fecha: `${18 - i}/10/2026` })),
     ops,
-    despachos: [
-      { numero: 42, nombre: "Campaña verano", asignados: 1, total: 3 },
-    ],
-    despachos_asignados: [],
+    ...resumenDespachos(),
     rollos: [
       { id: "R-031", nombre_textil: "Tela backlit", metros_restantes: 12.5, metros_iniciales: 50 },
       { id: "R-030", nombre_textil: "Lona mate", metros_restantes: 40, metros_iniciales: 50 },

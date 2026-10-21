@@ -7,6 +7,7 @@ import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
 import Cargando from "@/components/Cargando/Cargando";
 import Etiqueta from "@/components/Etiqueta/Etiqueta";
+import { direccionTexto } from "@/pages/Despachos/direcciones";
 import * as fmt from "@/utils/formato";
 import "./VerDespacho.css";
 
@@ -30,12 +31,6 @@ const ESTADOS = {
 function claveDireccion(d) {
   if (!d) return "";
   return [d.calle, d.numero, d.comuna, d.region].map((x) => (x || "").trim().toLowerCase()).join("|");
-}
-
-function direccionTexto(d) {
-  if (!d) return "—";
-  const linea1 = [d.calle, d.numero].filter(Boolean).join(" ");
-  return [linea1, d.comuna].filter(Boolean).join(", ") || "—";
 }
 
 async function cargarDespacho(numero) {

@@ -14,6 +14,8 @@ import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
 import VerOp from "@/pages/VerOp/VerOp";
 import HistorialOps from "@/pages/HistorialOps/HistorialOps";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
+import AsignarDespacho from "@/pages/AsignarDespacho/AsignarDespacho";
+import GestionarDirecciones from "@/pages/GestionarDirecciones/GestionarDirecciones";
 import VerRollo from "@/pages/VerRollo/VerRollo";
 import VerMaterial from "@/pages/VerMaterial/VerMaterial";
 
@@ -61,6 +63,8 @@ export default function RutasAnimadas() {
         <Route path="/ops/:numero" element={<VerOp />} />
         <Route path="/inventario/rollos/:id" element={<VerRollo />} />
         <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
+        <Route path="/despachos/direcciones" element={<GestionarDirecciones />} />
+        <Route path="/despachos/:numero/asignar" element={<AsignarDespacho />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />
       </Routes>

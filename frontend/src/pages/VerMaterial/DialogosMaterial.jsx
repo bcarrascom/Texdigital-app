@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "@/services/api";
 import Segmento from "@/components/Segmento/Segmento";
-import { Campo, enterGuarda } from "@/pages/Inventario/DialogosInventario";
+import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import { unidadDe } from "@/pages/Inventario/TablaMateriales";
 import IconoUnidad from "@/assets/svg/box.svg?react";
 import IconoMetro from "@/assets/svg/ruler.svg?react";

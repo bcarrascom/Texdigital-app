@@ -1,0 +1,106 @@
+/* Asignar dirección por producto — portado de
+   recursos/pantallas/asignar-despacho.html. */
+
+.pag-asignar-despacho {
+  .contenido { container: vista / inline-size; min-width: 0; }
+  .vista-asignar { width: min(100%, 68rem); margin-inline: auto; display: grid; gap: var(--e-4); }
+
+  .hoja {
+    display: grid; gap: var(--e-4);
+    padding: var(--e-5);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+  .hoja__cab { display: flex; align-items: baseline; gap: var(--e-3); flex-wrap: wrap; }
+  .hoja__num {
+    font-family: var(--f-mono); font-size: var(--t-2xl); font-weight: var(--peso-fuerte);
+    line-height: 1; letter-spacing: -.03em; color: var(--c-tema-tinta);
+  }
+  .hoja__nombre { font-size: var(--t-lg); font-weight: var(--peso-medio); }
+  .hoja__meta { font-size: var(--t-sm); color: var(--c-texto-suave); margin-left: auto; }
+
+  /* ── [select] [aceptar] [+] [quitar] ────────────────────────────────── */
+  .selector-direccion { display: flex; align-items: center; gap: var(--e-2); }
+  .selector-direccion select { flex: 1 1 auto; min-width: 0; min-height: 2.75rem; }
+  .btn-icono {
+    flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: var(--r-full);
+    display: grid; place-items: center;
+    border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+    color: var(--c-tema-fuerte); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
+  }
+  .btn-icono svg { width: 1.1rem; height: 1.1rem; }
+  .btn-icono:hover:not(:disabled) { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); transform: translateY(-1px); }
+  .btn-icono:active:not(:disabled) { transform: translateY(0) scale(.95); }
+  .btn-icono:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+  .btn-icono--peligro:hover:not(:disabled) { background: var(--c-error-suave); border-color: var(--c-error); }
+
+  /* ── Tarjetas de producto ─────────────────────────────────────────────── */
+  .productos-cab { display: flex; align-items: center; gap: var(--e-3); }
+  .productos-cab .seccion-titulo { margin: 0; }
+  .productos-cab .btn { margin-left: auto; }
+  /* Pasivo: solo informa (la OP pasa sola a Asignadas/). */
+  .estado-asignacion { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .estado-asignacion[data-completo] { color: var(--c-ok); font-weight: var(--peso-medio); }
+
+  .tarjetas-productos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-4); }
+  @container vista (max-width: 46rem) { .tarjetas-productos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container vista (max-width: 28rem) { .tarjetas-productos { grid-template-columns: 1fr; } }
+
+  .tarjeta-producto {
+    position: relative;
+    display: flex; flex-direction: column; gap: var(--e-2);
+    min-width: 0; padding: var(--e-4) var(--e-4) var(--e-3);
+    font: inherit; text-align: left; color: inherit;
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-2);
+    cursor: pointer;
+    transition: border-color var(--m-rapida) var(--ease-salida),
+                box-shadow var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida);
+  }
+  .tarjeta-producto:hover { transform: translateY(-2px); box-shadow: var(--s-3); }
+  .tarjeta-producto[data-seleccionado] {
+    border-color: var(--c-tema-fuerte);
+    box-shadow: var(--s-3), 0 0 0 3px color-mix(in srgb, var(--c-tema-fuerte) 22%, transparent);
+  }
+
+  /* Círculo BLANCO: el que lleva el color es el ícono (el del tema en reposo,
+     verde asignado), así el contraste queda alto en los dos estados. */
+  .tarjeta-producto__badge {
+    position: absolute; top: -.65rem; left: -.65rem; z-index: 2;
+    width: 2.1rem; height: 2.1rem; border-radius: var(--r-full);
+    background: var(--c-superficie); color: var(--c-tema-fuerte);
+    border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent);
+    box-shadow: var(--s-2);
+    transition: background var(--m-media) var(--ease-salida), color var(--m-media) var(--ease-salida),
+                border-color var(--m-media) var(--ease-salida);
+  }
+  .tarjeta-producto__badge[data-asignado] { background: var(--c-ok-suave); color: var(--c-ok); }
+  /* El translate de centrado va en la MISMA declaración que el giro: un
+     elemento tiene un solo transform. */
+  .badge__pin, .badge__check {
+    position: absolute; top: 50%; left: 50%; width: 1.05rem; height: 1.05rem;
+    transition: opacity var(--m-media) var(--ease-salida), transform var(--m-media) var(--ease-salida);
+  }
+  .badge__pin { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  .badge__check { opacity: 0; transform: translate(-50%, -50%) scale(.4) rotate(-40deg); }
+  [data-asignado] .badge__pin { opacity: 0; transform: translate(-50%, -50%) scale(.4) rotate(40deg); }
+  [data-asignado] .badge__check { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+
+  .tarjeta-producto__nombre { font-weight: var(--peso-medio); margin-top: var(--e-1); }
+  .tarjeta-producto__linea { display: flex; align-items: baseline; gap: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .tarjeta-producto__linea b { margin-left: auto; font-weight: var(--peso-normal); color: var(--c-texto); }
+  .tarjeta-producto__direccion {
+    min-height: 2.4rem; margin-top: var(--e-1); padding-top: var(--e-2);
+    border-top: 1px dashed var(--c-borde);
+    font-size: var(--t-xs); color: var(--c-texto-suave);
+  }
+  .tarjeta-producto__direccion[data-vacia] { color: var(--c-texto-tenue); font-style: italic; }
+}

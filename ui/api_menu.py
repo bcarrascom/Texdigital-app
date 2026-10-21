@@ -147,7 +147,3 @@ class ApiMenu:
         """Elimina varios despachos de una (selección múltiple con Shift,
         ver menu.html) — devuelve cuántos encontró y borró de verdad."""
         return sum(1 for n in numeros if eliminar_despacho(n))
-
-    def generar_guia_despacho(self, numero) -> None:
-        """Botón 'Generar guía' del panel de Despachos — todavía sin
-        implementar, Bruno la completa en una sesión aparte."""

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 import { useAvisos } from "@/context/AvisosContext";
 import Dialogo from "@/components/Dialogo/Dialogo";
+import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import DialogoMorph from "@/components/DialogoMorph/DialogoMorph";
 import IconoEditar from "@/assets/svg/pencil.svg?react";
 import IconoEliminar from "@/assets/svg/trash-2.svg?react";
@@ -12,28 +13,6 @@ import * as fmt from "@/utils/formato";
 /* Los diálogos del módulo Inventario: "Rollo nuevo" e "Ingresar material"
    (que nacen del botón "+" de su tabla, ver components/DialogoMorph) y la
    lista de proveedores. */
-
-/* Un campo con su etiqueta y su mensaje de "Obligatorio" (lo usan también
-   las fichas de rollo y de material). */
-export function Campo({ id, etiqueta, requerido, invalido, ayuda, className = "", children }) {
-  return (
-    <div className={`campo ${className}`} data-invalido={invalido || undefined}>
-      <label className="campo__etiqueta" htmlFor={id} data-requerido={requerido || undefined}>{etiqueta}</label>
-      {children}
-      {ayuda && <span className="campo__ayuda">{ayuda}</span>}
-      {requerido && <span className="campo__error">Obligatorio</span>}
-    </div>
-  );
-}
-
-/* Enter en cualquier campo intenta guardar — también en un <select>, que por
-   sí solo no envía el formulario. Si falta algo, guardar() solo marca los
-   campos en rojo: un Enter con el formulario a medias no guarda nada. */
-export function enterGuarda(e) {
-  if (e.key !== "Enter" || e.target.tagName === "TEXTAREA" || e.target.tagName === "BUTTON") return;
-  e.preventDefault();
-  e.currentTarget.requestSubmit();
-}
 
 /* Un proveedor nuevo se agrega a la lista al guardar el rollo/material que lo
    usa (la lista crece sola, no es un catálogo cerrado). */
