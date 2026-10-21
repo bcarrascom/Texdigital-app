@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import IconoOrden from "@/assets/svg/arrow-down.svg?react";
 import IconoDeshacer from "@/assets/svg/trash-2.svg?react";
 import "./Ficha.css";
@@ -23,8 +23,12 @@ import "./Ficha.css";
      datos        [[etiqueta, valor]] debajo (opcional; valor puede ser un nodo)
 
    El orden de las entradas que llega es el de Python: la última es la más
-   nueva (siempre se agrega al final). */
-export default function Historial({ entradas = [], vista, onDeshacer, vacio }) {
+   nueva (siempre se agrega al final).
+
+   Memorizado: abrir un diálogo de la página no vuelve a dibujar un historial
+   de cientos de entradas — `vista` y `onDeshacer` tienen que ser estables
+   (useCallback) para que sirva. */
+export default memo(function Historial({ entradas = [], vista, onDeshacer, vacio }) {
   const [reciente, setReciente] = useState(true);
   const idMasReciente = entradas.length ? entradas[entradas.length - 1].id : null;
   const lista = reciente ? entradas.slice().reverse() : entradas;
@@ -48,7 +52,7 @@ export default function Historial({ entradas = [], vista, onDeshacer, vacio }) {
       ) : <p className="estado-vacio">{vacio}</p>}
     </section>
   );
-}
+});
 
 function Tarjeta({ chip, variante, neto, cambio, fecha, descripcion, datos = [], onDeshacer }) {
   const conDatos = datos.filter(([, v]) => v);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { api } from "@/services/api";
 import { useDatos } from "@/hooks/useDatos";
@@ -29,6 +29,7 @@ import "./VerMaterial.css";
 
 const ETIQUETA_TIPO = { restock: "Restock", ajuste: "Ajuste", consumo: "Consumo", precio: "Precio" };
 const plata = (v, sufijo = "") => (v == null ? "—" : fmt.pesos(v) + sufijo);
+const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
 
 async function cargarMaterial(id) {
   const [material, proveedores, productos, estructuras] = await Promise.all([
@@ -69,12 +70,12 @@ export default function VerMaterial() {
     else navigate(rutas.inventario({ vista: "materiales" }), { replace: true });
   }
 
-  async function deshacer(u) {
-    await api.eliminar_ultimo_historial_material(m.id, u.id);
+  const deshacer = useCallback(async (u) => {
+    await api.eliminar_ultimo_historial_material(id, u.id);
     await recargar();
-  }
-
-  const abrirOp = (numero) => navigate(rutas.verOp(numero), { state: { desde: location.pathname } });
+  }, [id, recargar]);
+  const vista = useCallback((u) => vistaEntrada(u, m, (numero) => navigate(rutas.verOp(numero), { state: { desde: location.pathname } })),
+                            [m, navigate, location.pathname]);
   const titulo = m ? `Material · ${m.nombre || ""}` : "Material";
 
   return (
@@ -96,7 +97,7 @@ export default function VerMaterial() {
         ) : (
           <div className="ficha">
             <Hoja m={m} />
-            <Historial entradas={m.historial || []} vista={(u) => vistaEntrada(u, m, abrirOp)} onDeshacer={deshacer}
+            <Historial entradas={m.historial || SIN_ENTRADAS} vista={vista} onDeshacer={deshacer}
                        vacio="Todavía no hay ningún restock, ajuste, consumo ni cambio de precio registrado para este material." />
           </div>
         )}

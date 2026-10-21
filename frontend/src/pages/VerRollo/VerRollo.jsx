@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { api } from "@/services/api";
 import { useDatos } from "@/hooks/useDatos";
@@ -29,6 +29,7 @@ import "@/pages/Inventario/Ficha.css";
 const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación" };
 const esActivo = (r) => (r.estado || "activo") === "activo";
 const redondear = (n) => Math.round(n * 100) / 100;
+const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
 
 async function cargarRollo(id) {
   const [rollo, textiles, proveedores] = await Promise.all([
@@ -66,12 +67,12 @@ export default function VerRollo() {
     else navigate(rutas.inventario(), { replace: true });
   }
 
-  async function deshacer(u) {
-    await api.eliminar_ajuste_rollo(r.id, u.id);
+  const deshacer = useCallback(async (u) => {
+    await api.eliminar_ajuste_rollo(id, u.id);
     await recargar();
-  }
-
-  const abrirOp = (numero) => navigate(rutas.verOp(numero), { state: { desde: location.pathname } });
+  }, [id, recargar]);
+  const vista = useCallback((u) => vistaUso(u, (numero) => navigate(rutas.verOp(numero), { state: { desde: location.pathname } })),
+                            [navigate, location.pathname]);
   const titulo = r ? `Rollo #${r.id} · ${r.nombre_textil || ""}` : "Rollo";
 
   return (
@@ -93,7 +94,7 @@ export default function VerRollo() {
         ) : (
           <div className="ficha">
             <Hoja r={r} />
-            <Historial entradas={r.usos || []} vista={(u) => vistaUso(u, abrirOp)} onDeshacer={deshacer}
+            <Historial entradas={r.usos || SIN_ENTRADAS} vista={vista} onDeshacer={deshacer}
                        vacio="Todavía no hay ningún ajuste o consumo registrado para este rollo." />
           </div>
         )}

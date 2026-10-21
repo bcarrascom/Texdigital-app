@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import SwitchIconos from "@/components/SwitchIconos/SwitchIconos";
 import IconoNombre from "@/assets/svg/a-large-small.svg?react";
@@ -50,7 +50,9 @@ function aplicarModo(lista, modo) {
   return lista;
 }
 
-export default function TablaRollos({ rollos, buscarInicial = "", onAbrir, onCambiarEstado, botonNuevo, onNuevo }) {
+/* memo: no se vuelve a dibujar cuando cambia algo de la página que no le
+   toca (p. ej. abrir un diálogo) — ver Inventario.jsx. */
+export default memo(function TablaRollos({ rollos, buscarInicial = "", onAbrir, onCambiarEstado, botonNuevo, onNuevo }) {
   const [buscar, setBuscar] = useState(buscarInicial);
   // Una búsqueda que llega por la URL (el aviso de stock) pisa la escrita.
   useEffect(() => { if (buscarInicial) setBuscar(buscarInicial); }, [buscarInicial]);
@@ -100,7 +102,7 @@ export default function TablaRollos({ rollos, buscarInicial = "", onAbrir, onCam
       </div>
     </>
   );
-}
+});
 
 function FilaRollo({ r, onAbrir, onCambiarEstado }) {
   const esActivo = activo(r);

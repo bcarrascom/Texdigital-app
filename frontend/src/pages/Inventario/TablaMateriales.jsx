@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import IconoFlecha from "@/assets/svg/arrow-down.svg?react";
 import CeldasPlata from "./Plata";
 import * as fmt from "@/utils/formato";
@@ -56,7 +56,9 @@ function ordenar(lista, { columna, direccion }) {
   });
 }
 
-export default function TablaMateriales({ materiales, onAbrir, botonNuevo, onNuevo }) {
+/* memo: no se vuelve a dibujar cuando cambia algo de la página que no le
+   toca (p. ej. abrir un diálogo) — ver Inventario.jsx. */
+export default memo(function TablaMateriales({ materiales, onAbrir, botonNuevo, onNuevo }) {
   const [buscar, setBuscar] = useState("");
   const [orden, setOrden] = useState(POR_DEFECTO);
   const filtro = buscar.trim().toLowerCase();
@@ -95,7 +97,7 @@ export default function TablaMateriales({ materiales, onAbrir, botonNuevo, onNue
       </div>
     </>
   );
-}
+});
 
 function FilaMaterial({ m, onAbrir }) {
   const ultimo = ultimoRestock(m);

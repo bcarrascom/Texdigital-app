@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
@@ -28,7 +28,8 @@ const VISTAS = [
   { valor: "textiles", Icono: IconoTextiles, titulo: "Rollos de tela" },
   { valor: "materiales", Icono: IconoMateriales, titulo: "Materiales" },
 ];
-const FUNDIDO = { duration: 0.18 };   // --m-rapida, como el resto de los repintados de contenido
+const FUNDIDO = { duration: 0.18 };
+const VACIO = { rollos: [], materiales: [], textiles: [], proveedores: [], nombres: [] };   // --m-rapida, como el resto de los repintados de contenido
 
 /* Todo lo que necesitan las dos tablas y sus formularios, de una vez. */
 export async function cargarInventario() {
@@ -45,7 +46,7 @@ export default function Inventario({ datos, recargar }) {
   const { pathname, search } = useLocation();
   const [params, setParams] = useSearchParams();
   const vista = params.get("vista") === "materiales" ? "materiales" : "textiles";
-  const d = datos || { rollos: [], materiales: [], textiles: [], proveedores: [], nombres: [] };
+  const d = datos || VACIO;
 
   const masRollo = useRef(null);
   const masMaterial = useRef(null);
@@ -73,6 +74,22 @@ export default function Inventario({ datos, recargar }) {
   const cerrar = () => setDialogo(null);
   const alGuardar = async () => { cerrar(); await recargar(); };
 
+  /* Las tablas están memorizadas (memo): abrir o cerrar un diálogo cambia el
+     estado de esta página, y sin esto se volvía a dibujar cada fila — con
+     cientos de rollos, la animación del diálogo se congelaba. Por eso todo lo
+     que se les pasa tiene que ser estable entre renders: `recargar` cambia
+     en cada render del módulo, así que se lee desde un ref. */
+  const recargarRef = useRef(recargar);
+  useEffect(() => { recargarRef.current = recargar; });
+  const abrirRollo = useCallback((id) => navigate(rutas.verRollo(id), { state: { desde } }), [navigate, desde]);
+  const abrirMaterial = useCallback((id) => navigate(rutas.verMaterial(id), { state: { desde } }), [navigate, desde]);
+  const nuevoRollo = useCallback(() => { setTextilInicial(""); setDialogo("rollo"); }, []);
+  const nuevoMaterial = useCallback(() => setDialogo("material"), []);
+  const cambiarEstado = useCallback(async (id, activo) => {
+    await api.cambiar_estado_rollo(id, activo);
+    await recargarRef.current();
+  }, []);
+
   return (
     <>
       <div>
@@ -93,14 +110,11 @@ export default function Inventario({ datos, recargar }) {
             {vista === "textiles" ? (
               <TablaRollos
                 rollos={d.rollos} buscarInicial={params.get("buscar") || ""}
-                botonNuevo={masRollo} onNuevo={() => { setTextilInicial(""); setDialogo("rollo"); }}
-                onAbrir={(id) => navigate(rutas.verRollo(id), { state: { desde } })}
-                onCambiarEstado={async (id, activo) => { await api.cambiar_estado_rollo(id, activo); await recargar(); }}
+                botonNuevo={masRollo} onNuevo={nuevoRollo} onAbrir={abrirRollo} onCambiarEstado={cambiarEstado}
               />
             ) : (
               <TablaMateriales
-                materiales={d.materiales} botonNuevo={masMaterial} onNuevo={() => setDialogo("material")}
-                onAbrir={(id) => navigate(rutas.verMaterial(id), { state: { desde } })}
+                materiales={d.materiales} botonNuevo={masMaterial} onNuevo={nuevoMaterial} onAbrir={abrirMaterial}
               />
             )}
           </motion.div>
