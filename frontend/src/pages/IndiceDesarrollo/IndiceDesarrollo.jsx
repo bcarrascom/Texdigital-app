@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
+import Segmento from "@/components/Segmento/Segmento";
 import { rutas } from "@/router/rutas";
 import "./IndiceDesarrollo.css";
 
@@ -28,9 +29,39 @@ export default function IndiceDesarrollo() {
           <ul className="indice__lista">
             {MIGRADAS.map((p) => <Entrada key={p.nombre} {...p} />)}
           </ul>
+          <Muestrario />
         </div>
       </main>
     </Pagina>
+  );
+}
+
+/* Componentes reutilizables en sus variantes, para revisarlos sin tener que
+   llegar a la pantalla que los usa. */
+const SWITCHES = [
+  { titulo: "Textos parecidos", opciones: [{ valor: "Estándar" }, { valor: "Backlight" }] },
+  { titulo: "Textos muy distintos", opciones: [{ valor: "Sí" }, { valor: "Solo si el cliente lo pide por escrito" }] },
+  { titulo: "Vertical", vertical: true, opciones: [{ valor: "Caja terminada" }, { valor: "Área visual (medida interior)" }] },
+  { titulo: "Bloque (todo el ancho)", bloque: true, opciones: [{ valor: "Por unidad" }, { valor: "Por metro" }] },
+];
+
+function Muestrario() {
+  return (
+    <section className="muestrario" data-tema="cotizaciones">
+      <h2 className="seccion-titulo">Componentes · Segmento</h2>
+      {SWITCHES.map((s) => <MuestraSegmento key={s.titulo} {...s} />)}
+    </section>
+  );
+}
+
+function MuestraSegmento({ titulo, opciones, vertical, bloque }) {
+  const [valor, setValor] = useState(opciones[0].valor);
+  return (
+    <div className="muestrario__fila">
+      <span className="muestrario__titulo">{titulo}</span>
+      <Segmento opciones={opciones} valor={valor} onCambiar={setValor} etiqueta={titulo}
+                vertical={vertical} bloque={bloque} />
+    </div>
   );
 }
 

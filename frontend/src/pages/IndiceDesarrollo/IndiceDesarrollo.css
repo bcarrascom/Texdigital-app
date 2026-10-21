@@ -12,3 +12,9 @@
   .indice__item .entrada { width: 9rem; }
   .indice__btn--off { opacity: .4; pointer-events: none; }
 }
+
+.pag-indice-desarrollo {
+  .muestrario { display: grid; gap: var(--e-3); }
+  .muestrario__fila { display: grid; grid-template-columns: 12rem 1fr; align-items: center; gap: var(--e-3); }
+  .muestrario__titulo { font-size: var(--t-sm); color: var(--c-texto-suave); }
+}

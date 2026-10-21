@@ -510,7 +510,9 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 
 .segmento {
   position: relative;
-  display: inline-flex; padding: 3px; gap: 2px;
+  /* Mide lo que miden sus opciones: dentro de una grilla (un .campo) se
+     estiraría a todo el ancho y dejaría un hueco vacío al lado. */
+  display: inline-flex; width: fit-content; padding: 3px; gap: 2px;
   background: var(--c-superficie-2);
   border: 1.5px solid var(--c-borde-fuerte);
   border-radius: var(--r-full);
@@ -520,17 +522,21 @@ button { font: inherit; color: inherit; background: none; border: 0; }
   width: 1px; height: 1px; margin: 0; padding: 0;
   opacity: 0; pointer-events: none; appearance: none; -moz-appearance: none;
 }
-/* Una sola pastilla física, no dos ::before independientes: se desliza de una
-   opción a la otra con transform, en vez de apagar una y encender la otra. */
-.segmento::before {
-  content: ""; position: absolute; z-index: 0;
-  top: 3px; left: 3px; right: 50%;
-  bottom: 3px; margin-right: 1px;
+/* La píldora: UNA sola pieza física que se desliza de una opción a la otra.
+   Su tamaño y posición los mide components/Segmento sobre la opción elegida
+   (no es la mitad del switch): con textos de distinto largo, al cambiar se
+   desliza y cambia de ancho a la vez, siempre calzada. */
+.segmento__pildora {
+  position: absolute; top: 0; left: 0; z-index: 0;
   border-radius: var(--r-full);
   background: var(--c-tema-fuerte);
-  transition: transform var(--m-media) var(--ease-salida);
+  pointer-events: none;
 }
-.segmento:has(input:nth-of-type(2):checked)::before { transform: translateX(calc(100% + 2px)); }
+.segmento__pildora[data-animar] {
+  transition: transform var(--m-media) var(--ease-salida),
+              width var(--m-media) var(--ease-salida),
+              height var(--m-media) var(--ease-salida);
+}
 .segmento label {
   position: relative; z-index: 1;
   padding: .35rem var(--e-4); border-radius: var(--r-full);
@@ -541,27 +547,18 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 .segmento label:hover { color: var(--c-texto); }
 .segmento input:checked + label { color: var(--c-texto-inv); }
 .segmento input:focus-visible + label { outline: 3px solid var(--c-foco); outline-offset: 2px; }
-.segmento--bloque { display: flex; }
-.segmento--bloque label { flex: 1; text-align: center; }
+/* Bloque: todo el ancho disponible, repartido entre las dos opciones. */
+.segmento--bloque { display: flex; width: auto; }
+.segmento--bloque label { flex: 1 1 0; text-align: center; }   /* 0 de base: mitades iguales, no según el texto */
 
-/* Variante vertical: misma pastilla, mismas reglas, pero se desliza de
-   arriba hacia abajo en vez de lado a lado — para switches con dos textos
-   de largo muy distinto, donde uno horizontal deja una opción angosta y
-   la otra estirada sin necesidad.
-   El radio pleno (--r-full) que usa la horizontal solo funciona porque ahí
-   la pastilla es casi tan alta como el contenedor entero: acá, apilada, la
-   pastilla mide la mitad de alto que el contenedor, así que con el mismo
-   radio su curva es más cerrada que la de afuera y la esquina sobresale.
-   Con un radio fijo y moderado ambas curvas quedan concéntricas. */
+/* Vertical: las opciones apiladas — para dos textos de largo muy distinto,
+   donde uno horizontal queda desparejo. Las dos opciones toman el ancho de
+   la más larga. El radio pleno de la horizontal solo funciona porque ahí la
+   píldora es casi tan alta como el switch; apilada, con el mismo radio su
+   curva quedaría más cerrada que la de afuera: con uno fijo y moderado
+   ambas curvas quedan concéntricas. */
 .segmento--vertical { flex-direction: column; border-radius: var(--r-lg); }
-.segmento--vertical::before {
-  left: 3px; right: 3px; top: 3px; bottom: 50%;
-  margin-right: 0; margin-bottom: 1px;
-  border-radius: var(--r-md);
-}
-.segmento--vertical:has(input:nth-of-type(2):checked)::before {
-  transform: translateY(calc(100% + 2px));
-}
+.segmento--vertical .segmento__pildora,
 .segmento--vertical label { border-radius: var(--r-md); text-align: center; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
