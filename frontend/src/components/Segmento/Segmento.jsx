@@ -5,10 +5,12 @@ import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
        <Segmento valor={p.impresion} onCambiar={(v) => ...} etiqueta="Impresión"
                  opciones={[{ valor: "Cara única" }, { valor: "Tiro y retiro" }]} />
 
-       opciones   [{ valor, etiqueta? }, { valor, etiqueta? }] — sin etiqueta,
-                  se muestra el valor
+       opciones   [{ valor, etiqueta?, titulo? }, ...] — sin etiqueta, se
+                  muestra el valor; la etiqueta puede ser un ícono (con el
+                  texto en `titulo`, el tooltip)
        vertical   las opciones apiladas en vez de lado a lado
        bloque     ocupa todo el ancho y reparte el espacio entre las dos
+       className  clases extra (p. ej. "segmento--iconos")
 
    La píldora que marca la opción elegida es un elemento propio, MEDIDO sobre
    esa opción (no la mitad del switch): con textos de distinto largo, al
@@ -21,7 +23,7 @@ import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
    click nativo del label marcaría la que se tocó y, junto con este toggle,
    terminaría alternando dos veces; por eso se apaga y el cambio lo maneja
    solo el click del grupo. */
-export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertical = false, bloque = false }) {
+export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertical = false, bloque = false, className = "" }) {
   const nombre = useId();
   const grupo = useRef(null);
   const etiquetas = useRef([]);
@@ -55,7 +57,7 @@ export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertica
     return () => cancelAnimationFrame(t);
   }, [pildora, animar]);
 
-  const clases = ["segmento", vertical && "segmento--vertical", bloque && "segmento--bloque"].filter(Boolean).join(" ");
+  const clases = ["segmento", vertical && "segmento--vertical", bloque && "segmento--bloque", className].filter(Boolean).join(" ");
 
   return (
     <div ref={grupo} className={clases} role="group" aria-label={etiqueta} onClick={() => onCambiar(otra())}>
@@ -74,7 +76,8 @@ export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertica
             <input type="radio" id={id} name={nombre} checked={k === elegida} onChange={() => onCambiar(o.valor)}
                    // El click lo resuelve el grupo (ver arriba): que no suba dos veces.
                    onClick={(e) => e.stopPropagation()} />
-            <label ref={(el) => { etiquetas.current[k] = el; }} htmlFor={id} onClick={(e) => e.preventDefault()}>
+            <label ref={(el) => { etiquetas.current[k] = el; }} htmlFor={id} title={o.titulo}
+                   onClick={(e) => e.preventDefault()}>
               {o.etiqueta ?? o.valor}
             </label>
           </Fragment>

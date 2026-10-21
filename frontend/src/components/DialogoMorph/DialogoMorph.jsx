@@ -15,10 +15,11 @@ import "./DialogoMorph.css";
        </DialogoMorph>
 
    El contenido se vuelve a montar en cada apertura (arranca limpio). Escape y
-   un click en el fondo cierran; un hijo con data-autofoco recibe el foco. */
+   un click en el fondo cierran; un hijo con data-autofoco recibe el foco.
+   `anchoRem`: ancho final del diálogo (30rem por defecto, nunca más del 90%
+   de la ventana). */
 
 const MARGEN = 12;        // px libres alrededor del diálogo, como mínimo
-const ANCHO_REM = 30;
 
 function rectDe(el) {
   const r = el.getBoundingClientRect();
@@ -47,9 +48,9 @@ function altoNecesario(dlg, ancho) {
 }
 
 /* Centrado sobre el botón de origen, pero sin salirse de la ventana. */
-function rectFinal(dlg, origen) {
+function rectFinal(dlg, origen, anchoRem) {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-  const ancho = Math.min(window.innerWidth * 0.9, ANCHO_REM * rem);
+  const ancho = Math.min(window.innerWidth * 0.9, anchoRem * rem);
   const alto = Math.min(window.innerHeight - 2 * MARGEN, altoNecesario(dlg, ancho));
   const centrado = (inicio, tamOrigen, tam, limite) =>
     Math.min(Math.max(inicio + tamOrigen / 2 - tam / 2, MARGEN), limite - tam - MARGEN);
@@ -60,7 +61,7 @@ function rectFinal(dlg, origen) {
   };
 }
 
-export default function DialogoMorph({ abierto, origen, onCerrar, className = "", children }) {
+export default function DialogoMorph({ abierto, origen, onCerrar, anchoRem = 30, className = "", children }) {
   const ref = useRef(null);
   const [aperturas, setAperturas] = useState(0);
   const [montado, setMontado] = useState(false);   // el contenido sigue montado mientras se encoge
@@ -82,7 +83,7 @@ export default function DialogoMorph({ abierto, origen, onCerrar, className = ""
       if (boton) dlg.style.background = getComputedStyle(boton).backgroundColor;
       dlg.showModal();
       void dlg.getBoundingClientRect();   // el punto de partida ya aplicado, antes de animar
-      const hasta = rectFinal(dlg, desde);
+      const hasta = rectFinal(dlg, desde, anchoRem);
       requestAnimationFrame(() => {
         aplicar(dlg, hasta, "");
         dlg.style.background = "";

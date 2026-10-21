@@ -14,6 +14,8 @@ import VerCotizacion from "@/pages/VerCotizacion/VerCotizacion";
 import VerOp from "@/pages/VerOp/VerOp";
 import HistorialOps from "@/pages/HistorialOps/HistorialOps";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
+import VerRollo from "@/pages/VerRollo/VerRollo";
+import VerMaterial from "@/pages/VerMaterial/VerMaterial";
 
 /* Rutas que, entre sí, son la MISMA página: pasar de una a otra no desmonta
    la página (no hay transición del router), la página anima su propio
@@ -57,6 +59,8 @@ export default function RutasAnimadas() {
         <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
         <Route path="/ops/historial" element={<HistorialOps />} />
         <Route path="/ops/:numero" element={<VerOp />} />
+        <Route path="/inventario/rollos/:id" element={<VerRollo />} />
+        <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />
         <Route path="*" element={<PendienteMigrar />} />
       </Routes>

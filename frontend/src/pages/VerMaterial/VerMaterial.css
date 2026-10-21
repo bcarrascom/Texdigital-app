@@ -1,0 +1,59 @@
+/* Lo propio de la pantalla de un material (lo común con la del rollo está en
+   pages/Inventario/Ficha.css): los anchos de sus diálogos y el formulario de
+   Editar, que es el más cargado de la app. */
+
+.pag-ver-material {
+  .dlg-ajustar-material { width: min(90vw, 36rem); max-width: min(90vw, 36rem); }
+  /* Más ancho que el diálogo genérico: con el consumo automático (select +
+     parámetros + dos listas de asociaciones), cada campo tiene lugar de sobra. */
+  .dlg-editar-material { width: min(94vw, 56rem); max-width: min(94vw, 56rem); }
+
+  /* Los dos campos del ajuste de cantidad, lado a lado: son dos formas de
+     escribir lo mismo. */
+  .ajustar__par { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-3); }
+  @media (max-width: 30rem) { .ajustar__par { grid-template-columns: 1fr; } }
+
+  /* El nombre con el switch de solo íconos ("se cobra por unidad / metro"). */
+  .material-row { display: flex; align-items: center; gap: var(--e-3); }
+  .material-row .entrada { flex: 1 1 auto; min-width: 0; }
+  .material-row .segmento { flex: 0 0 auto; }
+  .segmento--iconos label { display: grid; place-items: center; padding: .4rem .9rem; }
+  .segmento--iconos svg { width: 1.1rem; height: 1.1rem; flex: none; }
+
+  /* Dos columnas solo con el parámetro al lado: si no, el hueco de la
+     segunda (vacía) le recortaría el ancho al selector. */
+  .fila--consumo { grid-template-columns: 1fr; }
+  .fila--consumo:has(> .campo--estrecho) { grid-template-columns: 1fr auto; }
+  /* La cantidad de "fijo_por_producto" es un número corto: un ancho fijo y
+     angosto, para que el selector de al lado se quede con el resto. */
+  .campo--estrecho { width: 8rem; }
+  .campo--estrecho .entrada { text-align: center; }
+
+  /* El <select> sin el chrome nativo (borde recto, flecha del sistema): con
+     el look de .entrada y una flecha propia encima. */
+  .campo-select { position: relative; }
+  .campo-select select.entrada { appearance: none; padding-right: 2.5rem; width: 100%; }
+  .campo-select__chevron {
+    position: absolute; right: var(--e-4); top: 50%; transform: translateY(-50%);
+    width: 1.1rem; height: 1.1rem; color: var(--c-texto-suave); pointer-events: none;
+  }
+
+  /* Buscador con lupa + "+" redondo (productos/estructuras asociados). */
+  .aditiva__alta .entrada-icono { position: relative; flex: 1 1 auto; min-width: 0; }
+  .entrada-icono__svg {
+    position: absolute; top: 50%; left: var(--e-4); transform: translateY(-50%);
+    width: 1.05rem; height: 1.05rem; color: var(--c-texto-tenue); pointer-events: none;
+  }
+  .entrada-icono .entrada { padding-left: 2.6rem; width: 100%; }
+  .btn-agregar-redondo {
+    flex: 0 0 auto; width: 3rem; height: 3rem; border-radius: var(--r-full);
+    border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+    color: var(--c-tema-fuerte); display: grid; place-items: center; cursor: pointer;
+    transition: border-color var(--m-rapida) var(--ease-salida),
+                background var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida);
+  }
+  .btn-agregar-redondo svg { width: 1.1rem; height: 1.1rem; }
+  .btn-agregar-redondo:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); transform: translateY(-1px); }
+  .btn-agregar-redondo:active { transform: translateY(0) scale(.92); }
+}
