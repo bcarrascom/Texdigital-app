@@ -1,0 +1,10 @@
+.pagina-modulo {
+  /* "Panel de producción" en hover pasa a la paleta oscura del panel de
+     producción en sí (no la del resto de acciones del módulo): así el hover
+     ya anticipa a qué pantalla se va a entrar. */
+  .accion--panel-produccion:hover { background: #161b23; border-color: #3a84cd; }
+  .accion--panel-produccion:hover .accion__titulo { color: #edf1f7; }
+  .accion--panel-produccion:hover .accion__desc { color: #8b97a8; }
+
+  .reg__entrega { font-size: var(--t-xs); font-weight: var(--peso-medio); color: var(--c-tema-fuerte); }
+}

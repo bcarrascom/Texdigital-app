@@ -20,6 +20,8 @@ export default {
   }),
   guardar_preferencia: () => true,
   abrir_manual: () => console.info("[mock] abrir_manual"),
+  // En la app abre ventanas aparte (p. ej. el panel de producción).
+  ir: (destino) => window.TD?.aviso?.(`[mock] abriría "${destino}" en su propia ventana.`, "info"),
   notificar_ruta: () => {},
   poner_titulo: () => {},
 };

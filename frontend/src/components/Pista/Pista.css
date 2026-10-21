@@ -1,0 +1,7 @@
+/* Ver Pista.jsx. La pista pone las fichas en fila, cada una del ancho de la
+   ventana. El recorte de lo que viaja por fuera del ancho visible NO va acá:
+   cortaría también las sombras de lo que toca el borde. Lo hace el
+   contenedor con scroll de la página (overflow-x: hidden), que incluye su
+   padding — si no, aparecería una barra de scroll horizontal en el slide. */
+.pista { display: flex; align-items: flex-start; }
+.pista__ficha { flex: 0 0 100%; min-width: 0; }

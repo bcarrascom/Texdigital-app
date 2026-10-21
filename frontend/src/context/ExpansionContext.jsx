@@ -109,6 +109,10 @@ export function ExpansionProvider({ children }) {
     // Qué módulo quedó "abierto" (el menú lo usa para saber hacia qué caja
     // contraer al volver).
     moduloAbierto: () => moduloAbierto.current?.modulo ?? null,
+    // Pasar de un módulo a otro con ←/→ (ver pages/Modulos): al volver al
+    // menú, el color se contrae hacia la caja del módulo en que se está,
+    // no hacia la del que se usó para entrar.
+    fijarModuloAbierto: (modulo) => { moduloAbierto.current = { modulo }; },
   };
 
   return (

@@ -1,5 +1,5 @@
-/* Estructura común de las páginas de módulo — portado de ".panel" de
-   recursos/pantallas/menu.html. */
+/* Estructura de las páginas de módulo (pages/Modulos) y de sus cuerpos —
+   portado de ".panel" de recursos/pantallas/menu.html. */
 .pagina-modulo {
   color: var(--c-tema-tinta);
 
@@ -9,15 +9,21 @@
   }
   .modulo-cab .cabecera__sep { flex: 1; }
 
-  /* Columna flex + margin:auto en el cuerpo: centrado vertical mientras
-     entra, y alineado arriba (con scroll) cuando no. */
+  /* Columna flex + margin-block:auto en la pista: centrado vertical mientras
+     entra, y alineado arriba (con scroll) cuando no. overflow-x: el módulo
+     que entra y el que sale viajan por fuera del ancho visible durante el
+     slide (ver components/Pista). */
   .modulo-contenido {
-    min-height: 0; overflow-y: auto;
+    min-height: 0; overflow-y: auto; overflow-x: hidden;
     display: flex; flex-direction: column;
     padding: 0 var(--e-6) var(--e-6);
   }
+  .modulo-contenido > .pista-ventana { margin-block: auto; }
+  /* Cada cuerpo va con el data-tema de SU módulo: durante el slide conviven
+     dos, cada uno con sus colores. */
   .modulo-cuerpo {
-    width: min(100%, var(--ancho-modulo, 62rem)); margin: auto;
+    color: var(--c-tema-tinta);
+    width: min(100%, var(--ancho-modulo, 62rem)); margin-inline: auto;
     display: grid; gap: var(--e-6); padding: var(--e-6) 0;
   }
   /* min-width:0: sin esto un hijo ancho (una tabla con muchas columnas)

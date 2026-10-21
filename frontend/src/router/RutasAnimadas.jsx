@@ -1,12 +1,12 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 import { AnimatePresence } from "motion/react";
 import { api } from "@/services/api";
-import { useApp } from "@/context/AppContext";
 import { useVolver } from "@/hooks/useVolver";
+import { MODULOS } from "@/router/rutas";
 
 import Menu from "@/pages/Menu/Menu";
-import Cotizaciones from "@/pages/Cotizaciones/Cotizaciones";
+import Modulos from "@/pages/Modulos/Modulos";
 import IndiceDesarrollo from "@/pages/IndiceDesarrollo/IndiceDesarrollo";
 import PendienteMigrar from "@/pages/PendienteMigrar/PendienteMigrar";
 import NuevaCotizacion from "@/pages/NuevaCotizacion/NuevaCotizacion";
@@ -15,9 +15,12 @@ import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 
 /* Rutas que, entre sí, son la MISMA página: pasar de una a otra no desmonta
    la página (no hay transición del router), la página anima su propio
-   contenido. Es lo que permite el slide entre cotizaciones con ←/→, donde
+   contenido. Es lo que permite los slides con ←/→ (components/Pista), donde
    la vieja y la nueva tienen que estar montadas al mismo tiempo. */
-const MISMA_PAGINA = [/^\/cotizaciones\/\d+$/];
+const MISMA_PAGINA = [
+  /^\/cotizaciones\/\d+$/,                      // entre cotizaciones (VerCotizacion)
+  /^\/(inventario|cotizaciones|ops|despachos)$/,  // entre módulos (Modulos)
+];
 
 /* Las rutas, con transición entre páginas: <AnimatePresence mode="wait">
    deja que la página que se va termine su animación de salida (ver
@@ -42,15 +45,8 @@ export default function RutasAnimadas() {
         <Route path="/" element={<Menu />} />
         <Route path="/dev" element={<IndiceDesarrollo />} />
 
-        {/* Módulos */}
-        <Route path="/inventario" element={
-          <RequiereModulo clave="inventario"><PendienteMigrar tema="inventario" titulo="Inventario" /></RequiereModulo>} />
-        <Route path="/cotizaciones" element={
-          <RequiereModulo clave="cotizaciones"><Cotizaciones /></RequiereModulo>} />
-        <Route path="/ops" element={
-          <RequiereModulo clave="ops"><PendienteMigrar tema="ops" titulo="Órdenes de Producción" /></RequiereModulo>} />
-        <Route path="/despachos" element={
-          <RequiereModulo clave="despachos"><PendienteMigrar tema="despachos" titulo="Despachos" /></RequiereModulo>} />
+        {/* Módulos: una sola página para los cuatro (ver pages/Modulos) */}
+        {MODULOS.map((m) => <Route key={m.clave} path={`/${m.clave}`} element={<Modulos />} />)}
 
         <Route path="/cotizaciones/nueva" element={<NuevaCotizacion />} />
         <Route path="/cotizaciones/:numero/editar" element={<NuevaCotizacion modo="editar" />} />
@@ -61,13 +57,4 @@ export default function RutasAnimadas() {
       </Routes>
     </AnimatePresence>
   );
-}
-
-/* Un módulo apagado en core/config.py::MODULOS_HABILITADOS (típicamente uno
-   sin terminar al sacar un release) no se abre ni llegando por URL: vuelve
-   al menú. Un dato que no llegó nunca apaga un módulo (`!== false`). */
-function RequiereModulo({ clave, children }) {
-  const { contexto } = useApp();
-  if (contexto.modulos_habilitados?.[clave] === false) return <Navigate to="/" replace />;
-  return children;
 }

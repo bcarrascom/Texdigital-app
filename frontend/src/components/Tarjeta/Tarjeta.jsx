@@ -6,13 +6,14 @@ import * as fmt from "@/utils/formato";
    adelante, los listados de cada módulo. Cada tipo sabe adónde lleva al
    hacer click; `style` deja pasar las variables del mazo (--i, --fila). */
 
-export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, onClick, style }) {
+export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, onClick, style, children }) {
   return (
     <button type="button" className={`reg${incompleta ? " reg--incompleta" : ""}`}
             title={title} onClick={onClick} style={style}>
       <span className="reg__num">{num}</span>
       <span className="reg__sub">{sub}</span>
       {pie && <span className="reg__pie">{pie}</span>}
+      {children}
       {/* La barra vive en el CANTO de la tarjeta: escondida detrás del
           módulo, esa línea de color es lo único que asoma (ver base.css). */}
       {progreso !== undefined && (
@@ -50,12 +51,17 @@ export function TarjetaPendiente({ p, style }) {
   );
 }
 
-export function TarjetaOp({ o, style }) {
+/* `conEntrega` solo en el listado del módulo: en el mazo del menú la tarjeta
+   es de alto fijo y no hay lugar para la fecha y la cuenta regresiva. */
+export function TarjetaOp({ o, style, conEntrega }) {
   const abrir = useAbrir();
   return (
     <Tarjeta num={o.numero} sub={o.empresa || "—"} style={style}
+             pie={conEntrega ? o.fecha_entrega || "" : undefined}
              title={`OP ${o.numero} · ${o.empresa || ""} · entrega ${o.fecha_entrega || "—"}`}
-             onClick={() => abrir(rutas.verOp(o.numero))} />
+             onClick={() => abrir(rutas.verOp(o.numero))}>
+      {conEntrega && <span className="reg__entrega">{fmt.textoEntrega(o.fecha_entrega)}</span>}
+    </Tarjeta>
   );
 }
 

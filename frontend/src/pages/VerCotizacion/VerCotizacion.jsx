@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { AnimatePresence, motion, useAnimate } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
 import { useAtajo } from "@/hooks/useAtajo";
 import { useCarrusel } from "@/hooks/useCarrusel";
@@ -9,6 +9,7 @@ import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
 import Cargando from "@/components/Cargando/Cargando";
 import Etiqueta from "@/components/Etiqueta/Etiqueta";
+import Pista from "@/components/Pista/Pista";
 import VisorProducto from "@/components/VisorProducto/VisorProducto";
 import { DialogoAprobar, DialogoEliminar, DialogoMaterialesBloqueado } from "./DialogosCotizacion";
 import * as fmt from "@/utils/formato";
@@ -31,9 +32,9 @@ import "./VerCotizacion.css";
    ellas vuelve adonde se entró, no retrocede de a una.
 
    Ese paso es un slide de verdad, como si una cotización estuviera al lado
-   de la otra: la página NO se desmonta (ver MISMA_PAGINA en
-   router/RutasAnimadas.jsx), la vieja sale por un costado mientras la nueva
-   entra por el otro, pegadas. Mientras tanto los botones de la cabecera no
+   de la otra (components/Pista): la página NO se desmonta (ver MISMA_PAGINA
+   en router/RutasAnimadas.jsx), la vieja sale por un costado mientras la
+   nueva entra por el otro, pegadas. Mientras tanto los botones de la cabecera no
    responden, y el título sale hacia arriba desvaneciéndose; cuando el slide
    termina, el título nuevo aparece subiendo desde abajo. Los datos de la
    vecina se piden ANTES de arrancar, para que entre ya llena. */
@@ -63,41 +64,6 @@ export default function VerCotizacion() {
   const [deslizando, setDeslizando] = useState(false);
   const pidiendo = useRef(false);
 
-  /* El slide: durante el paso, la pista tiene las DOS cotizaciones lado a
-     lado ([vieja, nueva] hacia la derecha, [nueva, vieja] hacia la
-     izquierda) y lo que se anima es la pista entera, no cada una por su
-     lado — así viajan pegadas, sin que una arranque un cuadro antes que la
-     otra. Al terminar queda solo la nueva. */
-  const [anterior, setAnterior] = useState(null);
-  const enPar = !!(anterior && cot && anterior.numero !== cot.numero);
-  const [pista, animar] = useAnimate();
-
-  useLayoutEffect(() => {
-    if (!enPar) return;
-    const ida = direccion > 0;
-    const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // La posición de partida se fija a mano ANTES del primer cuadro: si no,
-    // yendo hacia la izquierda se vería un instante la pista sin correr.
-    pista.current.style.transform = `translateX(${ida ? 0 : -100}%)`;
-    const animacion = animar(pista.current, { x: ida ? ["0%", "-100%"] : ["-100%", "0%"] },
-                             reducido ? { duration: 0 } : SLIDE);
-    animacion.then(() => {
-      setAnterior(null);
-      setDeslizando(false);
-    });
-    return () => animacion.stop();
-  }, [enPar]);  // solo al empezar un paso, no en cada render del mismo
-
-  // Ya sin la vieja, la pista vuelve a su lugar en el mismo cuadro en que se
-  // saca la vieja (useLayoutEffect: antes de pintar). Las dos cosas hacen
-  // falta: motion recuerda el último `x` que animó y lo volvería a escribir
-  // encima si solo se toca el estilo, pero su reset recién llega al cuadro
-  // siguiente — y ese único cuadro mostraba la cotización fuera de lugar.
-  useLayoutEffect(() => {
-    if (anterior || !pista.current) return;
-    animar(pista.current, { x: "0%" }, { duration: 0 });
-    pista.current.style.transform = "none";
-  }, [anterior, pista, animar]);
   // Solo la primera cotización que se abre hace la aparición en escalón de
   // sus fichas; las que llegan de costado entran ya armadas.
   const primera = useRef(null);
@@ -129,7 +95,6 @@ export default function VerCotizacion() {
       const vecina = await api.cotizacion_adyacente(numero, sentido);
       if (vecina == null || vecina === numero) return;
       if (!cache.current.has(vecina)) cache.current.set(vecina, await cargarCotizacion(vecina));
-      setAnterior(cot);
       setDeslizando(true);
       navigate(rutas.verCotizacion(vecina), {
         replace: true,
@@ -189,15 +154,9 @@ export default function VerCotizacion() {
         {cot === undefined ? <Cargando /> : cot === null ? (
           <p className="seccion-titulo">No se pudo cargar la cotización {fmt.numero(numero)}.</p>
         ) : (
-          <div ref={pista} className="pista">
-            {(enPar ? (direccion > 0 ? [anterior, cot] : [cot, anterior]) : [cot]).map((c) => (
-              // key por número: la nueva conserva su estado (carrusel) al
-              // quedar sola en la pista cuando termina el paso.
-              <div key={c.numero} className="diapositiva" aria-hidden={c === anterior || undefined}>
-                <VistaCotizacion cot={c} aparecer={c.numero === primera.current} />
-              </div>
-            ))}
-          </div>
+          <Pista elemento={cot} clave={(c) => c.numero} direccion={direccion} transicion={SLIDE}
+                 onTerminar={() => setDeslizando(false)}
+                 render={(c) => <VistaCotizacion cot={c} aparecer={c.numero === primera.current} />} />
         )}
       </main>
 

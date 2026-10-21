@@ -44,6 +44,25 @@ export function rut(raw) {
 /* plural(3, "rollo", "rollos") → "3 rollos" */
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
+/* Días de calendario desde hoy hasta una fecha "dd/mm/aaaa" (o con guiones),
+   sin horas: "hoy" no puede depender de a qué hora se mire. null si no se
+   puede leer. */
+export function diasHasta(fechaDMA) {
+  const t = fechaDMAaTime(fechaDMA);
+  if (!t) return null;
+  const hoy = new Date();
+  return Math.round((t - new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) / 86400000);
+}
+
+/* "Entrega en 3 días" · "Entrega hoy" · "Entrega atrasada hace 2 días" */
+export function textoEntrega(fechaDMA) {
+  const n = diasHasta(fechaDMA);
+  if (n == null) return "";
+  if (n > 0) return `Entrega en ${n} ${n === 1 ? "día" : "días"}`;
+  if (n === 0) return "Entrega hoy";
+  return `Entrega atrasada hace ${-n} ${-n === 1 ? "día" : "días"}`;
+}
+
 /* "20/10/2026" (o con guiones) → timestamp, 0 si no se puede leer. */
 export function fechaDMAaTime(fechaDMA) {
   const [d, m, a] = String(fechaDMA || "").split(/[/-]/).map(Number);

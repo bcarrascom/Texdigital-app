@@ -223,10 +223,6 @@
   /* La que sale y la que entra viajan por fuera del ancho visible: sin esto
      aparecería una barra de scroll horizontal durante el slide. */
   .contenido { overflow-x: hidden; }
-  /* La pista pone las cotizaciones en fila, cada una del ancho visible; el
-     slide la corre entera (ver VerCotizacion.jsx). */
-  .pista { display: flex; align-items: flex-start; }
-  .diapositiva { flex: 0 0 100%; min-width: 0; }
   .vista[data-sin-aparecer] .ficha-prod { animation: none; }
 }
 
