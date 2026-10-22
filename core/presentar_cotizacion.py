@@ -192,6 +192,7 @@ def generar_html(json_dict: dict) -> Path:
         "{{fila_neto}}":       fila_neto,
         "{{fila_descuento}}":  fila_descuento,
         "{{neto_total}}":      formatear_clp(totales["neto_total"]),
+        "{{iva_pct}}":         f"{totales['iva_pct']:g}".replace(".", ","),
         "{{iva}}":             formatear_clp(totales["iva"]),
         "{{total}}":           formatear_clp(totales["total"]),
     }

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
 import { useDatos } from "@/hooks/useDatos";
 import { useAvisos } from "@/context/AvisosContext";
@@ -9,7 +8,7 @@ import Dialogo from "@/components/Dialogo/Dialogo";
 import IconoRollos from "@/assets/svg/spiral.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import * as fmt from "@/utils/formato";
-import { Fila, Grupo } from "./Ajustes";
+import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
 
 /* Textiles: cuánto se cobra por metro de cada uno (ver
    core/precios_textiles.py). Cada textil se cobra por un valor fijo, escrito
@@ -100,12 +99,7 @@ export default function Textiles() {
 
   return (
     <>
-      {soloLectura && (
-        <p className="ajustes-nota ajustes-nota--aviso" role="status">
-          <IconoAviso aria-hidden="true" />
-          Estos precios los guardó una versión más nueva de la app. Se pueden ver, pero para cambiarlos hay que actualizar esta instalación.
-        </p>
-      )}
+      <NotaSoloLectura visible={soloLectura} />
 
       <Grupo titulo="Cómo se cobran"
              pie={datos.inventario ? PIE_MODO[actual.modo]
@@ -127,25 +121,8 @@ export default function Textiles() {
         ))}
       </Grupo>
 
-      <AnimatePresence>
-        {hayCambios && (
-          <motion.div className="barra-guardar" role="region" aria-label="Cambios sin guardar"
-                      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
-                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
-            <span className={`barra-guardar__texto${cantidadErrores ? " barra-guardar__texto--error" : ""}`}>
-              {cantidadErrores
-                ? `No se puede guardar: ${fmt.plural(cantidadErrores, "textil necesita", "textiles necesitan")} un valor válido.`
-                : "Hay cambios sin guardar."}
-            </span>
-            <button className="btn btn--fantasma btn--chico" type="button" disabled={guardando} onClick={() => setBorrador(null)}>
-              Descartar
-            </button>
-            <button className="btn btn--primario btn--chico" type="button" disabled={!!cantidadErrores || guardando} onClick={guardar}>
-              Guardar cambios
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <BarraGuardar visible={hayCambios} guardando={guardando} onDescartar={() => setBorrador(null)} onGuardar={guardar}
+                    error={cantidadErrores ? `${fmt.plural(cantidadErrores, "textil necesita", "textiles necesitan")} un valor válido.` : null} />
 
       <DialogoValorRollos textil={rollosDe} onCerrar={() => setRollosDe(null)}
                           onHecho={async (cambiados, textil) => {

@@ -148,7 +148,7 @@ class ApiVerCotizacion:
                 "descuento_monto": totales["descuento"],
                 "fuente_descuento": totales["fuente_descuento"],
                 "neto_total":      totales["neto_total"],
-                "iva_pct":         19,
+                "iva_pct":         totales["iva_pct"],
                 "iva":             totales["iva"],
                 "total":           totales["total"],
             },

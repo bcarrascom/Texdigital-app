@@ -153,6 +153,14 @@
   .fila-textil__valor { width: 8.5rem; min-height: 2.2rem; }
   .fila-textil[data-invalido] .fila-textil__valor { border-color: var(--c-error); }
 
+  /* ── Reglas de cobro ────────────────────────────────────────────────── */
+  .fila-regla { flex-wrap: wrap; row-gap: var(--e-1); }
+  .regla-campo { display: inline-flex; align-items: center; gap: var(--e-1); }
+  .regla-campo__entrada { width: 5.5rem; min-height: 2.2rem; }
+  .regla-campo__sufijo, .regla-texto { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .regla-campo__sufijo { min-width: 1.6rem; }
+  .fila-regla[data-invalido] .regla-campo__entrada { border-color: var(--c-error); }
+
   /* Guardar / Descartar: pegada abajo del contenido mientras haya cambios. */
   .barra-guardar {
     position: sticky; bottom: 0; z-index: 2;

@@ -1251,8 +1251,13 @@ def kwargs_precios() -> dict:
     Y el valor de los textiles (ver core.precios_textiles): textiles_valores
     con los valores fijos de Configuración › Textiles, y valor_textil para los
     que se cobran por rollo. valor_textil lee los rollos una vez y se los
-    guarda: pedir unos kwargs nuevos por cálculo, no reusarlos entre cálculos."""
-    from core import precios_textiles
+    guarda: pedir unos kwargs nuevos por cálculo, no reusarlos entre cálculos.
+
+    Y lo demás de Configuración: los precios de terminaciones y cajas (ver
+    core.precios_componentes) y las reglas de cobro (core.reglas_cobro).
+    Con esto, nada de lo que cobra una cotización sale de valores fijos de
+    la app."""
+    from core import precios_componentes, precios_textiles, reglas_cobro
 
     ajustes = precios_textiles.cargar()
     return {
@@ -1260,7 +1265,23 @@ def kwargs_precios() -> dict:
         "cobro_materiales":           cobro_materiales_producto,
         "textiles_valores":           precios_textiles.valores_fijos(ajustes),
         "valor_textil":               precios_textiles.valorizador(ajustes),
+        "terminaciones_legado_valores": precios_componentes.valores("terminaciones"),
+        "precios_cajas":              precios_componentes.cajas(),
+        "reglas":                     reglas_cobro.cargar(),
     }
+
+
+def estructuras_cobradas_por_materiales() -> dict[str, str]:
+    """{estructura: por qué} de las estructuras cuyo valor de catálogo puede
+    no ser lo que se cobra, porque lo pisa Inventario (ver kwargs_precios):
+    "asociados" si tiene materiales asociados, "mismo_nombre" si hay un
+    material con su mismo nombre y valor. Para avisarlo en Configuración ›
+    Estructuras. Vacío con Inventario apagado."""
+    if not _inventario_habilitado():
+        return {}
+    motivos = {n: "mismo_nombre" for n in valores_legado_materiales()}
+    motivos.update({n: "asociados" for n, ids in _leer_indice().get("estructuras", {}).items() if ids})
+    return motivos
 
 
 def estructuras_legado_valores_efectivos() -> dict:
@@ -1277,8 +1298,12 @@ def estructuras_legado_valores_efectivos() -> dict:
     pedido de Bruno 2026-09-16 pensando en sacar un release con el módulo
     todavía pausado) devuelve el catálogo estático TAL CUAL, sin pisar
     nada — los materiales de Inventario, si los hay, no deben afectar el
-    precio de ninguna cotización mientras el módulo no esté habilitado."""
-    from core.repositorio import ESTRUCTURAS_LEGADO_VALORES
+    precio de ninguna cotización mientras el módulo no esté habilitado.
+
+    "El catálogo" ahora son los precios de Configuración › Estructuras (ver
+    core.precios_componentes), que arrancan con los de recursos/."""
+    from core.precios_componentes import valores
+    catalogo = valores("estructuras")
     if not _inventario_habilitado():
-        return dict(ESTRUCTURAS_LEGADO_VALORES)
-    return {**ESTRUCTURAS_LEGADO_VALORES, **valores_legado_materiales()}
+        return catalogo
+    return {**catalogo, **valores_legado_materiales()}

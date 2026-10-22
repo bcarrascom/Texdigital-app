@@ -353,6 +353,26 @@ class ApiApp:
     def fijar_valor_rollos(self, nombre_textil, valor) -> dict:
         return self._configuracion.fijar_valor_rollos(nombre_textil, valor)
 
+    # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
+
+    def obtener_precios_componentes(self, tipo) -> dict:
+        return self._configuracion.obtener_precios_componentes(tipo)
+
+    def guardar_precios_componentes(self, tipo, filas) -> dict:
+        return self._configuracion.guardar_precios_componentes(tipo, filas)
+
+    def obtener_precios_cajas(self) -> dict:
+        return self._configuracion.obtener_precios_cajas()
+
+    def guardar_precios_cajas(self, cajas) -> dict:
+        return self._configuracion.guardar_precios_cajas(cajas)
+
+    def obtener_reglas_cobro(self) -> dict:
+        return self._configuracion.obtener_reglas_cobro()
+
+    def guardar_reglas_cobro(self, reglas) -> dict:
+        return self._configuracion.guardar_reglas_cobro(reglas)
+
     # ── Inventario: rollos ───────────────────────────────────────────────────
 
     def obtener_rollo(self, id_) -> dict | None:

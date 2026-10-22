@@ -20,7 +20,13 @@ export function AvisoPrecios({ onRevisar }) {
   );
 }
 
-const valor = (c, v) => (v == null ? "sin precio" : c.formato === "metros" ? `${fmt.cantidad(v)}${c.unidad}` : `${fmt.pesos(v)}${c.unidad}`);
+/* Un valor de la tabla según su "formato" (ver core.lista_precios._componentes). */
+function valor(c, v) {
+  if (v == null) return "sin precio";
+  if (c.formato === "texto") return v;
+  if (c.formato === "metros" || c.formato === "porcentaje") return `${fmt.cantidad(v)}${c.unidad}`;
+  return `${fmt.pesos(v)}${c.unidad}`;
+}
 
 /* "+$4.500" / "−$1.200": cuánto sube o baja. */
 const diferencia = (antes, ahora) => {

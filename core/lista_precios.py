@@ -20,13 +20,12 @@ vuelvan a cambiar).
 Funciona porque core.precios.costo_producto ya recibe todos los catálogos
 como parámetros: calcular con la lista congelada es pasarle los catálogos
 de la lista en vez de los vigentes (ver `kwargs_congelados`). Las reglas
-(IVA, mínimo de ML/M², tramos del descuento por volumen) todavía son
-constantes de core.precios; cuando sean editables, entran acá también —
-para eso está "version".
+(IVA, mínimo de ML/M², tramos del descuento por volumen, ver
+core.reglas_cobro) también se congelan.
 
 En el JSON de la cotización:
     "ListaPrecios": {
-        "version": 2,
+        "version": 3,
         "textiles":      {nombre: valor por ML o M²},
         "valores_textil": [el valor por ML o M² que cobró cada producto, en orden]
         "anchos":        {nombre: ancho de la tela en m}   (solo no-backlight)
@@ -34,7 +33,11 @@ En el JSON de la cotización:
         "terminaciones": {nombre: {"valorUNIT": x} | {"valorML": x}},
         "cajas":         precios de cajas (si algún producto lleva caja),
         "materiales":    [lo que cobró cada producto por materiales, en orden]
+        "reglas":        {"iva", "ml_minimo", "m2_minimo", "tramos_descuento"}
     }
+
+"reglas" es de la versión 3: sin ellas (listas anteriores) valen las
+constantes de core.precios, que son las que regían cuando se guardaron.
 
 "valores_textil" (versión 2) existe porque un textil que se cobra por rollo
 (ver core.precios_textiles) no tiene un solo valor: dos productos del mismo
@@ -49,7 +52,7 @@ import json
 
 from core.precios import costo_cotizacion, costo_producto, ml_o_area_facturable_por_producto, parsear_valor_manual
 
-VERSION = 2
+VERSION = 3
 
 # Diferencias de menos de medio peso son redondeo, no un cambio de precio.
 _TOLERANCIA = 0.5
@@ -108,6 +111,8 @@ def armar(internos: list[dict], vigentes: dict | None = None) -> dict:
 
     vigentes = vigentes or kwargs_precios()
     estructuras_cat = vigentes["estructuras_legado_valores"]
+    terminaciones_cat = vigentes.get("terminaciones_legado_valores") or TERMINACIONES_LEGADO_VALORES
+    cajas_cat = vigentes.get("precios_cajas") or PRECIOS_CAJAS
     textiles, estructuras, terminaciones, con_caja = _usados(internos)
     valores_textil = _valores_textil(internos, vigentes)
     primero = {}
@@ -119,10 +124,10 @@ def armar(internos: list[dict], vigentes: dict | None = None) -> dict:
         "valores_textil": valores_textil,
         "anchos":        {n: TEXTILES_ANCHOS.get(n) for n in sorted(textiles) if textiles[n] == "ML"},
         "estructuras":   {n: dict(estructuras_cat[n]) for n in sorted(estructuras) if n in estructuras_cat},
-        "terminaciones": {n: dict(TERMINACIONES_LEGADO_VALORES[n]) for n in sorted(terminaciones)
-                          if n in TERMINACIONES_LEGADO_VALORES},
-        "cajas":         copy.deepcopy(PRECIOS_CAJAS) if con_caja else {},
+        "terminaciones": {n: dict(terminaciones_cat[n]) for n in sorted(terminaciones) if n in terminaciones_cat},
+        "cajas":         copy.deepcopy(cajas_cat) if con_caja else {},
         "materiales":    [vigentes["cobro_materiales"](d) for d in internos],
+        "reglas":        copy.deepcopy(vigentes.get("reglas")),
     }
 
 
@@ -155,16 +160,24 @@ def kwargs_congelados(lista: dict) -> dict:
     lista. Los productos tienen que venir de `internos_congelados` (traen lo
     que cobraron sus materiales)."""
     from core.repositorio import PRECIOS_CAJAS
+
+    cajas = lista.get("cajas")
+    if cajas:
+        # Guardadas en JSON, las claves de "fp" (watts) vuelven como texto, y
+        # core.valor_cajas las busca por número.
+        cajas = {**cajas, "fp": {int(k): v for k, v in (cajas.get("fp") or {}).items()}}
     return {
         "textiles_valores":             lista.get("textiles", {}),
         "textiles_anchos":              lista.get("anchos", {}),
         "estructuras_legado_valores":   lista.get("estructuras", {}),
         "terminaciones_legado_valores": lista.get("terminaciones", {}),
         # Sin caja no se lee; con caja siempre viene en la lista.
-        "precios_cajas":                lista.get("cajas") or PRECIOS_CAJAS,
+        "precios_cajas":                cajas or PRECIOS_CAJAS,
         "cobro_materiales":             lambda d: d.get("_cobro_materiales"),
         # Sin "valores_textil" (versión 1) da None y vale "textiles".
         "valor_textil":                 lambda d: d.get("_valor_textil"),
+        # Sin "reglas" (versiones 1 y 2), None: las constantes de core.precios.
+        "reglas":                       lista.get("reglas"),
     }
 
 
@@ -297,7 +310,26 @@ def _componentes(antes: dict, ahora: dict, internos: list[dict], cajas_importan:
         a, ua = mat_a.get(n, (None, ""))
         b, ub = mat_b.get(n, (None, ""))
         agregar("Material", n, a, b, ub or ua)
+    reglas_a, reglas_b = _reglas(antes.get("reglas")), _reglas(ahora.get("reglas"))
+    agregar("Regla", "IVA", reglas_a["iva"], reglas_b["iva"], "%", "porcentaje")
+    agregar("Regla", "Mínimo por textil", reglas_a["ml_minimo"], reglas_b["ml_minimo"], " ML", "metros")
+    agregar("Regla", "Mínimo en Backlight", reglas_a["m2_minimo"], reglas_b["m2_minimo"], " m²", "metros")
+    agregar("Regla", "Descuento por volumen", _texto_tramos(reglas_a["tramos_descuento"]),
+            _texto_tramos(reglas_b["tramos_descuento"]), "", "texto")
     return cambios
+
+
+def _reglas(reglas: dict | None) -> dict:
+    from core.precios import _reglas as reglas_o_constantes
+    r = reglas_o_constantes(reglas)
+    return {**r, "iva": float(r["iva"]), "ml_minimo": float(r["ml_minimo"]), "m2_minimo": float(r["m2_minimo"])}
+
+
+def _texto_tramos(tramos) -> str:
+    """"desde 10 m² 5 % · desde 20 m² 10 %", de menor a mayor."""
+    def n(x):
+        return f"{float(x):g}".replace(".", ",")
+    return " · ".join(f"desde {n(m2)} m² {n(pct)} %" for m2, pct in sorted(tramos, key=lambda t: t[0])) or "sin descuento"
 
 
 def cambios(datos: dict) -> dict | None:
