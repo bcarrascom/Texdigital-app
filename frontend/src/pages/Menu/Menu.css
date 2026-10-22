@@ -65,7 +65,8 @@
     position: absolute; top: var(--e-4); left: 50%; translate: -50% 0;
     display: grid; place-items: center;
     width: 2.6rem; height: 2.6rem; border-radius: var(--r-md);
-    color: var(--c-texto-suave);
+    /* Gris liviano: está, pero no compite con los módulos. */
+    color: var(--c-texto-tenue);
     background: transparent;
     animation: aparecer var(--m-lenta) var(--ease-salida) both; animation-delay: 320ms;
     transition: background var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
@@ -73,7 +74,7 @@
   .menu__config svg { width: 1.35rem; height: 1.35rem; }
   .menu__config:hover, .menu__config:focus-visible {
     background: color-mix(in srgb, var(--c-borde-fuerte) 45%, transparent);
-    color: var(--c-texto);
+    color: var(--c-texto-suave);
   }
   .menu__config:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 2px; }
 

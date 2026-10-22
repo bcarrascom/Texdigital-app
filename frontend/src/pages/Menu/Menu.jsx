@@ -11,7 +11,7 @@ import { ControlTexto } from "@/components/Cabecera/Cabecera";
 import { TarjetaCotizacion, TarjetaDespacho, TarjetaOp, TarjetaPendiente, TarjetaRollo } from "@/components/Tarjeta/Tarjeta";
 import Modulo, { varsMazo } from "./Modulo";
 import AvisoMenu from "./AvisoMenu";
-import IconoConfiguracion from "@/assets/svg/cog.svg?react";
+import IconoConfiguracion from "@/assets/svg/cog-fino.svg?react";
 import { fechaDMAaTime, plural } from "@/utils/formato";
 import "./Menu.css";
 
