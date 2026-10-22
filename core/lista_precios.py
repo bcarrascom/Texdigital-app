@@ -26,14 +26,21 @@ para eso está "version".
 
 En el JSON de la cotización:
     "ListaPrecios": {
-        "version": 1,
+        "version": 2,
         "textiles":      {nombre: valor por ML o M²},
+        "valores_textil": [el valor por ML o M² que cobró cada producto, en orden]
         "anchos":        {nombre: ancho de la tela en m}   (solo no-backlight)
         "estructuras":   {nombre: {"valorUNIT": x} | {"valorML": x}},
         "terminaciones": {nombre: {"valorUNIT": x} | {"valorML": x}},
         "cajas":         precios de cajas (si algún producto lleva caja),
         "materiales":    [lo que cobró cada producto por materiales, en orden]
     }
+
+"valores_textil" (versión 2) existe porque un textil que se cobra por rollo
+(ver core.precios_textiles) no tiene un solo valor: dos productos del mismo
+textil pueden salir de rollos con precios distintos. Lo que manda es esa
+lista; "textiles" queda como respaldo (las listas de la versión 1 no la
+traen) y para mostrar.
 """
 
 import copy
@@ -42,7 +49,7 @@ import json
 
 from core.precios import costo_cotizacion, costo_producto, ml_o_area_facturable_por_producto, parsear_valor_manual
 
-VERSION = 1
+VERSION = 2
 
 # Diferencias de menos de medio peso son redondeo, no un cambio de precio.
 _TOLERANCIA = 0.5
@@ -76,18 +83,40 @@ def _usados(internos: list[dict]):
     return textiles, estructuras, terminaciones, con_caja
 
 
-def armar(internos: list[dict]) -> dict:
+def _nombre_textil(d: dict) -> str:
+    return (d.get("tela") if "tela" in d else d.get("textil")) or ""
+
+
+def _valores_textil(internos: list[dict], kwargs: dict) -> list[float | None]:
+    """El valor por ML/M² del textil de cada producto con estos kwargs
+    (None si el producto no lleva textil) — el mismo que usa costo_producto."""
+    from core.precios import _valor_tela
+    from core.repositorio import TEXTILES_VALORES
+
+    # Sin textiles_valores, el mismo default que costo_producto.
+    catalogo = kwargs["textiles_valores"] if kwargs.get("textiles_valores") is not None else TEXTILES_VALORES
+    return [_valor_tela(d, _nombre_textil(d), catalogo, kwargs.get("valor_textil"))
+            if _nombre_textil(d) else None for d in internos]
+
+
+def armar(internos: list[dict], vigentes: dict | None = None) -> dict:
     """La lista de precios VIGENTE para estos productos (esquema interno, ver
-    core.repositorio_cotizaciones.producto_desde_json)."""
-    from core.repositorio import PRECIOS_CAJAS, TEXTILES_ANCHOS, TEXTILES_VALORES, TERMINACIONES_LEGADO_VALORES
+    core.repositorio_cotizaciones.producto_desde_json). `vigentes`: unos
+    kwargs_precios() ya armados, para calcular con exactamente los mismos."""
+    from core.repositorio import PRECIOS_CAJAS, TEXTILES_ANCHOS, TERMINACIONES_LEGADO_VALORES
     from core.repositorio_materiales import kwargs_precios
 
-    vigentes = kwargs_precios()
+    vigentes = vigentes or kwargs_precios()
     estructuras_cat = vigentes["estructuras_legado_valores"]
     textiles, estructuras, terminaciones, con_caja = _usados(internos)
+    valores_textil = _valores_textil(internos, vigentes)
+    primero = {}
+    for d, v in zip(internos, valores_textil):
+        primero.setdefault(_nombre_textil(d), v)
     return {
         "version":       VERSION,
-        "textiles":      {n: TEXTILES_VALORES.get(n, 0.0) for n in sorted(textiles)},
+        "textiles":      {n: primero.get(n) or 0.0 for n in sorted(textiles)},
+        "valores_textil": valores_textil,
         "anchos":        {n: TEXTILES_ANCHOS.get(n) for n in sorted(textiles) if textiles[n] == "ML"},
         "estructuras":   {n: dict(estructuras_cat[n]) for n in sorted(estructuras) if n in estructuras_cat},
         "terminaciones": {n: dict(TERMINACIONES_LEGADO_VALORES[n]) for n in sorted(terminaciones)
@@ -134,6 +163,8 @@ def kwargs_congelados(lista: dict) -> dict:
         # Sin caja no se lee; con caja siempre viene en la lista.
         "precios_cajas":                lista.get("cajas") or PRECIOS_CAJAS,
         "cobro_materiales":             lambda d: d.get("_cobro_materiales"),
+        # Sin "valores_textil" (versión 1) da None y vale "textiles".
+        "valor_textil":                 lambda d: d.get("_valor_textil"),
     }
 
 
@@ -145,6 +176,8 @@ def internos_congelados(datos: dict) -> tuple[list[dict], dict]:
     internos = _internos(datos)
     for d, cobro in zip(internos, lista.get("materiales") or []):
         d["_cobro_materiales"] = cobro
+    for d, valor in zip(internos, lista.get("valores_textil") or []):
+        d["_valor_textil"] = valor
     return internos, kwargs_congelados(lista)
 
 
@@ -205,7 +238,40 @@ def _valores_materiales(cobros: list) -> dict:
     return valores
 
 
-def _componentes(antes: dict, ahora: dict, textiles_unidad: dict, cajas_importan: bool) -> list[dict]:
+def _valor_textil_de(lista: dict, i: int, nombre: str):
+    valores = lista.get("valores_textil")
+    if valores and i < len(valores) and valores[i] is not None:
+        return valores[i]
+    return lista.get("textiles", {}).get(nombre)
+
+
+def _textiles(antes: dict, ahora: dict, internos: list[dict]) -> list[tuple]:
+    """(nombre, antes, ahora, unidad) de los textiles que cambiaron. Producto
+    por producto (por rollo, un mismo textil puede cobrar distinto en cada
+    uno), pero juntando en una fila los productos de un textil que cambian
+    igual — lo normal. Si un textil cambia de más de una forma, una fila por
+    producto, con su nombre."""
+    por_textil: dict[str, list] = {}
+    for i, d in enumerate(internos):
+        n = _nombre_textil(d)
+        if not n:
+            continue
+        a, b = _valor_textil_de(antes, i, n), _valor_textil_de(ahora, i, n)
+        if a != b:
+            por_textil.setdefault(n, []).append((i, d, a, b))
+    filas = []
+    for n in sorted(por_textil):
+        unidad = "/M²" if "tela" in por_textil[n][0][1] else "/ML"
+        distintos = {(a, b) for _, _, a, b in por_textil[n]}
+        if len(distintos) == 1:
+            a, b = distintos.pop()
+            filas.append((n, a, b, unidad))
+        else:
+            filas += [(f"{n} · {_nombre_producto(d, i)}", a, b, unidad) for i, d, a, b in por_textil[n]]
+    return filas
+
+
+def _componentes(antes: dict, ahora: dict, internos: list[dict], cajas_importan: bool) -> list[dict]:
     """Qué cambió de precio, componente por componente."""
     cambios = []
 
@@ -213,9 +279,8 @@ def _componentes(antes: dict, ahora: dict, textiles_unidad: dict, cajas_importan
         if a != b:
             cambios.append({"tipo": tipo, "nombre": nombre, "antes": a, "ahora": b, "unidad": unidad, "formato": formato})
 
-    for n in sorted(set(antes.get("textiles", {})) | set(ahora.get("textiles", {}))):
-        agregar("Textil", n, antes.get("textiles", {}).get(n), ahora.get("textiles", {}).get(n),
-                f"/{textiles_unidad.get(n, 'ML')}")
+    for n, a, b, unidad in _textiles(antes, ahora, internos):
+        agregar("Textil", n, a, b, unidad)
     for n in sorted(set(antes.get("anchos", {})) | set(ahora.get("anchos", {}))):
         agregar("Ancho de tela", n, antes.get("anchos", {}).get(n), ahora.get("anchos", {}).get(n), " m", "metros")
     for tipo, clave in (("Estructura", "estructuras"), ("Terminación", "terminaciones")):
@@ -248,12 +313,12 @@ def cambios(datos: dict) -> dict | None:
 
     internos_c, kwargs_c = internos_congelados(datos)
     internos_v = _internos(datos)
-    actual = armar(internos_v)
+    kwargs_v = kwargs_precios()
+    actual = armar(internos_v, kwargs_v)
     firma_actual = firma(actual)
     if datos.get("PreciosRevisados") == firma_actual:
         return None
 
-    kwargs_v = kwargs_precios()
     antes_p, ahora_p = _por_producto(internos_c, kwargs_c), _por_producto(internos_v, kwargs_v)
     total_antes = totales(datos, internos_c, kwargs_c)["total"]
     total_ahora = totales(datos, internos_v, kwargs_v)["total"]
@@ -265,11 +330,10 @@ def cambios(datos: dict) -> dict | None:
     if not productos and abs(total_antes - total_ahora) < _TOLERANCIA:
         return None
 
-    textiles_unidad, _, _, _ = _usados(internos_v)
     cajas_importan = any("tela" in internos_v[p["indice"]] for p in productos)
     return {
         "firma":       firma_actual,
-        "componentes": _componentes(datos["ListaPrecios"], actual, textiles_unidad, cajas_importan),
+        "componentes": _componentes(datos["ListaPrecios"], actual, internos_v, cajas_importan),
         "productos":   productos,
         "total":       {"antes": total_antes, "ahora": total_ahora},
     }

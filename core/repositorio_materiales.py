@@ -1246,10 +1246,20 @@ def kwargs_precios() -> dict:
 
     Las dos partes ya se apagan solas con el módulo Inventario deshabilitado
     (core.config.MODULOS_HABILITADOS), así que esto se puede pasar siempre sin
-    preguntar nada."""
+    preguntar nada.
+
+    Y el valor de los textiles (ver core.precios_textiles): textiles_valores
+    con los valores fijos de Configuración › Textiles, y valor_textil para los
+    que se cobran por rollo. valor_textil lee los rollos una vez y se los
+    guarda: pedir unos kwargs nuevos por cálculo, no reusarlos entre cálculos."""
+    from core import precios_textiles
+
+    ajustes = precios_textiles.cargar()
     return {
         "estructuras_legado_valores": estructuras_legado_valores_efectivos(),
         "cobro_materiales":           cobro_materiales_producto,
+        "textiles_valores":           precios_textiles.valores_fijos(ajustes),
+        "valor_textil":               precios_textiles.valorizador(ajustes),
     }
 
 

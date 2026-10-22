@@ -421,16 +421,19 @@ class ApiCotizacion:
         internos = [_producto_a_interno(productos[i]) for i in indices]
         facturables = ml_o_area_facturable_por_producto(internos)
 
+        # Unos solos precios para todos (los rollos se leen una vez, ver kwargs_precios).
+        precios = kwargs_precios()
         calculos: list[dict | None] = [None] * len(productos)
         for i, f in zip(indices, facturables):
-            calculos[i] = self.calcular_producto(productos[i], ml_o_area_facturable=f)
+            calculos[i] = self.calcular_producto(productos[i], ml_o_area_facturable=f, precios=precios)
         return calculos
 
-    def calcular_producto(self, p: dict, ml_o_area_facturable: float | None = None) -> dict | None:
+    def calcular_producto(self, p: dict, ml_o_area_facturable: float | None = None, precios: dict | None = None) -> dict | None:
         """Un solo producto. `ml_o_area_facturable` es el ML/M² ya con el
         piso mínimo del GRUPO aplicado (ver calcular_productos): sin él,
         costo_producto le aplica el piso a esta línea sola, como si fuera
-        el único producto de su textil."""
+        el único producto de su textil. `precios`: los kwargs_precios() ya
+        armados, si quien llama calcula varios productos seguidos."""
         if not _calculable(p):
             return None
         ancho = _num(p.get("ancho"), 0.0)
@@ -440,7 +443,7 @@ class ApiCotizacion:
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
         costo = costo_producto(
-            interno, ml_o_area_facturable=ml_o_area_facturable, **kwargs_precios(),
+            interno, ml_o_area_facturable=ml_o_area_facturable, **(precios or kwargs_precios()),
         )
 
         if p.get("tipo") == "backlight":

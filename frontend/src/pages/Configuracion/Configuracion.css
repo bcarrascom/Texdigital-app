@@ -126,4 +126,51 @@
   .btn-fila-ajuste:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
   .btn-fila-ajuste--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
   .btn-fila-ajuste--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+  .btn-fila-ajuste:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-fila-ajuste:disabled:hover { border-color: var(--c-borde-fuerte); background: var(--c-superficie); }
+
+  /* Una nota dentro de la página (no un toast): "solo lectura", advertencias. */
+  .ajustes-nota {
+    display: flex; align-items: flex-start; gap: var(--e-2);
+    padding: var(--e-3) var(--e-4); border-radius: var(--r-lg);
+    font-size: var(--t-sm); color: var(--c-texto);
+  }
+  .ajustes-nota svg { width: 1.1rem; height: 1.1rem; flex: none; margin-top: .1rem; }
+  .ajustes-nota--aviso {
+    background: var(--c-aviso-suave);
+    border: 1.5px solid color-mix(in srgb, var(--c-aviso) 35%, transparent);
+  }
+  .ajustes-nota--aviso svg { color: var(--c-aviso); }
+
+  /* ── Textiles ───────────────────────────────────────────────────────── */
+  .fila-textil { flex-wrap: wrap; row-gap: var(--e-1); }
+  .fila-textil__info { flex: 1 1 12rem; min-width: 0; display: grid; gap: .1rem; }
+  .fila-textil__nombre { font-weight: var(--peso-medio); overflow-wrap: anywhere; }
+  .fila-textil__sub { font-size: var(--t-xs); color: var(--c-texto-tenue); font-variant-numeric: tabular-nums; }
+  .fila-textil__error { font-size: var(--t-xs); color: var(--c-error); }
+  .fila-textil__aviso { font-size: var(--t-xs); color: var(--c-aviso); }
+  .fila-textil .segmento label { padding: .25rem var(--e-3); font-size: var(--t-xs); }
+  .fila-textil__valor { width: 8.5rem; min-height: 2.2rem; }
+  .fila-textil[data-invalido] .fila-textil__valor { border-color: var(--c-error); }
+
+  /* Guardar / Descartar: pegada abajo del contenido mientras haya cambios. */
+  .barra-guardar {
+    position: sticky; bottom: 0; z-index: 2;
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--e-2);
+    padding: var(--e-3) var(--e-4);
+    background: var(--c-superficie);
+    border: 1px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-2);
+  }
+  .barra-guardar__texto { flex: 1 1 12rem; font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .barra-guardar__texto--error { color: var(--c-error); }
+}
+
+/* El diálogo vive fuera de la página (<dialog> en la capa superior), pero
+   sigue dentro de .pag-configuracion en el DOM. */
+.pag-configuracion .dlg-valor-rollos {
+  width: min(92vw, 30rem);
+  .dlg-valor-rollos__campo { margin-top: var(--e-4); }
+  .dlg-valor-rollos__aviso { margin-top: var(--e-3); }
 }

@@ -561,6 +561,9 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 .segmento label:hover { color: var(--c-texto); }
 .segmento input:checked + label { color: var(--c-texto-inv); }
 .segmento input:focus-visible + label { outline: 3px solid var(--c-foco); outline-offset: 2px; }
+.segmento[aria-disabled] { opacity: .55; }
+.segmento[aria-disabled] label { cursor: default; }
+.segmento[aria-disabled] label:hover { color: var(--c-texto-suave); }
 /* Bloque: todo el ancho disponible, repartido entre las dos opciones. */
 .segmento--bloque { display: flex; width: auto; }
 .segmento--bloque label { flex: 1 1 0; text-align: center; }   /* 0 de base: mitades iguales, no según el texto */

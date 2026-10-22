@@ -27,7 +27,7 @@ const uso = (tipo, fecha, anterior, nuevo, extra = {}) =>
   ({ id: idEntrada(), tipo, fecha, metros_restantes_anterior: anterior, metros_restantes_nuevo: nuevo, descripcion: "", ...extra });
 
 let siguienteRollo = 32;
-const rollos = [
+export const rollos = [
   { id: "R-031", nombre_textil: "Tela backlit", ancho: 3, metros_iniciales: 50, metros_restantes: 12.5, estado: "activo", proveedor: "Textiles del Sur", fecha: "02/10/2026", precio_compra: 380000, valor: 14000,
     usos: [
       uso("consumo", "05/10/2026", 50, 41.2, { numero_op: 9008, cliente: "Clínica Norte", tema: "Señalética interior", obs: "" }),

@@ -42,6 +42,7 @@ from ui.api_ver_despacho import ApiVerDespacho
 from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 from ui.api_inventario import ApiInventario
+from ui.api_configuracion import ApiConfiguracion
 
 
 def _abrir_manual_usuario() -> None:
@@ -81,6 +82,7 @@ class ApiApp:
         self._asignar_despacho = ApiAsignarDespacho()
         self._gestionar_direcciones = ApiGestionarDirecciones()
         self._inventario = ApiInventario()
+        self._configuracion = ApiConfiguracion()
         _migrar_inventario_formato_viejo()
 
     # ── Arranque ─────────────────────────────────────────────────────────────
@@ -339,6 +341,17 @@ class ApiApp:
 
     def eliminar_direccion_gestion(self, id_) -> bool:
         return self._gestionar_direcciones.eliminar_direccion(id_)
+
+    # ── Configuración › Textiles ─────────────────────────────────────────────
+
+    def obtener_precios_textiles(self) -> dict:
+        return self._configuracion.obtener_precios_textiles()
+
+    def guardar_precios_textiles(self, datos) -> dict:
+        return self._configuracion.guardar_precios_textiles(datos)
+
+    def fijar_valor_rollos(self, nombre_textil, valor) -> dict:
+        return self._configuracion.fijar_valor_rollos(nombre_textil, valor)
 
     # ── Inventario: rollos ───────────────────────────────────────────────────
 
