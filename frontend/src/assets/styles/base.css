@@ -62,6 +62,14 @@
   --c-inv-fuerte:    #1F7A42;
   --c-inv-tinta:     #124726;
 
+  /* ── Configuración · grafito ─────────────────────────────────────────────
+     No es un módulo de producción: neutro, como los Ajustes de macOS con el
+     acento "grafito" (el azul de Mac se confundiría con el de OPs). */
+  --c-conf-relleno:  #EFEEEB;
+  --c-conf-borde:    #C9C6BE;
+  --c-conf-fuerte:   #4A4D55;
+  --c-conf-tinta:    #23252A;
+
   /* Tema activo — lo escribe [data-tema] más abajo. Las pantallas internas
      usan SIEMPRE estas cuatro variables, nunca las de un módulo puntual: así
      la misma pantalla sirve en el flujo naranjo y en el azul. */
@@ -158,6 +166,12 @@
   --c-tema-borde:   var(--c-inv-borde);
   --c-tema-fuerte:  var(--c-inv-fuerte);
   --c-tema-tinta:   var(--c-inv-tinta);
+}
+[data-tema="configuracion"] {
+  --c-tema-relleno: var(--c-conf-relleno);
+  --c-tema-borde:   var(--c-conf-borde);
+  --c-tema-fuerte:  var(--c-conf-fuerte);
+  --c-tema-tinta:   var(--c-conf-tinta);
 }
 
 @media (prefers-reduced-motion: reduce) {

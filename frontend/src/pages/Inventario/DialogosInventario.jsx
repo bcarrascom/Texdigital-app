@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 import { useAvisos } from "@/context/AvisosContext";
-import Dialogo from "@/components/Dialogo/Dialogo";
 import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import DialogoMorph from "@/components/DialogoMorph/DialogoMorph";
-import IconoEditar from "@/assets/svg/pencil.svg?react";
-import IconoEliminar from "@/assets/svg/trash-2.svg?react";
-import IconoGuardar from "@/assets/svg/check.svg?react";
-import IconoCancelar from "@/assets/svg/x.svg?react";
 import * as fmt from "@/utils/formato";
 
-/* Los diálogos del módulo Inventario: "Rollo nuevo" e "Ingresar material"
-   (que nacen del botón "+" de su tabla, ver components/DialogoMorph) y la
-   lista de proveedores. */
+/* Los diálogos del módulo Inventario: "Rollo nuevo" e "Ingresar material",
+   que nacen del botón "+" de su tabla (ver components/DialogoMorph). La
+   lista de proveedores vive en Configuración. */
 
 /* Un proveedor nuevo se agrega a la lista al guardar el rollo/material que lo
    usa (la lista crece sola, no es un catálogo cerrado). */
@@ -213,100 +208,5 @@ function FormularioMaterial({ materiales, nombres, onCerrar, onGuardado }) {
         <button className="btn btn--primario btn--chico" type="submit">Guardar</button>
       </div>
     </form>
-  );
-}
-
-// ── Proveedores ─────────────────────────────────────────────────────────────
-
-/* Lista simple (proveedores.json, ver core/repositorio.py) con editar en el
-   lugar, eliminar y agregar. Los rollos y materiales que ya tienen un
-   proveedor cargado no se tocan: ahí es una copia de texto, no una
-   referencia viva a esta lista. */
-export function DialogoProveedores({ abierto, proveedores, onCerrar, onCambio }) {
-  return (
-    <Dialogo abierto={abierto} onCerrar={onCerrar} className="dlg-proveedores">
-      <ListaProveedores proveedores={proveedores} onCerrar={onCerrar} onCambio={onCambio} />
-    </Dialogo>
-  );
-}
-
-function ListaProveedores({ proveedores, onCerrar, onCambio }) {
-  const aviso = useAvisos();
-  const [editando, setEditando] = useState(null);   // nombre en edición, o null
-  const [nuevo, setNuevo] = useState("");
-
-  async function agregar() {
-    const nombre = nuevo.trim();
-    if (!nombre) return;
-    await api.guardar_proveedor(nombre);
-    setNuevo("");
-    await onCambio();
-    aviso("Proveedor agregado.", "info");
-  }
-
-  async function renombrar(actual, nombre) {
-    if (!nombre || nombre === actual) { setEditando(null); return; }
-    if (!(await api.editar_proveedor(actual, nombre))) { aviso("Ya existe un proveedor con ese nombre.", "error"); return; }
-    setEditando(null);
-    await onCambio();
-    aviso("Proveedor actualizado.", "info");
-  }
-
-  async function eliminar(nombre) {
-    await api.eliminar_proveedor(nombre);
-    await onCambio();
-    aviso("Proveedor eliminado.", "info");
-  }
-
-  return (
-    <>
-      <h2 className="dlg__titulo">Proveedores</h2>
-      {proveedores.length ? (
-        <div className="proveedores-lista">
-          {proveedores.map((p) => p === editando
-            ? <FilaEditando key={p} nombre={p} onGuardar={(n) => renombrar(p, n)} onCancelar={() => setEditando(null)} />
-            : (
-              <div key={p} className="fila-proveedor">
-                <span className="fila-proveedor__nombre">{p}</span>
-                <div className="fila-proveedor__acciones">
-                  <button className="btn-fila-icono" type="button" title="Editar" onClick={() => setEditando(p)}><IconoEditar /></button>
-                  <button className="btn-fila-icono btn-fila-icono--peligro" type="button" title="Eliminar" onClick={() => eliminar(p)}><IconoEliminar /></button>
-                </div>
-              </div>
-            ))}
-        </div>
-      ) : <p className="proveedores-vacio">Todavía no hay proveedores guardados.</p>}
-      <div className="proveedores-alta">
-        <input className="entrada" type="text" placeholder="Nuevo proveedor…" autoComplete="off" data-autofoco
-               value={nuevo} onChange={(e) => setNuevo(e.target.value)}
-               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} />
-      </div>
-      <div className="dlg__acciones">
-        <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cerrar</button>
-      </div>
-    </>
-  );
-}
-
-/* Editar es en el lugar (la fila se vuelve un campo con ✓ / ✕): el nombre es
-   lo único que se edita, no vale un segundo diálogo para un solo campo. */
-function FilaEditando({ nombre, onGuardar, onCancelar }) {
-  const [valor, setValor] = useState(nombre);
-  return (
-    <div className="fila-proveedor">
-      <div className="fila-proveedor__nombre">
-        <input className="entrada" type="text" autoComplete="off" autoFocus value={valor}
-               onFocus={(e) => e.target.select()} onChange={(e) => setValor(e.target.value)}
-               onKeyDown={(e) => {
-                 if (e.key === "Enter") { e.preventDefault(); onGuardar(valor.trim()); }
-                 // Escape cancela la edición, no cierra el diálogo entero.
-                 if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancelar(); }
-               }} />
-      </div>
-      <div className="fila-proveedor__acciones">
-        <button className="btn-fila-icono" type="button" title="Guardar" onClick={() => onGuardar(valor.trim())}><IconoGuardar /></button>
-        <button className="btn-fila-icono" type="button" title="Cancelar" onClick={onCancelar}><IconoCancelar /></button>
-      </div>
-    </div>
   );
 }

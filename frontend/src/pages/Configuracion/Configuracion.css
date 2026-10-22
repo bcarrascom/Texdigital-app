@@ -1,0 +1,129 @@
+/* Configuración — al estilo de los Ajustes de macOS: barra lateral con las
+   categorías y, a la derecha, el contenido en grupos de filas. */
+
+.pag-configuracion {
+  /* Las dos columnas ocupan toda la ventana: sin cabecera arriba, "Volver"
+     vive en la barra lateral (donde macOS pone los botones de la ventana). */
+  &.app { grid-template-columns: 17rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+
+  /* ── Barra lateral ──────────────────────────────────────────────────── */
+  .ajustes-lateral {
+    display: flex; flex-direction: column; gap: var(--e-3);
+    min-height: 0; overflow-y: auto;
+    padding: var(--e-4) var(--e-3);
+    border-right: 1px solid var(--c-tema-borde);
+  }
+  .ajustes-lateral__volver { align-self: flex-start; }
+
+  .ajustes-buscar {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: 0 var(--e-3); min-height: 2.1rem;
+    background: color-mix(in srgb, var(--c-tema-borde) 35%, transparent);
+    border-radius: var(--r-md);
+    color: var(--c-texto-tenue);
+  }
+  .ajustes-buscar:focus-within { outline: 3px solid var(--c-foco); outline-offset: 1px; }
+  .ajustes-buscar svg { width: .95rem; height: .95rem; flex: none; }
+  .ajustes-buscar input {
+    flex: 1; min-width: 0; border: 0; background: none; outline: none;
+    font: inherit; font-size: var(--t-sm); color: var(--c-texto);
+  }
+
+  .ajustes-lista { display: grid; gap: 2px; }
+  .ajustes-lista__item {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: .3rem var(--e-2); border: 0; border-radius: var(--r-md);
+    background: none; color: var(--c-texto); text-align: left;
+    font: inherit; font-size: var(--t-sm); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
+  }
+  .ajustes-lista__item:hover { background: color-mix(in srgb, var(--c-tema-borde) 35%, transparent); }
+  .ajustes-lista__item:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 1px; }
+  /* La elegida: la píldora con el acento (grafito). */
+  .ajustes-lista__item[aria-current] { background: var(--c-tema-fuerte); color: var(--c-texto-inv); }
+  .ajustes-lista__vacio { padding: var(--e-3) var(--e-2); font-size: var(--t-sm); color: var(--c-texto-tenue); }
+
+  /* ── Contenido ──────────────────────────────────────────────────────── */
+  .ajustes-contenido {
+    min-height: 0; overflow-y: auto;
+    padding: var(--e-6) var(--e-5);
+    background: color-mix(in srgb, var(--c-tema-relleno) 50%, var(--c-lienzo));
+  }
+  .ajustes-pagina { width: min(100%, 42rem); margin-inline: auto; display: grid; gap: var(--e-5); }
+
+  .ajustes-encabezado {
+    display: grid; justify-items: center; gap: var(--e-2); text-align: center;
+    padding: var(--e-5) var(--e-5) var(--e-4);
+    background: var(--c-superficie);
+    border: 1px solid var(--c-borde);
+    border-radius: var(--r-xl);
+  }
+  .ajustes-encabezado__titulo { font-size: var(--t-2xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; line-height: 1.1; margin-top: var(--e-1); }
+  .ajustes-encabezado__desc { max-width: 30rem; font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+  .ajustes-grupo { display: grid; gap: var(--e-2); }
+  .ajustes-grupo__titulo {
+    padding-inline: var(--e-2);
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); color: var(--c-texto-tenue);
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .ajustes-grupo__filas {
+    background: var(--c-superficie);
+    border: 1px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .ajustes-grupo__pie { padding-inline: var(--e-2); font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+  /* Una fila: [ícono] etiqueta · · · detalle / control [›]. La línea que
+     separa filas no llega al borde izquierdo, como en macOS. */
+  .fila-ajuste {
+    position: relative;
+    display: flex; align-items: center; gap: var(--e-3);
+    width: 100%; min-height: 2.9rem; padding: var(--e-2) var(--e-4);
+    border: 0; background: none; color: var(--c-texto); text-align: left;
+    font: inherit; font-size: var(--t-sm);
+  }
+  .fila-ajuste + .fila-ajuste::before {
+    content: ""; position: absolute; top: 0; left: var(--e-4); right: 0;
+    height: 1px; background: var(--c-borde);
+  }
+  .fila-ajuste__etiqueta { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .fila-ajuste__detalle { color: var(--c-texto-suave); font-variant-numeric: tabular-nums; }
+  .fila-ajuste__control { display: flex; align-items: center; gap: var(--e-1); }
+  .fila-ajuste__flecha { width: 1rem; height: 1rem; color: var(--c-texto-tenue); flex: none; }
+  .fila-ajuste--boton { cursor: pointer; transition: background var(--m-rapida) var(--ease-salida); }
+  .fila-ajuste--boton:hover { background: var(--c-superficie-2); }
+  .fila-ajuste--boton:focus-visible { outline: 3px solid var(--c-foco); outline-offset: -3px; }
+
+  .icono-ajuste {
+    display: inline-grid; place-items: center; flex: none;
+    width: 1.55rem; height: 1.55rem; border-radius: .4rem;
+    background: var(--color-icono); color: #fff;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .12);
+  }
+  .icono-ajuste svg { width: 62%; height: 62%; }
+  .icono-ajuste--grande { width: 4rem; height: 4rem; border-radius: 1rem; box-shadow: var(--s-2), inset 0 -2px 0 rgba(0, 0, 0, .12); }
+
+  .ajustes-vacio { padding: var(--e-4); text-align: center; font-size: var(--t-sm); color: var(--c-texto-tenue); }
+
+  /* ── Proveedores ────────────────────────────────────────────────────── */
+  .fila-ajuste--alta .entrada, .fila-ajuste--editando .entrada { flex: 1; min-width: 0; min-height: 2.2rem; }
+  .fila-ajuste--alta .btn { display: inline-flex; align-items: center; gap: var(--e-1); }
+  .fila-ajuste--alta .btn svg { width: 1rem; height: 1rem; }
+  /* Renombrar/eliminar aparecen al pasar por la fila (o al llegar con Tab). */
+  .fila-ajuste--proveedor .fila-ajuste__control { opacity: 0; transition: opacity var(--m-rapida) var(--ease-salida); }
+  .fila-ajuste--proveedor:hover .fila-ajuste__control,
+  .fila-ajuste--proveedor:focus-within .fila-ajuste__control { opacity: 1; }
+  .btn-fila-ajuste {
+    display: inline-grid; place-items: center;
+    width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+    border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
+    color: var(--c-tema-fuerte); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
+  }
+  .btn-fila-ajuste svg { width: 1rem; height: 1rem; }
+  .btn-fila-ajuste:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+  .btn-fila-ajuste--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
+  .btn-fila-ajuste--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+}
