@@ -10,6 +10,8 @@ import Pista from "@/components/Pista/Pista";
 import TituloDeslizante from "@/components/TituloDeslizante/TituloDeslizante";
 import { Datos, VistaDetalle } from "@/components/Detalle/Detalle";
 import { DialogoAprobar, DialogoEliminar, DialogoMaterialesBloqueado } from "./DialogosCotizacion";
+import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
+import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 import "./VerCotizacion.css";
 
@@ -45,7 +47,8 @@ export default function VerCotizacion() {
   const numero = Number(useParams().numero);
   const navigate = useNavigate();
   const location = useLocation();
-  const { ficha: cot, direccion, deslizando, alTerminarSlide } = useFichaPaginada({
+  const aviso = useAvisos();
+  const { ficha: cot, direccion, deslizando, alTerminarSlide, actualizar } = useFichaPaginada({
     numero, cargar: cargarCotizacion, adyacente: api.cotizacion_adyacente, ruta: rutas.verCotizacion,
   });
 
@@ -54,7 +57,7 @@ export default function VerCotizacion() {
   const primera = useRef(null);
   if (cot && primera.current === null) primera.current = cot.numero;
 
-  // "eliminar" | "bloqueado" | "aprobar" | null
+  // "eliminar" | "bloqueado" | "aprobar" | "precios" | null
   const [dialogo, setDialogo] = useState(null);
   const [faltantes, setFaltantes] = useState([]);
   const [manuales, setManuales] = useState([]);
@@ -87,6 +90,17 @@ export default function VerCotizacion() {
     setDialogo("aprobar");
   }
 
+  /* "Cambiaron precios": actualizarla a los de hoy o mantener los suyos. Se
+     vuelve a pedir la cotización para mostrar cómo quedó. */
+  async function decidirPrecios(actualizarPrecios) {
+    if (actualizarPrecios) await api.actualizar_precios_cotizacion(numero);
+    else await api.mantener_precios_cotizacion(numero);
+    const nueva = await cargarCotizacion(numero);
+    if (nueva) actualizar(() => nueva);
+    setDialogo(null);
+    aviso(actualizarPrecios ? "Cotización actualizada a los precios de hoy." : "Se mantienen los precios de la cotización.", "info");
+  }
+
   const editar = () => navigate(rutas.editarCotizacion(numero));
   const titulo = tituloDe(cot, numero);
 
@@ -112,7 +126,11 @@ export default function VerCotizacion() {
                  onTerminar={alTerminarSlide}
                  render={(c) => (
                    <VistaDetalle productos={c.productos} aparecer={c.numero === primera.current}
-                                 hoja={<Hoja cot={c} />} lateral={<Plata t={c.totales || {}} />}
+                                 hoja={<>
+                                   {c.cambios_precios && <AvisoPrecios onRevisar={() => setDialogo("precios")} />}
+                                   <Hoja cot={c} />
+                                 </>}
+                                 lateral={<Plata t={c.totales || {}} />}
                                  pieFicha={(p) => <><span>Total</span><b>{p.total != null ? fmt.pesos(p.total) : "—"}</b></>} />
                  )} />
         )}
@@ -125,6 +143,8 @@ export default function VerCotizacion() {
           <DialogoMaterialesBloqueado abierto={dialogo === "bloqueado"} faltantes={faltantes}
                                       onCerrar={cerrarDialogo}
                                       onNuevoRollo={(textil) => navigate(rutas.inventario({ nuevo_textil: textil }))} />
+          <DialogoPrecios abierto={dialogo === "precios"} cambios={cot.cambios_precios}
+                          onCerrar={cerrarDialogo} onDecidir={decidirPrecios} />
           <DialogoAprobar abierto={dialogo === "aprobar"} cot={cot} manuales={manuales}
                           onCerrar={cerrarDialogo} onEditar={editar}
                           onAprobada={() => navigate(rutas.ops(), { replace: true })} />

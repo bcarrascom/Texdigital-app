@@ -31,6 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
+from core import lista_precios
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
@@ -559,6 +560,10 @@ class ApiCotizacion:
             "Condicion de pago": cliente.get("condicion", ""),
             "Descripcion": cliente.get("descripcion", ""),
             "productos": [mapear_producto(p) for p in productos_internos],
+            # Con qué precios se calculó: verla o imprimirla después usa estos,
+            # no los de ese día (ver core.lista_precios). Editarla y volver a
+            # guardar la arma de nuevo, con los precios de hoy.
+            "ListaPrecios": lista_precios.armar(productos_internos),
             "Neto": totales["neto"],
             "NetoTotal": totales["neto_total"],
             "IVA": totales["iva"],

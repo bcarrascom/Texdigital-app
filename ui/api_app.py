@@ -197,6 +197,13 @@ class ApiApp:
         numero_adyacente) — la navegación la hace React Router."""
         return self._ver_cotizacion.numero_adyacente(numero, direccion)
 
+    # El aviso "cambiaron precios" de Ver cotización (ver core.lista_precios).
+    def actualizar_precios_cotizacion(self, numero) -> bool:
+        return self._ver_cotizacion.actualizar_precios(numero)
+
+    def mantener_precios_cotizacion(self, numero) -> bool:
+        return self._ver_cotizacion.mantener_precios(numero)
+
     def eliminar_cotizacion(self, numero) -> None:
         self._ver_cotizacion.eliminar_cotizacion(numero)
 
