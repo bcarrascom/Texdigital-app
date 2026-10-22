@@ -59,9 +59,6 @@ def op_despacho_a_json(datos: dict) -> dict:
 
 class ApiVerDespacho:
 
-    def contexto_extra(self, numero) -> dict:
-        return {"numero": int(numero) if numero is not None else None}
-
     def obtener(self, numero) -> dict | None:
         datos = repositorio_despachos.cargar_op_despacho(int(numero))
         if datos is None:

@@ -35,6 +35,18 @@ def _base_docs() -> Path:
     return Path(__file__).parent.parent / "docs"
 
 
+def _base_frontend() -> Path:
+    """
+    Build de la interfaz en React (salida de `npm run build` en frontend/),
+    mismo criterio que _base_recursos().
+    - Normal:      <raíz del proyecto>/frontend/dist
+    - PyInstaller: sys._MEIPASS/frontend/dist
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "frontend" / "dist"
+    return Path(__file__).parent.parent / "frontend" / "dist"
+
+
 def _base_datos() -> Path:
     """
     Carpeta local (por máquina) para datos que no dependen de Dropbox.
@@ -138,5 +150,6 @@ def _base_conf() -> Path:
 
 RECURSOS  = _base_recursos()   # recursos/: catálogos de referencia (solo lectura), plantilla xlsx, assets/
 DOCS      = _base_docs()       # docs/: manual de usuario y otra documentación de solo lectura
+FRONTEND  = _base_frontend()   # frontend/dist/: build de la interfaz en React
 DATOS     = _base_datos()      # datos locales por máquina (fallback sin Dropbox)
 CONF      = _base_conf()       # clientes.json, contactos.json (datos que el operador va agregando)

@@ -17,9 +17,6 @@ from core import repositorio
 
 class ApiGestionarDirecciones:
 
-    def contexto_extra(self) -> dict:
-        return {}
-
     def listar_direcciones(self) -> list[dict]:
         return repositorio.cargar_direcciones()
 

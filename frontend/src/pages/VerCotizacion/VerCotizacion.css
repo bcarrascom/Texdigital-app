@@ -1,0 +1,90 @@
+/* Estilos propios de VerCotizacion — portados de recursos/pantallas/ver-cotizacion.html.
+   Lo que comparte con ver-OP (las dos columnas, la hoja, las fichas) vive en
+   components/Detalle; el visor y los diálogos, en sus componentes. */
+
+.pag-ver-cotizacion {
+  /* Módulo 2 · el desglose de plata, sin panel propio */
+  .plata { display: grid; gap: var(--e-1); }
+  .plata__linea {
+    display: flex; align-items: baseline; gap: var(--e-2);
+    font-size: var(--t-sm); color: var(--c-texto-suave);
+  }
+  .plata__linea b { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+                    font-weight: var(--peso-normal); color: var(--c-texto); }
+  .plata__linea--total {
+    margin-top: var(--e-2); padding-top: var(--e-2);
+    border-top: 1.5px solid var(--c-borde);
+    font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta);
+  }
+  .plata__linea--total b { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+  .plata__nota { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+  /* ── La hoja de datos: número, nombre y empresa apilados ─────────────────── */
+  .hoja__cab { display: grid; gap: var(--e-1); }
+
+  /* Los montos por concepto, en una fila. Etiqueta arriba, cifra abajo. */
+  .conceptos {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--e-3);
+    padding-top: var(--e-4); border-top: 1px solid var(--c-borde);
+  }
+  .concepto { display: grid; gap: var(--e-1); min-width: 0; }
+  .concepto__et {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .08em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .concepto__val {
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+    font-size: var(--t-lg); font-weight: var(--peso-medio); color: var(--c-texto);
+    white-space: nowrap;
+  }
+
+  /* Bloqueo por stock insuficiente (ver TD.api.aprobar_cotizacion) — red de
+     seguridad por si el stock cambió mientras el diálogo de fechas estaba
+     abierto: no se cierra el diálogo, se muestra qué falta debajo de las
+     fechas. El chequeo real de entrada es .dlg-materiales-bloqueado, más
+     abajo, que corre ANTES de llegar a elegir fechas. */
+  .dlg-faltantes {
+    display: grid; gap: var(--e-2); margin-top: var(--e-4);
+    padding: var(--e-3); border-radius: var(--r-md);
+    background: var(--c-aviso-suave); color: var(--c-aviso);
+  }
+  .dlg-faltantes__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+  .dlg-faltantes__item { font-size: var(--t-xs); }
+  
+  /* Materiales "manual" (core.repositorio_materiales, tipo_consumo=="manual")
+     asociados a los productos de la cotización — se piden ACÁ, dentro del
+     mismo diálogo de aprobar, porque recién ahí se sabe que la cotización
+     efectivamente se va a convertir en OP (ver
+     TD.api.materiales_manuales_pendientes). Dejar un monto vacío es válido:
+     ese material simplemente no se descuenta (no bloquea, ver
+     core.repositorio_materiales.consumir_para_op). */
+  .dlg-materiales-manuales { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+  .dlg-materiales-manuales__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+  
+  /* ── Materiales insuficientes: aviso al apretar "Aprobar →" ──────────────
+     Mismo tratamiento que #dlg-materiales de nueva-cotizacion.html (dropshadow
+     marcado + fondo desenfocado, efecto "3D") — acá es un bloqueo de verdad
+     (no hay forma de "aprobar igual" desde este diálogo), así que solo tiene
+     un botón de salida y los atajos por textil. */
+  .aviso-materiales__icono {
+    display: inline-grid; place-items: center; flex: 0 0 auto;
+    width: 1.2rem; height: 1.2rem; border-radius: var(--r-full);
+    background: var(--c-aviso); color: var(--c-texto-inv);
+    font-size: .75rem; font-weight: var(--peso-fuerte);
+  }
+  .dlg-materiales-bloqueado {
+    max-width: min(92vw, 34rem);
+    box-shadow: 0 20px 50px rgba(22, 22, 26, .25), 0 4px 12px rgba(22, 22, 26, .12);
+  }
+  .dlg-materiales-bloqueado::backdrop { background: rgba(22, 22, 26, .45); backdrop-filter: blur(6px); }
+  .materiales-faltantes { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+  .material-falta {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--e-3);
+    padding: var(--e-3); border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+  }
+  .material-falta__info { display: grid; gap: .15rem; }
+  .material-falta__info strong { font-size: var(--t-sm); }
+  .material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
+  .material-falta__btn { flex: 0 0 auto; }
+}

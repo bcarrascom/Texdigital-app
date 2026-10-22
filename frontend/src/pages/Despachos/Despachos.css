@@ -1,0 +1,25 @@
+/* Estilos propios del módulo Despachos — portados de su panel en
+   recursos/pantallas/menu.html. */
+
+.pagina-modulo {
+  /* El título de "Con dirección asignada" con las acciones sobre lo
+     seleccionado a la derecha (siempre visibles, apagadas sin selección). */
+  .despachos-cab { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; margin-bottom: var(--e-3); }
+  .despachos-cab .seccion-titulo { margin: 0; color: var(--c-tema-fuerte); opacity: .8; }
+  .despachos-cab .cabecera__sep { flex: 1; }
+  .despachos-cab__cuenta { font-size: var(--t-xs); color: var(--c-tema-fuerte); font-weight: var(--peso-medio); }
+
+  .reg--seleccionable .reg__pie { transition: opacity var(--m-media) var(--ease-salida); }
+  .reg--seleccionable .reg__pie[data-oculto] { opacity: 0; }
+  .reg--seleccionable[data-seleccionado] {
+    border-color: var(--c-tema-fuerte);
+    box-shadow: var(--s-2), 0 0 0 3px color-mix(in srgb, var(--c-tema-fuerte) 25%, transparent);
+    background: var(--c-tema-relleno);
+  }
+  /* Se esfuma en paralelo a la caja de envío: así su salida de la grilla, al
+     recargar, no se siente como un salto. */
+  .reg--seleccionable.reg--saliendo {
+    opacity: 0; transform: scale(.92); pointer-events: none;
+    transition: opacity var(--m-lenta) var(--ease-salida), transform var(--m-lenta) var(--ease-salida);
+  }
+}

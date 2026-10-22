@@ -1,0 +1,84 @@
+/* Visor de proporción del producto (panel lateral de ver-cotización y ver-OP).
+   Portado tal cual de recursos/pantallas/ver-cotizacion.html. */
+
+.visor {
+  /* La animación de este panel va al 50% de velocidad: el doble de tiempo
+     que el resto de la app, escalado local para no tocar --m-media/
+     --m-rapida globales. */
+  --m-visor: calc(var(--m-media) * 3);
+  --m-visor-rapida: calc(var(--m-rapida) * 2);
+  display: grid; gap: var(--e-2);
+}
+.visor__cab {
+  display: flex; align-items: baseline; gap: var(--e-2);
+  font-size: var(--t-sm); font-weight: var(--peso-fuerte);
+  color: var(--c-tema-tinta);
+  min-height: 1.5rem;
+}
+.visor__n { font-family: var(--f-mono); color: var(--c-tema-fuerte); }
+.visor__tema {
+  font-weight: var(--peso-medio); color: var(--c-texto-suave);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.visor__marco {
+  width: 100%; aspect-ratio: 1;
+  display: grid; place-items: center;
+  padding: var(--e-3);
+  background: #F2F1EF;
+  border-radius: var(--r-lg);
+}
+.visor__marco svg { width: 100%; height: 100%; overflow: visible; }
+/* Mismo dibujo que al crear un producto: solo contorno blanco con sombra, y
+   las medidas se reacomodan con transición en vez de saltar. */
+.visor__rect {
+  fill: none; stroke: #FFFFFF; stroke-width: 2.5;
+  /* Las 3 últimas funciones empiezan "apagadas" (radio 0, alfa 0) — no
+     hacen nada acá, existen solo para que .visor__rect--brillo pueda
+     interpolar contra ellas: una lista de filtros solo anima función a
+     función cuando ambos lados tienen la MISMA cantidad de funciones en
+     el mismo orden; con listas de distinto largo el navegador no anima,
+     salta de golpe (eso pasaba antes: 1 drop-shadow acá vs. 3 en
+     --brillo). */
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18))
+          drop-shadow(0 0 0 rgba(20,20,24,0))
+          drop-shadow(0 0 0 rgba(255,255,255,0))
+          drop-shadow(0 0 0 rgba(255,255,255,0));
+  transition: x var(--m-visor) ease-in-out,
+              y var(--m-visor) ease-in-out,
+              width var(--m-visor) ease-in-out,
+              height var(--m-visor) ease-in-out,
+              stroke-width var(--m-visor) ease-in-out,
+              filter var(--m-visor) ease-in-out;
+}
+/* Brillo blanco controlado SOBRE el borde mientras la figura se reacomoda
+   de un producto a otro: el fondo del visor (#F2F1EF) es casi blanco, así
+   que un brillo blanco sin más se perdía contra el fondo (primer intento,
+   invisible) — el halo oscuro angosto de abajo le da el contraste que le
+   faltaba, y el trazo engrosa un poco, como si el borde mismo brillara en
+   vez de una nube difusa alrededor. No es un estado permanente: se
+   prende y apaga junto con el morph (misma duración/curva, --m-visor),
+   nunca se queda encendido en reposo. */
+.visor__rect--brillo {
+  stroke-width: 4;
+  filter: drop-shadow(0 1px 2px rgba(22,22,26,.18))
+          drop-shadow(0 0 3px rgba(20,20,24,.45))
+          drop-shadow(0 0 6px #FFFFFF)
+          drop-shadow(0 0 16px #FFFFFF);
+}
+.visor__cota {
+  font-family: var(--f-mono); font-size: 7px; fill: var(--c-texto-suave);
+}
+.visor__pie {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave);
+}
+.visor__unidades { font-family: var(--f-mono); color: var(--c-texto); font-weight: var(--peso-medio); }
+/* Puntitos: cuál de los productos se está mostrando. */
+.visor__puntos { display: flex; gap: 4px; align-items: center; }
+.visor__punto {
+  width: 5px; height: 5px; border-radius: var(--r-full);
+  background: var(--c-borde-fuerte);
+  transition: background var(--m-visor-rapida) var(--ease-salida),
+              transform var(--m-visor-rapida) var(--ease-salida);
+}
+.visor__punto[data-activo] { background: var(--c-tema-fuerte); transform: scale(1.5); }

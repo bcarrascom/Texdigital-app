@@ -1,0 +1,75 @@
+/* Gestionar direcciones — portado de
+   recursos/pantallas/gestionar-direcciones.html. */
+
+.pag-direcciones {
+  /* La tabla a la izquierda (scrollea con la página) y el mapa a la derecha,
+     pegado arriba: align-items:start en la grilla + align-self:stretch en el
+     aside, para que el sticky tenga recorrido. */
+  .vista-direcciones {
+    width: min(100%, 80rem); margin-inline: auto;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    gap: var(--e-4); align-items: start;
+  }
+  .lateral-mapa { align-self: stretch; min-width: 0; }
+
+  .hoja {
+    display: grid; gap: var(--e-4); min-width: 0;
+    padding: var(--e-5);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+
+  .lateral {
+    position: sticky; top: 0;
+    display: grid; gap: var(--e-4);
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+  }
+  .mapa-cab { display: grid; gap: var(--e-1); min-width: 0; }
+  .mapa-cab__titulo, .mapa-cab__sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mapa-cab__titulo { font-weight: var(--peso-fuerte); }
+  .mapa-cab__sub { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .mapa-marco {
+    aspect-ratio: 1 / 1;
+    border: 1.5px solid var(--c-borde); border-radius: var(--r-lg);
+    overflow: hidden; background: var(--c-superficie-2);
+  }
+  .mapa-marco iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  .barra-direcciones { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; }
+  .barra-direcciones .seccion-titulo { margin: 0; }
+  .barra-direcciones .entrada { flex: 1 1 16rem; min-width: 0; }
+  .barra-direcciones .btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--e-1); }
+  .barra-direcciones .btn svg { width: 1rem; height: 1rem; }
+
+  /* Empresa + RUT, calle + comuna (+ región): apilados, para ahorrar columnas. */
+  .celda-lineas { display: grid; gap: .1rem; }
+  .celda-lineas__sub { font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .celda-vacia { color: var(--c-texto-tenue); font-style: italic; }
+
+  .tabla tbody tr { cursor: pointer; }
+  .tabla tbody tr[data-seleccionada],
+  .tabla tbody tr[data-seleccionada]:nth-child(even) {
+    background: var(--c-tema-relleno);
+    box-shadow: inset 3px 0 0 var(--c-tema-fuerte);
+  }
+  .tabla td.acciones { white-space: nowrap; text-align: right; }
+  .btn-fila-icono {
+    display: inline-grid; place-items: center;
+    width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
+    border: 1.5px solid var(--c-error-suave); background: var(--c-superficie);
+    color: var(--c-error); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
+  }
+  .btn-fila-icono svg { width: 1rem; height: 1rem; }
+  .btn-fila-icono:hover { background: var(--c-error-suave); border-color: var(--c-error); }
+
+  .estado-vacio { padding: var(--e-6); text-align: center; color: var(--c-texto-suave); }
+
+  .dlg-direccion { width: min(90vw, 30rem); max-width: min(90vw, 30rem); }
+}

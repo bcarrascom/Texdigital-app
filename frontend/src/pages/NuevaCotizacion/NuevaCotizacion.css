@@ -1,0 +1,368 @@
+/* Estilos propios de NuevaCotizacion — portados de recursos/pantallas/nueva-cotizacion.html.
+   La estructura de página (.app) reemplaza a .pizarra, y la cabecera común
+   (components/Cabecera) a .barra. */
+
+.pag-nueva-cotizacion {
+  .barra__sep { flex: 1; }
+  .barra__guardado { font-size: var(--t-xs); opacity: .6; font-variant-numeric: tabular-nums; }
+
+  /* ── El marco y el lienzo ────────────────────────────────────────────────── */
+  /* `clip`, no `hidden`: hidden crea un contenedor scrolleable y el navegador lo
+     scrollea solo al enfocar un campo que está fuera de vista — con lo que la
+     pizarra queda corrida a mitad de camino entre dos paneles y el translate
+     deja de mandar. `clip` recorta sin poder scrollear. */
+  .escena { overflow: clip; }
+  .lienzo {
+    display: grid;
+    grid-template-rows: repeat(2, 100%);   /* dos zonas, cada una del alto del marco */
+    height: 100%;
+    transform: translateY(calc(var(--zona, 0) * -100%));
+    transition: transform var(--m-bajada) var(--ease-expandir);
+  }
+  .zona { min-height: 0; display: grid; }
+
+  /* ── Zona 0 · venta + cliente ────────────────────────────────────────────── */
+  .datos {
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--e-4);
+    padding: 0 var(--e-5) var(--e-4);
+  }
+  .datos__paneles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: var(--e-4);
+    width: min(100%, 78rem); margin-inline: auto;
+    min-height: 0;
+  }
+  /* La izquierda son dos hojas apiladas: el trabajo y el documento. Con
+     subgrid, sus dos filas quedan compartidas con la columna derecha, así
+     "Documento" y "Contacto" arrancan a la misma altura. */
+  .columna {
+    display: grid; grid-template-rows: subgrid; grid-row: span 2;
+    gap: var(--e-4); align-content: start; min-height: 0;
+  }
+  /* La derecha es una sola hoja: Empresa ocupa la primera fila del subgrid,
+     Contacto la segunda — mismo truco sin partir la hoja en dos.
+     `start`, no `center`: lo que tiene que calzar es la línea de arriba de cada
+     grupo (título, etiqueta, campo), no el centro del bloque. Si a la celda le
+     sobra alto, que sobre abajo. */
+  .hoja--cliente {
+    display: grid; grid-template-rows: subgrid; grid-row: span 2;
+  }
+  .hoja--cliente > .grupo { align-content: start; }
+  /* La fila de abajo de la izquierda es una tarjeta con su propio padding y
+     borde; la de la derecha es un grupo dentro de la misma tarjeta. El grupo de
+     abajo compensa esa diferencia para que "Documento" y "Contacto" arranquen a
+     la misma altura, igual que "Trabajo" y "Empresa" arriba. */
+  .hoja--cliente > .grupo + .grupo { padding-top: calc(var(--e-4) + 1.5px); }
+  @container pizarra (max-width: 58rem) {
+    .columna, .hoja--cliente { grid-template-rows: none; grid-row: auto; }
+  }
+
+  /* ── La fila de cantidad + servicios ──────────────────────────────────────
+     UNA sola rejilla de 3 columnas × 2 filas, no tres columnas cada una con su
+     propio apilado: así la fila de arriba (etiqueta y casillas) y la de abajo
+     (stepper y montos) son filas de verdad y quedan alineadas entre sí, y con
+     las del panel de la derecha. */
+  .fila-trabajo {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 9rem) 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: var(--e-2) var(--e-4);
+    align-items: end;
+  }
+  .campo--angosto .stepper__btn, .fila-trabajo .stepper__btn { width: 2.25rem; }
+  /* La casilla tiene que medir lo mismo que una etiqueta de campo, si no la
+     primera fila crece y los campos de abajo dejan de calzar con la derecha. */
+  .fila-trabajo .chip-casilla input { width: 1.25rem; height: 1.25rem; }
+  .fila-trabajo .chip-casilla__texto { line-height: 1.2; }
+  /* Los montos se ocultan con visibility, no con display: así la fila conserva
+     su alto y nada salta al marcar o desmarcar. */
+  .fila-trabajo__monto {
+    visibility: hidden; opacity: 0;
+    transition: opacity var(--m-media) var(--ease-salida);
+  }
+  .fila-trabajo__monto[data-visible] {
+    visibility: visible; opacity: 1;
+  }
+  /* Un botón compartiendo fila con un campo se alinea con el input, no con la
+     etiqueta: por eso `end` y no el `stretch` por defecto. */
+  .fila--accion { align-items: end; }
+  /* En ventanas angostas los dos paneles se apilan y la zona scrollea. */
+  @container pizarra (max-width: 58rem) {
+    .datos__paneles { grid-template-columns: 1fr; }
+  }
+  .escena { container: pizarra / inline-size; }
+
+  .hoja {
+    display: grid; align-content: start; gap: var(--e-3);
+    /* Apretado a propósito: con tres hojas en pantalla, el aire de más era lo
+       único que obligaba a scrollear en 768 px de alto. */
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    box-shadow: var(--s-2);
+    overflow: auto; min-height: 0;
+    animation: aparecer var(--m-lenta) var(--ease-salida) both;
+  }
+  .hoja--venta   { animation-delay: 60ms; }
+  .hoja--doc     { animation-delay: 110ms; }
+  .hoja--cliente { animation-delay: 160ms; }
+
+  /* La bajada: las hojas de ARRIBA se van hacia arriba y dejan ver lo de abajo.
+     Ojo con el alcance: los paneles de producto también usan .hoja, así que la
+     regla tiene que quedar atada a .datos o se apaga media pizarra. */
+  .datos .hoja { transition: opacity var(--m-media) var(--ease-entrada),
+                             transform var(--m-bajada) var(--ease-expandir); }
+  .lienzo[data-zona="1"] .datos .hoja { opacity: 0; transform: translateY(-2rem); }
+
+  .hoja__cab { display: grid; gap: var(--e-1); }
+  .hoja__titulo { font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em; }
+  .hoja__bajada { font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+  .grupo { display: grid; gap: var(--e-3); }
+  /* Estándar y backlight son grupos hermanos que se alternan con [hidden]:
+     el selector de adyacencia no sabe de eso, así que sin :not([hidden]) el
+     grupo visible hereda el borde aunque su "anterior" esté oculto. */
+  .grupo:not([hidden]) + .grupo:not([hidden]) { padding-top: var(--e-2); border-top: 1px solid var(--c-borde); }
+  .grupo__titulo {
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .1em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+  .fila--2 { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+
+  .pie-datos {
+    display: flex; align-items: center; gap: var(--e-3);
+    width: min(100%, 78rem); margin-inline: auto;
+  }
+  .pie-datos__nota { flex: 1; font-size: var(--t-xs); color: var(--c-texto-suave); }
+
+  /* ── Zona 1 · productos ──────────────────────────────────────────────────── */
+  .productos { grid-template-rows: auto minmax(0, 1fr); gap: var(--e-3); padding-bottom: var(--e-4); }
+
+  /* El mapa NO se mueve al cambiar de panel: es el índice del trabajo. */
+  .mapa {
+    display: flex; align-items: center; gap: var(--e-2);
+    /* Los botones se levantan 2 px en hover y la escena recorta: sin este
+       respiro, el borde de arriba queda cortado contra la barra. */
+    padding: var(--e-2) var(--e-5) 0;
+    width: min(100%, 78rem); margin-inline: auto;
+    overflow-x: auto;
+  }
+  .mapa__num {
+    flex: 0 0 auto;
+    display: grid; place-items: center;
+    width: 2.25rem; height: 2.25rem;
+    border: 1.5px solid var(--c-tema-borde);
+    border-radius: var(--r-md);
+    background: var(--c-superficie);
+    font-family: var(--f-mono); font-size: var(--t-sm); font-weight: var(--peso-medio);
+    color: var(--c-texto-suave); cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida),
+                border-color var(--m-rapida) var(--ease-salida),
+                color var(--m-rapida) var(--ease-salida),
+                transform var(--m-rapida) var(--ease-salida);
+  }
+  .mapa__num:hover { transform: translateY(-2px); border-color: var(--c-tema-fuerte); }
+  /* Completo: relleno suave. Actual: pleno. El resto, vacío. */
+  .mapa__num[data-estado="completo"] { background: var(--c-tema-relleno); color: var(--c-tema-fuerte); border-color: var(--c-tema-borde); }
+  .mapa__num[aria-current="true"] { background: var(--c-tema-fuerte); border-color: var(--c-tema-fuerte); color: var(--c-texto-inv); }
+  .mapa__num--mas { border-style: dashed; font-size: var(--t-md); }
+  .mapa__sep { flex: 0 0 auto; width: 1px; height: 1.5rem; background: var(--c-tema-borde); margin: 0 var(--e-2); }
+  .mapa__resumen { flex: 0 0 auto; width: auto; padding: 0 var(--e-4); font-family: var(--f-ui); }
+  .mapa__cuenta { margin-left: auto; padding-left: var(--e-4); font-size: var(--t-xs); color: var(--c-texto-suave); white-space: nowrap; }
+
+  .carril-marco { overflow: clip; min-height: 0; }
+  .carril {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 100%;
+    height: 100%;
+    transform: translateX(calc(var(--p, 0) * -100%));
+    transition: transform var(--m-lateral) var(--ease-expandir);
+  }
+  /* El ancho máximo y el centrado viven acá, no en .prod: .prod tiene zoom, y
+     un porcentaje calculado dentro de un elemento con zoom se resuelve en un
+     espacio de coordenadas distinto al de afuera — el mismo 78rem deja de
+     coincidir con lo que .mapa (sin zoom, misma fórmula) calcula como 100%,
+     y el badge "1" y el panel terminan con bordes izquierdos distintos según
+     el ancho de ventana. Puesto acá, antes del zoom, ambos quedan en el mismo
+     sistema de referencia y se alinean siempre. */
+  .tablero {
+    min-height: 0; overflow: auto; padding: var(--e-1) var(--e-5) 0;
+    width: min(100%, 78rem); margin-inline: auto;
+  }
+
+  /* Producto, Textil y el switch de impresión comparten fila. El switch va
+     pegado abajo, a la altura de los inputs, sin etiqueta — igual que el de
+     Estándar/Backlight de la cabecera. */
+  .fila-prod {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: var(--e-3);
+  }
+  .fila-prod .segmento label { padding: .35rem var(--e-3); }
+  /* El switch no lleva etiqueta visible, pero sí una del alto de una etiqueta:
+     así cae solo a la altura de los inputs de al lado, sin números mágicos. La
+     segunda fila mide lo mismo que un input (3rem) y el switch se centra ahí. */
+  .campo--switch { grid-template-rows: auto 3rem; align-items: center; }
+  /* El switch vertical apilado mide más que la fila de 3rem, pero esa fila de
+     3rem es justo la altura de los selects vecinos (Luces 1, Luces 2): en vez
+     de agrandar la fila (lo que lo baja y empuja lo que viene después), se
+     deja la misma referencia de 3rem y con align-items:center el switch
+     sobresale parejo arriba y abajo — su propio centro cae en el centro de
+     esa franja, que es el de los selects. */
+  .caja-bl { display: grid; gap: var(--e-3); }
+  /* El bloque sin perfil solo tiene el switch de terminaciones de caja: no lleva
+     la franja de 3rem de .campo--switch porque acá su etiqueta es una pregunta de
+     verdad ("¿Qué medida entregó el cliente?"), no el &nbsp; que alinea el switch
+     con los selects de al lado. */
+  .sin-caja-bl { display: grid; gap: var(--e-3); }
+  .sin-caja-bl .campo--switch { grid-template-rows: auto auto auto; align-items: start; }
+
+  /* Las dos listas aditivas, una al lado de la otra: cada una lista lo agregado
+     hacia abajo, y juntas ocupan la mitad del alto que ocupaban apiladas. */
+  .aditiva-bloque { display: grid; gap: var(--e-3); align-content: start; }
+  .fila-listas { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--e-4); }
+
+  /* ── Panel de producto ───────────────────────────────────────────────────── */
+  /* Todo el panel —formulario y columna derecha— al 90 %. `zoom` escala también
+     las tipografías y los espaciados, que es justo lo que se pidió; con un
+     `transform: scale` el layout seguiría reservando el tamaño original. */
+  .prod {
+    zoom: .9;
+    display: grid; gap: var(--e-4);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
+  }
+  .prod__cab { display: flex; align-items: center; gap: var(--e-3); flex-wrap: wrap; }
+  .prod__num {
+    font-size: var(--t-xl); font-weight: var(--peso-fuerte); letter-spacing: -.02em;
+    color: var(--c-tema-tinta);
+  }
+  .prod__num small { font-size: var(--t-sm); font-weight: var(--peso-normal); color: var(--c-texto-suave); }
+  .prod__cab .barra__sep { flex: 1; }
+
+  .prod__cuerpo {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
+    gap: var(--e-4); align-items: start; min-height: 0;
+  }
+  @container pizarra (max-width: 58rem) {
+    .prod__cuerpo { grid-template-columns: 1fr; }
+  }
+
+  /* ── La figura: reemplaza el Canvas de Tkinter ───────────────────────────── */
+  .figura {
+    display: grid; gap: var(--e-3); justify-items: center;
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-xl);
+    position: sticky; top: 0;
+  }
+  /* El dibujo vive en un marco cuadrado gris muy pálido; la pieza en sí es solo
+     un contorno blanco con sombra, sin relleno. */
+  .figura__marco {
+    width: 100%; aspect-ratio: 1;
+    display: grid; place-items: center;
+    padding: var(--e-3);
+    background: #F2F1EF;
+    border-radius: var(--r-lg);
+  }
+  .figura svg { width: 100%; height: 100%; overflow: visible; }
+  .figura__rect {
+    fill: none;
+    stroke: #FFFFFF; stroke-width: 2.5;
+    filter: drop-shadow(0 1px 2px rgba(22,22,26,.18));
+    /* x/y/width/height son propiedades CSS animables en SVG2: el rectángulo se
+       reacomoda con una transición al cambiar las medidas, en vez de saltar. */
+    transition: x var(--m-media) var(--ease-salida),
+                y var(--m-media) var(--ease-salida),
+                width var(--m-media) var(--ease-salida),
+                height var(--m-media) var(--ease-salida),
+                stroke var(--m-rapida) var(--ease-salida);
+  }
+  .figura[data-estado="error"]   .figura__rect { stroke: var(--c-error); }
+  .figura[data-estado="forzado"] .figura__rect { stroke: #E8A020; }
+  .figura__cota { transition: x var(--m-media) var(--ease-salida), y var(--m-media) var(--ease-salida); }
+  .figura__cota { font-family: var(--f-mono); font-size: 7px; fill: var(--c-texto-suave); }
+  .figura__vacio { font-size: var(--t-sm); color: var(--c-texto-tenue); text-align: center; padding: var(--e-6) 0; }
+
+  .cifras { display: grid; gap: var(--e-1); width: 100%; }
+  .cifra { display: flex; align-items: baseline; gap: var(--e-2); font-size: var(--t-sm); }
+  .cifra__et { color: var(--c-texto-suave); }
+  .cifra__val { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .cifra--total { padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+                  font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+
+  /* ── Resumen ─────────────────────────────────────────────────────────────── */
+  .resumen {
+    display: grid; gap: var(--e-4);
+    width: min(100%, 78rem); margin-inline: auto; align-content: start;
+  }
+  .resumen__cab { display: flex; align-items: flex-end; gap: var(--e-4); }
+  .resumen__cab .barra__sep { flex: 1; }
+  .resumen .tabla-caja { border-radius: var(--r-xl); }
+  .resumen .tabla tbody tr { cursor: pointer; }
+
+  /* El cierre: los totales y las acciones sobre su propia superficie. Sin esto
+     las cifras quedan flotando sobre el fondo y no se leen como el remate de
+     la tabla. */
+  /* El cierre es una tarjeta del ancho de su propio contenido, no de la fila:
+     envuelve los totales y nada más. Los botones van sueltos al lado. */
+  .resumen__pie { display: flex; align-items: flex-end; gap: var(--e-4); flex-wrap: wrap; }
+  .resumen__pie .barra__sep { flex: 1; }
+  .resumen__cierre {
+    width: fit-content; min-width: 20rem; max-width: 28rem;
+    padding: var(--e-4);
+    background: var(--c-superficie);
+    border: 1.5px solid var(--c-borde);
+    border-radius: var(--r-lg);
+    box-shadow: var(--s-1);
+  }
+  .resumen__acciones { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+  .tipo-chip {
+    display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
+    font-size: var(--t-xs); font-weight: var(--peso-medio);
+    background: var(--c-tema-relleno); color: var(--c-tema-fuerte);
+  }
+  .tipo-chip--bl { background: var(--c-op-relleno); color: var(--c-op-fuerte); }
+  .quitar-fila { color: var(--c-texto-tenue); cursor: pointer; padding: 0 var(--e-2); }
+  .quitar-fila:hover { color: var(--c-error); }
+
+  /* ── Materiales insuficientes ────────────────────────────────────────────
+     El aviso chico arriba de la tabla del resumen (ver actualizarAvisoMateriales)
+     y el diálogo previo a Guardar/Guardar y abrir (ver mostrarDialogoMateriales)
+     comparten el mismo ícono "!" — acá el diálogo además necesita más ancho
+     y un dropshadow/desenfoque más marcado que el genérico de arriba, para
+     que se note como una interrupción real, no un confirm más. */
+  .aviso-materiales {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: var(--e-2) var(--e-3);
+    background: var(--c-aviso-suave); color: var(--c-aviso);
+    border-radius: var(--r-md);
+    font-size: var(--t-sm); font-weight: var(--peso-medio);
+  }
+  .aviso-materiales__icono {
+    display: inline-grid; place-items: center; flex: 0 0 auto;
+    width: 1.2rem; height: 1.2rem; border-radius: var(--r-full);
+    background: var(--c-aviso); color: var(--c-texto-inv);
+    font-size: .75rem; font-weight: var(--peso-fuerte);
+  }
+
+  .dlg-materiales {
+    max-width: min(92vw, 34rem);
+    box-shadow: 0 20px 50px rgba(22, 22, 26, .25), 0 4px 12px rgba(22, 22, 26, .12);
+  }
+  .dlg-materiales::backdrop { background: rgba(22, 22, 26, .45); backdrop-filter: blur(6px); }
+  .materiales-faltantes { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
+  .material-falta {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--e-3);
+    padding: var(--e-3); border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
+  }
+  .material-falta__info { display: grid; gap: .15rem; }
+  .material-falta__info strong { font-size: var(--t-sm); }
+  .material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
+  .material-falta__btn { flex: 0 0 auto; }
+  .dlg__acciones--materiales { flex-wrap: wrap; }
+}

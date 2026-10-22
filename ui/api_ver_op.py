@@ -98,9 +98,6 @@ def op_a_json(datos: dict) -> dict:
 
 class ApiVerOp:
 
-    def contexto_extra(self, numero) -> dict:
-        return {"numero": int(numero) if numero is not None else None}
-
     def numero_adyacente(self, numero, direccion: str) -> int | None:
         """Flechas ←/→ de ver-op.html: el número de la OP siguiente/
         anterior recorriendo TODAS las OPs (activas + Pendiente +

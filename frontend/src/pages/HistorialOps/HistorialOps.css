@@ -1,0 +1,116 @@
+/* Estilos propios de HistorialOps — portados de recursos/pantallas/historial-ops.html.
+   La base del diálogo vive en components/Dialogo. */
+
+.pag-historial-ops {
+  .vista-historial {
+    width: min(100%, 72rem); margin-inline: auto;
+    display: grid; gap: var(--e-4);
+  }
+
+  .filtros {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-3);
+  }
+  .filtros__nav { display: flex; gap: var(--e-2); flex: 0 0 auto; }
+  .filtros__nav .entrada { width: 10rem; min-height: 2.75rem; }
+  .filtros__busqueda { display: flex; gap: var(--e-2); flex: 1 1 16rem; min-width: 0; }
+  .filtros__busqueda .entrada { min-height: 2.75rem; }
+  .filtros__busqueda input[type="search"] { flex: 1 1 auto; min-width: 0; }
+
+  /* El botón de filtros avisa que hay algo aplicado con un puntito — si no,
+     cerrar el diálogo borra el rastro de que el listado está filtrado y el
+     "no hay resultados" de más abajo no se explica solo. */
+  .btn-filtros { position: relative; flex: 0 0 auto; }
+  .btn-filtros[data-activo]::after {
+    content: ""; position: absolute; top: -2px; right: -2px;
+    width: 8px; height: 8px; border-radius: var(--r-full);
+    background: var(--c-tema-fuerte); border: 1.5px solid var(--c-superficie);
+  }
+
+  /* Cada OP es su propio <tbody> —fila principal + fila de detalle—, no dos
+     <tr> sueltas en un solo cuerpo: así el :hover se puede poner en el
+     <tbody> entero, y sigue activo aunque el mouse baje desde la fila
+     compacta hacia el detalle que recién se reveló. Con :hover en un solo
+     <tr> eso no se puede: al mover el mouse hacia abajo, se sale de la fila
+     y el detalle se cierra antes de llegar.
+     Todas las filas van blancas, sin rayado par/impar: lo único que separa
+     una de otra es el borde fino de abajo (heredado de .tabla), nada de
+     color — ni en reposo ni en hover ni con el foco del teclado, que es
+     justo lo que .tabla tbody tr:hover de base.css rompía por default. */
+  .tabla tbody tr.fila-principal,
+  .tabla tbody tr.fila-principal:hover { background: var(--c-superficie); }
+
+  .fila-principal { cursor: pointer; }
+  .tabla .num { white-space: nowrap; }
+
+  /* El truco de "grid-template-rows: 0fr → 1fr" en vez de max-height: anima
+     a la altura real del contenido sin tener que medirla a mano en JS, y sin
+     el salto brusco que da display:none/block. El overflow:hidden vive en el
+     hijo, no en la fila con la transición: así el interior no se recorta a
+     media transición mientras crece.
+     El padding y el borde de esta <td> tienen que llegar a cero de verdad:
+     ".tabla tbody td" de base.css (padding + border-top) le gana a
+     ".fila-detalle td" en especificidad (dos selectores de tipo contra uno),
+     así que sin el "tbody tr" de acá el padding original seguía vivo — la
+     fila "colapsada" en realidad medía ~19px de alto (puro padding) con su
+     borde superior encima, y ESO era el contorno celeste que aparecía: no
+     estaba en el detalle que se revela, estaba siempre ahí, en la fila de al
+     lado, escondido a simple vista hasta que el vecino crecía y lo hacía
+     notorio. */
+  .tabla tbody tr.fila-detalle td { padding: 0; border: 0; }
+  .fila-detalle__marco {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows var(--m-media) ease-in-out;
+  }
+  .fila-detalle__interior { overflow: hidden; min-height: 0; }
+  .fila-grupo:hover .fila-detalle__marco,
+  .fila-grupo:focus-within .fila-detalle__marco { grid-template-rows: 1fr; }
+
+  /* Mitad izquierda: los productos, uno por línea (nombre y detalle lado a
+     lado, no apilados: es lo que ahorra el alto de más). Mitad derecha: los
+     cuatro datos del trabajo en una grilla 2×2, no en cuatro filas — el
+     mismo motivo. Blanco, como el resto de la fila: la única separación es
+     la línea fina de arriba, que ya viene del borde entre filas de .tabla. */
+  .fila-detalle__cuerpo {
+    padding: var(--e-3) var(--e-4) var(--e-4) calc(var(--e-4) + 1px);
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-4);
+    background: var(--c-superficie);
+    border-top: 1px solid var(--c-borde);
+  }
+  .fila-detalle__col { display: grid; gap: var(--e-1); align-content: start; min-width: 0; }
+  .fila-detalle__col + .fila-detalle__col { padding-left: var(--e-4); border-left: 1px solid var(--c-borde); }
+
+  .fila-detalle__productos {
+    display: grid; gap: var(--e-1);
+    list-style: none; padding: 0; margin: 0;
+  }
+  .fila-detalle__productos li {
+    display: flex; align-items: baseline; gap: var(--e-2); min-width: 0;
+    font-size: var(--t-xs);
+  }
+  .fila-detalle__productos b { flex: 0 0 auto; font-weight: var(--peso-medio); color: var(--c-texto); }
+  .fila-detalle__productos span {
+    flex: 1 1 auto; color: var(--c-texto-suave); text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .fila-detalle__mas { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+  .fila-detalle__datos {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-2) var(--e-3);
+  }
+  .fila-detalle__dato { display: grid; gap: 1px; min-width: 0; font-size: var(--t-xs); }
+  .fila-detalle__dato span { color: var(--c-texto-tenue); }
+  .fila-detalle__dato b { font-weight: var(--peso-medio); color: var(--c-texto); white-space: nowrap; }
+  /* El número de OP ancla a la izquierda, no a la derecha como el resto de
+     los números de la tabla: acá no se están comparando dígito contra
+     dígito, es un identificador, se lee como texto. */
+  .tabla th.num--izq, .tabla td.num--izq { text-align: left; }
+
+  .historial-vacio {
+    padding: var(--e-6); text-align: center;
+    color: var(--c-texto-suave); font-size: var(--t-sm);
+  }
+
+  /* ── Diálogo de filtros avanzados ───────────────────────────────────────── */
+  .dlg-filtros { max-width: min(90vw, 28rem); }
+  .fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--e-3); }
+}

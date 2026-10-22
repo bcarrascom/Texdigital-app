@@ -1,7 +1,9 @@
 # Sistema de Gestión — Cotizador
 
-Aplicación de escritorio (Tkinter) para generar cotizaciones de productos textiles
-y backlight, y exportarlas a Excel a partir de una plantilla.
+Aplicación de escritorio para cotizar productos textiles y backlight y seguir el
+trabajo hasta el despacho: cotizaciones, órdenes de producción, inventario y
+despachos. La lógica está en Python y la interfaz en React, dentro de una ventana
+de pywebview.
 
 ## Estructura del proyecto
 
@@ -12,9 +14,11 @@ core/
   escala.py           Escalado de la interfaz según resolución de pantalla
   repositorio.py      Acceso a datos: catálogos (productos, textiles) y
                        datos de usuario (clientes, contactos)
-ui/                   Pantallas de la interfaz (Tkinter)
+ui/                   La API que usa la interfaz (una clase por pantalla, ver ui/api_app.py)
+                       y el panel de producción (ui/panel_produccion.py, su propia ventana)
+frontend/             La interfaz en React (ver más abajo)
 excel/                Generación de documentos Excel (openpyxl)
-recursos/             Catálogos, plantilla Excel, assets y datos de ejemplo
+recursos/             Catálogos, plantillas, assets, datos de ejemplo y el panel de TV (panel_tv/)
 docs/                 Documentación de referencia (mapeo de celdas del Excel)
 build_mac.sh          Script de empaquetado para macOS (PyInstaller)
 build_windows.ps1     Script de empaquetado para Windows (PyInstaller)
@@ -29,12 +33,40 @@ La primera vez que se ejecuta la app, se copian las versiones de ejemplo desde
 ## Requisitos
 
 - Python 3.11+
+- Node.js 20.19+ (para armar la interfaz; la app empaquetada no lo necesita)
 
 ## Instalación y ejecución
 
 ```bash
 pip install -r requirements.txt
+cd frontend && npm install && npm run build && cd ..   # genera frontend/dist/, lo que carga la app
 python main.py
+```
+
+## La interfaz (`frontend/`)
+
+Vite + React + React Router + Motion.
+
+```bash
+cd frontend
+npm run dev        # http://localhost:5173 en el navegador, con datos de prueba (mocks)
+npm run build      # genera frontend/dist/
+```
+
+```bash
+python main.py --dev   # la app real cargando `npm run dev` (recarga en caliente)
+```
+
+```
+frontend/src/
+  pages/        una carpeta por pantalla (Pagina.jsx + Pagina.css)
+  components/   piezas reutilizables (Cabecera, Pagina, Cargando, ...)
+  hooks/        useDatos, useAtajo, useVolver
+  context/      estado global: contexto de la app, escala de texto, avisos
+  services/     api.js (puente a Python) y mocks/ (datos de prueba)
+  router/       rutas.js (todas las URLs) y RutasAnimadas.jsx (transiciones)
+  utils/        formato.js (pesos, medidas, fechas)
+  assets/       styles/base.css (sistema de diseño) y svg/ (íconos Lucide)
 ```
 
 ## Generar build de macOS
