@@ -59,21 +59,24 @@
   .menu[data-regreso] :is(.menu__config, .menu__marca, .modulo, .menu__pie) { animation: none; }
 
   /* ── Configuración ──────────────────────────────────────────────────────
-     Un engranaje suelto, arriba al centro. Al pasar el mouse aparece detrás
-     un cuadrado de esquinas redondeadas que dice "esto es un botón". */
+     Un engranaje suelto, arriba al centro. Al pasar el mouse aparece a su
+     alrededor solo el borde fino de un cuadrado de esquinas redondeadas (sin
+     relleno), que dice "esto es un botón". El borde está siempre, invisible:
+     así aparecer no corre el ícono ni un píxel. */
   .menu__config {
     position: absolute; top: var(--e-4); left: 50%; translate: -50% 0;
     display: grid; place-items: center;
     width: 2.6rem; height: 2.6rem; border-radius: var(--r-md);
+    border: 1px solid transparent;
+    background: transparent;
     /* Gris liviano: está, pero no compite con los módulos. */
     color: var(--c-texto-tenue);
-    background: transparent;
     animation: aparecer var(--m-lenta) var(--ease-salida) both; animation-delay: 320ms;
-    transition: background var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
+    transition: border-color var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
   }
   .menu__config svg { width: 1.35rem; height: 1.35rem; }
   .menu__config:hover, .menu__config:focus-visible {
-    background: color-mix(in srgb, var(--c-borde-fuerte) 45%, transparent);
+    border-color: var(--c-borde-fuerte);
     color: var(--c-texto-suave);
   }
   .menu__config:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 2px; }
