@@ -15,10 +15,23 @@ if ! command -v python3 &>/dev/null; then
 fi
 python3 --version
 
+if ! command -v npm &>/dev/null; then
+    echo "ERROR: Node.js no está instalado (hace falta para armar la interfaz)."
+    echo "Descárgalo desde https://nodejs.org/ (versión 20.19 o más nueva)"
+    exit 1
+fi
+node --version
+
 echo ""
 echo "=== Instalando dependencias ==="
 python3 -m pip install --upgrade pip --quiet
 python3 -m pip install pyinstaller -r "$SCRIPT_DIR/requirements.txt" --quiet
+
+echo ""
+echo "=== Armando la interfaz (frontend/) ==="
+# Viaja ya compilada dentro del .app (frontend/dist, ver
+# core/rutas.py::_base_frontend): la app empaquetada no necesita Node.
+(cd "$SCRIPT_DIR/frontend" && npm ci && npm run build)
 
 echo ""
 echo "=== Limpiando builds anteriores ==="
@@ -34,6 +47,8 @@ python3 -m PyInstaller \
     --onedir \
     --collect-all openpyxl \
     --add-data "recursos:recursos" \
+    --add-data "docs:docs" \
+    --add-data "frontend/dist:frontend/dist" \
     --hidden-import "PIL._tkinter_finder" \
     main.py
 

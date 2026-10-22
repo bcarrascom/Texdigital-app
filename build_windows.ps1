@@ -16,9 +16,30 @@ if (-not $python) {
 python --version
 
 Write-Host ""
+Write-Host "=== Verificando Node.js ==="
+$node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $node) {
+    Write-Host "ERROR: Node.js no esta instalado (hace falta para armar la interfaz)."
+    Write-Host "Descargalo desde https://nodejs.org/ (version 20.19 o mas nueva)"
+    exit 1
+}
+node --version
+
+Write-Host ""
 Write-Host "=== Instalando dependencias ==="
 python -m pip install --upgrade pip --quiet
 python -m pip install pyinstaller -r "$ScriptDir\requirements.txt" --quiet
+
+Write-Host ""
+Write-Host "=== Armando la interfaz (frontend/) ==="
+# Viaja ya compilada dentro del ejecutable (frontend/dist, ver
+# core/rutas.py::_base_frontend): la app empaquetada no necesita Node.
+Set-Location "$ScriptDir\frontend"
+npm ci
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+npm run build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Set-Location $ScriptDir
 
 Write-Host ""
 Write-Host "=== Limpiando builds anteriores ==="
@@ -49,6 +70,7 @@ python -m PyInstaller `
     --collect-all webview `
     --add-data "recursos;recursos" `
     --add-data "docs;docs" `
+    --add-data "frontend/dist;frontend/dist" `
     --add-data "$pynetRuntime;pythonnet/runtime" `
     --hidden-import "PIL._tkinter_finder" `
     main.py
