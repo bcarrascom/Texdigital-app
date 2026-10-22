@@ -24,9 +24,6 @@ def _nombre_producto(p: dict) -> str:
 
 class ApiAsignarDespacho:
 
-    def contexto_extra(self, numero) -> dict:
-        return {"numero": int(numero) if numero is not None else None}
-
     def obtener(self, numero) -> dict | None:
         datos = repositorio_despachos.cargar_op_despacho(int(numero))
         if datos is None:

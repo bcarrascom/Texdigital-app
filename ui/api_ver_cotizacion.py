@@ -73,9 +73,6 @@ class ApiVerCotizacion:
         # sola en el chequeo de "cotización inexistente", sin tocar stock.
         self._lock_aprobar = threading.Lock()
 
-    def contexto_extra(self, numero) -> dict:
-        return {"numero": int(numero) if numero is not None else None}
-
     def numero_adyacente(self, numero, direccion: str) -> int | None:
         """Flechas ←/→ de ver-cotizacion.html: el número de la cotización
         siguiente/anterior en el mismo orden en que ya se listan hoy en el

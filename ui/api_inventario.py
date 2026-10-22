@@ -27,9 +27,6 @@ def _iso_a_dma(iso: str) -> str:
 
 class ApiInventario:
 
-    def contexto_extra(self, id_) -> dict:
-        return {"id": id_}
-
     # Las 9 cifras del modelo económico (ver
     # core.repositorio_inventario.metricas_rollo) se agregan ACÁ, igual que en
     # materiales: son derivados que cambian con el paso del tiempo ("gasto este

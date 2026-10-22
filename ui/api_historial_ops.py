@@ -4,8 +4,6 @@ Lógica de historial-ops.html — instanciada una sola vez por
 ui.api_app.ApiApp (ver docstring de ese módulo).
 """
 
-from datetime import datetime
-
 from ui.api_ver_op import op_a_json
 from core.repositorio_ops import listar_ops_del_mes, listar_todas_las_ops
 
@@ -46,10 +44,6 @@ def _tiene_material(op_json: dict, termino: str) -> bool:
 
 
 class ApiHistorialOps:
-
-    def contexto_extra(self) -> dict:
-        hoy = datetime.now()
-        return {"anio_actual": hoy.year, "mes_actual": hoy.month}
 
     def obtener_historial(self, anio, mes) -> list[dict]:
         """La "carpeta" de un año/mes puntual — ver
