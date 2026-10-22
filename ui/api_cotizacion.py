@@ -31,7 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
-from core import lista_precios
+from core import catalogo, lista_precios
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
@@ -49,14 +49,6 @@ from core.repositorio_inventario import calcular_faltantes
 from core.presentar_cotizacion import generar_html
 
 SIN_CAJA = "Sin caja"
-
-# Telas backlight: mismo recorte curado que ui/cotizador_backlight.py
-# (_NOMBRES_TELAS_BACKLIGHT) — no CUALQUIER textil sirve para backlight
-# (necesita ser translúcido), así que no se reusa la lista completa de
-# TEXTILES acá.
-_TELAS_BACKLIGHT = [
-    "Popelina 155", "Popelina 310", "Pearl 155", "Pearl 310", "Pearl 160 HP",
-]
 
 
 def _num(v, default=0.0) -> float:
@@ -296,6 +288,12 @@ class ApiCotizacion:
             if datos is not None:
                 ctx["estado"] = self._estado_desde_pendiente(datos)
 
+        # Un textil renombrado después de hacer la cotización aparece con su
+        # nombre de hoy (ver core.catalogo): el de antes ya no está en la lista.
+        for p in (ctx["estado"] or {}).get("productos") or []:
+            for clave in ("textil", "tela"):
+                if p.get(clave):
+                    p[clave] = catalogo.nombre_textil(p[clave])
         return ctx
 
     def _estado_desde_json(self, datos: dict) -> dict:
@@ -365,12 +363,15 @@ class ApiCotizacion:
         # tiene que seguirlo, o el formulario seguiría dejando agregarlo a
         # un producto sin textil (rompiendo el cálculo, que para ML
         # necesita el ancho de un textil elegido).
+        catalogo.refrescar()
         estructuras_valores = estructuras_legado_valores_efectivos()
         return {
             "productos": PRODUCTOS,
             "textiles": TEXTILES,
             "textiles_anchos": TEXTILES_ANCHOS,
-            "telas_backlight": _TELAS_BACKLIGHT,
+            # No CUALQUIER textil sirve para backlight (necesita ser
+            # translúcido): los marcados en Configuración › Textiles.
+            "telas_backlight": catalogo.telas_backlight(),
             "estructuras": ESTRUCTURAS_LEGADO,
             "terminaciones": TERMINACIONES_LEGADO,
             # Nombres que se cobran POR UNIDAD (valorUNIT) — las que son por

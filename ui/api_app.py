@@ -28,6 +28,7 @@ from datetime import datetime
 
 from core import config as _config
 from core.config import MODULOS_HABILITADOS
+from core import catalogo as _catalogo
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
 from core.rutas import DOCS as _DOCS, FRONTEND
@@ -84,6 +85,9 @@ class ApiApp:
         self._inventario = ApiInventario()
         self._configuracion = ApiConfiguracion()
         _migrar_inventario_formato_viejo()
+        # Los textiles, estructuras y terminaciones agregados o renombrados
+        # en Configuración (ver core.catalogo).
+        _catalogo.refrescar()
 
     # ── Arranque ─────────────────────────────────────────────────────────────
 
@@ -352,6 +356,15 @@ class ApiApp:
 
     def fijar_valor_rollos(self, nombre_textil, valor) -> dict:
         return self._configuracion.fijar_valor_rollos(nombre_textil, valor)
+
+    def agregar_textil(self, datos) -> dict:
+        return self._configuracion.agregar_textil(datos)
+
+    def editar_textil(self, nombre_actual, datos) -> dict:
+        return self._configuracion.editar_textil(nombre_actual, datos)
+
+    def agregar_componente(self, tipo, datos) -> dict:
+        return self._configuracion.agregar_componente(tipo, datos)
 
     # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
 

@@ -177,6 +177,11 @@
 
 /* El diálogo vive fuera de la página (<dialog> en la capa superior), pero
    sigue dentro de .pag-configuracion en el DOM. */
+.pag-configuracion .dlg-catalogo {
+  width: min(92vw, 30rem);
+  .dlg-catalogo__campos { display: grid; gap: var(--e-4); margin-top: var(--e-4); }
+  .dlg-catalogo__nota { margin-top: var(--e-4); }
+}
 .pag-configuracion .dlg-valor-rollos {
   width: min(92vw, 30rem);
   .dlg-valor-rollos__campo { margin-top: var(--e-4); }

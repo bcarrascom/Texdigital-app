@@ -102,6 +102,16 @@ def guardar_lista(tipo: str, filas: list[dict]) -> dict:
     return _guardar(_ARCHIVO[tipo], {"valores": por_nombre})
 
 
+def fijar(tipo: str, nombre: str, valor: float) -> None:
+    """El valor de UNA estructura o terminación (la que se acaba de agregar,
+    ver core.catalogo.agregar_componente), sin tocar las demás."""
+    base = _catalogo(tipo)
+    guardado = ajustes_globales.leer(_ARCHIVO[tipo]).get("valores")
+    por_nombre = dict(guardado) if isinstance(guardado, dict) else {}
+    por_nombre[nombre] = {next(iter(base.get(nombre) or {"valorUNIT": 0})): float(valor)}
+    _guardar(_ARCHIVO[tipo], {"valores": por_nombre})
+
+
 # ── Cajas de Backlight ──────────────────────────────────────────────────────
 
 def cajas() -> dict:

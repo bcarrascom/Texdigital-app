@@ -396,6 +396,19 @@ def fijar_valor_rollos(nombre_textil: str, valor: float) -> int:
     return cambiados
 
 
+def renombrar_textil_rollos(viejo: str, nuevo: str) -> int:
+    """Pasa al nombre `nuevo` los rollos sin decomisionar de `viejo` — al
+    renombrar un textil en Configuración (ver core.catalogo.editar_textil).
+    Los decomisionados quedan como estaban: son historia. Devuelve cuántos."""
+    cambiados = 0
+    for r in listar_rollos():
+        if r.get("nombre_textil") == viejo:
+            r["nombre_textil"] = nuevo
+            _escribir_rollo(carpeta_activos(), r)
+            cambiados += 1
+    return cambiados
+
+
 def resumen_valores_por_textil() -> dict[str, dict]:
     """{textil: {"rollos", "sin_valor", "minimo", "maximo"}} de los rollos sin
     decomisionar — lo que muestra Configuración › Textiles junto a cada textil
@@ -612,6 +625,7 @@ def _metros_lineales(producto_interno: dict, con_margen: bool = True) -> tuple[s
     (metro_lineal_directo/metro_lineal_salto), donde el margen de tensión
     de LA TELA no aplica (un adhesivo o un ojal no se gasta de más por
     cómo la impresora sostiene el rollo)."""
+    from core.catalogo import nombre_textil
     from core.precios import costo_producto
     from core.repositorio import TEXTILES_ANCHOS
 
@@ -619,6 +633,9 @@ def _metros_lineales(producto_interno: dict, con_margen: bool = True) -> tuple[s
     textil = (producto_interno.get("tela" if es_backlight else "textil") or "").strip()
     if not textil:
         return "", 0.0
+    # Con el nombre actual: una cotización vieja puede traer el de antes de
+    # renombrarlo, y los rollos ya tienen el nuevo (ver core.catalogo).
+    textil = nombre_textil(textil)
     resultado = costo_producto(producto_interno)
     if es_backlight:
         ancho_tela = TEXTILES_ANCHOS.get(textil)
@@ -812,6 +829,8 @@ def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:
     stock" apenas se desactivara el módulo."""
     if not _inventario_habilitado():
         return []
+    from core.catalogo import refrescar
+    refrescar()
     rollos = listar_rollos()
     asignaciones = _asignar_rollos_por_producto(productos_internos, rollos)
     necesarios = metros_necesarios(productos_internos)

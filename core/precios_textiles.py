@@ -97,10 +97,15 @@ def valores_fijos(ajustes: dict | None = None) -> dict[str, float]:
     recursos/, si tiene."""
     from core.repositorio import TEXTILES_VALORES
 
+    from core.catalogo import alias_textiles
+
     ajustes = ajustes or cargar()
     configurables = {t["nombre"] for t in ajustes["textiles"]}
     fijos = {n: v for n, v in TEXTILES_VALORES.items() if n not in configurables}
     fijos.update({t["nombre"]: t["valor"] for t in ajustes["textiles"] if t["valor"] is not None})
+    # Los nombres anteriores de un textil renombrado valen lo mismo que él
+    # (las cotizaciones ya hechas los usan, ver core.catalogo).
+    fijos.update({viejo: fijos[nuevo] for viejo, nuevo in alias_textiles().items() if nuevo in fijos})
     return fijos
 
 
@@ -169,10 +174,34 @@ def solo_lectura() -> bool:
     return ajustes_globales.es_mas_nuevo(NOMBRE, VERSION)
 
 
+def _por_nombre() -> dict:
+    guardado = ajustes_globales.leer(NOMBRE).get("textiles")
+    return dict(guardado) if isinstance(guardado, dict) else {}
+
+
+def fijar(nombre: str, cobro: str = "fijo", valor: float | None = None) -> None:
+    """Cómo se cobra UN textil (el que se acaba de agregar, ver
+    core.catalogo.agregar_textil), sin tocar los demás."""
+    por_nombre = _por_nombre()
+    por_nombre[nombre] = {"cobro": cobro if cobro in COBROS else "fijo", "valor": valor}
+    ajustes_globales.guardar(NOMBRE, {"textiles": por_nombre}, VERSION)
+
+
+def renombrar(viejo: str, nuevo: str) -> None:
+    """Lo guardado de `viejo` pasa a `nuevo` (ver core.catalogo.editar_textil)."""
+    por_nombre = _por_nombre()
+    if viejo in por_nombre:
+        por_nombre[nuevo] = por_nombre.pop(viejo)
+        ajustes_globales.guardar(NOMBRE, {"textiles": por_nombre}, VERSION)
+
+
 # ── Valorizar ────────────────────────────────────────────────────────────────
 
 def _nombre_textil(d: dict) -> str:
-    return (d.get("tela") if "tela" in d else d.get("textil")) or ""
+    """El nombre ACTUAL del textil de `d` (una cotización vieja puede traer
+    uno anterior, ver core.catalogo)."""
+    from core.catalogo import nombre_textil
+    return nombre_textil((d.get("tela") if "tela" in d else d.get("textil")) or "")
 
 
 def _valor_por_rollo(d: dict, nombre: str, rollos: list[dict]) -> float | None:

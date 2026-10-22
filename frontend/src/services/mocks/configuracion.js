@@ -6,13 +6,13 @@ import { rollos } from "./inventario";
 let ajustes = {
   modo: "por_textil",
   textiles: [
-    { nombre: "Bistretch", ancho: 1.48, cobro: "fijo", valor: 11000 },
+    { nombre: "Bistretch", ancho: 1.48, cobro: "fijo", valor: 11000, anteriores: ["Bi-stretch"] },
     { nombre: "Blackout", ancho: 1.48, cobro: "fijo", valor: 12000 },
     { nombre: "Felpa gruesa", ancho: 1.38, cobro: "rollo", valor: 12000 },
     { nombre: "Gasa", ancho: 1.46, cobro: "fijo", valor: 12000 },
     { nombre: "Lona mate", ancho: 3.2, cobro: "rollo", valor: null },
     { nombre: "Poliéster satinado", ancho: 1.5, cobro: "rollo", valor: null },
-    { nombre: "Tela backlit", ancho: 3, cobro: "fijo", valor: 14000 },
+    { nombre: "Tela backlit", ancho: 3, cobro: "fijo", valor: 14000, backlight: true },
     { nombre: "Tela sin rollos", ancho: 1.5, cobro: "rollo", valor: null },
   ],
 };
@@ -92,6 +92,42 @@ export default {
   guardar_reglas_cobro(nuevas) {
     if (!(nuevas.iva >= 0 && nuevas.iva < 100)) return { ok: false, errores: [{ campo: "iva", mensaje: "El IVA tiene que ser un % entre 0 y 100." }] };
     reglas = { ...nuevas, tramos_descuento: [...nuevas.tramos_descuento].sort((a, b) => b[0] - a[0]) };
+    return { ok: true };
+  },
+
+  agregar_textil({ nombre, ancho, backlight, valor }) {
+    nombre = (nombre || "").trim();
+    const errores = {};
+    if (!nombre) errores.nombre = "Falta el nombre.";
+    else if (ajustes.textiles.some((t) => t.nombre.toLowerCase() === nombre.toLowerCase())) errores.nombre = "Ya existe uno con ese nombre.";
+    const n = parseFloat(String(ancho).replace(",", "."));
+    if (!(n > 0 && n <= 10)) errores.ancho = "El ancho tiene que ser más que 0 y hasta 10 m.";
+    if (valor == null && ajustes.modo !== "rollo") errores.valor = "Falta el valor por metro.";
+    if (Object.keys(errores).length) return { ok: false, errores };
+    ajustes.textiles.push({ nombre, ancho: n, cobro: "fijo", valor: valor ?? null, backlight, agregado: true, anteriores: [] });
+    return { ok: true };
+  },
+  editar_textil(actual, { nombre, ancho, backlight }) {
+    nombre = (nombre || "").trim();
+    const t = ajustes.textiles.find((x) => x.nombre === actual);
+    if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
+    if (nombre !== actual && ajustes.textiles.some((x) => x !== t && x.nombre.toLowerCase() === nombre.toLowerCase())) {
+      return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
+    }
+    let renombrados = 0;
+    if (nombre !== actual) {
+      for (const r of rollos) if (r.nombre_textil === actual) { r.nombre_textil = nombre; renombrados++; }
+      t.anteriores = [...(t.anteriores || []), actual];
+    }
+    Object.assign(t, { nombre, ancho: parseFloat(String(ancho).replace(",", ".")), backlight });
+    return { ok: true, rollos: renombrados };
+  },
+  agregar_componente(tipo, { nombre, unidad, valor }) {
+    nombre = (nombre || "").trim();
+    if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
+    if (componentes[tipo].some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
+    if (!(valor > 0)) return { ok: false, errores: { valor: "Falta el valor." } };
+    componentes[tipo].push({ nombre, valor, unidad, por_materiales: null, agregado: true });
     return { ok: true };
   },
 

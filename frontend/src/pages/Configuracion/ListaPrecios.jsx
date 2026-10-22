@@ -3,13 +3,16 @@ import { api } from "@/services/api";
 import { useDatos } from "@/hooks/useDatos";
 import { useAvisos } from "@/context/AvisosContext";
 import Cargando from "@/components/Cargando/Cargando";
+import IconoMas from "@/assets/svg/plus.svg?react";
 import * as fmt from "@/utils/formato";
-import { BarraGuardar, Grupo, NotaSoloLectura } from "./Ajustes";
+import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
+import { DialogoComponente } from "./DialogosCatalogo";
 
 /* Estructuras y Terminaciones: cuánto se cobra por cada una (ver
    core/precios_componentes.py). Los nombres son los del catálogo de la app;
-   acá se cambia solo el valor. Ajuste GLOBAL (Dropbox), se guarda todo junto
-   y no se deja guardar con un valor vacío o en 0. */
+   acá se cambia el valor. Ajuste GLOBAL (Dropbox), se guarda todo junto y no
+   se deja guardar con un valor vacío o en 0. Agregar una nueva es aparte, en
+   un diálogo que se aplica al confirmar (ver core/catalogo.py). */
 
 const UNIDAD = { "un.": "por unidad", ML: "por metro lineal" };
 
@@ -34,6 +37,7 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
   const { datos, cargando, recargar } = useDatos(() => api.obtener_precios_componentes(tipo), [tipo]);
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [agregando, setAgregando] = useState(false);
 
   const original = useMemo(() => (datos ? aBorrador(datos.filas) : null), [datos]);
   const actual = borrador || original;
@@ -66,11 +70,23 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
       <Grupo titulo={fmt.plural(actual.length, singular, plural)} pie={pie}>
         {actual.map((f) => (
           <FilaPrecio key={f.nombre} id={`${tipo}-${f.nombre}`} nombre={f.nombre} valor={f.valor}
-                      sub={UNIDAD[info[f.nombre].unidad]} nota={POR_MATERIALES[info[f.nombre].por_materiales]}
+                      sub={[UNIDAD[info[f.nombre].unidad], info[f.nombre].agregado && "agregada en Configuración"].filter(Boolean).join(" · ")}
+                      nota={POR_MATERIALES[info[f.nombre].por_materiales]}
                       error={errores[f.nombre]} deshabilitado={datos.solo_lectura}
                       onCambiar={(valor) => setBorrador(actual.map((x) => (x.nombre === f.nombre ? { ...x, valor } : x)))} />
         ))}
+        {!datos.solo_lectura && !datos.catalogo_solo_lectura && (
+          <Fila etiqueta={`Agregar ${singular}`} icono={IconoMas} color="#2E9D5B"
+                onClick={() => (hayCambios ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setAgregando(true))} />
+        )}
       </Grupo>
+      <DialogoComponente abierto={agregando} tipo={tipo} singular={singular} onCerrar={() => setAgregando(false)}
+                         onHecho={async () => {
+                           setAgregando(false);
+                           await recargar();
+                           setBorrador(null);
+                           aviso(`${singular[0].toUpperCase()}${singular.slice(1)} agregada.`, "info");
+                         }} />
       <BarraGuardar visible={hayCambios} guardando={guardando} onDescartar={() => setBorrador(null)} onGuardar={guardar}
                     error={cantidadErrores ? `${fmt.plural(cantidadErrores, singular, plural)} sin un valor válido.` : null} />
     </>

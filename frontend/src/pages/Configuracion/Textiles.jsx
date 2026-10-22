@@ -7,8 +7,11 @@ import Segmento from "@/components/Segmento/Segmento";
 import Dialogo from "@/components/Dialogo/Dialogo";
 import IconoRollos from "@/assets/svg/spiral.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
+import IconoEditar from "@/assets/svg/pencil.svg?react";
+import IconoMas from "@/assets/svg/plus.svg?react";
 import * as fmt from "@/utils/formato";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
+import { DialogoTextil } from "./DialogosCatalogo";
 
 /* Textiles: cuánto se cobra por metro de cada uno (ver
    core/precios_textiles.py). Cada textil se cobra por un valor fijo, escrito
@@ -17,7 +20,11 @@ import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
 
    Es un ajuste GLOBAL (Dropbox): vale para todos los que cotizan. Se edita
    todo junto y se guarda con un botón; mientras haya algo que no se puede
-   cobrar (un textil fijo sin valor), no se deja guardar. */
+   cobrar (un textil fijo sin valor), no se deja guardar.
+
+   Agregar un textil y cambiarle el nombre o el ancho (el lápiz) son aparte,
+   en un diálogo que se aplica al confirmar (ver core/catalogo.py). Con
+   precios sin guardar no se deja: al volver a cargar se perderían. */
 
 const MODOS = [
   { valor: "fijo", etiqueta: "Valor fijo" },
@@ -61,6 +68,7 @@ export default function Textiles() {
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [rollosDe, setRollosDe] = useState(null);   // textil del diálogo "valor de todos los rollos"
+  const [editando, setEditando] = useState(null);   // null | "nuevo" | el textil a editar
 
   // Lo guardado, como borrador: comparar contra esto dice si hay cambios.
   const original = useMemo(() => (datos ? aBorrador(datos) : null), [datos]);
@@ -74,6 +82,12 @@ export default function Textiles() {
   const resumen = Object.fromEntries(datos.textiles.map((t) => [t.nombre, t]));
 
   const cambiar = (cambio) => setBorrador({ ...actual, ...cambio });
+  const soloLecturaCatalogo = soloLectura || datos.catalogo_solo_lectura;
+
+  function abrirEdicion(cual) {
+    if (hayCambios) { aviso("Primero guarda o descarta los cambios de precios.", "aviso"); return; }
+    setEditando(cual);
+  }
   const cambiarTextil = (nombre, cambio) =>
     cambiar({ textiles: actual.textiles.map((t) => (t.nombre === nombre ? { ...t, ...cambio } : t)) });
 
@@ -117,8 +131,10 @@ export default function Textiles() {
           <FilaTextil key={t.nombre} textil={t} resumen={resumen[t.nombre]} modo={actual.modo}
                       error={errores[t.nombre]} soloLectura={soloLectura} inventario={datos.inventario}
                       onCambiar={(cambio) => cambiarTextil(t.nombre, cambio)}
-                      onRollos={() => setRollosDe(resumen[t.nombre])} />
+                      onRollos={() => setRollosDe(resumen[t.nombre])}
+                      onEditar={soloLecturaCatalogo ? null : () => abrirEdicion(resumen[t.nombre])} />
         ))}
+        {!soloLecturaCatalogo && <Fila etiqueta="Agregar textil" icono={IconoMas} color="#2E9D5B" onClick={() => abrirEdicion("nuevo")} />}
       </Grupo>
 
       <BarraGuardar visible={hayCambios} guardando={guardando} onDescartar={() => setBorrador(null)} onGuardar={guardar}
@@ -131,6 +147,18 @@ export default function Textiles() {
                             aviso(cambiados ? `${fmt.plural(cambiados, "rollo", "rollos")} de ${textil} con el valor nuevo.`
                               : `Los rollos de ${textil} ya tenían ese valor.`, "info");
                           }} />
+
+      <DialogoTextil abierto={!!editando} textil={editando === "nuevo" ? null : editando} modoCobro={actual.modo}
+                     onCerrar={() => setEditando(null)}
+                     onHecho={async (r) => {
+                       const antes = editando === "nuevo" ? null : editando.nombre;
+                       setEditando(null);
+                       await recargar();
+                       setBorrador(null);
+                       aviso(!antes ? "Textil agregado."
+                         : r.rollos ? `Textil actualizado, con ${fmt.plural(r.rollos, "rollo renombrado", "rollos renombrados")}.`
+                         : "Textil actualizado.", "info");
+                     }} />
     </>
   );
 }
@@ -144,7 +172,7 @@ function textoRollos(r) {
   return partes.join(" · ");
 }
 
-function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, onCambiar, onRollos }) {
+function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, onCambiar, onRollos, onEditar }) {
   const cobro = cobroDe(modo, t);
   const r = resumen?.rollos;
   // Por rollo, sin ningún rollo con valor, el textil cae al valor fijo (o sale sin precio).
@@ -155,8 +183,9 @@ function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, 
       <span className="fila-textil__info">
         <label className="fila-textil__nombre" htmlFor={id}>{t.nombre}</label>
         <span className="fila-textil__sub">
-          {resumen?.ancho ? `${fmt.cantidad(resumen.ancho)} m de ancho · ` : ""}
-          {inventario ? textoRollos(r) : ""}
+          {[resumen?.ancho && `${fmt.cantidad(resumen.ancho)} m de ancho`, resumen?.backlight && "Backlight",
+            inventario && textoRollos(r), resumen?.anteriores?.length && `antes: ${resumen.anteriores.join(", ")}`]
+            .filter(Boolean).join(" · ")}
         </span>
         {error && <span className="fila-textil__error">{error}</span>}
         {!error && sinPrecio && <span className="fila-textil__aviso">Sin rollos con valor ni valor fijo: se cotizaría sin precio.</span>}
@@ -169,6 +198,12 @@ function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, 
              placeholder={cobro === "rollo" ? "Opcional" : "$0"} aria-invalid={error ? true : undefined}
              disabled={soloLectura} value={t.valor}
              onChange={(e) => onCambiar({ valor: fmt.clp(e.target.value) })} />
+      {onEditar && (
+        <button className="btn-fila-ajuste" type="button" title="Nombre, ancho y Backlight"
+                aria-label={`Editar ${t.nombre}`} onClick={onEditar}>
+          <IconoEditar />
+        </button>
+      )}
       {inventario && (
         <button className="btn-fila-ajuste" type="button" title="Cambiar el valor de todos sus rollos"
                 aria-label={`Cambiar el valor de todos los rollos de ${t.nombre}`}

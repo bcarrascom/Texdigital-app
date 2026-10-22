@@ -1257,8 +1257,9 @@ def kwargs_precios() -> dict:
     core.precios_componentes) y las reglas de cobro (core.reglas_cobro).
     Con esto, nada de lo que cobra una cotización sale de valores fijos de
     la app."""
-    from core import precios_componentes, precios_textiles, reglas_cobro
+    from core import catalogo, precios_componentes, precios_textiles, reglas_cobro
 
+    catalogo.refrescar()
     ajustes = precios_textiles.cargar()
     return {
         "estructuras_legado_valores": estructuras_legado_valores_efectivos(),
