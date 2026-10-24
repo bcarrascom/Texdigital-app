@@ -69,7 +69,7 @@ export default function Proveedores() {
         {proveedores.length ? proveedores.map((p) => p === editando
           ? <FilaEditando key={p} nombre={p} onGuardar={(n) => renombrar(p, n)} onCancelar={() => setEditando(null)} />
           : (
-            <Fila key={p} etiqueta={p} className="fila-ajuste--proveedor">
+            <Fila key={p} etiqueta={p} className="fila-ajuste--acciones">
               <button className="btn-fila-ajuste" type="button" title="Renombrar" onClick={() => setEditando(p)}><IconoEditar /></button>
               <button className="btn-fila-ajuste btn-fila-ajuste--peligro" type="button" title="Eliminar" onClick={() => eliminar(p)}><IconoEliminar /></button>
             </Fila>

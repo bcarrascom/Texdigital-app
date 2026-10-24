@@ -174,6 +174,112 @@ def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool:
     return True
 
 
+# ── Gestión desde Configuración › Clientes y contactos ─────────────────────
+# Alta, edición y baja con validación (las de arriba son las del cotizador,
+# que agregan sin preguntar). Un cliente se identifica por su nombre de
+# empresa (único, sin importar mayúsculas); el RUT también es único y liga
+# al cliente con sus direcciones (ver direcciones_de_cliente). Las
+# cotizaciones y OPs ya hechas guardan una COPIA de los datos del cliente,
+# así que cambiarlo o borrarlo acá no las toca.
+
+def rut_valido(rut: str) -> bool:
+    """Si el dígito verificador del RUT calza (módulo 11)."""
+    chars = "".join(c for c in (rut or "").upper() if c.isdigit() or c == "K")
+    if len(chars) < 2 or not chars[:-1].isdigit():
+        return False
+    cuerpo, dv = chars[:-1], chars[-1]
+    suma = sum(int(d) * (2 + i % 6) for i, d in enumerate(reversed(cuerpo)))
+    resto = 11 - suma % 11
+    return dv == {11: "0", 10: "K"}.get(resto, str(resto))
+
+
+def _texto(v) -> str:
+    return " ".join(str(v or "").split())
+
+
+def _validar_cliente(datos: dict, actual: str | None = None) -> tuple[dict, dict]:
+    """(cliente normalizado, errores por campo). `actual`: la empresa que se
+    está editando (no choca consigo misma)."""
+    cliente = {"empresa": _texto(datos.get("empresa")), "rut": formatear_rut(datos.get("rut") or ""),
+               "razon_social": _texto(datos.get("razon_social"))}
+    otros = [c for c in cargar_clientes() if actual is None or c.get("empresa", "").lower() != actual.lower()]
+    errores = {}
+    if not cliente["empresa"]:
+        errores["empresa"] = "Falta el nombre de la empresa."
+    elif any(c.get("empresa", "").lower() == cliente["empresa"].lower() for c in otros):
+        errores["empresa"] = "Ya hay un cliente con ese nombre."
+    if cliente["rut"]:
+        if not rut_valido(cliente["rut"]):
+            errores["rut"] = "El RUT no es válido: revisa el dígito verificador."
+        else:
+            dueno = next((c for c in otros if formatear_rut(c.get("rut", "")) == cliente["rut"]), None)
+            if dueno:
+                errores["rut"] = f"Ese RUT ya es de «{dueno.get('empresa', '')}»."
+    return cliente, errores
+
+
+def crear_cliente(datos: dict) -> dict:
+    """{"ok": True} o {"ok": False, "errores": {campo: mensaje}}."""
+    cliente, errores = _validar_cliente(datos)
+    if errores:
+        return {"ok": False, "errores": errores}
+    _escribir_json(CLIENTES_PATH, cargar_clientes() + [cliente])
+    return {"ok": True}
+
+
+def editar_cliente(empresa_actual: str, datos: dict) -> dict:
+    """Cambia los datos de un cliente. Sus direcciones lo siguen: si cambia
+    el RUT o el nombre, se actualizan también en direcciones.json (que las
+    liga por RUT y guarda el nombre para mostrarlo). Devuelve {"ok": True,
+    "direcciones": n actualizadas} o {"ok": False, "errores": {...}}."""
+    clientes = cargar_clientes()
+    viejo = next((c for c in clientes if c.get("empresa", "").lower() == (empresa_actual or "").lower()), None)
+    if viejo is None:
+        return {"ok": False, "errores": {"general": "Ese cliente ya no existe: recarga la página."}}
+    cliente, errores = _validar_cliente(datos, actual=empresa_actual)
+    rut_viejo = formatear_rut(viejo.get("rut", ""))
+    if not cliente["rut"] and rut_viejo and "rut" not in errores:
+        n = len(direcciones_de_cliente(rut_viejo))
+        if n:
+            errores["rut"] = (f"Tiene {n} {'dirección guardada' if n == 1 else 'direcciones guardadas'} "
+                              "ligadas a su RUT: no puede quedar sin RUT.")
+    if errores:
+        return {"ok": False, "errores": errores}
+    viejo.update(cliente)
+    _escribir_json(CLIENTES_PATH, clientes)
+
+    movidas = 0
+    if rut_viejo:
+        direcciones = cargar_direcciones()
+        for d in direcciones:
+            if formatear_rut(d.get("rut", "")) == rut_viejo:
+                d["rut"], d["empresa"] = cliente["rut"] or rut_viejo, cliente["empresa"]
+                movidas += 1
+        if movidas:
+            _escribir_json(DIRECCIONES_PATH, direcciones)
+    return {"ok": True, "direcciones": movidas}
+
+
+def eliminar_cliente(empresa: str) -> dict:
+    """Borra un cliente y sus direcciones guardadas. {"ok": True,
+    "direcciones": n borradas} o {"ok": False, "errores": {...}}."""
+    clientes = cargar_clientes()
+    restantes = [c for c in clientes if c.get("empresa", "").lower() != (empresa or "").lower()]
+    if len(restantes) == len(clientes):
+        return {"ok": False, "errores": {"general": "Ese cliente ya no existe: recarga la página."}}
+    borrado = next(c for c in clientes if c not in restantes)
+    _escribir_json(CLIENTES_PATH, restantes)
+    rut = formatear_rut(borrado.get("rut", ""))
+    borradas = 0
+    if rut:
+        direcciones = cargar_direcciones()
+        quedan = [d for d in direcciones if formatear_rut(d.get("rut", "")) != rut]
+        borradas = len(direcciones) - len(quedan)
+        if borradas:
+            _escribir_json(DIRECCIONES_PATH, quedan)
+    return {"ok": True, "direcciones": borradas}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Gestión de contactos.json — lista de {contacto, email, descuento, condicion}
 # "descuento" se llamaba "fuente" antes de la cotización con precios — es un
@@ -181,8 +287,14 @@ def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_contactos() -> list[dict]:
-    """Lee contactos.json y devuelve lista de dicts {contacto, email, descuento, condicion}."""
-    return _leer_json(CONTACTOS_PATH)
+    """Lee contactos.json y devuelve lista de dicts {contacto, email, descuento, condicion}.
+    Los guardados con el nombre viejo del campo ("fuente", ver arriba) vuelven
+    con "descuento": antes el cotizador los mostraba sin descuento."""
+    contactos = _leer_json(CONTACTOS_PATH)
+    for c in contactos:
+        if "descuento" not in c and "fuente" in c:
+            c["descuento"] = c.pop("fuente")
+    return contactos
 
 
 def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
@@ -193,6 +305,65 @@ def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
             return  # ya existe, no duplicar
     contactos.append({"contacto": contacto, "email": email, "descuento": descuento, "condicion": condicion})
     _escribir_json(CONTACTOS_PATH, contactos)
+
+
+# ── Gestión desde Configuración › Clientes y contactos ─────────────────────
+# Un contacto se identifica por su nombre (único, sin importar mayúsculas).
+# El descuento es el % que el cotizador propone para ese contacto; se guarda
+# como texto ("10"), igual que lo guarda el cotizador.
+
+def _validar_contacto(datos: dict, actual: str | None = None) -> tuple[dict, dict]:
+    contacto = {"contacto": _texto(datos.get("contacto")), "email": _texto(datos.get("email")),
+                "descuento": str(datos.get("descuento") if datos.get("descuento") not in (None, "") else "0").strip().replace(",", "."),
+                "condicion": _texto(datos.get("condicion"))}
+    otros = [c for c in cargar_contactos() if actual is None or c.get("contacto", "").lower() != actual.lower()]
+    errores = {}
+    if not contacto["contacto"]:
+        errores["contacto"] = "Falta el nombre."
+    elif any(c.get("contacto", "").lower() == contacto["contacto"].lower() for c in otros):
+        errores["contacto"] = "Ya hay un contacto con ese nombre."
+    if contacto["email"] and (contacto["email"].count("@") != 1 or "." not in contacto["email"].split("@")[1]
+                              or " " in contacto["email"]):
+        errores["email"] = "El correo no es válido."
+    try:
+        pct = float(contacto["descuento"])
+    except ValueError:
+        pct = -1
+    if not 0 <= pct < 100:
+        errores["descuento"] = "El descuento tiene que ser un % entre 0 y 100."
+    else:
+        contacto["descuento"] = f"{pct:g}"
+    return contacto, errores
+
+
+def crear_contacto(datos: dict) -> dict:
+    contacto, errores = _validar_contacto(datos)
+    if errores:
+        return {"ok": False, "errores": errores}
+    _escribir_json(CONTACTOS_PATH, cargar_contactos() + [contacto])
+    return {"ok": True}
+
+
+def editar_contacto(nombre_actual: str, datos: dict) -> dict:
+    contactos = cargar_contactos()
+    viejo = next((c for c in contactos if c.get("contacto", "").lower() == (nombre_actual or "").lower()), None)
+    if viejo is None:
+        return {"ok": False, "errores": {"general": "Ese contacto ya no existe: recarga la página."}}
+    contacto, errores = _validar_contacto(datos, actual=nombre_actual)
+    if errores:
+        return {"ok": False, "errores": errores}
+    viejo.update(contacto)
+    _escribir_json(CONTACTOS_PATH, contactos)
+    return {"ok": True}
+
+
+def eliminar_contacto(nombre: str) -> dict:
+    contactos = cargar_contactos()
+    restantes = [c for c in contactos if c.get("contacto", "").lower() != (nombre or "").lower()]
+    if len(restantes) == len(contactos):
+        return {"ok": False, "errores": {"general": "Ese contacto ya no existe: recarga la página."}}
+    _escribir_json(CONTACTOS_PATH, restantes)
+    return {"ok": True}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

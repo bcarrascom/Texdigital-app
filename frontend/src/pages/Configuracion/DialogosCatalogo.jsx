@@ -16,7 +16,7 @@ const UNIDADES = [{ valor: "un.", etiqueta: "Por unidad" }, { valor: "ML", etiqu
 
 const anchoTexto = (n) => (n == null ? "" : String(n).replace(".", ","));
 
-function useEnvio(enviar, onHecho) {
+export function useEnvio(enviar, onHecho) {
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
   async function confirmar(e) {
@@ -34,7 +34,7 @@ function useEnvio(enviar, onHecho) {
   return { errores, enviando, confirmar };
 }
 
-function ErrorGeneral({ texto }) {
+export function ErrorGeneral({ texto }) {
   return texto ? <p className="ajustes-nota ajustes-nota--aviso dlg-catalogo__nota" role="alert"><IconoAviso aria-hidden="true" />{texto}</p> : null;
 }
 

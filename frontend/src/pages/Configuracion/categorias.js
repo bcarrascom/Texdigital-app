@@ -5,11 +5,13 @@ import IconoEstructuras from "@/assets/svg/wrench.svg?react";
 import IconoTerminaciones from "@/assets/svg/scissors.svg?react";
 import IconoCajas from "@/assets/svg/box.svg?react";
 import IconoReglas from "@/assets/svg/percent.svg?react";
+import IconoClientes from "@/assets/svg/users.svg?react";
 import General from "./General";
 import Proveedores from "./Proveedores";
 import Textiles from "./Textiles";
 import Cajas from "./Cajas";
 import Reglas from "./Reglas";
+import ClientesContactos from "./ClientesContactos";
 import { Estructuras, Terminaciones } from "./ListaPrecios";
 
 /* Las categorías de Configuración, en el orden de la barra lateral. Sumar
@@ -51,6 +53,11 @@ export const CATEGORIAS = [
     clave: "reglas", titulo: "Reglas de cobro", Icono: IconoReglas, color: "#E5484D", Contenido: Reglas,
     desc: "El IVA, el mínimo que se cobra por textil y el descuento por volumen. Cada cotización guarda las suyas.",
     palabras: "iva impuesto minimo mínimo descuento volumen tramos porcentaje reglas",
+  },
+  {
+    clave: "clientes", titulo: "Clientes y contactos", Icono: IconoClientes, color: "#30B0C7", Contenido: ClientesContactos,
+    desc: "Los clientes y contactos que sugiere el cotizador: agregar, corregir sus datos o eliminarlos.",
+    palabras: "cliente clientes empresa rut razon social contacto contactos correo email descuento condicion pago",
   },
   {
     clave: "proveedores", titulo: "Proveedores", Icono: IconoProveedores, color: "#2E9D5B", Contenido: Proveedores,

@@ -112,9 +112,9 @@
   .fila-ajuste--alta .btn { display: inline-flex; align-items: center; gap: var(--e-1); }
   .fila-ajuste--alta .btn svg { width: 1rem; height: 1rem; }
   /* Renombrar/eliminar aparecen al pasar por la fila (o al llegar con Tab). */
-  .fila-ajuste--proveedor .fila-ajuste__control { opacity: 0; transition: opacity var(--m-rapida) var(--ease-salida); }
-  .fila-ajuste--proveedor:hover .fila-ajuste__control,
-  .fila-ajuste--proveedor:focus-within .fila-ajuste__control { opacity: 1; }
+  .fila-ajuste--acciones .fila-ajuste__control { opacity: 0; transition: opacity var(--m-rapida) var(--ease-salida); }
+  .fila-ajuste--acciones:hover .fila-ajuste__control,
+  .fila-ajuste--acciones:focus-within .fila-ajuste__control { opacity: 1; }
   .btn-fila-ajuste {
     display: inline-grid; place-items: center;
     width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
@@ -152,6 +152,13 @@
   .fila-textil .segmento label { padding: .25rem var(--e-3); font-size: var(--t-xs); }
   .fila-textil__valor { width: 8.5rem; min-height: 2.2rem; }
   .fila-textil[data-invalido] .fila-textil__valor { border-color: var(--c-error); }
+
+  /* ── Clientes y contactos ───────────────────────────────────────────── */
+  .ajustes-pestanas .segmento { width: 100%; }
+  /* El buscador de la lista, sobre el fondo del contenido (el de la barra
+     lateral se apoya en el gris de la barra). */
+  .ajustes-buscar--lista { background: var(--c-superficie); border: 1px solid var(--c-borde); min-height: 2.4rem; }
+  .fila-gestion .fila-textil__sub { overflow-wrap: anywhere; }
 
   /* ── Reglas de cobro ────────────────────────────────────────────────── */
   .fila-regla { flex-wrap: wrap; row-gap: var(--e-1); }

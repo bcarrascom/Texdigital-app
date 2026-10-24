@@ -55,6 +55,17 @@ let reglas = structuredClone(REGLAS_DEFECTO);
 
 const sinValor = (v) => !(v > 0);
 
+let clientes = [
+  { empresa: "Café del Puerto", rut: "76.086.428-5", razon_social: "Café del Puerto SpA", direcciones: 2 },
+  { empresa: "Librería Norte", rut: "11.111.111-1", razon_social: "", direcciones: 0 },
+  { empresa: "Sin RUT Ltda.", rut: "", razon_social: "", direcciones: 0 },
+];
+let contactos = [
+  { contacto: "Ana Pérez", email: "ana@cafedelpuerto.cl", descuento: "10", condicion: "30 días" },
+  { contacto: "Jorge Soto", email: "", descuento: "0", condicion: "Contado" },
+];
+const igual = (a, b) => a.toLowerCase() === b.toLowerCase();
+
 const cobroDe = (modo, t) => (modo === "por_textil" ? t.cobro : modo);
 
 export default {
@@ -128,6 +139,48 @@ export default {
     if (componentes[tipo].some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
     if (!(valor > 0)) return { ok: false, errores: { valor: "Falta el valor." } };
     componentes[tipo].push({ nombre, valor, unidad, materiales: [], agregado: true });
+    return { ok: true };
+  },
+
+  obtener_clientes: () => structuredClone(clientes).sort((a, b) => a.empresa.localeCompare(b.empresa, "es")),
+  crear_cliente(d) {
+    const empresa = (d.empresa || "").trim();
+    if (!empresa) return { ok: false, errores: { empresa: "Falta el nombre de la empresa." } };
+    if (clientes.some((c) => igual(c.empresa, empresa))) return { ok: false, errores: { empresa: "Ya hay un cliente con ese nombre." } };
+    if (d.rut && clientes.some((c) => c.rut === d.rut)) return { ok: false, errores: { rut: "Ese RUT ya es de otro cliente." } };
+    clientes.push({ empresa, rut: d.rut, razon_social: d.razon_social, direcciones: 0 });
+    return { ok: true };
+  },
+  editar_cliente(actual, d) {
+    const c = clientes.find((x) => igual(x.empresa, actual));
+    const empresa = (d.empresa || "").trim();
+    if (!empresa) return { ok: false, errores: { empresa: "Falta el nombre de la empresa." } };
+    if (clientes.some((x) => x !== c && igual(x.empresa, empresa))) return { ok: false, errores: { empresa: "Ya hay un cliente con ese nombre." } };
+    if (d.rut === "12.345.678-9") return { ok: false, errores: { rut: "El RUT no es válido: revisa el dígito verificador." } };
+    Object.assign(c, { empresa, rut: d.rut, razon_social: d.razon_social });
+    return { ok: true, direcciones: c.direcciones };
+  },
+  eliminar_cliente(empresa) {
+    const c = clientes.find((x) => igual(x.empresa, empresa));
+    clientes = clientes.filter((x) => x !== c);
+    return { ok: true, direcciones: c?.direcciones || 0 };
+  },
+  obtener_contactos: () => structuredClone(contactos).sort((a, b) => a.contacto.localeCompare(b.contacto, "es")),
+  crear_contacto(d) {
+    const contacto = (d.contacto || "").trim();
+    if (!contacto) return { ok: false, errores: { contacto: "Falta el nombre." } };
+    if (contactos.some((c) => igual(c.contacto, contacto))) return { ok: false, errores: { contacto: "Ya hay un contacto con ese nombre." } };
+    contactos.push({ ...d, contacto, descuento: (d.descuento || "0").replace(",", ".") });
+    return { ok: true };
+  },
+  editar_contacto(actual, d) {
+    const c = contactos.find((x) => igual(x.contacto, actual));
+    if (d.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) return { ok: false, errores: { email: "El correo no es válido." } };
+    Object.assign(c, { ...d, descuento: (d.descuento || "0").replace(",", ".") });
+    return { ok: true };
+  },
+  eliminar_contacto(nombre) {
+    contactos = contactos.filter((x) => !igual(x.contacto, nombre));
     return { ok: true };
   },
 
