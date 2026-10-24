@@ -29,15 +29,15 @@ function resumen(nombre) {
 
 const componentes = {
   estructuras: [
-    { nombre: "Asta fibra de vidrio vela 2 mts", valor: 17000, unidad: "un.", por_materiales: null },
-    { nombre: "Base auto", valor: 11000, unidad: "un.", por_materiales: "asociados" },
-    { nombre: "Estaca", valor: 10000, unidad: "un.", por_materiales: null },
-    { nombre: "Perfil 10 cm", valor: 9000, unidad: "un.", por_materiales: "mismo_nombre" },
+    { nombre: "Asta fibra de vidrio vela 2 mts", valor: 17000, unidad: "un.", materiales: [] },
+    { nombre: "Base auto", valor: 11000, unidad: "un.", materiales: [{ nombre: "Tubo 20 mm", falta: null }, { nombre: "Unión T", falta: "valor" }] },
+    { nombre: "Bastidor 10 cm", valor: 9000, unidad: "un.", materiales: [{ nombre: "Perfil 10 cm", falta: null }] },
+    { nombre: "Estaca", valor: 10000, unidad: "un.", materiales: [] },
   ],
   terminaciones: [
-    { nombre: "Basta", valor: 3500, unidad: "un.", por_materiales: null },
-    { nombre: "Bolsillos", valor: 3500, unidad: "un.", por_materiales: null },
-    { nombre: "Ojetillos", valor: 14500, unidad: "un.", por_materiales: null },
+    { nombre: "Basta", valor: 3500, unidad: "un.", materiales: [] },
+    { nombre: "Bolsillos", valor: 3500, unidad: "un.", materiales: [] },
+    { nombre: "Ojetillos", valor: 14500, unidad: "un.", materiales: [] },
   ],
 };
 
@@ -127,7 +127,7 @@ export default {
     if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
     if (componentes[tipo].some((c) => c.nombre.toLowerCase() === nombre.toLowerCase())) return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
     if (!(valor > 0)) return { ok: false, errores: { valor: "Falta el valor." } };
-    componentes[tipo].push({ nombre, valor, unidad, por_materiales: null, agregado: true });
+    componentes[tipo].push({ nombre, valor, unidad, materiales: [], agregado: true });
     return { ok: true };
   },
 

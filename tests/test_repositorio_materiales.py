@@ -334,30 +334,35 @@ class TestGastoDelMes(_ConRutaTemporal):
         self.assertEqual(repo_mat.gasto_del_mes(m), 0.0)
 
 
-class TestValoresLegadoYPrecios(_ConRutaTemporal):
+class TestMaterialesYPreciosDeEstructuras(_ConRutaTemporal):
+    """Desde 2026-10-24 un material con el MISMO NOMBRE que una estructura ya
+    no la cobra a su precio (decisión de Bruno, ver
+    core.repositorio_materiales.kwargs_precios): la única forma de que
+    Inventario defina lo que cobra una estructura es asociarle materiales."""
 
-    def test_material_sin_valor_no_aparece(self):
-        repo_mat.ingresar_material("Estaca", 10)
-        self.assertEqual(repo_mat.valores_legado_materiales(), {})
-
-    def test_tipo_unidad_da_valorUNIT(self):
-        creado = repo_mat.ingresar_material("Estaca", 10)
-        repo_mat.ajustar_valor(creado["id"], 5000)
-        self.assertEqual(repo_mat.valores_legado_materiales(), {"Estaca": {"valorUNIT": 5000.0}})
-
-    def test_tipo_metro_da_valorML(self):
-        creado = repo_mat.ingresar_material("Cinta", 10, tipo="metro")
-        repo_mat.ajustar_valor(creado["id"], 200)
-        self.assertEqual(repo_mat.valores_legado_materiales(), {"Cinta": {"valorML": 200.0}})
-
-    def test_efectivos_mezcla_catalogo_estatico_con_materiales(self):
+    def test_un_material_con_el_mismo_nombre_no_cambia_el_precio(self):
         base = repo_mat.ingresar_material("Base auto", 5)
         repo_mat.ajustar_valor(base["id"], 15000)
-        catalogo_mock = {"Base auto": {"valorUNIT": 11000.0}, "Estaca": {"valorUNIT": 10000.0}}
+        catalogo_mock = {"Base auto": {"valorUNIT": 11000.0}}
         with mock.patch("core.repositorio.ESTRUCTURAS_LEGADO_VALORES", catalogo_mock):
             efectivos = repo_mat.estructuras_legado_valores_efectivos()
-        self.assertEqual(efectivos["Base auto"], {"valorUNIT": 15000.0})  # material pisa al catálogo
-        self.assertEqual(efectivos["Estaca"], {"valorUNIT": 10000.0})     # sin material, queda el catálogo
+        self.assertEqual(efectivos, {"Base auto": {"valorUNIT": 11000.0}})
+        self.assertEqual(repo_mat.materiales_de_estructuras(), {})   # llamarse igual no lo asocia
+
+    def test_materiales_de_estructuras_dice_cuales_y_que_les_falta(self):
+        tubo = repo_mat.ingresar_material("Tubo", 10, tipo="metro")
+        repo_mat.editar_material(tubo["id"], "Tubo", "metro", valor=None, tipo_consumo="metro_lineal_directo",
+                                 estructuras_asociadas=["Base auto"])
+        union = repo_mat.ingresar_material("Unión", 10)
+        repo_mat.editar_material(union["id"], "Unión", "unidad", valor=500, tipo_consumo=None,
+                                 estructuras_asociadas=["Base auto"])
+        estaca = repo_mat.ingresar_material("Punta", 10)
+        repo_mat.editar_material(estaca["id"], "Punta", "unidad", valor=300, tipo_consumo="fijo_por_producto",
+                                 consumo_parametros={"n": 1}, estructuras_asociadas=["Estaca"])
+        self.assertEqual(repo_mat.materiales_de_estructuras(), {
+            "Base auto": [{"nombre": "Tubo", "falta": "valor"}, {"nombre": "Unión", "falta": "consumo"}],
+            "Estaca": [{"nombre": "Punta", "falta": None}],
+        })
 
 
 class TestArchivadoAnual(_ConRutaTemporal):

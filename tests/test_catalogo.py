@@ -64,7 +64,6 @@ class _Base(unittest.TestCase):
             mock.patch.dict(repo.ESTRUCTURAS_LEGADO_VALORES, {}),
             mock.patch.dict(repo.TERMINACIONES_LEGADO_VALORES, {}),
             mock.patch.dict(config.MODULOS_HABILITADOS, {"inventario": True}),
-            mock.patch.object(repo_mat, "valores_legado_materiales", lambda: {}),
             mock.patch.object(repo_mat, "_leer_indice", lambda: {"productos": {}, "estructuras": {}}),
         ]
         for p in parches:

@@ -155,8 +155,36 @@ function Hoja({ m }) {
         ["Ganancias este mes", plata(m.ganancia_mes), mono],
         ["Ganancias totales", plata(m.ganancia_total), mono],
         ["Proveedores", proveedores.length ? proveedores.join(", ") : "—", { ancho: true }],
+        ["Estructuras asociadas", (m.estructuras_asociadas || []).join(", ") || "—", { ancho: true }],
+        ["Productos asociados", (m.productos_asociados || []).join(", ") || "—", { ancho: true }],
       ]} />
+      <NotaCobro m={m} />
     </section>
+  );
+}
+
+/* Qué cobra este material en las cotizaciones (ver
+   core.repositorio_materiales.cobro_materiales_producto): solo a través de
+   las estructuras y productos asociados. Se dice acá porque es lo que define
+   el precio de esas estructuras, y en Configuración su valor queda de
+   respaldo. Llamarse igual que una estructura no hace nada. */
+function NotaCobro({ m }) {
+  const estructuras = m.estructuras_asociadas || [], productos = m.productos_asociados || [];
+  if (!estructuras.length && !productos.length) {
+    return <p className="hoja__nota">No está asociado a ninguna estructura ni producto: no cambia lo que cobra ninguna cotización.</p>;
+  }
+  const lista = (items, uno, varios) => `${items.length === 1 ? uno : varios} ${items.join(", ")}`;
+  const donde = [estructuras.length && lista(estructuras, "la estructura", "las estructuras"),
+                 productos.length && lista(productos, "el producto", "los productos")].filter(Boolean).join(" y ");
+  if (m.valor == null) return <p className="hoja__nota hoja__nota--aviso">Sin valor de venta: {donde} no se cobran por este material.</p>;
+  if (!m.tipo_consumo || m.tipo_consumo === "manual") {
+    return <p className="hoja__nota hoja__nota--aviso">Sin un consumo automático que se calcule al cotizar: {donde} no se cobran por este material.</p>;
+  }
+  return (
+    <p className="hoja__nota">
+      Se cobra en {donde}: lo que {estructuras.length + productos.length === 1 ? "gasta" : "gastan"} de este material, a su valor de venta.
+      {estructuras.length > 0 && ` En ${estructuras.length === 1 ? "esa estructura" : "esas estructuras"} reemplaza al valor de Configuración.`}
+    </p>
   );
 }
 

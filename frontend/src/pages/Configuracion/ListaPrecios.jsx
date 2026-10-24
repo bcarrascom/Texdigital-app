@@ -16,14 +16,32 @@ import { DialogoComponente } from "./DialogosCatalogo";
 
 const UNIDAD = { "un.": "por unidad", ML: "por metro lineal" };
 
-const POR_MATERIALES = {
-  asociados: "Tiene materiales de Inventario asociados: se cobra por ellos, no por este valor.",
-  mismo_nombre: "Hay un material de Inventario con este nombre: se cobra su valor de venta, no este.",
-};
+const FALTA = { valor: "el valor de venta", consumo: "un consumo automático que se calcule al cotizar" };
+
+/* Una estructura con materiales de Inventario asociados se cobra por lo que
+   gasta de ellos (ver core.repositorio_materiales.cobro_materiales_producto).
+   Su valor de acá queda de respaldo: vale solo si a uno de esos materiales le
+   falta con qué cobrarlo. Lo decimos en la fila, para que nadie cambie un
+   valor que no se está usando sin saberlo. */
+function textoMateriales(materiales) {
+  if (!materiales?.length) return {};
+  const nombres = materiales.map((m) => m.nombre).join(", ");
+  const incompleto = materiales.find((m) => m.falta);
+  if (incompleto) {
+    return {
+      sub: `Materiales de Inventario asociados: ${nombres}`,
+      nota: `Se cobra este valor, no sus materiales: a «${incompleto.nombre}» le falta ${FALTA[incompleto.falta]}.`,
+    };
+  }
+  return {
+    sub: `Se cobra por sus materiales de Inventario: ${nombres}`,
+    ayuda: "Este valor solo se usa si a uno de sus materiales le falta con qué cobrarlo.",
+  };
+}
 
 export function Estructuras() {
   return <ListaPrecios tipo="estructuras" singular="estructura" plural="estructuras"
-                       pie="Una estructura que se cobra por sus materiales de Inventario usa este valor solo si deja de tenerlos." />;
+                       pie="Para que una estructura se cobre por lo que gasta de un material de Inventario, asócialo en la ficha del material (Inventario › Materiales › Editar). Que se llamen igual no los conecta." />;
 }
 
 export function Terminaciones() {
@@ -68,13 +86,17 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
     <>
       <NotaSoloLectura visible={datos.solo_lectura} />
       <Grupo titulo={fmt.plural(actual.length, singular, plural)} pie={pie}>
-        {actual.map((f) => (
-          <FilaPrecio key={f.nombre} id={`${tipo}-${f.nombre}`} nombre={f.nombre} valor={f.valor}
-                      sub={[UNIDAD[info[f.nombre].unidad], info[f.nombre].agregado && "agregada en Configuración"].filter(Boolean).join(" · ")}
-                      nota={POR_MATERIALES[info[f.nombre].por_materiales]}
-                      error={errores[f.nombre]} deshabilitado={datos.solo_lectura}
-                      onCambiar={(valor) => setBorrador(actual.map((x) => (x.nombre === f.nombre ? { ...x, valor } : x)))} />
-        ))}
+        {actual.map((f) => {
+          const i = info[f.nombre];
+          const m = textoMateriales(i.materiales);
+          return (
+            <FilaPrecio key={f.nombre} id={`${tipo}-${f.nombre}`} nombre={f.nombre} valor={f.valor}
+                        sub={m.sub || [UNIDAD[i.unidad], i.agregado && "agregada en Configuración"].filter(Boolean).join(" · ")}
+                        ayuda={m.ayuda} nota={m.nota}
+                        error={errores[f.nombre]} deshabilitado={datos.solo_lectura}
+                        onCambiar={(valor) => setBorrador(actual.map((x) => (x.nombre === f.nombre ? { ...x, valor } : x)))} />
+          );
+        })}
         {!datos.solo_lectura && !datos.catalogo_solo_lectura && (
           <Fila etiqueta={`Agregar ${singular}`} icono={IconoMas} color="#2E9D5B"
                 onClick={() => (hayCambios ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setAgregando(true))} />
@@ -95,12 +117,13 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
 
 /* Una fila con nombre, una línea chica debajo y el monto a la derecha. La
    usan también Cajas. */
-export function FilaPrecio({ id, nombre, sub, nota, error, valor, deshabilitado, onCambiar }) {
+export function FilaPrecio({ id, nombre, sub, ayuda, nota, error, valor, deshabilitado, onCambiar }) {
   return (
     <div className="fila-ajuste fila-textil" data-invalido={error ? "" : undefined}>
       <span className="fila-textil__info">
         <label className="fila-textil__nombre" htmlFor={id}>{nombre}</label>
         {sub && <span className="fila-textil__sub">{sub}</span>}
+        {ayuda && <span className="fila-textil__sub">{ayuda}</span>}
         {error && <span className="fila-textil__error">{error}</span>}
         {!error && nota && <span className="fila-textil__aviso">{nota}</span>}
       </span>

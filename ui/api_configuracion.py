@@ -64,13 +64,14 @@ class ApiConfiguracion:
     def obtener_precios_componentes(self, tipo: str) -> dict:
         """tipo: "estructuras" o "terminaciones".
 
-            {"filas": [{"nombre", "valor", "unidad", "por_materiales": None | "asociados" | "mismo_nombre"}],
-             "solo_lectura": bool}
+            {"filas": [{"nombre", "valor", "unidad", "agregado",
+                        "materiales": [{"nombre", "falta"}]}],   ← los asociados, si tiene
+             "solo_lectura": bool, "catalogo_solo_lectura": bool}
         """
         catalogo.refrescar()
-        motivos = _repo_mat.estructuras_cobradas_por_materiales() if tipo == "estructuras" else {}
+        asociados = _repo_mat.materiales_de_estructuras() if tipo == "estructuras" else {}
         agregados = {c["nombre"] for c in catalogo.componentes(tipo) if c["agregado"]}
-        filas = [{**f, "por_materiales": motivos.get(f["nombre"]), "agregado": f["nombre"] in agregados}
+        filas = [{**f, "materiales": asociados.get(f["nombre"], []), "agregado": f["nombre"] in agregados}
                  for f in precios_componentes.cargar_lista(tipo)]
         return {"filas": filas, "solo_lectura": precios_componentes.solo_lectura(tipo),
                 "catalogo_solo_lectura": catalogo.solo_lectura()}

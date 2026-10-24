@@ -53,7 +53,6 @@ class _Base(unittest.TestCase):
             mock.patch.dict(repo.ESTRUCTURAS_LEGADO_VALORES, {"Asta": {"valorUNIT": 5000.0}, "Riel": {"valorML": 900.0}}, clear=True),
             mock.patch.dict(repo.PRECIOS_CAJAS, CAJAS, clear=True),
             # Sin materiales de Inventario.
-            mock.patch.object(repo_mat, "valores_legado_materiales", lambda: {}),
             mock.patch.object(repo_mat, "cobro_materiales_producto", lambda d: None),
         ]
         for p in parches:

@@ -1205,23 +1205,6 @@ def metricas_material(m: dict) -> dict:
     }
 
 
-def valores_legado_materiales() -> dict[str, dict]:
-    """{nombre: {"valorUNIT": x}} (tipo="unidad") o {"valorML": x}
-    (tipo="metro") de cada material CON valor fijado — mismo shape que
-    core.repositorio.cargar_estructuras_legado(), para poder mezclarse
-    directo con ESTRUCTURAS_LEGADO_VALORES (ver
-    estructuras_legado_valores_efectivos). Un material sin valor (nunca
-    editado) no aparece acá — deja el catálogo estático a cargo de ese
-    nombre hasta que alguien le ponga un valor a mano."""
-    valores: dict[str, dict] = {}
-    for m in listar_materiales():
-        if m.get("valor") is None:
-            continue
-        clave = "valorML" if m.get("tipo") == "metro" else "valorUNIT"
-        valores[m["nombre"]] = {clave: float(m["valor"])}
-    return valores
-
-
 def kwargs_precios() -> dict:
     """Los parámetros con los que hay que llamar a core.precios.costo_producto
     (y costo_cotizacion, que los reenvía) para que una cotización se cobre con
@@ -1230,21 +1213,27 @@ def kwargs_precios() -> dict:
     exactamente los mismos precios: antes solo ui/api_cotizacion.py pasaba el
     catálogo efectivo, así que una cotización creada con precios de Inventario
     se reabría valorizada con el catálogo estático y los totales cambiaban
-    solos. Son dos cosas, y conviven:
+    solos. Para las estructuras son dos cosas, y conviven:
 
-      estructuras_legado_valores → el catálogo con los precios de venta de los
-          materiales pisándolo POR NOMBRE (ver
-          estructuras_legado_valores_efectivos). Sigue siendo lo que cobra una
+      estructuras_legado_valores → los precios de Configuración › Estructuras
+          (ver estructuras_legado_valores_efectivos). Es lo que cobra una
           estructura que no tiene materiales asociados.
       cobro_materiales → el cobro por los materiales que la estructura de
           verdad gasta (ver cobro_materiales_producto), que REEMPLAZA al
-          catálogo donde se puede resolver.
+          valor de Configuración donde se puede resolver.
 
     Orden de precedencia, de más fuerte a más débil: monto escrito a mano en
-    la cotización ("$10.000") > materiales asociados a la estructura > precio
-    de venta del material del mismo nombre > catálogo estático.
+    la cotización ("$10.000") > materiales asociados a la estructura > valor
+    de Configuración. Hasta 2026-10-24 había un paso más entre los dos
+    últimos: un material de Inventario con el MISMO NOMBRE que una estructura
+    la cobraba a su precio de venta. Se sacó (decisión de Bruno): era una
+    conexión invisible —nada en pantalla decía que dos nombres iguales
+    estaban ligados—, competía con el valor de Configuración y no descontaba
+    stock. Ahora la única forma de que Inventario defina lo que cobra una
+    estructura es asociarle materiales, que se ve, se elige a propósito y sí
+    descuenta stock.
 
-    Las dos partes ya se apagan solas con el módulo Inventario deshabilitado
+    cobro_materiales se apaga solo con el módulo Inventario deshabilitado
     (core.config.MODULOS_HABILITADOS), así que esto se puede pasar siempre sin
     preguntar nada.
 
@@ -1272,39 +1261,42 @@ def kwargs_precios() -> dict:
     }
 
 
-def estructuras_cobradas_por_materiales() -> dict[str, str]:
-    """{estructura: por qué} de las estructuras cuyo valor de catálogo puede
-    no ser lo que se cobra, porque lo pisa Inventario (ver kwargs_precios):
-    "asociados" si tiene materiales asociados, "mismo_nombre" si hay un
-    material con su mismo nombre y valor. Para avisarlo en Configuración ›
-    Estructuras. Vacío con Inventario apagado."""
+def materiales_de_estructuras() -> dict[str, list[dict]]:
+    """{estructura: [{"nombre", "falta": None | "valor" | "consumo"}]} de las
+    estructuras con materiales asociados — para Configuración › Estructuras,
+    que muestra que esas se cobran por sus materiales y no por su valor.
+
+    "falta" dice si un material, hoy, no se puede cobrar en NINGÚN producto
+    (ver _cobrable): sin valor de venta, o sin una fórmula de consumo que se
+    resuelva al cotizar. En ese caso la estructura entera cae a su valor de
+    Configuración. (Que la fórmula dé 0 depende de las medidas de cada
+    producto, así que eso no se puede saber acá.) Vacío con Inventario apagado."""
     if not _inventario_habilitado():
         return {}
-    motivos = {n: "mismo_nombre" for n in valores_legado_materiales()}
-    motivos.update({n: "asociados" for n, ids in _leer_indice().get("estructuras", {}).items() if ids})
-    return motivos
+    resultado: dict[str, list[dict]] = {}
+    for nombre, ids in _leer_indice().get("estructuras", {}).items():
+        materiales = []
+        for id_ in ids:
+            m = obtener_material(id_)
+            if m is None:
+                continue
+            falta = ("valor" if m.get("valor") is None
+                     else "consumo" if m.get("tipo_consumo") in (None, "manual") else None)
+            materiales.append({"nombre": m.get("nombre", ""), "falta": falta})
+        if materiales:
+            resultado[nombre] = materiales
+    return resultado
 
 
 def estructuras_legado_valores_efectivos() -> dict:
-    """El catálogo que de verdad hay que usar para cobrar una cotización
-    NUEVA: ESTRUCTURAS_LEGADO_VALORES (recursos/estructuras_legado.json,
-    de solo lectura) con los materiales editados en Inventario PISÁNDOLO
-    por nombre — pedido explícito de Bruno (2026-09-14): el valor que se
-    carga acá pasa a ser lo que cobran las cotizaciones nuevas de ahí en
-    adelante. Import adentro de la función (no al tope del módulo) por el
-    mismo motivo que valor_sugerido_textil en core.repositorio_inventario:
-    evitar acoplar el import a nivel de módulo con core.repositorio.
+    """El valor de cada estructura para cobrar una cotización NUEVA: el de
+    Configuración › Estructuras (ver core.precios_componentes, que arranca con
+    recursos/estructuras_legado.json). Lo que gastan sus materiales asociados,
+    si los tiene, va aparte (cobro_materiales_producto) y lo reemplaza.
 
-    Con el módulo Inventario apagado (core.config.MODULOS_HABILITADOS,
-    pedido de Bruno 2026-09-16 pensando en sacar un release con el módulo
-    todavía pausado) devuelve el catálogo estático TAL CUAL, sin pisar
-    nada — los materiales de Inventario, si los hay, no deben afectar el
-    precio de ninguna cotización mientras el módulo no esté habilitado.
-
-    "El catálogo" ahora son los precios de Configuración › Estructuras (ver
-    core.precios_componentes), que arrancan con los de recursos/."""
+    Ya no lo pisa un material de Inventario con el mismo nombre (ver
+    kwargs_precios): un material y una estructura pueden llamarse igual sin
+    que pase nada. Import adentro de la función por el mismo motivo que
+    valor_sugerido_textil en core.repositorio_inventario."""
     from core.precios_componentes import valores
-    catalogo = valores("estructuras")
-    if not _inventario_habilitado():
-        return catalogo
-    return {**catalogo, **valores_legado_materiales()}
+    return valores("estructuras")
