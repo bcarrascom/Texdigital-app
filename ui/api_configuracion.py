@@ -3,13 +3,14 @@ ui/api_configuracion.py
 API de las páginas de Configuración que no son de un módulo en particular:
 los precios (textiles, estructuras, terminaciones, cajas — ver
 core.precios_textiles y core.precios_componentes), las reglas de cobro
-(core.reglas_cobro) y qué textiles, estructuras y terminaciones existen
-(core.catalogo).
+(core.reglas_cobro), qué textiles, estructuras y terminaciones existen
+(core.catalogo), y las listas de clientes y contactos (core.repositorio).
 Proveedores sigue en ui/api_inventario.py: es la misma lista que usan los
 formularios de Inventario.
 """
 
 from core import catalogo, precios_componentes, precios_textiles, reglas_cobro
+from core import repositorio as _repo
 from core import repositorio_inventario as _repo_inv
 from core import repositorio_materiales as _repo_mat
 
@@ -95,6 +96,44 @@ class ApiConfiguracion:
 
     def guardar_precios_cajas(self, cajas: dict) -> dict:
         return precios_componentes.guardar_cajas(cajas or {})
+
+    # ── Clientes y contactos ─────────────────────────────────────────────
+
+    def obtener_clientes(self) -> list[dict]:
+        """[{"empresa", "rut", "razon_social", "direcciones": n}] por nombre."""
+        direcciones: dict[str, int] = {}
+        for d in _repo.cargar_direcciones():
+            rut = _repo.formatear_rut(d.get("rut", ""))
+            direcciones[rut] = direcciones.get(rut, 0) + 1
+        clientes = [{"empresa": c.get("empresa", ""), "rut": c.get("rut", ""), "razon_social": c.get("razon_social", ""),
+                     "direcciones": direcciones.get(_repo.formatear_rut(c.get("rut", "")), 0) if c.get("rut") else 0}
+                    for c in _repo.cargar_clientes()]
+        return sorted(clientes, key=lambda c: c["empresa"].casefold())
+
+    def crear_cliente(self, datos: dict) -> dict:
+        return _repo.crear_cliente(datos or {})
+
+    def editar_cliente(self, empresa_actual: str, datos: dict) -> dict:
+        return _repo.editar_cliente(empresa_actual, datos or {})
+
+    def eliminar_cliente(self, empresa: str) -> dict:
+        return _repo.eliminar_cliente(empresa)
+
+    def obtener_contactos(self) -> list[dict]:
+        """[{"contacto", "email", "descuento", "condicion"}] por nombre."""
+        contactos = [{"contacto": c.get("contacto", ""), "email": c.get("email", ""),
+                      "descuento": c.get("descuento", "") or "0", "condicion": c.get("condicion", "")}
+                     for c in _repo.cargar_contactos()]
+        return sorted(contactos, key=lambda c: c["contacto"].casefold())
+
+    def crear_contacto(self, datos: dict) -> dict:
+        return _repo.crear_contacto(datos or {})
+
+    def editar_contacto(self, nombre_actual: str, datos: dict) -> dict:
+        return _repo.editar_contacto(nombre_actual, datos or {})
+
+    def eliminar_contacto(self, nombre: str) -> dict:
+        return _repo.eliminar_contacto(nombre)
 
     # ── Reglas de cobro ──────────────────────────────────────────────────
 

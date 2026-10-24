@@ -366,6 +366,32 @@ class ApiApp:
     def agregar_componente(self, tipo, datos) -> dict:
         return self._configuracion.agregar_componente(tipo, datos)
 
+    # ── Configuración › Clientes y contactos ─────────────────────────────────
+
+    def obtener_clientes(self) -> list[dict]:
+        return self._configuracion.obtener_clientes()
+
+    def crear_cliente(self, datos) -> dict:
+        return self._configuracion.crear_cliente(datos)
+
+    def editar_cliente(self, empresa_actual, datos) -> dict:
+        return self._configuracion.editar_cliente(empresa_actual, datos)
+
+    def eliminar_cliente(self, empresa) -> dict:
+        return self._configuracion.eliminar_cliente(empresa)
+
+    def obtener_contactos(self) -> list[dict]:
+        return self._configuracion.obtener_contactos()
+
+    def crear_contacto(self, datos) -> dict:
+        return self._configuracion.crear_contacto(datos)
+
+    def editar_contacto(self, nombre_actual, datos) -> dict:
+        return self._configuracion.editar_contacto(nombre_actual, datos)
+
+    def eliminar_contacto(self, nombre) -> dict:
+        return self._configuracion.eliminar_contacto(nombre)
+
     # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
 
     def obtener_precios_componentes(self, tipo) -> dict:
