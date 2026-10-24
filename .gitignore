@@ -15,3 +15,6 @@ dist/
 # Carpetas locales que no se versionan
 outputs/
 templates/
+
+# Notas de trabajo locales (pruebas y pendientes antes de un release)
+CLAUDE.md
