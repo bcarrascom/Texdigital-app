@@ -31,6 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
+from core import catalogo, lista_precios
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
@@ -48,14 +49,6 @@ from core.repositorio_inventario import calcular_faltantes
 from core.presentar_cotizacion import generar_html
 
 SIN_CAJA = "Sin caja"
-
-# Telas backlight: mismo recorte curado que ui/cotizador_backlight.py
-# (_NOMBRES_TELAS_BACKLIGHT) — no CUALQUIER textil sirve para backlight
-# (necesita ser translúcido), así que no se reusa la lista completa de
-# TEXTILES acá.
-_TELAS_BACKLIGHT = [
-    "Popelina 155", "Popelina 310", "Pearl 155", "Pearl 310", "Pearl 160 HP",
-]
 
 
 def _num(v, default=0.0) -> float:
@@ -295,6 +288,12 @@ class ApiCotizacion:
             if datos is not None:
                 ctx["estado"] = self._estado_desde_pendiente(datos)
 
+        # Un textil renombrado después de hacer la cotización aparece con su
+        # nombre de hoy (ver core.catalogo): el de antes ya no está en la lista.
+        for p in (ctx["estado"] or {}).get("productos") or []:
+            for clave in ("textil", "tela"):
+                if p.get(clave):
+                    p[clave] = catalogo.nombre_textil(p[clave])
         return ctx
 
     def _estado_desde_json(self, datos: dict) -> dict:
@@ -364,12 +363,15 @@ class ApiCotizacion:
         # tiene que seguirlo, o el formulario seguiría dejando agregarlo a
         # un producto sin textil (rompiendo el cálculo, que para ML
         # necesita el ancho de un textil elegido).
+        catalogo.refrescar()
         estructuras_valores = estructuras_legado_valores_efectivos()
         return {
             "productos": PRODUCTOS,
             "textiles": TEXTILES,
             "textiles_anchos": TEXTILES_ANCHOS,
-            "telas_backlight": _TELAS_BACKLIGHT,
+            # No CUALQUIER textil sirve para backlight (necesita ser
+            # translúcido): los marcados en Configuración › Textiles.
+            "telas_backlight": catalogo.telas_backlight(),
             "estructuras": ESTRUCTURAS_LEGADO,
             "terminaciones": TERMINACIONES_LEGADO,
             # Nombres que se cobran POR UNIDAD (valorUNIT) — las que son por
@@ -420,16 +422,19 @@ class ApiCotizacion:
         internos = [_producto_a_interno(productos[i]) for i in indices]
         facturables = ml_o_area_facturable_por_producto(internos)
 
+        # Unos solos precios para todos (los rollos se leen una vez, ver kwargs_precios).
+        precios = kwargs_precios()
         calculos: list[dict | None] = [None] * len(productos)
         for i, f in zip(indices, facturables):
-            calculos[i] = self.calcular_producto(productos[i], ml_o_area_facturable=f)
+            calculos[i] = self.calcular_producto(productos[i], ml_o_area_facturable=f, precios=precios)
         return calculos
 
-    def calcular_producto(self, p: dict, ml_o_area_facturable: float | None = None) -> dict | None:
+    def calcular_producto(self, p: dict, ml_o_area_facturable: float | None = None, precios: dict | None = None) -> dict | None:
         """Un solo producto. `ml_o_area_facturable` es el ML/M² ya con el
         piso mínimo del GRUPO aplicado (ver calcular_productos): sin él,
         costo_producto le aplica el piso a esta línea sola, como si fuera
-        el único producto de su textil."""
+        el único producto de su textil. `precios`: los kwargs_precios() ya
+        armados, si quien llama calcula varios productos seguidos."""
         if not _calculable(p):
             return None
         ancho = _num(p.get("ancho"), 0.0)
@@ -439,7 +444,7 @@ class ApiCotizacion:
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
         costo = costo_producto(
-            interno, ml_o_area_facturable=ml_o_area_facturable, **kwargs_precios(),
+            interno, ml_o_area_facturable=ml_o_area_facturable, **(precios or kwargs_precios()),
         )
 
         if p.get("tipo") == "backlight":
@@ -559,6 +564,10 @@ class ApiCotizacion:
             "Condicion de pago": cliente.get("condicion", ""),
             "Descripcion": cliente.get("descripcion", ""),
             "productos": [mapear_producto(p) for p in productos_internos],
+            # Con qué precios se calculó: verla o imprimirla después usa estos,
+            # no los de ese día (ver core.lista_precios). Editarla y volver a
+            # guardar la arma de nuevo, con los precios de hoy.
+            "ListaPrecios": lista_precios.armar(productos_internos),
             "Neto": totales["neto"],
             "NetoTotal": totales["neto_total"],
             "IVA": totales["iva"],

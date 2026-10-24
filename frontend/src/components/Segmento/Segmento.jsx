@@ -22,13 +22,18 @@ import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
    click en CUALQUIER punto —incluida la opción ya elegida— pasa a la otra. El
    click nativo del label marcaría la que se tocó y, junto con este toggle,
    terminaría alternando dos veces; por eso se apaga y el cambio lo maneja
-   solo el click del grupo. */
-export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertical = false, bloque = false, className = "" }) {
+   solo el click del grupo.
+
+   Con TRES o más opciones no hay "la otra": cada click elige la opción
+   tocada, como un grupo de radios normal (el click nativo del label).
+   `deshabilitado` apaga el switch entero. */
+export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertical = false, bloque = false, deshabilitado = false, className = "" }) {
   const nombre = useId();
   const grupo = useRef(null);
   const etiquetas = useRef([]);
   const [pildora, setPildora] = useState(null);   // { x, y, ancho, alto } en px, relativa al grupo
   const elegida = Math.max(0, opciones.findIndex((o) => o.valor === valor));
+  const alterna = opciones.length === 2;
   const otra = () => opciones.find((o) => o.valor !== valor)?.valor ?? opciones[0].valor;
 
   useLayoutEffect(() => {
@@ -60,7 +65,8 @@ export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertica
   const clases = ["segmento", vertical && "segmento--vertical", bloque && "segmento--bloque", className].filter(Boolean).join(" ");
 
   return (
-    <div ref={grupo} className={clases} role="group" aria-label={etiqueta} onClick={() => onCambiar(otra())}>
+    <div ref={grupo} className={clases} role="group" aria-label={etiqueta} aria-disabled={deshabilitado || undefined}
+         onClick={alterna && !deshabilitado ? () => onCambiar(otra()) : undefined}>
       {pildora && (
         <span
           className="segmento__pildora"
@@ -73,11 +79,12 @@ export default function Segmento({ opciones, valor, onCambiar, etiqueta, vertica
         const id = `${nombre}-${k}`;
         return (
           <Fragment key={o.valor}>
-            <input type="radio" id={id} name={nombre} checked={k === elegida} onChange={() => onCambiar(o.valor)}
+            <input type="radio" id={id} name={nombre} checked={k === elegida} disabled={deshabilitado}
+                   onChange={() => onCambiar(o.valor)}
                    // El click lo resuelve el grupo (ver arriba): que no suba dos veces.
                    onClick={(e) => e.stopPropagation()} />
             <label ref={(el) => { etiquetas.current[k] = el; }} htmlFor={id} title={o.titulo}
-                   onClick={(e) => e.preventDefault()}>
+                   onClick={alterna ? (e) => e.preventDefault() : undefined}>
               {o.etiqueta ?? o.valor}
             </label>
           </Fragment>

@@ -3,6 +3,10 @@
    Editar, que es el más cargado de la app. */
 
 .pag-ver-material {
+  /* Debajo de las cifras: qué cobra este material en las cotizaciones. */
+  .hoja__nota { margin-top: var(--e-4); font-size: var(--t-sm); color: var(--c-texto-suave); }
+  .hoja__nota--aviso { color: var(--c-aviso); }
+
   .dlg-ajustar-material { width: min(90vw, 36rem); max-width: min(90vw, 36rem); }
   /* Más ancho que el diálogo genérico: con el consumo automático (select +
      parámetros + dos listas de asociaciones), cada campo tiene lugar de sobra. */

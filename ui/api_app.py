@@ -28,6 +28,7 @@ from datetime import datetime
 
 from core import config as _config
 from core.config import MODULOS_HABILITADOS
+from core import catalogo as _catalogo
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
 from core.rutas import DOCS as _DOCS, FRONTEND
@@ -42,6 +43,7 @@ from ui.api_ver_despacho import ApiVerDespacho
 from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 from ui.api_inventario import ApiInventario
+from ui.api_configuracion import ApiConfiguracion
 
 
 def _abrir_manual_usuario() -> None:
@@ -81,7 +83,11 @@ class ApiApp:
         self._asignar_despacho = ApiAsignarDespacho()
         self._gestionar_direcciones = ApiGestionarDirecciones()
         self._inventario = ApiInventario()
+        self._configuracion = ApiConfiguracion()
         _migrar_inventario_formato_viejo()
+        # Los textiles, estructuras y terminaciones agregados o renombrados
+        # en Configuración (ver core.catalogo).
+        _catalogo.refrescar()
 
     # ── Arranque ─────────────────────────────────────────────────────────────
 
@@ -196,6 +202,13 @@ class ApiApp:
         """Cuál es la cotización vecina (←/→, ver ApiVerCotizacion.
         numero_adyacente) — la navegación la hace React Router."""
         return self._ver_cotizacion.numero_adyacente(numero, direccion)
+
+    # El aviso "cambiaron precios" de Ver cotización (ver core.lista_precios).
+    def actualizar_precios_cotizacion(self, numero) -> bool:
+        return self._ver_cotizacion.actualizar_precios(numero)
+
+    def mantener_precios_cotizacion(self, numero) -> bool:
+        return self._ver_cotizacion.mantener_precios(numero)
 
     def eliminar_cotizacion(self, numero) -> None:
         self._ver_cotizacion.eliminar_cotizacion(numero)
@@ -332,6 +345,46 @@ class ApiApp:
 
     def eliminar_direccion_gestion(self, id_) -> bool:
         return self._gestionar_direcciones.eliminar_direccion(id_)
+
+    # ── Configuración › Textiles ─────────────────────────────────────────────
+
+    def obtener_precios_textiles(self) -> dict:
+        return self._configuracion.obtener_precios_textiles()
+
+    def guardar_precios_textiles(self, datos) -> dict:
+        return self._configuracion.guardar_precios_textiles(datos)
+
+    def fijar_valor_rollos(self, nombre_textil, valor) -> dict:
+        return self._configuracion.fijar_valor_rollos(nombre_textil, valor)
+
+    def agregar_textil(self, datos) -> dict:
+        return self._configuracion.agregar_textil(datos)
+
+    def editar_textil(self, nombre_actual, datos) -> dict:
+        return self._configuracion.editar_textil(nombre_actual, datos)
+
+    def agregar_componente(self, tipo, datos) -> dict:
+        return self._configuracion.agregar_componente(tipo, datos)
+
+    # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
+
+    def obtener_precios_componentes(self, tipo) -> dict:
+        return self._configuracion.obtener_precios_componentes(tipo)
+
+    def guardar_precios_componentes(self, tipo, filas) -> dict:
+        return self._configuracion.guardar_precios_componentes(tipo, filas)
+
+    def obtener_precios_cajas(self) -> dict:
+        return self._configuracion.obtener_precios_cajas()
+
+    def guardar_precios_cajas(self, cajas) -> dict:
+        return self._configuracion.guardar_precios_cajas(cajas)
+
+    def obtener_reglas_cobro(self) -> dict:
+        return self._configuracion.obtener_reglas_cobro()
+
+    def guardar_reglas_cobro(self, reglas) -> dict:
+        return self._configuracion.guardar_reglas_cobro(reglas)
 
     # ── Inventario: rollos ───────────────────────────────────────────────────
 

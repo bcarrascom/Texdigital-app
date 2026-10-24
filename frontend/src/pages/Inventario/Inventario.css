@@ -126,29 +126,4 @@
      la mitad, así el espacio total entre las dos filas queda parejo. */
   .fila--proveedor { grid-template-columns: 2fr 1fr; }
   .campo--mitad { max-width: 50%; }
-
-  /* ── Proveedores ───────────────────────────────────────────────────────── */
-  .dlg-proveedores { width: min(90vw, 28rem); }
-  .proveedores-lista { display: grid; gap: var(--e-2); margin-top: var(--e-4); max-height: 18rem; overflow: auto; }
-  .fila-proveedor {
-    display: flex; align-items: center; gap: var(--e-2);
-    padding: var(--e-2) var(--e-3);
-    border: 1.5px solid var(--c-borde); border-radius: var(--r-md);
-  }
-  .fila-proveedor__nombre { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
-  .fila-proveedor__nombre .entrada { min-height: 2.2rem; padding: var(--e-1) var(--e-2); }
-  .fila-proveedor__acciones { display: flex; gap: var(--e-1); flex: 0 0 auto; }
-  .btn-fila-icono {
-    display: inline-grid; place-items: center;
-    width: 1.9rem; height: 1.9rem; border-radius: var(--r-full);
-    border: 1.5px solid var(--c-borde-fuerte); background: var(--c-superficie);
-    color: var(--c-tema-fuerte); cursor: pointer;
-    transition: background var(--m-rapida) var(--ease-salida), border-color var(--m-rapida) var(--ease-salida);
-  }
-  .btn-fila-icono svg { width: 1rem; height: 1rem; }
-  .btn-fila-icono:hover { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
-  .btn-fila-icono--peligro { color: var(--c-error); border-color: var(--c-error-suave); }
-  .btn-fila-icono--peligro:hover { background: var(--c-error-suave); border-color: var(--c-error); }
-  .proveedores-vacio { padding: var(--e-4) 0; color: var(--c-texto-tenue); font-size: var(--t-sm); text-align: center; }
-  .proveedores-alta { margin-top: var(--e-4); padding-top: var(--e-4); border-top: 1.5px solid var(--c-borde); }
 }

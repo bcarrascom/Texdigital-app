@@ -8,7 +8,7 @@ import IconoTextiles from "@/assets/svg/spiral.svg?react";
 import IconoMateriales from "@/assets/svg/boxes.svg?react";
 import TablaRollos from "./TablaRollos";
 import TablaMateriales from "./TablaMateriales";
-import { DialogoMaterial, DialogoProveedores, DialogoRollo } from "./DialogosInventario";
+import { DialogoMaterial, DialogoRollo } from "./DialogosInventario";
 import "./Inventario.css";
 
 /* Contenido del módulo Inventario (antes, su panel en menu.html): dos tablas
@@ -16,6 +16,8 @@ import "./Inventario.css";
    para pasar de una a otra, y la lista de proveedores. Cada fila lleva a la
    pantalla de ese rollo/material, donde están sus ajustes; acá solo se da de
    alta (el "+" de cada tabla) y se activa/desactiva un rollo de un toque.
+   "Proveedores" es un atajo a esa categoría de Configuración, donde vive la
+   lista.
 
    La URL manda (para que "Volver" desde un rollo/material reaparezca en la
    misma tabla):
@@ -28,8 +30,9 @@ const VISTAS = [
   { valor: "textiles", Icono: IconoTextiles, titulo: "Rollos de tela" },
   { valor: "materiales", Icono: IconoMateriales, titulo: "Materiales" },
 ];
-const FUNDIDO = { duration: 0.18 };
-const VACIO = { rollos: [], materiales: [], textiles: [], proveedores: [], nombres: [] };   // --m-rapida, como el resto de los repintados de contenido
+const FUNDIDO = { duration: 0.18 };   // --m-rapida, como el resto de los repintados de contenido
+// Sin datos todavía: listas vacías estables (un [] nuevo por render rompería el memo de las tablas).
+const VACIO = { rollos: [], materiales: [], textiles: [], proveedores: [], nombres: [] };
 
 /* Todo lo que necesitan las dos tablas y sus formularios, de una vez. */
 export async function cargarInventario() {
@@ -50,7 +53,7 @@ export default function Inventario({ datos, recargar }) {
 
   const masRollo = useRef(null);
   const masMaterial = useRef(null);
-  const [dialogo, setDialogo] = useState(null);   // "rollo" | "material" | "proveedores" | null
+  const [dialogo, setDialogo] = useState(null);   // "rollo" | "material" | null
   const [textilInicial, setTextilInicial] = useState("");
 
   /* Llegando con ?nuevo_textil: se abre "Rollo nuevo" con el textil elegido y
@@ -97,7 +100,8 @@ export default function Inventario({ datos, recargar }) {
           <h1 className="modulo-cuerpo__titulo">Inventario</h1>
           <SwitchIconos opciones={VISTAS} valor={vista} onCambiar={cambiarVista} etiqueta="Vista de inventario" />
           <span className="cabecera__sep" />
-          <button className="cab-btn" type="button" onClick={() => setDialogo("proveedores")}>Proveedores</button>
+          <button className="cab-btn" type="button" title="Abrir la lista de proveedores, en Configuración"
+                  onClick={() => navigate(rutas.configuracion("proveedores"), { state: { desde } })}>Proveedores</button>
         </div>
         <p className="modulo-cuerpo__bajada">
           {vista === "materiales" ? "Materiales — stock disponible." : "Rollos de tela — stock disponible."}
@@ -128,7 +132,6 @@ export default function Inventario({ datos, recargar }) {
                     onCerrar={cerrar} onGuardado={alGuardar} />
       <DialogoMaterial abierto={dialogo === "material"} origen={masMaterial} materiales={d.materiales} nombres={d.nombres}
                        onCerrar={cerrar} onGuardado={alGuardar} />
-      <DialogoProveedores abierto={dialogo === "proveedores"} proveedores={d.proveedores} onCerrar={cerrar} onCambio={recargar} />
     </>
   );
 }

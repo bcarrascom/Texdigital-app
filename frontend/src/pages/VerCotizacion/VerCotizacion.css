@@ -87,4 +87,49 @@
   .material-falta__info strong { font-size: var(--t-sm); }
   .material-falta__info span { font-size: var(--t-xs); color: var(--c-texto-suave); }
   .material-falta__btn { flex: 0 0 auto; }
+
+  /* ── Cambiaron precios (ver CambiosPrecios.jsx) ─────────────────────────
+     Un aviso chico arriba de la hoja: la cotización se sigue viendo con SUS
+     precios, esto solo ofrece revisar. */
+  .aviso-precios {
+    display: flex; align-items: center; gap: var(--e-3);
+    padding: var(--e-3) var(--e-4);
+    background: var(--c-aviso-suave);
+    border: 1.5px solid color-mix(in srgb, var(--c-aviso) 35%, transparent);
+    border-radius: var(--r-lg);
+    animation: aparecer var(--m-media) var(--ease-salida) both;
+  }
+  .aviso-precios__icono { width: 1.25rem; height: 1.25rem; flex: none; color: var(--c-aviso); }
+  .aviso-precios__texto { flex: 1; font-size: var(--t-sm); color: var(--c-texto); }
+
+  .dlg-precios { width: min(92vw, 36rem); max-width: min(92vw, 36rem); }
+  .precios-tabla { width: 100%; margin-top: var(--e-4); border-collapse: collapse; font-size: var(--t-sm); }
+  .precios-tabla th {
+    padding: 0 0 var(--e-2); text-align: left;
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .precios-tabla td { padding: var(--e-2) 0; border-top: 1px solid var(--c-borde); vertical-align: baseline; }
+  .precios-tabla .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: var(--e-4); }
+  .precios-tabla__tipo {
+    display: block; font-size: var(--t-xs); color: var(--c-texto-tenue);
+  }
+  .precios-tabla__antes { color: var(--c-texto-suave); text-decoration: line-through; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+
+  .precios-subtitulo {
+    margin-top: var(--e-5);
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); letter-spacing: .06em;
+    text-transform: uppercase; color: var(--c-texto-tenue);
+  }
+  .precios-impacto { display: grid; gap: var(--e-1); margin-top: var(--e-2); font-size: var(--t-sm); }
+  .precios-impacto__fila { display: flex; justify-content: space-between; gap: var(--e-3); }
+  .precios-impacto__montos { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--c-texto-suave); }
+  .precios-impacto__montos b { color: var(--c-texto); font-weight: var(--peso-medio); }
+  .precios-impacto__montos em { margin-left: var(--e-2); font-style: normal; font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  .precios-impacto__fila--total {
+    margin-top: var(--e-1); padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
+    font-weight: var(--peso-fuerte);
+  }
+  .precios-impacto__fila--total b { font-weight: var(--peso-fuerte); color: var(--c-tema-fuerte); }
+  .precios-nota { margin-top: var(--e-4); font-size: var(--t-xs); }
 }

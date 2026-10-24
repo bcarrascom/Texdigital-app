@@ -305,15 +305,18 @@ def valor_sugerido_textil(nombre_textil: str) -> float | None:
     TEXTILES_VALORES) — mismo precio que se factura al cliente, la mejor
     estimación disponible para un textil que recién se compra por primera
     vez. None si no hay ni rollo previo ni catálogo (el formulario lo deja
-    en blanco, no inventa un 0)."""
-    from core.repositorio import TEXTILES_VALORES
+    en blanco, no inventa un 0).
+
+    "El catálogo" ahora es el valor fijo de Configuración › Textiles (ver
+    core.precios_textiles), que arranca con el de recursos/textiles.json."""
+    from core.precios_textiles import valor_fijo
 
     nombre_textil = nombre_textil.strip()
     candidatos = [r for r in listar_rollos()
                   if r.get("nombre_textil") == nombre_textil and r.get("valor") is not None]
     if candidatos:
         return max(candidatos, key=lambda r: r.get("id", "")).get("valor")
-    return TEXTILES_VALORES.get(nombre_textil)
+    return valor_fijo(nombre_textil)
 
 
 def crear_rollo(
@@ -372,6 +375,55 @@ def editar_rollo(
     r["proveedor"] = (proveedor or "").strip()
     _escribir_rollo(carpeta_activos(), r)
     return r
+
+
+def fijar_valor_rollos(nombre_textil: str, valor: float) -> int:
+    """Pone el mismo valor de venta por metro a TODOS los rollos de
+    `nombre_textil` que no están decomisionados (activos e inactivos) —
+    pedido de Bruno (2026-10-22), la acción "Cambiar el valor de todos los
+    rollos" de Configuración › Textiles. Cada rollo sigue teniendo su propio
+    valor: esto solo los iguala de una vez. Devuelve cuántos cambió."""
+    valor = float(valor)
+    if valor <= 0:
+        raise ValueError("El valor tiene que ser mayor que 0.")
+    cambiados = 0
+    for r in listar_rollos():
+        if r.get("nombre_textil") != nombre_textil or r.get("valor") == valor:
+            continue
+        r["valor"] = valor
+        _escribir_rollo(carpeta_activos(), r)
+        cambiados += 1
+    return cambiados
+
+
+def renombrar_textil_rollos(viejo: str, nuevo: str) -> int:
+    """Pasa al nombre `nuevo` los rollos sin decomisionar de `viejo` — al
+    renombrar un textil en Configuración (ver core.catalogo.editar_textil).
+    Los decomisionados quedan como estaban: son historia. Devuelve cuántos."""
+    cambiados = 0
+    for r in listar_rollos():
+        if r.get("nombre_textil") == viejo:
+            r["nombre_textil"] = nuevo
+            _escribir_rollo(carpeta_activos(), r)
+            cambiados += 1
+    return cambiados
+
+
+def resumen_valores_por_textil() -> dict[str, dict]:
+    """{textil: {"rollos", "sin_valor", "minimo", "maximo"}} de los rollos sin
+    decomisionar — lo que muestra Configuración › Textiles junto a cada textil
+    que se cobra por rollo."""
+    resumen: dict[str, dict] = {}
+    for r in listar_rollos():
+        t = resumen.setdefault(r.get("nombre_textil", ""), {"rollos": 0, "sin_valor": 0, "minimo": None, "maximo": None})
+        t["rollos"] += 1
+        valor = r.get("valor")
+        if valor is None:
+            t["sin_valor"] += 1
+            continue
+        t["minimo"] = valor if t["minimo"] is None else min(t["minimo"], valor)
+        t["maximo"] = valor if t["maximo"] is None else max(t["maximo"], valor)
+    return resumen
 
 
 def cambiar_estado_rollo(id_: str, activo: bool) -> dict | None:
@@ -573,6 +625,7 @@ def _metros_lineales(producto_interno: dict, con_margen: bool = True) -> tuple[s
     (metro_lineal_directo/metro_lineal_salto), donde el margen de tensión
     de LA TELA no aplica (un adhesivo o un ojal no se gasta de más por
     cómo la impresora sostiene el rollo)."""
+    from core.catalogo import nombre_textil
     from core.precios import costo_producto
     from core.repositorio import TEXTILES_ANCHOS
 
@@ -580,6 +633,9 @@ def _metros_lineales(producto_interno: dict, con_margen: bool = True) -> tuple[s
     textil = (producto_interno.get("tela" if es_backlight else "textil") or "").strip()
     if not textil:
         return "", 0.0
+    # Con el nombre actual: una cotización vieja puede traer el de antes de
+    # renombrarlo, y los rollos ya tienen el nuevo (ver core.catalogo).
+    textil = nombre_textil(textil)
     resultado = costo_producto(producto_interno)
     if es_backlight:
         ancho_tela = TEXTILES_ANCHOS.get(textil)
@@ -741,6 +797,16 @@ def _asignar_rollos_por_producto(productos_internos: list[dict], rollos: list[di
     return resultado
 
 
+def rollo_para_producto(producto_interno: dict, rollos: list[dict]) -> dict | None:
+    """El rollo del que saldría este producto si se aprobara hoy, solo (sin
+    los demás productos de la cotización): misma regla que
+    _asignar_rollos_por_producto. None si ninguno alcanza, o con Inventario
+    apagado. Lo usa core.precios_textiles para cobrar un textil por rollo."""
+    if not _inventario_habilitado():
+        return None
+    return _asignar_rollos_por_producto([producto_interno], rollos)[0]["rollo"]
+
+
 def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:
     """Textiles que NO alcanzan para cubrir `productos_internos`: lista de
     {textil, necesario, disponible, faltante} (metros lineales, 2
@@ -763,6 +829,8 @@ def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:
     stock" apenas se desactivara el módulo."""
     if not _inventario_habilitado():
         return []
+    from core.catalogo import refrescar
+    refrescar()
     rollos = listar_rollos()
     asignaciones = _asignar_rollos_por_producto(productos_internos, rollos)
     necesarios = metros_necesarios(productos_internos)

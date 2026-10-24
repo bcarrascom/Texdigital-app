@@ -11,6 +11,7 @@ import { ControlTexto } from "@/components/Cabecera/Cabecera";
 import { TarjetaCotizacion, TarjetaDespacho, TarjetaOp, TarjetaPendiente, TarjetaRollo } from "@/components/Tarjeta/Tarjeta";
 import Modulo, { varsMazo } from "./Modulo";
 import AvisoMenu from "./AvisoMenu";
+import IconoConfiguracion from "@/assets/svg/cog-fino.svg?react";
 import { fechaDMAaTime, plural } from "@/utils/formato";
 import "./Menu.css";
 
@@ -166,6 +167,11 @@ export default function Menu() {
   return (
     <Pagina titulo="TexDigital" className="pag-menu" animarEntrada={!volviendoDe.current}>
       <div className="menu" data-saliendo={expandiendo || undefined} data-regreso={volviendoDe.current ? "" : undefined}>
+        {/* Configuración no es un módulo de producción: un engranaje chico,
+            arriba al centro, en vez de una caja más en la fila. */}
+        <Link className="menu__config" to={rutas.configuracion()} title="Configuración" aria-label="Configuración">
+          <IconoConfiguracion aria-hidden="true" />
+        </Link>
         <div className="menu__marca">
           <img className="menu__logo" src="./img/logo_texdigital.png" alt="TexDigital" />
           <p className="menu__sub">Sistema de Gestión</p>

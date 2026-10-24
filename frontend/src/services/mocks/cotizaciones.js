@@ -1,6 +1,22 @@
 /* Mocks de ver-cotización (ui/api_ver_cotizacion.py). Datos inventados. La
-   9013 simula falta de stock al aprobar; las demás aprueban. Los números
-   son los mismos que lista el mock del menú (9015 … 9006). */
+   9013 simula falta de stock al aprobar; las demás aprueban. La 9015 trae
+   precios que cambiaron desde que se hizo (core/lista_precios.py). Los
+   números son los mismos que lista el mock del menú (9015 … 9006). */
+
+/* Qué devuelve lista_precios.cambios() para la 9015, hasta que se decide. */
+let cambios9015 = {
+  firma: "mock",
+  componentes: [
+    { tipo: "Textil", nombre: "Poliéster satinado", antes: 9500, ahora: 10800, unidad: "/ML", formato: "pesos" },
+    { tipo: "Terminación", nombre: "Bolsillo", antes: 1200, ahora: 1400, unidad: "/un.", formato: "pesos" },
+    { tipo: "Material", nombre: "Ojetillos", antes: 35, ahora: 42, unidad: "/un.", formato: "pesos" },
+  ],
+  productos: [
+    { indice: 0, nombre: "Pendón roller", antes: 389000, ahora: 417000 },
+    { indice: 2, nombre: "Lienzo", antes: 268000, ahora: 291400 },
+  ],
+  total: { antes: 1282239, ahora: 1338601 },
+};
 
 const NUMEROS = Array.from({ length: 10 }, (_, i) => 9015 - i);
 const EMPRESAS = ["Tiendas Ejemplo SpA", "Café del Puerto", "Gimnasio Activo", "Clínica Norte",
@@ -38,6 +54,7 @@ function cotizacion(numero) {
       neto_total: netoTotal, iva_pct: 19, iva, total: netoTotal + iva,
     },
     productos: i % 2 ? productos.slice(0, 2) : productos,
+    cambios_precios: numero === 9015 ? cambios9015 : null,
   };
 }
 
@@ -61,6 +78,8 @@ export default {
     return { ok: true };
   },
 
+  actualizar_precios_cotizacion: () => { cambios9015 = null; return true; },
+  mantener_precios_cotizacion: () => { cambios9015 = null; return true; },
   eliminar_cotizacion: (numero) => console.info("[mock] eliminar_cotizacion", numero),
   imprimir_cotizacion: (numero) => console.info("[mock] imprimir_cotizacion", numero),
 };

@@ -12,15 +12,17 @@ import webbrowser
 from core.repositorio_cotizaciones import (
     cargar_cotizacion,
     eliminar_cotizacion as _eliminar_cotizacion,
+    guardar_cotizacion,
     listar_cotizaciones,
     producto_desde_json,
     recalcular_descuentos,
 )
-from core.precios import costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto
+from core import lista_precios
+from core.precios import costo_producto, ml_o_area_facturable_por_producto
 from core.presentar_cotizacion import generar_html
 from core.repositorio_inventario import calcular_faltantes, consumir_para_op
 from core.repositorio_materiales import (
-    materiales_para_producto, kwargs_precios, nombre_producto_para_consumo,
+    materiales_para_producto, nombre_producto_para_consumo,
     consumir_para_op as consumir_materiales_para_op,
 )
 from ui.dialogo_aprobar import promover_a_op
@@ -94,14 +96,12 @@ class ApiVerCotizacion:
         datos = recalcular_descuentos(datos)  # deja Neto/NetoTotal/IVA/Total al día
 
         productos_json = datos.get("productos", [])
-        productos_internos = [producto_desde_json(p) for p in productos_json]
-        facturables = ml_o_area_facturable_por_producto(productos_internos)
-        # kwargs_precios(): la misma valorización con la que se creó la
-        # cotización (ver core.repositorio_materiales.kwargs_precios) — sin
-        # esto, verla la recalculaba con el catálogo estático y los montos no
-        # coincidían con los que se habían cobrado.
+        # Con SU lista de precios, no con los de hoy (ver core.lista_precios):
+        # si cambiaron, "cambios_precios" lo dice y el usuario decide.
+        productos_internos, kwargs = lista_precios.internos_congelados(datos)
+        facturables = ml_o_area_facturable_por_producto(productos_internos, **kwargs)
         costos = [
-            costo_producto(p, ml_o_area_facturable=f, **kwargs_precios())
+            costo_producto(p, ml_o_area_facturable=f, **kwargs)
             for p, f in zip(productos_internos, facturables)
         ]
 
@@ -112,9 +112,7 @@ class ApiVerCotizacion:
         despacho = datos.get("Despacho")
         instalacion = datos.get("Instalacion")
         descuento_pct = datos.get("Descuento", 0.0) or 0.0
-        totales = costo_cotizacion(productos_internos, descuento_pct,
-                                    despacho=despacho or 0.0, instalacion=instalacion or 0.0,
-                                    **kwargs_precios())
+        totales = lista_precios.totales(datos, productos_internos, kwargs)
 
         # Mismo criterio que core.presentar_cotizacion.generar_html: si
         # ganó el descuento automático por volumen, se muestra SU %, no el
@@ -150,7 +148,7 @@ class ApiVerCotizacion:
                 "descuento_monto": totales["descuento"],
                 "fuente_descuento": totales["fuente_descuento"],
                 "neto_total":      totales["neto_total"],
-                "iva_pct":         19,
+                "iva_pct":         totales["iva_pct"],
                 "iva":             totales["iva"],
                 "total":           totales["total"],
             },
@@ -158,7 +156,31 @@ class ApiVerCotizacion:
                 _producto_a_json_pantalla(pj, pi, c)
                 for pj, pi, c in zip(productos_json, productos_internos, costos)
             ],
+            # None, o qué cambiaría con los precios de hoy (ver
+            # core.lista_precios.cambios): la pantalla avisa y el usuario decide.
+            "cambios_precios": lista_precios.cambios(datos),
         }
+
+    def actualizar_precios(self, numero) -> bool:
+        """"Actualizar" en el aviso de precios: la cotización pasa a los
+        precios de hoy (ver core.lista_precios.actualizar)."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return False
+        lista_precios.actualizar(datos)
+        recalcular_descuentos(datos)   # Neto/Total con la lista nueva, y la guarda
+        guardar_cotizacion(datos)      # por si los totales no cambiaron
+        return True
+
+    def mantener_precios(self, numero) -> bool:
+        """"Mantener" en el aviso de precios: se queda con los suyos y no se
+        vuelve a avisar hasta que los precios de hoy cambien otra vez."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return False
+        lista_precios.mantener(datos)
+        guardar_cotizacion(datos)
+        return True
 
     def eliminar_cotizacion(self, numero) -> bool:
         return _eliminar_cotizacion(int(numero))
@@ -271,5 +293,9 @@ class ApiVerCotizacion:
                 productos_internos, int(numero), datos.get("Empresa", ""), consumos_manuales,
             )
 
+            # La OP se lleva la lista de precios con que se cotizó (ver
+            # core.lista_precios): una cotización vieja que nunca se abrió no la
+            # tiene todavía.
+            lista_precios.congelar(datos)
             promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
             return {"ok": True}

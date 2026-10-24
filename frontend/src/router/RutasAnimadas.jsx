@@ -16,6 +16,7 @@ import HistorialOps from "@/pages/HistorialOps/HistorialOps";
 import VerDespacho from "@/pages/VerDespacho/VerDespacho";
 import AsignarDespacho from "@/pages/AsignarDespacho/AsignarDespacho";
 import GestionarDirecciones from "@/pages/GestionarDirecciones/GestionarDirecciones";
+import Configuracion from "@/pages/Configuracion/Configuracion";
 import VerRollo from "@/pages/VerRollo/VerRollo";
 import VerMaterial from "@/pages/VerMaterial/VerMaterial";
 
@@ -27,6 +28,7 @@ const MISMA_PAGINA = [
   /^\/cotizaciones\/\d+$/,                      // entre cotizaciones (VerCotizacion)
   /^\/ops\/\d+$/,                               // entre OPs (VerOp)
   /^\/(inventario|cotizaciones|ops|despachos)$/,  // entre módulos (Modulos)
+  /^\/configuracion(\/[\w-]+)?$/,                 // entre categorías de Configuración
 ];
 
 /* Las rutas, con transición entre páginas: <AnimatePresence mode="wait">
@@ -63,6 +65,7 @@ export default function RutasAnimadas() {
         <Route path="/ops/:numero" element={<VerOp />} />
         <Route path="/inventario/rollos/:id" element={<VerRollo />} />
         <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
+        <Route path="/configuracion/:categoria?" element={<Configuracion />} />
         <Route path="/despachos/direcciones" element={<GestionarDirecciones />} />
         <Route path="/despachos/:numero/asignar" element={<AsignarDespacho />} />
         <Route path="/despachos/:numero" element={<VerDespacho />} />

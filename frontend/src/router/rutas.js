@@ -35,6 +35,9 @@ export const rutas = {
   asignarDespacho:      (numero) => `/despachos/${numero}/asignar`,  // asignar-despacho
   verRollo:             (id) => `/inventario/rollos/${id}`,          // ver-rollo
   verMaterial:          (id) => `/inventario/materiales/${id}`,      // ver-material
+
+  // Configuración (no es un módulo de producción: se entra por el engranaje del menú)
+  configuracion:        (categoria) => "/configuracion" + (categoria ? `/${categoria}` : ""),
 };
 
 /* Los módulos del menú, en el orden en que aparecen. `clave` es la misma de

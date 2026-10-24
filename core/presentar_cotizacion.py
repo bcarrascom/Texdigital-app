@@ -12,9 +12,9 @@ el contenido de los placeholders {{...}}.
 from pathlib import Path
 
 from core.rutas import RECURSOS
-from core.repositorio_cotizaciones import carpeta_html, producto_desde_json
+from core import lista_precios
+from core.repositorio_cotizaciones import carpeta_html
 from core.titulo_impresion import titulo_impresion
-from core.repositorio_materiales import kwargs_precios
 from core.precios import (
     costo_cotizacion, costo_producto, formatear_clp, parsear_valor_manual,
     ml_o_area_facturable_por_producto,
@@ -28,22 +28,19 @@ def _fmt_medida(valor: float) -> str:
     return f"{float(valor):.3f}".replace(".", ",")
 
 
-def _fila_producto(p: dict, ml_o_area_facturable: float | None = None) -> str:
-    # producto_desde_json ya migra el esquema viejo de una sola Estructura/
-    # Terminación (string) a listas — se usa una sola vez acá tanto para el
-    # costo como para lo que se muestra, así los dos siempre coinciden
-    # incluso en cotizaciones guardadas antes del modelo aditivo.
-    interno = producto_desde_json(p)
+def _fila_producto(p: dict, interno: dict, kwargs: dict, ml_o_area_facturable: float | None = None) -> str:
+    # `interno` es `p` en el esquema interno (producto_desde_json, que ya
+    # migra el esquema viejo de una sola Estructura/Terminación a listas) —
+    # el mismo para el costo y para lo que se muestra, así los dos siempre
+    # coinciden incluso en cotizaciones guardadas antes del modelo aditivo.
     # ml_o_area_facturable viene de ml_o_area_facturable_por_producto()
     # (calculado por generar_html() con la lista completa) — el piso mínimo
     # de facturación se aplica por grupo de textil/tela, no línea por línea
     # (ver core.precios, docstring "Piso mínimo de facturación"), así que
     # esta fila sola no puede decidirlo por su cuenta.
-    # kwargs_precios(): el documento impreso tiene que cobrar lo mismo que la
-    # pantalla donde se armó la cotización (ver
-    # core.repositorio_materiales.kwargs_precios).
-    costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable,
-                            **kwargs_precios())
+    # kwargs: la lista de precios de la cotización (ver core.lista_precios) —
+    # el documento impreso cobra lo mismo que la pantalla.
+    costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable, **kwargs)
     cantidad = p.get("Cantidad", 0)
     valor_unit = formatear_clp(costo["valor_unitario"])
     total_fila = formatear_clp(costo["total"])
@@ -133,18 +130,16 @@ def generar_html(json_dict: dict) -> Path:
     numero = json_dict.get("Cotizacion", "")
     productos = json_dict.get("productos", [])
 
-    productos_internos = [producto_desde_json(p) for p in productos]
     descuento_pct = json_dict.get("Descuento", 0.0) or 0.0
     despacho = json_dict.get("Despacho")
     instalacion = json_dict.get("Instalacion")
-    totales = costo_cotizacion(productos_internos, descuento_pct,
-                                despacho=despacho or 0.0, instalacion=instalacion or 0.0,
-                                **kwargs_precios())
+    productos_internos, kwargs = lista_precios.internos_congelados(json_dict)
+    totales = lista_precios.totales(json_dict, productos_internos, kwargs)
     # Mismo piso-por-grupo que usó costo_cotizacion() arriba — si cada fila
     # decidiera su propio piso por su cuenta, la suma de las filas podría no
     # coincidir con el total del documento (ver core.precios, docstring
     # "Piso mínimo de facturación").
-    facturables = ml_o_area_facturable_por_producto(productos_internos)
+    facturables = ml_o_area_facturable_por_producto(productos_internos, **kwargs)
 
     contacto = json_dict.get("Contacto", "")
     email    = json_dict.get("Email", "")
@@ -190,13 +185,14 @@ def generar_html(json_dict: dict) -> Path:
         "{{condicion_pago}}":  json_dict.get("Condicion de pago", ""),
         "{{descripcion_bloque}}": descripcion_bloque,
         "{{filas_productos}}": "\n".join(
-            [_fila_producto(p, f) for p, f in zip(productos, facturables)]
+            [_fila_producto(p, d, kwargs, f) for p, d, f in zip(productos, productos_internos, facturables)]
             + ([_fila_extra("Despacho", despacho)] if despacho else [])
             + ([_fila_extra("Instalación", instalacion)] if instalacion else [])
         ),
         "{{fila_neto}}":       fila_neto,
         "{{fila_descuento}}":  fila_descuento,
         "{{neto_total}}":      formatear_clp(totales["neto_total"]),
+        "{{iva_pct}}":         f"{totales['iva_pct']:g}".replace(".", ","),
         "{{iva}}":             formatear_clp(totales["iva"]),
         "{{total}}":           formatear_clp(totales["total"]),
     }

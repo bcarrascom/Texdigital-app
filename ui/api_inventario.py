@@ -11,7 +11,7 @@ el autocompletado de los formularios — mismo mecanismo que el campo
 Cliente de gestionar-direcciones.html.
 """
 
-from core import repositorio
+from core import catalogo, repositorio
 from core import repositorio_inventario as _repo
 from core import repositorio_materiales as _repo_mat
 
@@ -45,6 +45,7 @@ class ApiInventario:
         return self._con_metricas_rollo(_repo.obtener_rollo(id_))
 
     def cargar_textiles(self) -> list[str]:
+        catalogo.refrescar()
         return repositorio.TEXTILES
 
     def cargar_proveedores(self) -> list[str]:
@@ -150,6 +151,7 @@ class ApiInventario:
         return [_repo_mat.PRODUCTO_BACKLIGHT] + list(repositorio.PRODUCTOS)
 
     def cargar_estructuras_catalogo(self) -> list[str]:
+        catalogo.refrescar()
         return list(repositorio.ESTRUCTURAS_LEGADO)
 
     def ajustar_cantidad_material(self, id_: str, nueva_cantidad, descripcion: str = "") -> dict | None:

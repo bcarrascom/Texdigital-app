@@ -16,7 +16,6 @@ from pathlib import Path
 
 from core.rutas import DATOS, _detectar_dropbox
 from core.repositorio import TEXTILES_ANCHOS
-from core.precios import costo_cotizacion
 from core import carpetas_mensuales as cm
 
 _CAMPO_FECHA = "Fecha"
@@ -201,20 +200,17 @@ def recalcular_descuentos(datos: dict, *, guardar: bool = True) -> dict:
     mecanismo que guardar_cotizacion) para que la corrección quede
     permanente y no solo para esta vista puntual.
     """
-    productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
-    descuento_pct = datos.get("Descuento", 0.0) or 0.0
-    despacho = datos.get("Despacho")
-    instalacion = datos.get("Instalacion")
-    # kwargs_precios(): misma valorización que al crear/ver/imprimir (ver
-    # core.repositorio_materiales.kwargs_precios) — este recálculo REESCRIBE
-    # el archivo si algún monto cambió, así que valorizar acá con otros
-    # precios que el resto del sistema corrompería la cotización guardada.
-    from core.repositorio_materiales import kwargs_precios
-    totales = costo_cotizacion(productos_internos, descuento_pct,
-                                despacho=despacho or 0.0, instalacion=instalacion or 0.0,
-                                **kwargs_precios())
+    # Con SU lista de precios (ver core.lista_precios), no con los de hoy:
+    # este recálculo REESCRIBE el archivo, y una cotización guardada no
+    # cambia de monto sola porque cambió un precio — eso lo decide el usuario
+    # (ver lista_precios.cambios). Una guardada antes de que existiera la
+    # lista se congela acá, con los precios de hoy.
+    from core import lista_precios
+    congelada_recien = not datos.get("ListaPrecios")
+    productos_internos, kwargs = lista_precios.internos_congelados(datos)
+    totales = lista_precios.totales(datos, productos_internos, kwargs)
 
-    cambio = (
+    cambio = congelada_recien or (
         datos.get("Neto") != totales["neto"]
         or datos.get("NetoTotal") != totales["neto_total"]
         or datos.get("IVA") != totales["iva"]

@@ -116,6 +116,27 @@ IVA_PORCENTAJE = 19
 ML_MINIMO_POR_PRODUCTO = 2.0
 M2_MINIMO_POR_PRODUCTO = 2.0
 
+# Las reglas de arriba (y TRAMOS_DESCUENTO_TEXTIL, más abajo) son ahora
+# editables en Configuración › Reglas de cobro (ver core.reglas_cobro) y
+# llegan a cada función por el kwarg `reglas`:
+#     {"iva": %, "ml_minimo": ML, "m2_minimo": M², "tramos_descuento": [[m², %], ...]}
+# Sin `reglas` (None) valen estas constantes. NO CAMBIARLAS: una cotización
+# guardada antes de que las reglas se congelaran en su lista de precios (ver
+# core.lista_precios) se sigue calculando con ellas.
+
+
+def _reglas(reglas: dict | None) -> dict:
+    return reglas or {
+        "iva": IVA_PORCENTAJE, "ml_minimo": ML_MINIMO_POR_PRODUCTO, "m2_minimo": M2_MINIMO_POR_PRODUCTO,
+        "tramos_descuento": TRAMOS_DESCUENTO_TEXTIL,
+    }
+
+
+def _piso(tipo: str, reglas: dict | None) -> float:
+    """El mínimo facturable de un grupo: M² en Backlight, ML en el resto."""
+    r = _reglas(reglas)
+    return float(r["m2_minimo"] if tipo == "backlight" else r["ml_minimo"])
+
 
 def _con_piso(valor: float, piso: float) -> float:
     """Sube `valor` a `piso` si queda por debajo — pero solo si `valor` ya
@@ -204,6 +225,13 @@ def parsear_valor_manual(texto: str) -> float | None:
     return None
 
 
+def _valor_tela(d: dict, nombre: str, textiles_valores: dict, valor_textil) -> float:
+    """El valor por ML/M² del textil de `d`: el que dé `valor_textil` (ver
+    costo_producto) y, si no da ninguno, el de textiles_valores. 0 sin precio."""
+    valor = valor_textil(d) if valor_textil is not None else None
+    return textiles_valores.get(nombre, 0.0) if valor is None else valor
+
+
 def costo_producto(
     d: dict,
     *,
@@ -217,6 +245,8 @@ def costo_producto(
     precios_cajas: dict | None = None,
     ml_o_area_facturable: float | None = None,
     cobro_materiales=None,
+    valor_textil=None,
+    reglas: dict | None = None,
 ) -> dict:
     """
     Devuelve el desglose de costo de un producto (dict interno del
@@ -285,6 +315,13 @@ def costo_producto(
     En None (default) nada de esto corre y el cálculo es el de siempre — es
     lo que mantiene a este módulo andando igual con el módulo Inventario
     apagado, o en un test que no quiere saber de materiales.
+
+    `valor_textil`: función que recibe este mismo producto y devuelve el
+    valor por ML/M² de su textil, o None para buscarlo en textiles_valores
+    — en la práctica core.precios_textiles.valorizador, porque un textil que
+    se cobra por rollo no tiene UN valor: depende del rollo del que salga
+    cada producto (pedido de Bruno, 2026-10-22). Mismo motivo que
+    `cobro_materiales` para recibirla como parámetro.
     """
     textiles_valores       = TEXTILES_VALORES if textiles_valores is None else textiles_valores
     textiles_anchos        = TEXTILES_ANCHOS if textiles_anchos is None else textiles_anchos
@@ -299,10 +336,10 @@ def costo_producto(
     if "tela" in d:
         area = d.get("alto", 0.0) * d.get("ancho", 0.0) * cantidad
         area_facturable = (
-            _con_piso(area, M2_MINIMO_POR_PRODUCTO)
+            _con_piso(area, _piso("backlight", reglas))
             if ml_o_area_facturable is None else ml_o_area_facturable
         )
-        valor_tela = textiles_valores.get(d.get("tela", ""), 0.0)
+        valor_tela = _valor_tela(d, d.get("tela", ""), textiles_valores, valor_textil)
         costo_impresion = area_facturable * valor_tela
 
         detalle_caja = None
@@ -342,11 +379,11 @@ def costo_producto(
         _, ml = calcular_ml(d, ancho_tela)
         ml = ml or 0.0
         ml_facturable = (
-            _con_piso(ml, ML_MINIMO_POR_PRODUCTO)
+            _con_piso(ml, _piso("estandar", reglas))
             if ml_o_area_facturable is None else ml_o_area_facturable
         )
 
-        valor_tela = textiles_valores.get(d.get("textil", ""), 0.0)
+        valor_tela = _valor_tela(d, d.get("textil", ""), textiles_valores, valor_textil)
         costo_impresion = ml_facturable * valor_tela
 
         cant_efectiva = cantidad_efectiva(d)
@@ -465,12 +502,14 @@ TRAMOS_DESCUENTO_TEXTIL = [
 ]
 
 
-def tramo_descuento_textil(m2: float) -> float:
+def tramo_descuento_textil(m2: float, tramos=None) -> float:
     """% de descuento-textil según m² impresos: 10-20 m² -> 5%, 20-50 m²
-    -> 10%, 50 m² en adelante -> 20%. Bajo 10 m², 0% (no aplica)."""
-    for piso, pct in TRAMOS_DESCUENTO_TEXTIL:
+    -> 10%, 50 m² en adelante -> 20%. Bajo 10 m², 0% (no aplica).
+    `tramos`: [[m², %], ...] en cualquier orden (los de Configuración, ver
+    `reglas`); sin ellos, TRAMOS_DESCUENTO_TEXTIL."""
+    for piso, pct in sorted(TRAMOS_DESCUENTO_TEXTIL if tramos is None else tramos, key=lambda t: t[0], reverse=True):
         if m2 >= piso:
-            return pct
+            return float(pct)
     return 0.0
 
 
@@ -537,12 +576,13 @@ def ml_o_area_facturable_por_producto(productos: list[dict], **kwargs) -> list[f
 
     kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
     ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
-    sin piso, de cada producto individual). `cobro_materiales` se descarta a
-    propósito: acá no se mira ningún costo de estructuras, y resolverlo
-    implica leer el inventario del disco por cada producto (ver
+    sin piso, de cada producto individual). `cobro_materiales` y
+    `valor_textil` se descartan a propósito: acá no se mira ningún precio, y
+    resolverlos implica leer el inventario del disco por cada producto (ver
     core.repositorio_materiales.cobro_materiales_producto) para después tirar
     el resultado."""
     kwargs.pop("cobro_materiales", None)
+    kwargs.pop("valor_textil", None)
     reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
 
     grupos: dict[tuple[str, str], list[int]] = {}
@@ -551,7 +591,7 @@ def ml_o_area_facturable_por_producto(productos: list[dict], **kwargs) -> list[f
 
     facturables = [0.0] * len(productos)
     for (tipo, _textil), indices in grupos.items():
-        piso = M2_MINIMO_POR_PRODUCTO if tipo == "backlight" else ML_MINIMO_POR_PRODUCTO
+        piso = _piso(tipo, kwargs.get("reglas"))
         valores_grupo = [reales[i] for i in indices]
         for i, valor in zip(indices, _distribuir_piso(valores_grupo, piso)):
             facturables[i] = valor
@@ -575,9 +615,11 @@ def en_piso_minimo_por_producto(productos: list[dict], **kwargs) -> list[bool]:
 
     kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
     ver ahí) — solo se usa para leer "ml_o_area" (siempre el valor real,
-    sin piso, de cada producto individual). `cobro_materiales` se descarta
-    por el mismo motivo que en ml_o_area_facturable_por_producto."""
+    sin piso, de cada producto individual). `cobro_materiales` y
+    `valor_textil` se descartan por el mismo motivo que en
+    ml_o_area_facturable_por_producto."""
     kwargs.pop("cobro_materiales", None)
+    kwargs.pop("valor_textil", None)
     reales = [costo_producto(p, **kwargs)["ml_o_area"] for p in productos]
 
     grupos: dict[tuple[str, str], list[int]] = {}
@@ -586,7 +628,7 @@ def en_piso_minimo_por_producto(productos: list[dict], **kwargs) -> list[bool]:
 
     en_minimo = [False] * len(productos)
     for (tipo, _textil), indices in grupos.items():
-        piso = M2_MINIMO_POR_PRODUCTO if tipo == "backlight" else ML_MINIMO_POR_PRODUCTO
+        piso = _piso(tipo, kwargs.get("reglas"))
         total_real = sum(reales[i] for i in indices)
         if 0 < total_real < piso:
             for i in indices:
@@ -651,7 +693,8 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
 
     monto = 0.0
     for grupo in grupos.values():
-        pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _, _ in grupo))
+        pct_grupo = tramo_descuento_textil(sum(_area_producto(p) for p, _, _ in grupo),
+                                           _reglas(kwargs.get("reglas"))["tramos_descuento"])
         if not pct_grupo:
             continue
         costo_impresion_grupo = sum(
@@ -689,7 +732,7 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
     tela).
 
     Devuelve {neto, descuento, descuento_textil_pct, fuente_descuento,
-    neto_total, iva, total}. `descuento_textil_pct` es el % (derivado,
+    neto_total, iva, iva_pct, total}. `descuento_textil_pct` es el % (derivado,
     "visual") del descuento-textil calculado para esta cotización, se
     devuelve siempre (haya ganado o no) para poder mostrarlo en pantalla.
     `fuente_descuento` es "normal" o "textil", según cuál se aplicó.
@@ -720,7 +763,8 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
         fuente_descuento = "normal"
 
     neto_total = neto - descuento
-    iva = neto_total * IVA_PORCENTAJE / 100
+    iva_pct = float(_reglas(kwargs.get("reglas"))["iva"])
+    iva = neto_total * iva_pct / 100
     total = neto_total + iva
     return {
         "neto":                 neto,
@@ -729,5 +773,6 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
         "fuente_descuento":     fuente_descuento,
         "neto_total":           neto_total,
         "iva":                  iva,
+        "iva_pct":              iva_pct,
         "total":                total,
     }
