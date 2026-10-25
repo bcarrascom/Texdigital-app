@@ -100,6 +100,8 @@ export default function Inventario({ datos, recargar }) {
           <h1 className="modulo-cuerpo__titulo">Inventario</h1>
           <SwitchIconos opciones={VISTAS} valor={vista} onCambiar={cambiarVista} etiqueta="Vista de inventario" />
           <span className="cabecera__sep" />
+          <button className="cab-btn" type="button" title="Cuánto se usó y cuánto queda, mes a mes"
+                  onClick={() => navigate(rutas.reportesInventario(), { state: { desde } })}>Reportes</button>
           <button className="cab-btn" type="button" title="Abrir la lista de proveedores, en Configuración"
                   onClick={() => navigate(rutas.configuracion("proveedores"), { state: { desde } })}>Proveedores</button>
         </div>

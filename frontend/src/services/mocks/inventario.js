@@ -4,6 +4,8 @@
    pantallas, no para llevar la contabilidad. Cada entrada de historial tiene
    la forma de la real (_agregar_registro / _agregar_historial). */
 
+import reportesCerrados from "./reportesInventario.json";
+
 const hoy = () => new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/-/g, "/");
 const isoADma = (iso) => iso.split("-").reverse().join("/");
 let siguienteEntrada = 1;
@@ -83,7 +85,23 @@ const conMetricasMaterial = (m) => {
 const materialPorId = (id) => materiales.find((x) => x.id === id);
 const devolverMaterial = (m) => (m ? structuredClone(conMetricasMaterial(m)) : null);
 
+/* ── Reportes mensuales ────────────────────────────────────────────────────
+   Los tres cerrados son los mismos que se escriben en la Dropbox de
+   desarrollo; el del mes en curso es una copia del último, a medio mes. */
+
+function reporteEnCurso() {
+  const ahora = new Date();
+  const base = structuredClone(reportesCerrados[reportesCerrados.length - 1]);
+  return { ...base, anio: ahora.getFullYear(), mes: ahora.getMonth() + 1, cerrado: false,
+           generado: `${hoy()} ${ahora.toTimeString().slice(0, 5)}` };
+}
+const todosLosReportes = () => [reporteEnCurso(), ...reportesCerrados.slice().reverse()];
+
 export default {
+  abrir_reportes_inventario: () => todosLosReportes().map(({ anio, mes, cerrado }) => ({ anio, mes, cerrado })),
+  obtener_reporte_inventario: (anio, mes) =>
+    structuredClone(todosLosReportes().find((r) => r.anio === Number(anio) && r.mes === Number(mes)) || null),
+
   listar_rollos: () => structuredClone(rollos.map(conMetricasRollo)),
   obtener_rollo: (id) => devolverRollo(rolloPorId(id)),
   listar_materiales: () => structuredClone(materiales.map(conMetricasMaterial)),
@@ -103,6 +121,9 @@ export default {
   },
   editar_rollo(id, nombre_textil, ancho, precio_compra, valor, proveedor) {
     const r = rolloPorId(id);
+    if (r && r.valor !== valor) {
+      r.usos.push(uso("precio", hoy(), r.metros_restantes, r.metros_restantes, { valor_anterior: r.valor, valor_nuevo: valor }));
+    }
     if (r) Object.assign(r, { nombre_textil, ancho, precio_compra, valor, proveedor });
     return devolverRollo(r);
   },

@@ -14,6 +14,7 @@ Cliente de gestionar-direcciones.html.
 from core import catalogo, repositorio
 from core import repositorio_inventario as _repo
 from core import repositorio_materiales as _repo_mat
+from core import reportes_inventario as _reportes
 
 
 def _iso_a_dma(iso: str) -> str:
@@ -169,3 +170,16 @@ class ApiInventario:
 
     def eliminar_material(self, id_: str) -> bool:
         return _repo_mat.eliminar_material(id_)
+
+    # ── Reportes mensuales ────────────────────────────────────────────────
+
+    def abrir_reportes(self) -> list[dict]:
+        """Al abrir la página de reportes: recalcula el mes en curso (y
+        cierra los que terminaron, ver core.reportes_inventario.
+        actualizar_reportes) y devuelve los meses que hay."""
+        catalogo.refrescar()
+        _reportes.actualizar_reportes()
+        return _reportes.listar_reportes()
+
+    def obtener_reporte(self, anio, mes) -> dict | None:
+        return _reportes.obtener_reporte(anio, mes)

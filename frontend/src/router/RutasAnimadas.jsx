@@ -19,6 +19,7 @@ import GestionarDirecciones from "@/pages/GestionarDirecciones/GestionarDireccio
 import Configuracion from "@/pages/Configuracion/Configuracion";
 import VerRollo from "@/pages/VerRollo/VerRollo";
 import VerMaterial from "@/pages/VerMaterial/VerMaterial";
+import ReportesInventario from "@/pages/ReportesInventario/ReportesInventario";
 
 /* Rutas que, entre sí, son la MISMA página: pasar de una a otra no desmonta
    la página (no hay transición del router), la página anima su propio
@@ -65,6 +66,7 @@ export default function RutasAnimadas() {
         <Route path="/ops/:numero" element={<VerOp />} />
         <Route path="/inventario/rollos/:id" element={<VerRollo />} />
         <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
+        <Route path="/inventario/reportes" element={<ReportesInventario />} />
         <Route path="/configuracion/:categoria?" element={<Configuracion />} />
         <Route path="/despachos/direcciones" element={<GestionarDirecciones />} />
         <Route path="/despachos/:numero/asignar" element={<AsignarDespacho />} />

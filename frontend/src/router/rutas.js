@@ -35,6 +35,7 @@ export const rutas = {
   asignarDespacho:      (numero) => `/despachos/${numero}/asignar`,  // asignar-despacho
   verRollo:             (id) => `/inventario/rollos/${id}`,          // ver-rollo
   verMaterial:          (id) => `/inventario/materiales/${id}`,      // ver-material
+  reportesInventario:   (params) => "/inventario/reportes" + consulta(params), // ?anio=2026&mes=9
 
   // Configuración (no es un módulo de producción: se entra por el engranaje del menú)
   configuracion:        (categoria) => "/configuracion" + (categoria ? `/${categoria}` : ""),
