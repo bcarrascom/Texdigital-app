@@ -25,6 +25,7 @@ from core.repositorio_materiales import (
     materiales_para_producto, nombre_producto_para_consumo,
     consumir_para_op as consumir_materiales_para_op,
 )
+from core.reportes_inventario import actualizar_reportes
 from ui.dialogo_aprobar import promover_a_op
 
 
@@ -298,4 +299,11 @@ class ApiVerCotizacion:
             # tiene todavía.
             lista_precios.congelar(datos)
             promover_a_op(datos, _iso_a_dma(ingreso), _iso_a_dma(entrega))
+            # El reporte mensual de Inventario cuenta el consumo en el
+            # momento. Si falla, la OP ya está aprobada: el reporte se vuelve
+            # a armar igual la próxima vez que se abra su página.
+            try:
+                actualizar_reportes()
+            except Exception:
+                pass
             return {"ok": True}
