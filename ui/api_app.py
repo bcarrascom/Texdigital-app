@@ -516,3 +516,11 @@ class ApiApp:
 
     def eliminar_material(self, id_) -> None:
         self._inventario.eliminar_material(id_)
+
+    # ── Inventario: reportes mensuales ───────────────────────────────────────
+
+    def abrir_reportes_inventario(self) -> list[dict]:
+        return self._inventario.abrir_reportes()
+
+    def obtener_reporte_inventario(self, anio, mes) -> dict | None:
+        return self._inventario.obtener_reporte(anio, mes)

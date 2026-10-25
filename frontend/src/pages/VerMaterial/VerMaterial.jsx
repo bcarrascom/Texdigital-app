@@ -202,16 +202,20 @@ function netoDe(u) {
 function vistaEntrada(u, m, abrirOp) {
   const unidad = unidadDe(m);
   const restock = u.tipo === "restock", consumo = u.tipo === "consumo", precio = u.tipo === "precio";
-  const neto = precio ? "" : netoDe(u);
+  // Un consumo de una OP que se recotizó: lo descontado volvió al stock (ver
+  // revertir_consumo_op). Queda a la vista, sin el color de un consumo.
+  const revertido = consumo && u.revertido;
+  const neto = precio || revertido ? "" : netoDe(u);
   return {
-    chip: ETIQUETA_TIPO[u.tipo] || u.tipo,
-    variante: restock ? "restock" : consumo ? "consumo" : precio ? "precio" : undefined,
+    chip: revertido ? "Consumo revertido" : ETIQUETA_TIPO[u.tipo] || u.tipo,
+    variante: restock ? "restock" : revertido ? undefined : consumo ? "consumo" : precio ? "precio" : undefined,
     neto: neto && `${neto} ${unidad}`,
     cambio: precio
       ? `${plata(u.valor_anterior)} → ${plata(u.valor_nuevo)}/${unidad}`
+      : revertido ? `${fmt.cantidad(u.cantidad_revertida)} ${unidad} devueltos`
       : `${fmt.cantidad(u.cantidad_anterior)} → ${fmt.cantidad(u.cantidad_nueva)} ${unidad}`,
     fecha: u.fecha,
-    descripcion: restock || consumo ? null : u.descripcion,
+    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: lo descontado volvió al stock.` : restock || consumo ? null : u.descripcion,
     datos: restock ? [
       ["Proveedor", u.proveedor],
       ["Costo total", u.costo_total != null ? fmt.pesos(u.costo_total) : null],

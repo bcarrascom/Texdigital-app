@@ -1,0 +1,458 @@
+[
+  {
+    "anio": 2026,
+    "mes": 7,
+    "cerrado": true,
+    "generado": "01/08/2026 09:12",
+    "totales": {
+      "valor_vendido": 762874.97,
+      "valor_restante": 3132081.3,
+      "textiles": {
+        "valor_vendido": 473843.84,
+        "valor_restante": 2217172.42,
+        "inicial": 237.433,
+        "ingresado": 152.974,
+        "usado": 91.825,
+        "restante": 298.582
+      },
+      "materiales": {
+        "valor_vendido": 289031.13,
+        "valor_restante": 914908.88
+      }
+    },
+    "textiles": [
+      {
+        "nombre": "Canvas algodón",
+        "unidad": "m",
+        "rollos": 3,
+        "inicial": 48.678,
+        "ingresado": 80.926,
+        "usado": 7.296,
+        "restante": 122.309,
+        "valor_vendido": 69921.23,
+        "valor_restante": 1345394.13,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Felpa gruesa",
+        "unidad": "m",
+        "rollos": 1,
+        "inicial": 61.868,
+        "ingresado": 72.048,
+        "usado": 40.087,
+        "restante": 93.828,
+        "valor_vendido": 0.0,
+        "valor_restante": 0.0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Lona mate",
+        "unidad": "m",
+        "rollos": 2,
+        "inicial": 41.161,
+        "ingresado": 0.0,
+        "usado": 18.911,
+        "restante": 22.25,
+        "valor_vendido": 141281.69,
+        "valor_restante": 200248.79,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Poliéster satinado",
+        "unidad": "m",
+        "rollos": 4,
+        "inicial": 34.482,
+        "ingresado": 0.0,
+        "usado": 8.143,
+        "restante": 26.339,
+        "valor_vendido": 53109.14,
+        "valor_restante": 197543.45,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Tela backlit",
+        "unidad": "m",
+        "rollos": 1,
+        "inicial": 51.244,
+        "ingresado": 0.0,
+        "usado": 17.388,
+        "restante": 33.856,
+        "valor_vendido": 209531.78,
+        "valor_restante": 473986.05,
+        "sin_valor": 0
+      }
+    ],
+    "materiales": [
+      {
+        "nombre": "Ojal metálico",
+        "unidad": "un.",
+        "inicial": 669,
+        "ingresado": 380,
+        "usado": 214,
+        "restante": 835,
+        "valor_vendido": 22376.56,
+        "valor_restante": 100200,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Silicona transparente",
+        "unidad": "m",
+        "inicial": 10.463,
+        "ingresado": 18.489,
+        "usado": 13.363,
+        "restante": 15.589,
+        "valor_vendido": 10652.27,
+        "valor_restante": 14030.0,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Bastidor de aluminio",
+        "unidad": "m",
+        "inicial": 48.221,
+        "ingresado": 66.416,
+        "usado": 29.562,
+        "restante": 85.075,
+        "valor_vendido": 187738.19,
+        "valor_restante": 552989.06,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Adhesivo doble contacto",
+        "unidad": "m",
+        "inicial": 62.231,
+        "ingresado": 0.0,
+        "usado": 22.483,
+        "restante": 39.748,
+        "valor_vendido": 9449.12,
+        "valor_restante": 17886.71,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Pie metálico",
+        "unidad": "un.",
+        "inicial": 631,
+        "ingresado": 0,
+        "usado": 43,
+        "restante": 588,
+        "valor_vendido": 0.0,
+        "valor_restante": 0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Tubo de aluminio 25 mm",
+        "unidad": "m",
+        "inicial": 61.242,
+        "ingresado": 32.104,
+        "usado": 21.532,
+        "restante": 71.813,
+        "valor_vendido": 58814.99,
+        "valor_restante": 229803.11,
+        "sin_valor": 0
+      }
+    ]
+  },
+  {
+    "anio": 2026,
+    "mes": 8,
+    "cerrado": true,
+    "generado": "01/09/2026 09:12",
+    "totales": {
+      "valor_vendido": 1381223.68,
+      "valor_restante": 3744776.4,
+      "textiles": {
+        "valor_vendido": 860061.24,
+        "valor_restante": 3386378.06,
+        "inicial": 272.36,
+        "ingresado": 252.214,
+        "usado": 152.76,
+        "restante": 371.813
+      },
+      "materiales": {
+        "valor_vendido": 521162.44,
+        "valor_restante": 358398.34
+      }
+    },
+    "textiles": [
+      {
+        "nombre": "Canvas algodón",
+        "unidad": "m",
+        "rollos": 3,
+        "inicial": 86.023,
+        "ingresado": 0.0,
+        "usado": 22.799,
+        "restante": 63.224,
+        "valor_vendido": 210288.43,
+        "valor_restante": 695463.23,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Felpa gruesa",
+        "unidad": "m",
+        "rollos": 3,
+        "inicial": 6.782,
+        "ingresado": 58.338,
+        "usado": 42.536,
+        "restante": 22.584,
+        "valor_vendido": 0.0,
+        "valor_restante": 0.0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Lona mate",
+        "unidad": "m",
+        "rollos": 3,
+        "inicial": 150.657,
+        "ingresado": 0.0,
+        "usado": 37.02,
+        "restante": 113.637,
+        "valor_vendido": 268227.29,
+        "valor_restante": 1022730.94,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Poliéster satinado",
+        "unidad": "m",
+        "rollos": 1,
+        "inicial": 19.771,
+        "ingresado": 128.668,
+        "usado": 33.827,
+        "restante": 114.611,
+        "valor_vendido": 213676.29,
+        "valor_restante": 859586.23,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Tela backlit",
+        "unidad": "m",
+        "rollos": 4,
+        "inicial": 9.127,
+        "ingresado": 65.208,
+        "usado": 16.578,
+        "restante": 57.757,
+        "valor_vendido": 167869.23,
+        "valor_restante": 808597.66,
+        "sin_valor": 0
+      }
+    ],
+    "materiales": [
+      {
+        "nombre": "Ojal metálico",
+        "unidad": "un.",
+        "inicial": 731,
+        "ingresado": 0,
+        "usado": 106,
+        "restante": 625,
+        "valor_vendido": 9128.97,
+        "valor_restante": 75000,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Silicona transparente",
+        "unidad": "m",
+        "inicial": 83.312,
+        "ingresado": 0.0,
+        "usado": 62.617,
+        "restante": 20.694,
+        "valor_vendido": 46058.69,
+        "valor_restante": 18624.99,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Bastidor de aluminio",
+        "unidad": "m",
+        "inicial": 30.83,
+        "ingresado": 52.419,
+        "usado": 70.357,
+        "restante": 12.893,
+        "valor_vendido": 441319.0,
+        "valor_restante": 83804.55,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Adhesivo doble contacto",
+        "unidad": "m",
+        "inicial": 204.684,
+        "ingresado": 0.0,
+        "usado": 66.446,
+        "restante": 138.238,
+        "valor_vendido": 24655.78,
+        "valor_restante": 62206.88,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Pie metálico",
+        "unidad": "un.",
+        "inicial": 113,
+        "ingresado": 789,
+        "usado": 203,
+        "restante": 699,
+        "valor_vendido": 0.0,
+        "valor_restante": 0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Tubo de aluminio 25 mm",
+        "unidad": "m",
+        "inicial": 37.113,
+        "ingresado": 0.0,
+        "usado": 0.0,
+        "restante": 37.113,
+        "valor_vendido": 0.0,
+        "valor_restante": 118761.92,
+        "sin_valor": 0
+      }
+    ]
+  },
+  {
+    "anio": 2026,
+    "mes": 9,
+    "cerrado": true,
+    "generado": "01/10/2026 09:12",
+    "totales": {
+      "valor_vendido": 2436357.75,
+      "valor_restante": 3119866.45,
+      "textiles": {
+        "valor_vendido": 1567085.78,
+        "valor_restante": 2270690.52,
+        "inicial": 263.194,
+        "ingresado": 206.832,
+        "usado": 220.932,
+        "restante": 249.092
+      },
+      "materiales": {
+        "valor_vendido": 869271.97,
+        "valor_restante": 849175.93
+      }
+    },
+    "textiles": [
+      {
+        "nombre": "Canvas algodón",
+        "unidad": "m",
+        "rollos": 1,
+        "inicial": 34.448,
+        "ingresado": 69.387,
+        "usado": 17.987,
+        "restante": 85.848,
+        "valor_vendido": 142674.01,
+        "valor_restante": 944327.46,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Felpa gruesa",
+        "unidad": "m",
+        "rollos": 2,
+        "inicial": 49.289,
+        "ingresado": 28.448,
+        "usado": 38.911,
+        "restante": 38.826,
+        "valor_vendido": 0.0,
+        "valor_restante": 0.0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Lona mate",
+        "unidad": "m",
+        "rollos": 2,
+        "inicial": 42.366,
+        "ingresado": 66.069,
+        "usado": 53.609,
+        "restante": 54.826,
+        "valor_vendido": 427128.4,
+        "valor_restante": 493438.14,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Poliéster satinado",
+        "unidad": "m",
+        "rollos": 4,
+        "inicial": 37.091,
+        "ingresado": 42.928,
+        "usado": 58.269,
+        "restante": 21.749,
+        "valor_vendido": 369043.98,
+        "valor_restante": 163118.34,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Tela backlit",
+        "unidad": "m",
+        "rollos": 1,
+        "inicial": 100.0,
+        "ingresado": 0.0,
+        "usado": 52.156,
+        "restante": 47.843,
+        "valor_vendido": 628239.39,
+        "valor_restante": 669806.58,
+        "sin_valor": 0
+      }
+    ],
+    "materiales": [
+      {
+        "nombre": "Ojal metálico",
+        "unidad": "un.",
+        "inicial": 255,
+        "ingresado": 543,
+        "usado": 170,
+        "restante": 628,
+        "valor_vendido": 20127.46,
+        "valor_restante": 75360,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Silicona transparente",
+        "unidad": "m",
+        "inicial": 143.595,
+        "ingresado": 0.0,
+        "usado": 67.731,
+        "restante": 75.864,
+        "valor_vendido": 51595.83,
+        "valor_restante": 68277.81,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Bastidor de aluminio",
+        "unidad": "m",
+        "inicial": 182.618,
+        "ingresado": 0.0,
+        "usado": 105.755,
+        "restante": 76.863,
+        "valor_vendido": 510903.45,
+        "valor_restante": 499610.91,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Adhesivo doble contacto",
+        "unidad": "m",
+        "inicial": 57.269,
+        "ingresado": 143.841,
+        "usado": 82.654,
+        "restante": 118.456,
+        "valor_vendido": 31797.61,
+        "valor_restante": 53305.29,
+        "sin_valor": 0
+      },
+      {
+        "nombre": "Pie metálico",
+        "unidad": "un.",
+        "inicial": 203,
+        "ingresado": 506,
+        "usado": 169,
+        "restante": 540,
+        "valor_vendido": 0.0,
+        "valor_restante": 0,
+        "sin_valor": 1
+      },
+      {
+        "nombre": "Tubo de aluminio 25 mm",
+        "unidad": "m",
+        "inicial": 84.68,
+        "ingresado": 46.527,
+        "usado": 83.512,
+        "restante": 47.694,
+        "valor_vendido": 254847.62,
+        "valor_restante": 152621.92,
+        "sin_valor": 0
+      }
+    ]
+  }
+]

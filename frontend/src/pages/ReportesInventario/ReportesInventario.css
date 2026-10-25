@@ -1,0 +1,64 @@
+/* Estilos propios de los reportes mensuales de Inventario. La tabla y su
+   fila de total vienen de base.css (.tabla, .tabla-caja, tr[data-total]). */
+
+.pag-reportes-inventario {
+  /* Meses a la izquierda, el reporte a la derecha. */
+  .reportes {
+    width: min(100%, 76rem); margin-inline: auto;
+    display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: var(--e-6);
+    align-items: start;
+  }
+
+  /* ── Lista de meses ─────────────────────────────────────────────────────── */
+  .reportes__meses { position: sticky; top: 0; display: grid; gap: var(--e-5); }
+  .reportes__anio { display: grid; gap: var(--e-1); }
+  .reportes__anio .seccion-titulo { margin-bottom: var(--e-1); padding-inline: var(--e-3); }
+  .reportes__mes {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--e-2);
+    padding: var(--e-2) var(--e-3); border: 0; border-radius: var(--r-md);
+    background: none; color: var(--c-texto-suave);
+    font: inherit; font-size: var(--t-sm); text-align: left; cursor: pointer;
+    transition: background var(--m-rapida) var(--ease-salida), color var(--m-rapida) var(--ease-salida);
+  }
+  .reportes__mes:hover { background: var(--c-tema-relleno); color: var(--c-texto); }
+  .reportes__mes[aria-current] {
+    background: var(--c-superficie); color: var(--c-tema-tinta);
+    font-weight: var(--peso-medio); box-shadow: var(--s-1);
+  }
+
+  /* ── El reporte ─────────────────────────────────────────────────────────── */
+  .reportes__cuerpo { display: grid; gap: var(--e-5); min-width: 0; }
+  .reporte__titulo { font-size: var(--t-2xl); font-weight: var(--peso-fuerte); line-height: 1.1; }
+  .reporte__bajada { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
+
+  /* Las cuatro cifras grandes: plata usada y restante, metros usados y restantes. */
+  .reporte__cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--e-3); }
+  .cifra {
+    display: grid; gap: var(--e-1); padding: var(--e-4);
+    background: var(--c-superficie); border: 1.5px solid var(--c-borde); border-radius: var(--r-lg);
+    box-shadow: var(--s-1);
+  }
+  .cifra__etiqueta { font-size: var(--t-xs); font-weight: var(--peso-fuerte); color: var(--c-texto-tenue);
+                     text-transform: uppercase; letter-spacing: .08em; }
+  .cifra__valor { font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+                  font-size: var(--t-xl); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+  .cifra__detalle { font-size: var(--t-xs); color: var(--c-texto-suave); }
+
+  .reporte__seccion .seccion-titulo { margin-bottom: var(--e-2); }
+  .reporte__tabla .num { white-space: nowrap; }
+  .reporte__nombre { display: grid; gap: .15rem; }
+  .reporte__nombre > span { font-weight: var(--peso-medio); }
+  .reporte__nombre small { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  .reporte__aviso { color: var(--c-aviso); }
+  .sin-dato { color: var(--c-texto-tenue); }
+
+  .reportes__vacio { padding: var(--e-5); text-align: center; color: var(--c-texto-tenue); font-size: var(--t-sm); }
+
+  /* Angosto: los meses pasan arriba, en una fila que se desplaza. */
+  @media (max-width: 52rem) {
+    .reportes { grid-template-columns: minmax(0, 1fr); gap: var(--e-4); }
+    .reportes__meses { position: static; display: flex; gap: var(--e-4); overflow-x: auto; }
+    .reportes__anio { display: flex; align-items: center; }
+    .reportes__anio .seccion-titulo { margin: 0; }
+  }
+}

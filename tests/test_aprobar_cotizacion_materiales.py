@@ -34,8 +34,10 @@ import core.repositorio_cotizaciones as repo_cot
 import core.repositorio_inventario as repo_inv
 import core.repositorio_materiales as repo_mat
 import core.repositorio_ops as repo_ops
+import core.reportes_inventario as reportes
 from ui.api_ver_cotizacion import ApiVerCotizacion
 from ui.api_cotizacion import ApiCotizacion
+from ui.dialogo_recotizar import recotizar_op
 
 _ANCHOS = {"TelaTest": 1.5}
 
@@ -71,6 +73,7 @@ class _ConRutasTemporales(unittest.TestCase):
             mock.patch.object(repo_ops, "_ruta_base", lambda: base / "OPs"),
             mock.patch.object(repo_inv, "_ruta_base", lambda: base / "Inventario"),
             mock.patch.object(repo_mat, "_ruta_base", lambda: base / "Inventario"),
+            mock.patch.object(reportes, "_ruta_base", lambda: base / "Inventario"),
             mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", _ANCHOS, clear=True),
         ]
         for p in self._parches:
@@ -156,6 +159,48 @@ class TestAprobarConStockSuficiente(_ConRutasTemporales):
         self.assertEqual(sorted(r["ok"] for r in resultados), [False, True])
         self.assertEqual(repo_inv.stock_por_textil()["TelaTest"], 89.0)  # 100 - 11, UNA sola vez
         self.assertEqual(len(repo_inv.obtener_rollo(repo_inv.listar_rollos()[0]["id"])["usos"]), 1)
+
+
+class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
+    """Aprobar actualiza el reporte del mes en el momento; recotizar
+    devuelve el consumo al stock y el reporte deja de contarlo."""
+
+    def _textil_del_mes(self):
+        hoy = reportes.date.today()
+        reporte = reportes.obtener_reporte(hoy.year, hoy.month)
+        return next(f for f in reporte["textiles"] if f["nombre"] == "TelaTest")
+
+    def test_aprobar_guarda_el_consumo_en_el_reporte_del_mes(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+        fila = self._textil_del_mes()
+        self.assertEqual(fila["usado"], 11.0)
+        self.assertEqual(fila["valor_vendido"], 11000.0)
+
+    def test_recotizar_devuelve_la_tela_y_revierte_el_reporte(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+
+        self.assertTrue(recotizar_op(4210))
+
+        rollo = repo_inv.obtener_rollo(r["id"])
+        self.assertEqual(rollo["metros_restantes"], 100.0)
+        self.assertTrue(rollo["usos"][0]["revertido"])
+        fila = self._textil_del_mes()
+        self.assertEqual((fila["usado"], fila["valor_vendido"], fila["restante"]), (0.0, 0.0, 100.0))
+        # Vuelve a cotizaciones sin la asignación de rollos de la aprobación.
+        self.assertNotIn("RollosUsados", repo_cot.cargar_cotizacion(4210)["productos"][0])
+
+    def test_aprobar_de_nuevo_despues_de_recotizar_consume_una_sola_vez(self):
+        repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+        recotizar_op(4210)
+        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+        self.assertEqual(repo_inv.stock_por_textil()["TelaTest"], 89.0)
+        self.assertEqual(self._textil_del_mes()["usado"], 11.0)
 
 
 class TestAprobarConStockInsuficiente(_ConRutasTemporales):

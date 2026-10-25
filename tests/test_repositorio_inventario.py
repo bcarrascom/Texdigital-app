@@ -130,6 +130,24 @@ class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
         self.assertEqual(editado["proveedor"], "Proveedor X")
         self.assertEqual(editado["metros_restantes"], 80.0)  # no lo toca
 
+    def test_cambiar_el_valor_queda_en_el_historial_y_se_puede_deshacer(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
+        editado = repo_inv.editar_rollo(r["id"], "TelaTest", 1.5, valor=1500.0)
+        entrada = editado["usos"][-1]
+        self.assertEqual((entrada["tipo"], entrada["valor_anterior"], entrada["valor_nuevo"]), ("precio", 1000.0, 1500.0))
+        self.assertEqual(entrada["metros_restantes_anterior"], entrada["metros_restantes_nuevo"])
+        restaurado = repo_inv.eliminar_ajuste(r["id"], entrada["id"])
+        self.assertEqual(restaurado["valor"], 1000.0)
+
+    def test_editar_sin_cambiar_el_valor_no_deja_entrada(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
+        self.assertEqual(repo_inv.editar_rollo(r["id"], "TelaTest", 2.0, valor=1000.0)["usos"], [])
+
+    def test_fijar_valor_de_todos_los_rollos_queda_en_el_historial(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
+        self.assertEqual(repo_inv.fijar_valor_rollos("TelaTest", 1200.0), 1)
+        self.assertEqual(repo_inv.obtener_rollo(r["id"])["usos"][-1]["valor_nuevo"], 1200.0)
+
     def test_editar_rollo_inexistente_da_none(self):
         self.assertIsNone(repo_inv.editar_rollo("9999", "X", 1.0))
 
@@ -362,6 +380,48 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # El retorno es lo que ui/dialogo_aprobar.py graba como
         # producto["RollosUsados"] — el panel de producción lo lee tal cual.
         self.assertEqual(asignaciones, [[{"id": r["id"], "metros": 11.0}]])
+
+    def test_consumo_guarda_el_valor_por_metro_del_momento(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=8000.0)
+        repo_inv.consumir_para_op([_producto_estandar()], 4210, "Cliente ABC")
+        self.assertEqual(repo_inv.obtener_rollo(r["id"])["usos"][0]["valor_venta"], 8000.0)
+
+    def test_revertir_devuelve_los_metros_y_deja_el_consumo_marcado(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.consumir_para_op([_producto_estandar()], 4210)   # 11 m
+        fechas = repo_inv.revertir_consumo_op(4210)
+        rollo = repo_inv.obtener_rollo(r["id"])
+        self.assertEqual(len(fechas), 1)
+        self.assertEqual(rollo["metros_restantes"], 100.0)
+        consumo = rollo["usos"][0]
+        self.assertEqual((consumo["metros_revertidos"], consumo["metros_restantes_nuevo"]), (11.0, 100.0))
+        self.assertTrue(consumo["revertido"])
+
+    def test_revertir_corre_las_entradas_posteriores(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.consumir_para_op([_producto_estandar()], 4210)   # 100 → 89
+        repo_inv.ajustar_restante(r["id"], 80.0)                   # 89 → 80
+        repo_inv.revertir_consumo_op(4210)
+        rollo = repo_inv.obtener_rollo(r["id"])
+        ajuste = rollo["usos"][-1]
+        self.assertEqual((ajuste["metros_restantes_anterior"], ajuste["metros_restantes_nuevo"]), (100.0, 91.0))
+        self.assertEqual(rollo["metros_restantes"], 91.0)
+
+    def test_revertir_no_toca_otras_ops_ni_revierte_dos_veces(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.consumir_para_op([_producto_estandar()], 4210)
+        repo_inv.consumir_para_op([_producto_estandar()], 4211)
+        repo_inv.revertir_consumo_op(4210)
+        self.assertEqual(repo_inv.revertir_consumo_op(4210), [])
+        self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 89.0)
+
+    def test_revertir_alcanza_a_un_rollo_decomisionado(self):
+        r = repo_inv.crear_rollo("TelaTest", 1.5, 11)
+        repo_inv.consumir_para_op([_producto_estandar()], 4210)   # lo deja en 0
+        repo_inv.decomisionar_rollo(r["id"])
+        repo_inv.revertir_consumo_op(4210)
+        decomisionado = repo_inv.listar_decomisionados()[0]
+        self.assertEqual(decomisionado["metros_restantes"], 11.0)
 
     def test_consumo_guarda_numero_op_cliente_tema_y_obs(self):
         # Pedido de Bruno (2026-09-04, pantalla ver-rollo.html): cada
