@@ -26,7 +26,7 @@ import "@/pages/Inventario/Ficha.css";
    la herramienta de corrección manual, con una descripción para poder
    revisarla después. */
 
-const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación" };
+const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación", precio: "Precio" };
 const esActivo = (r) => (r.estado || "activo") === "activo";
 const redondear = (n) => Math.round(n * 100) / 100;
 const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
@@ -172,24 +172,32 @@ function Hoja({ r }) {
 }
 
 /* Cómo se ve cada entrada del historial. Un consumo trae el rastro completo
-   hacia la OP que lo generó (cliente/tema/obs), grabado tal cual al momento
-   del consumo — no depende de que esa OP siga existiendo. Una activación no
-   mueve metros: en vez de "40 → 40 m" dice a qué estado pasó. */
+   hacia la OP que lo generó (cliente/tema/obs) y el valor por metro con que
+   se vendió, grabados tal cual al momento del consumo — no depende de que
+   esa OP siga existiendo. Una activación y un cambio de precio no mueven
+   metros: en vez de "40 → 40 m" dicen a qué estado o valor pasó. */
 function vistaUso(u, abrirOp) {
   const consumo = u.tipo === "consumo";
   const activacion = u.tipo === "activacion";
+  const precio = u.tipo === "precio";
   const activado = u.estado_nuevo === "activo";
+  const plata = (v) => (v != null ? fmt.pesos(v) : "—");
+  // Un consumo de una OP que se recotizó: sus metros volvieron al rollo (ver
+  // revertir_consumo_op). Queda a la vista, sin el color de un consumo.
+  const revertido = consumo && u.revertido;
   return {
-    chip: ETIQUETA_TIPO[u.tipo] || u.tipo,
-    variante: consumo ? "consumo" : activacion ? (activado ? "activo" : "inactivo") : undefined,
-    cambio: activacion
-      ? (activado ? "Activado" : "Desactivado")
+    chip: revertido ? "Consumo revertido" : ETIQUETA_TIPO[u.tipo] || u.tipo,
+    variante: revertido ? undefined : consumo ? "consumo" : precio ? "precio" : activacion ? (activado ? "activo" : "inactivo") : undefined,
+    cambio: activacion ? (activado ? "Activado" : "Desactivado")
+      : precio ? `${plata(u.valor_anterior)} → ${plata(u.valor_nuevo)}/m`
+      : revertido ? `${fmt.cantidad(u.metros_revertidos)} m devueltos`
       : `${fmt.cantidad(u.metros_restantes_anterior)} → ${fmt.cantidad(u.metros_restantes_nuevo)} m`,
     fecha: u.fecha,
-    descripcion: consumo ? null : u.descripcion,
+    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: los metros volvieron al rollo.` : consumo ? null : u.descripcion,
     datos: consumo ? [
       ["OP", u.numero_op && <EnlaceOp numero={u.numero_op} onAbrir={() => abrirOp(u.numero_op)} />],
       ["Cliente", u.cliente], ["Tema", u.tema], ["Obs", u.obs],
+      ["Valor", u.valor_venta != null ? `${fmt.pesos(u.valor_venta)}/m` : null],
     ] : [],
   };
 }

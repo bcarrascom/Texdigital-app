@@ -175,6 +175,15 @@ def obtener_rollo(id_: str) -> dict | None:
     return _leer_rollo(carpeta_activos() / f"{id_}.json")
 
 
+def listar_decomisionados() -> list[dict]:
+    """Todos los rollos decomisionados, de todos los meses. Abre años de
+    archivos, así que es solo para lo que de verdad necesita la historia
+    completa (los reportes mensuales, ver core.reportes_inventario), nunca
+    para el panel de Inventario."""
+    rollos = (_leer_rollo(archivo) for archivo in carpeta_decomisionados().rglob("*.json"))
+    return [r for r in rollos if r is not None]
+
+
 def _siguiente_id() -> str:
     """4 dígitos, con ceros a la izquierda, siguiente al mayor ID que haya
     existido — se deriva de los nombres de archivo (Activos/ Y
@@ -371,10 +380,28 @@ def editar_rollo(
     r["nombre_textil"] = nombre_textil.strip()
     r["ancho"] = float(ancho)
     r["precio_compra"] = float(precio_compra) if precio_compra else 0.0
-    r["valor"] = float(valor) if valor is not None else None
+    _fijar_valor(r, float(valor) if valor is not None else None)
     r["proveedor"] = (proveedor or "").strip()
     _escribir_rollo(carpeta_activos(), r)
     return r
+
+
+def _fijar_valor(r: dict, nuevo: float | None, descripcion: str = "") -> bool:
+    """Cambia el valor de venta por metro de `r` dejando una entrada
+    tipo="precio" en su historial — punto único por donde pasa cualquier
+    cambio de valor (editar_rollo, fijar_valor_rollos), mismo criterio que
+    core.repositorio_materiales._fijar_valor_venta. Con eso los reportes
+    mensuales (core.reportes_inventario) saben cuánto valía el rollo el
+    último día de un mes pasado. No escribe el archivo. Si el valor no
+    cambia no registra nada y devuelve False."""
+    anterior = r.get("valor")
+    if anterior == nuevo or (anterior is not None and nuevo is not None and float(anterior) == float(nuevo)):
+        return False
+    r["valor"] = nuevo
+    restantes = r.get("metros_restantes", 0.0)
+    _agregar_registro(r, tipo="precio", anterior=restantes, nuevo=restantes, descripcion=descripcion,
+                      valor_anterior=anterior, valor_nuevo=nuevo)
+    return True
 
 
 def fijar_valor_rollos(nombre_textil: str, valor: float) -> int:
@@ -388,11 +415,11 @@ def fijar_valor_rollos(nombre_textil: str, valor: float) -> int:
         raise ValueError("El valor tiene que ser mayor que 0.")
     cambiados = 0
     for r in listar_rollos():
-        if r.get("nombre_textil") != nombre_textil or r.get("valor") == valor:
+        if r.get("nombre_textil") != nombre_textil:
             continue
-        r["valor"] = valor
-        _escribir_rollo(carpeta_activos(), r)
-        cambiados += 1
+        if _fijar_valor(r, valor, "Valor de todos los rollos, desde Configuración › Textiles"):
+            _escribir_rollo(carpeta_activos(), r)
+            cambiados += 1
     return cambiados
 
 
@@ -467,7 +494,8 @@ def decomisionar_rollo(id_: str) -> bool:
 def _agregar_registro(
     r: dict, *, tipo: str, anterior: float, nuevo: float, descripcion: str,
     numero_op=None, cliente: str | None = None, tema: str | None = None, obs: str | None = None,
-    estado_nuevo: str | None = None,
+    estado_nuevo: str | None = None, valor_venta: float | None = None,
+    valor_anterior: float | None = None, valor_nuevo: float | None = None,
 ) -> None:
     """Un solo formato de entrada para TODO lo que le pasa a un rollo —
     ajuste manual de cantidad, consumo automático o cambio de Activo/
@@ -488,11 +516,17 @@ def _agregar_registro(
     2026-09-08, switch "Activación" del diálogo "Ajustar" en menu.html):
     metros_restantes no cambia con este tipo (anterior == nuevo), así que
     sin este campo la entrada no diría si fue una activación o una
-    desactivación."""
+    desactivación.
+
+    valor_venta (tipo="consumo") es el valor por metro del rollo en el
+    momento del consumo, y valor_anterior/valor_nuevo (tipo="precio") el
+    cambio de valor — pedido de Bruno (2026-10-24): el reporte mensual
+    valoriza lo usado con lo que valía cuando se vendió, y lo restante con
+    lo que valía al cerrar el mes. Las dos cosas no cambian los metros."""
     entrada = {
         "id":                        uuid.uuid4().hex,
         "fecha":                     _hoy_dma(),
-        "tipo":                      tipo,  # "ajuste" (manual) | "consumo" (aprobar cotización) | "activacion" (Activo/Inactivo con motivo)
+        "tipo":                      tipo,  # "ajuste" (manual) | "consumo" (aprobar cotización) | "activacion" (Activo/Inactivo con motivo) | "precio" (cambio de valor)
         "metros_restantes_anterior": anterior,
         "metros_restantes_nuevo":    nuevo,
         "descripcion":               descripcion.strip(),
@@ -502,8 +536,12 @@ def _agregar_registro(
         entrada["cliente"] = (cliente or "").strip()
         entrada["tema"] = (tema or "").strip()
         entrada["obs"] = (obs or "").strip()
+        entrada["valor_venta"] = float(valor_venta) if valor_venta is not None else None
     if tipo == "activacion":
         entrada["estado_nuevo"] = estado_nuevo
+    if tipo == "precio":
+        entrada["valor_anterior"] = float(valor_anterior) if valor_anterior is not None else None
+        entrada["valor_nuevo"] = float(valor_nuevo) if valor_nuevo is not None else None
     r.setdefault("usos", []).append(entrada)
 
 
@@ -580,6 +618,8 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
     r["metros_restantes"] = objetivo.get("metros_restantes_anterior", r.get("metros_restantes", 0.0))
     if objetivo.get("tipo") == "activacion":
         r["estado"] = "inactivo" if objetivo.get("estado_nuevo") == "activo" else "activo"
+    if objetivo.get("tipo") == "precio":
+        r["valor"] = objetivo.get("valor_anterior")
     _escribir_rollo(carpeta_activos(), r)
     return r
 
@@ -943,9 +983,63 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
             r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
             numero_op=numero_op, cliente=referencia,
             tema="; ".join(datos["temas"]), obs="; ".join(datos["obss"]),
+            valor_venta=r.get("valor"),
         )
         tocados[id_rollo] = r
 
     for r in tocados.values():
         _escribir_rollo(carpeta_activos(), r)
     return asignacion_por_producto
+
+
+def _numero_op_igual(a, b) -> bool:
+    try:
+        return int(a) == int(b)
+    except (TypeError, ValueError):
+        return False
+
+
+def revertir_consumo_op(numero_op) -> list[str]:
+    """Devuelve a los rollos lo que les descontó aprobar la OP `numero_op`
+    — al recotizarla (ui/dialogo_recotizar.py), pedido de Bruno
+    (2026-10-24): recotizar deshace la aprobación, y eso incluye la tela.
+
+    El consumo no se borra: queda en el historial marcado "revertido" (con
+    la fecha y los metros devueltos) y en 0 (antes == después), así sigue
+    viéndose que la OP se aprobó y se recotizó. Como cada entrada guarda la
+    cantidad de antes y después, las entradas POSTERIORES a ese consumo se
+    corren en los mismos metros: si no, el historial diría que después del
+    consumo había menos de lo que hubo. Busca también entre los
+    decomisionados (el rollo pudo haberse decomisionado después).
+
+    Una OP recotizada y vuelta a aprobar tiene consumos nuevos: solo se
+    revierten los que todavía no lo están. Devuelve las fechas (dd/mm/aaaa)
+    de los consumos revertidos, para recalcular los reportes de esos meses
+    (ver core.reportes_inventario.recalcular_desde). Con Inventario apagado
+    no toca nada."""
+    if not _inventario_habilitado():
+        return []
+    fechas = []
+    archivos = list(carpeta_activos().glob("*.json")) + list(carpeta_decomisionados().rglob("*.json"))
+    for archivo in archivos:
+        r = _leer_rollo(archivo)
+        if r is None:
+            continue
+        usos = r.get("usos", [])
+        cambiado = False
+        for i, e in enumerate(usos):
+            if e.get("tipo") != "consumo" or e.get("revertido") or not _numero_op_igual(e.get("numero_op"), numero_op):
+                continue
+            metros = round((e.get("metros_restantes_anterior") or 0.0) - (e.get("metros_restantes_nuevo") or 0.0), 3)
+            e["metros_restantes_nuevo"] = e.get("metros_restantes_anterior", 0.0)
+            e["metros_revertidos"] = metros
+            e["revertido"] = _hoy_dma()
+            for posterior in usos[i + 1:]:
+                for clave in ("metros_restantes_anterior", "metros_restantes_nuevo"):
+                    posterior[clave] = round((posterior.get(clave) or 0.0) + metros, 3)
+            r["metros_restantes"] = round((r.get("metros_restantes") or 0.0) + metros, 3)
+            fechas.append(e.get("fecha", ""))
+            cambiado = True
+        if cambiado:
+            _escribir_rollo(archivo.parent, r)
+    return fechas

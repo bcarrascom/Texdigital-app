@@ -778,6 +778,53 @@ class TestConsumirParaOpMateriales(_ConRutaTemporal):
 # Ver el docstring de core/repositorio_materiales.py.
 # ══════════════════════════════════════════════════════════════════════════════
 
+class TestRevertirConsumoOp(_ConRutaTemporal):
+    """revertir_consumo_op — al recotizar una OP, lo que descontó su
+    aprobación vuelve al stock y sale de lo vendido (pedido de Bruno,
+    2026-10-24)."""
+
+    def setUp(self):
+        super().setUp()
+        parche = mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", {"TelaTest": 1.5}, clear=True)
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _con_consumo(self, cantidad=10, valor=500.0):
+        m = repo_mat.ingresar_material("Bastidor", cantidad, tipo_consumo="fijo_por_producto",
+                                        consumo_parametros={"n": 1}, productos_asociados=["Bandera"],
+                                        costo_total=1000.0, valor=valor)
+        repo_mat.consumir_para_op([_producto_interno(producto="Bandera", cantidad=2)], 4210)
+        return m
+
+    def test_devuelve_la_cantidad_y_descuenta_lo_vendido_y_la_ganancia(self):
+        m = self._con_consumo()
+        fechas = repo_mat.revertir_consumo_op(4210)
+        actualizado = repo_mat.obtener_material(m["id"])
+        self.assertEqual(len(fechas), 1)
+        self.assertEqual(actualizado["cantidad"], 10.0)
+        self.assertEqual(actualizado["vendido_acumulado"], 0.0)
+        self.assertEqual(actualizado["ganancia_acumulada"], 0.0)
+        consumo = next(e for e in actualizado["historial"] if e["tipo"] == "consumo")
+        self.assertEqual((consumo["cantidad_revertida"], consumo["ganancia"]), (2.0, 0.0))
+        self.assertEqual(consumo["cantidad_anterior"], consumo["cantidad_nueva"])
+
+    def test_corre_las_entradas_posteriores(self):
+        m = self._con_consumo()
+        repo_mat.ajustar_cantidad(m["id"], 7.0)   # 8 → 7
+        repo_mat.revertir_consumo_op(4210)
+        actualizado = repo_mat.obtener_material(m["id"])
+        ajuste = actualizado["historial"][-1]
+        self.assertEqual((ajuste["cantidad_anterior"], ajuste["cantidad_nueva"]), (10.0, 9.0))
+        self.assertEqual(actualizado["cantidad"], 9.0)
+
+    def test_no_revierte_dos_veces_ni_toca_otras_ops(self):
+        m = self._con_consumo()
+        repo_mat.consumir_para_op([_producto_interno(producto="Bandera", cantidad=1)], 4211)
+        repo_mat.revertir_consumo_op(4210)
+        self.assertEqual(repo_mat.revertir_consumo_op(4210), [])
+        self.assertEqual(repo_mat.obtener_material(m["id"])["cantidad"], 9.0)   # 10 - 1 de la 4211
+
+
 class TestGastoUnitarioPromedioPonderado(_ConRutaTemporal):
     """El costo unitario es un promedio móvil que sale de los restocks, no el
     último precio pagado ni un campo de formulario — pedido de Bruno: "los

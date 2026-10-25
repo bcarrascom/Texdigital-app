@@ -322,6 +322,29 @@ def obtener_material(id_: str) -> dict | None:
     return _leer_material(carpeta_materiales() / f"{id_}.json")
 
 
+def historial_completo(m: dict) -> list[dict]:
+    """El historial de `m` de todos los años: lo archivado en
+    Historial/{año}/Materiales/ (ver _archivar_si_corresponde), del año más
+    viejo al más nuevo, seguido del año en curso. Para los reportes
+    mensuales (ver core.reportes_inventario), que pueden mirar un mes de un
+    año que ya se archivó."""
+    archivados = []
+    for archivo in (_ruta_base() / "Historial").glob(f"*/Materiales/{m['id']}.json"):
+        try:
+            anio = int(archivo.parent.parent.name)
+            entradas = json.loads(archivo.read_text(encoding="utf-8"))
+        except (ValueError, OSError, json.JSONDecodeError):
+            continue
+        archivados.append((anio, entradas))
+    archivados.sort(key=lambda par: par[0])
+    completo = [e for _, entradas in archivados for e in entradas]
+    for e in completo:
+        tipo = _TIPOS_RENOMBRADOS.get(e.get("tipo"))
+        if tipo:
+            e["tipo"] = tipo
+    return completo + list(m.get("historial", []))
+
+
 def buscar_material_por_nombre(nombre: str) -> dict | None:
     """Match case-insensitive por nombre completo — usado por
     ingresar_material para decidir si una compra suma a un material que
@@ -928,6 +951,52 @@ def consumir_para_op(
         _escribir_material(m)
 
     return acumulado
+
+
+def revertir_consumo_op(numero_op) -> list[str]:
+    """Devuelve a los materiales lo que les descontó aprobar la OP
+    `numero_op` — al recotizarla, mismo criterio que
+    core.repositorio_inventario.revertir_consumo_op: el consumo queda en el
+    historial marcado "revertido", en 0 (antes == después) y con su
+    ganancia en 0; las entradas posteriores se corren en la misma cantidad;
+    y se descuenta de "vendido_acumulado"/"ganancia_acumulada" lo que esa OP
+    les había sumado. El costo promedio no se toca: sale de los restocks.
+
+    Solo mira el historial del año en curso: una OP sigue activa unas
+    semanas, no un año. Devuelve las fechas de los consumos revertidos. Con
+    Inventario apagado no toca nada."""
+    if not _inventario_habilitado():
+        return []
+    fechas = []
+    for m in listar_materiales():
+        historial = m.get("historial", [])
+        cambiado = False
+        for i, e in enumerate(historial):
+            if e.get("tipo") != "consumo" or e.get("revertido"):
+                continue
+            try:
+                if int(e.get("numero_op")) != int(numero_op):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            cantidad = round((e.get("cantidad_anterior") or 0.0) - (e.get("cantidad_nueva") or 0.0), 3)
+            if e.get("valor_venta") is not None:
+                m["vendido_acumulado"] = round(m.get("vendido_acumulado", 0.0) - cantidad * float(e["valor_venta"]), 2)
+            m["ganancia_acumulada"] = round(m.get("ganancia_acumulada", 0.0) - float(e.get("ganancia") or 0.0), 2)
+            if e.get("ganancia") is not None:
+                e["ganancia"] = 0.0
+            e["cantidad_nueva"] = e.get("cantidad_anterior", 0.0)
+            e["cantidad_revertida"] = cantidad
+            e["revertido"] = _hoy_dma()
+            for posterior in historial[i + 1:]:
+                for clave in ("cantidad_anterior", "cantidad_nueva"):
+                    posterior[clave] = round((posterior.get(clave) or 0.0) + cantidad, 3)
+            m["cantidad"] = round((m.get("cantidad") or 0.0) + cantidad, 3)
+            fechas.append(e.get("fecha", ""))
+            cambiado = True
+        if cambiado:
+            _escribir_material(m)
+    return fechas
 
 
 def gasto_del_mes(m: dict) -> float:
