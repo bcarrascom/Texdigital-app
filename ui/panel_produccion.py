@@ -77,6 +77,7 @@ from core.repositorio_ops import (
     envejecer_completadas,
 )
 from core.repositorio import TEXTILES_ANCHOS
+from core import corte_backlight
 from core.rutas import RECURSOS
 
 RUTA_LISTA   = RECURSOS / "panel_tv" / "panel_lista.html"
@@ -140,6 +141,11 @@ class _ApiPanelProduccion:
         except Exception as e:
             print("No se pudo generar el HTML de la OP:", e)
             return False
+
+    def obtener_margenes_corte(self):
+        """{"caja_terminada": m, "area_visual": m} — los márgenes de costura del
+        corte de backlight (Configuración › Backlight, ver core.corte_backlight)."""
+        return corte_backlight.cargar()
 
     def obtener_anchos_tela(self):
         """Mapeo tela → ancho máximo de rollo (recursos/textiles.json)."""

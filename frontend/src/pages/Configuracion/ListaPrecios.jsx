@@ -23,7 +23,7 @@ const FALTA = { valor: "el valor de venta", consumo: "un consumo automático que
    Su valor de acá queda de respaldo: vale solo si a uno de esos materiales le
    falta con qué cobrarlo. Lo decimos en la fila, para que nadie cambie un
    valor que no se está usando sin saberlo. */
-function textoMateriales(materiales) {
+export function textoMateriales(materiales) {
   if (!materiales?.length) return {};
   const nombres = materiales.map((m) => m.nombre).join(", ");
   const incompleto = materiales.find((m) => m.falta);

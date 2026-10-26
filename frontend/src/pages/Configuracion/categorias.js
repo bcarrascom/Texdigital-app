@@ -6,12 +6,14 @@ import IconoTerminaciones from "@/assets/svg/scissors.svg?react";
 import IconoCajas from "@/assets/svg/box.svg?react";
 import IconoReglas from "@/assets/svg/percent.svg?react";
 import IconoClientes from "@/assets/svg/users.svg?react";
+import IconoProductos from "@/assets/svg/package.svg?react";
 import General from "./General";
 import Proveedores from "./Proveedores";
 import Textiles from "./Textiles";
 import Cajas from "./Cajas";
 import Reglas from "./Reglas";
 import ClientesContactos from "./ClientesContactos";
+import Productos from "./Productos";
 import { Estructuras, Terminaciones } from "./ListaPrecios";
 
 /* Las categorías de Configuración, en el orden de la barra lateral. Sumar
@@ -35,6 +37,11 @@ export const CATEGORIAS = [
     palabras: "precio precios valor metro cobro cobrar telas rollos cotizar",
   },
   {
+    clave: "productos", titulo: "Productos", Icono: IconoProductos, color: "#FF9F0A", Contenido: Productos,
+    desc: "Los productos que se eligen en el cotizador: agregar, renombrar o quitar.",
+    palabras: "producto productos bandera pendon lienzo vela catalogo cotizar",
+  },
+  {
     clave: "estructuras", titulo: "Estructuras", Icono: IconoEstructuras, color: "#3478F6", Contenido: Estructuras,
     desc: "Cuánto se cobra por cada estructura. Vale para todos los que cotizan.",
     palabras: "precio precios valor cobro asta base estaca panel araña cotizar",
@@ -45,9 +52,9 @@ export const CATEGORIAS = [
     palabras: "precio precios valor cobro basta bolsillos ojetillos fundas cotizar",
   },
   {
-    clave: "cajas", titulo: "Cajas de Backlight", Icono: IconoCajas, color: "#C9A227", Contenido: Cajas,
-    desc: "Lo que vale cada pieza de una caja de Backlight: luces, fuentes, perfiles, traseras, armado y pintura.",
-    palabras: "precio precios valor backlight caja luces fuente poder perfil trasera armado pintura",
+    clave: "cajas", titulo: "Backlight", Icono: IconoCajas, color: "#C9A227", Contenido: Cajas,
+    desc: "Los márgenes del corte de la tela y lo que vale cada pieza de una caja: luces, fuentes, perfiles, traseras, armado y pintura.",
+    palabras: "precio precios valor backlight caja cajas luces fuente poder perfil trasera armado pintura corte margen costura area visual caja terminada",
   },
   {
     clave: "reglas", titulo: "Reglas de cobro", Icono: IconoReglas, color: "#E5484D", Contenido: Reglas,

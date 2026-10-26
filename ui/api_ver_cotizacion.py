@@ -22,7 +22,7 @@ from core.precios import costo_producto, ml_o_area_facturable_por_producto
 from core.presentar_cotizacion import generar_html
 from core.repositorio_inventario import calcular_faltantes, consumir_para_op
 from core.repositorio_materiales import (
-    materiales_para_producto, nombre_producto_para_consumo,
+    materiales_para_producto, claves_consumo,
     consumir_para_op as consumir_materiales_para_op,
 )
 from core.reportes_inventario import actualizar_reportes
@@ -230,13 +230,13 @@ class ApiVerCotizacion:
         productos_internos = [producto_desde_json(p) for p in datos.get("productos", [])]
         vistos: dict[str, dict] = {}
         for p in productos_internos:
-            # nombre_producto_para_consumo, no p["producto"]: un backlight no
-            # tiene producto de catálogo y responde al nombre reservado
-            # "Backlight" (ver core.repositorio_materiales). Con el nombre crudo,
-            # un material "manual" asociado a todos los backlight nunca se pedía.
-            nombre_producto = nombre_producto_para_consumo(p)
-            nombres_estructuras = list(p.get("estructuras", []) or [])
-            for m in materiales_para_producto(nombre_producto, nombres_estructuras):
+            # claves_consumo, no p["producto"]: un backlight no tiene producto de
+            # catálogo y responde a los nombres reservados "Backlight" y
+            # "Backlight + Caja", y al perfil de su caja (ver
+            # core.repositorio_materiales). Con el nombre crudo, un material
+            # "manual" asociado a todos los backlight nunca se pedía.
+            nombres_producto, nombres_estructuras = claves_consumo(p)
+            for m in materiales_para_producto(nombres_producto, nombres_estructuras):
                 if m.get("tipo_consumo") == "manual" and m["id"] not in vistos:
                     vistos[m["id"]] = {"id": m["id"], "nombre": m["nombre"], "tipo": m.get("tipo", "unidad")}
         return list(vistos.values())

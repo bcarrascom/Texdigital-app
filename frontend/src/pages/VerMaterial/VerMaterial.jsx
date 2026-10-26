@@ -32,11 +32,12 @@ const plata = (v, sufijo = "") => (v == null ? "—" : fmt.pesos(v) + sufijo);
 const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
 
 async function cargarMaterial(id) {
-  const [material, proveedores, productos, estructuras] = await Promise.all([
+  const [material, proveedores, productos, estructuras, perfiles] = await Promise.all([
     api.obtener_material(id), api.cargar_proveedores(),
-    api.cargar_productos_catalogo(), api.cargar_estructuras_catalogo(),
+    api.cargar_productos_catalogo(), api.cargar_estructuras_catalogo(), api.cargar_perfiles_catalogo(),
   ]);
-  return { material: material || null, proveedores: proveedores || [], productos: productos || [], estructuras: estructuras || [] };
+  return { material: material || null, proveedores: proveedores || [], productos: productos || [],
+           estructuras: estructuras || [], perfiles: perfiles || [] };
 }
 
 /* Un material ya no tiene "un" proveedor: cada restock puede traer uno
@@ -96,7 +97,7 @@ export default function VerMaterial() {
           <p className="seccion-titulo">No se pudo cargar el material.</p>
         ) : (
           <div className="ficha">
-            <Hoja m={m} />
+            <Hoja m={m} perfiles={datos.perfiles} />
             <Historial entradas={m.historial || SIN_ENTRADAS} vista={vista} onDeshacer={deshacer}
                        vacio="Todavía no hay ningún restock, ajuste, consumo ni cambio de precio registrado para este material." />
           </div>
@@ -131,7 +132,7 @@ export default function VerMaterial() {
    Las mismas 9 cifras que la tabla de materiales, en el mismo orden (gastos,
    valor, ganancias). "—" cuando el dato todavía no existe, nunca "$0", que
    significaría otra cosa. */
-function Hoja({ m }) {
+function Hoja({ m, perfiles }) {
   const por = `/${unidadDe(m)}`;
   const proveedores = proveedoresDeHistorial(m);
   const mono = { mono: true };
@@ -158,7 +159,7 @@ function Hoja({ m }) {
         ["Estructuras asociadas", (m.estructuras_asociadas || []).join(", ") || "—", { ancho: true }],
         ["Productos asociados", (m.productos_asociados || []).join(", ") || "—", { ancho: true }],
       ]} />
-      <NotaCobro m={m} />
+      <NotaCobro m={m} perfiles={perfiles} />
     </section>
   );
 }
@@ -168,13 +169,18 @@ function Hoja({ m }) {
    las estructuras y productos asociados. Se dice acá porque es lo que define
    el precio de esas estructuras, y en Configuración su valor queda de
    respaldo. Llamarse igual que una estructura no hace nada. */
-function NotaCobro({ m }) {
-  const estructuras = m.estructuras_asociadas || [], productos = m.productos_asociados || [];
-  if (!estructuras.length && !productos.length) {
+function NotaCobro({ m, perfiles = [] }) {
+  // Los perfiles de caja van en la misma lista que las estructuras, pero se
+  // cobran distinto: sus materiales se SUMAN al precio del perfil (ver core.precios).
+  const asociadas = m.estructuras_asociadas || [], productos = m.productos_asociados || [];
+  const perfilesAsociados = asociadas.filter((e) => perfiles.includes(e));
+  const estructuras = asociadas.filter((e) => !perfiles.includes(e));
+  if (!asociadas.length && !productos.length) {
     return <p className="hoja__nota">No está asociado a ninguna estructura ni producto: no cambia lo que cobra ninguna cotización.</p>;
   }
   const lista = (items, uno, varios) => `${items.length === 1 ? uno : varios} ${items.join(", ")}`;
   const donde = [estructuras.length && lista(estructuras, "la estructura", "las estructuras"),
+                 perfilesAsociados.length && lista(perfilesAsociados, "las cajas con", "las cajas con"),
                  productos.length && lista(productos, "el producto", "los productos")].filter(Boolean).join(" y ");
   if (m.valor == null) return <p className="hoja__nota hoja__nota--aviso">Sin valor de venta: {donde} no se cobran por este material.</p>;
   if (!m.tipo_consumo || m.tipo_consumo === "manual") {
@@ -182,8 +188,9 @@ function NotaCobro({ m }) {
   }
   return (
     <p className="hoja__nota">
-      Se cobra en {donde}: lo que {estructuras.length + productos.length === 1 ? "gasta" : "gastan"} de este material, a su valor de venta.
+      Se cobra en {donde}: lo que {asociadas.length + productos.length === 1 ? "gasta" : "gastan"} de este material, a su valor de venta.
       {estructuras.length > 0 && ` En ${estructuras.length === 1 ? "esa estructura" : "esas estructuras"} reemplaza al valor de Configuración.`}
+      {perfilesAsociados.length > 0 && " En las cajas se suma al precio del perfil."}
     </p>
   );
 }
@@ -215,7 +222,9 @@ function vistaEntrada(u, m, abrirOp) {
       : revertido ? `${fmt.cantidad(u.cantidad_revertida)} ${unidad} devueltos`
       : `${fmt.cantidad(u.cantidad_anterior)} → ${fmt.cantidad(u.cantidad_nueva)} ${unidad}`,
     fecha: u.fecha,
-    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: lo descontado volvió al stock.` : restock || consumo ? null : u.descripcion,
+    // Un consumo sin OP (una venta cargada de una planilla) solo tiene su descripción.
+    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: lo descontado volvió al stock.`
+      : restock || (consumo && u.numero_op) ? null : u.descripcion,
     datos: restock ? [
       ["Proveedor", u.proveedor],
       ["Costo total", u.costo_total != null ? fmt.pesos(u.costo_total) : null],

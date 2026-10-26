@@ -109,8 +109,9 @@ export default {
   cargar_textiles_inventario: () => ["Felpa gruesa", "Lona mate", "Poliéster satinado", "Tela backlit"],
   cargar_proveedores: () => [...proveedores],
   cargar_nombres_materiales: () => materiales.map((m) => m.nombre),
-  cargar_productos_catalogo: () => ["Backlight", "Pendón", "Telón", "Bandera", "Lienzo"],
-  cargar_estructuras_catalogo: () => ["Bastidor 10 cm", "Bastidor 5 cm", "Tubo de aluminio", "Pie metálico"],
+  cargar_productos_catalogo: () => ["Backlight", "Backlight + Caja", "Pendón", "Telón", "Bandera", "Lienzo"],
+  cargar_perfiles_catalogo: () => ["PERFIL 60 MM", "PERFIL 100 MM DOBLE"],
+  cargar_estructuras_catalogo: () => ["Bastidor 10 cm", "Bastidor 5 cm", "Tubo de aluminio", "Pie metálico", "PERFIL 60 MM", "PERFIL 100 MM DOBLE"],
   valor_sugerido_textil: (textil) => rollos.find((r) => r.nombre_textil === textil)?.valor ?? 8000,
 
   crear_rollo(nombre_textil, ancho, metros, precio_compra, valor, proveedor) {

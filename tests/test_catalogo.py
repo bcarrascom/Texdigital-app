@@ -34,6 +34,7 @@ SEMILLAS = {
     "backlight": [GASA],
     "estructuras": (["Asta"], {"Asta": {"valorUNIT": 5000.0}}),
     "terminaciones": (["Basta"], {"Basta": {"valorUNIT": 2000.0}}),
+    "productos": ["Pendón", "Bandera 3x2"],
 }
 
 
@@ -51,7 +52,7 @@ class _Base(unittest.TestCase):
         self.conf = base / "Conf"
         # Los catálogos de core.repositorio son objetos compartidos que
         # catalogo modifica en el lugar: se guardan y se restauran.
-        for nombre in ("TEXTILES", "ESTRUCTURAS_LEGADO", "TERMINACIONES_LEGADO"):
+        for nombre in ("TEXTILES", "ESTRUCTURAS_LEGADO", "TERMINACIONES_LEGADO", "PRODUCTOS"):
             lista = getattr(repo, nombre)
             copia = list(lista)
             self.addCleanup(lista.__setitem__, slice(None), copia)

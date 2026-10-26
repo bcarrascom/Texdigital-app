@@ -256,6 +256,7 @@
       para telas que no estén en el catálogo. ── */
 let ANCHO_TELA = {};
 async function cargarAnchosTela(){
+  await cargarMargenesCorte();
   try{ ANCHO_TELA = await window.pywebview.api.obtener_anchos_tela(); }
   catch(e){ console.error("No se pudo cargar el mapeo de anchos de tela:", e); ANCHO_TELA = {}; }
 }
@@ -377,7 +378,17 @@ const fmt = n => (Math.round(n*100)/100).toLocaleString("es-CL");
    existiera no lo traen: en los dos casos se cae a "CAJA TERMINADA", que es el
    margen con el que esas OPs se imprimieron en su momento (ver
    _terminaciones_caja_de en core/presentar_op.py). */
-const MARGEN_CAJA_TERMINADA = 0.015, MARGEN_AREA_VISUAL = 0.025;
+/* Los márgenes se editan en Configuración › Backlight (core/corte_backlight.py)
+   y llegan por pywebview.api.obtener_margenes_corte() al arrancar (ver
+   cargarMargenesCorte); estos son los de siempre, por si la API no responde. */
+let MARGEN_CAJA_TERMINADA = 0.015, MARGEN_AREA_VISUAL = 0.025;
+async function cargarMargenesCorte(){
+  try{
+    const m = await window.pywebview.api.obtener_margenes_corte();
+    if (m && typeof m.caja_terminada === "number") MARGEN_CAJA_TERMINADA = m.caja_terminada;
+    if (m && typeof m.area_visual === "number") MARGEN_AREA_VISUAL = m.area_visual;
+  }catch(e){}
+}
 const ETIQUETA_TERMINACIONES_CAJA = {
   "CAJA TERMINADA": "Caja terminada",
   "AREA VISUAL":    "Área visual",

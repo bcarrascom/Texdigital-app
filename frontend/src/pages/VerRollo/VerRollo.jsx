@@ -193,7 +193,8 @@ function vistaUso(u, abrirOp) {
       : revertido ? `${fmt.cantidad(u.metros_revertidos)} m devueltos`
       : `${fmt.cantidad(u.metros_restantes_anterior)} → ${fmt.cantidad(u.metros_restantes_nuevo)} m`,
     fecha: u.fecha,
-    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: los metros volvieron al rollo.` : consumo ? null : u.descripcion,
+    // Un consumo sin OP (una venta cargada de una planilla) solo tiene su descripción.
+    descripcion: revertido ? `La OP se recotizó el ${u.revertido}: los metros volvieron al rollo.` : consumo && u.numero_op ? null : u.descripcion,
     datos: consumo ? [
       ["OP", u.numero_op && <EnlaceOp numero={u.numero_op} onAbrir={() => abrirOp(u.numero_op)} />],
       ["Cliente", u.cliente], ["Tema", u.tema], ["Obs", u.obs],

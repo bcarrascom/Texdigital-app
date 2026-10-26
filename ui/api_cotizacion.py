@@ -31,7 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
-from core import catalogo, lista_precios
+from core import catalogo, corte_backlight, lista_precios
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
@@ -288,12 +288,15 @@ class ApiCotizacion:
             if datos is not None:
                 ctx["estado"] = self._estado_desde_pendiente(datos)
 
-        # Un textil renombrado después de hacer la cotización aparece con su
-        # nombre de hoy (ver core.catalogo): el de antes ya no está en la lista.
+        # Un textil o un producto renombrado después de hacer la cotización
+        # aparece con su nombre de hoy (ver core.catalogo): el de antes ya no
+        # está en la lista.
         for p in (ctx["estado"] or {}).get("productos") or []:
             for clave in ("textil", "tela"):
                 if p.get(clave):
                     p[clave] = catalogo.nombre_textil(p[clave])
+            if p.get("producto"):
+                p["producto"] = catalogo.nombre_producto(p["producto"])
         return ctx
 
     def _estado_desde_json(self, datos: dict) -> dict:
@@ -372,6 +375,9 @@ class ApiCotizacion:
             # No CUALQUIER textil sirve para backlight (necesita ser
             # translúcido): los marcados en Configuración › Textiles.
             "telas_backlight": catalogo.telas_backlight(),
+            # Los márgenes de costura del corte, en cm, para el texto de ayuda
+            # del switch "caja terminada / área visual" (ver core.corte_backlight).
+            "margenes_corte_cm": {k: round(v * 100, 2) for k, v in corte_backlight.cargar().items()},
             "estructuras": ESTRUCTURAS_LEGADO,
             "terminaciones": TERMINACIONES_LEGADO,
             # Nombres que se cobran POR UNIDAD (valorUNIT) — las que son por

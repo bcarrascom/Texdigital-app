@@ -12,6 +12,9 @@ const TIPOS = [{ valor: "estandar", etiqueta: "Estándar" }, { valor: "backlight
 const IMPRESIONES = [{ valor: "Cara única" }, { valor: "Tiro y retiro" }];
 const TERMINACIONES_CAJA = [{ valor: CAJA_TERMINADA, etiqueta: "Caja terminada" }, { valor: "AREA VISUAL", etiqueta: "Área visual" }];
 
+/* 1.5 → "1,5" (los márgenes de corte, ver Configuración › Backlight). */
+const cm = (n) => String(n).replace(".", ",");
+
 const PanelProducto = forwardRef(function PanelProducto(
   { p, i, total, cat, onCambiar, onTipo, onDuplicar, onQuitar, onSiguiente }, ref,
 ) {
@@ -99,7 +102,10 @@ const PanelProducto = forwardRef(function PanelProducto(
                       <span className="campo__etiqueta">¿Qué medida entregó el cliente?</span>
                       <Segmento opciones={TERMINACIONES_CAJA} valor={p.terminaciones_caja} etiqueta="Terminaciones de caja"
                                 onCambiar={(v) => onCambiar({ terminaciones_caja: v })} />
-                      <span className="campo__ayuda">Define el margen de costura del corte: caja terminada +1,5 cm, área visual +2,5 cm.</span>
+                      <span className="campo__ayuda">
+                        Define el margen de costura del corte: caja terminada +{cm(cat.margenes_corte_cm?.caja_terminada ?? 1.5)} cm,
+                        área visual +{cm(cat.margenes_corte_cm?.area_visual ?? 2.5)} cm.
+                      </span>
                     </div>
                   </div>
                 )}

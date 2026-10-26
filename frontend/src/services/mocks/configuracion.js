@@ -66,6 +66,14 @@ let contactos = [
 ];
 const igual = (a, b) => a.toLowerCase() === b.toLowerCase();
 
+let margenes = { caja_terminada: 1.5, area_visual: 2.5 };
+let productos = [
+  { nombre: "Pendón", agregado: false, anteriores: [], materiales: [{ nombre: "Ojetillos", falta: null }] },
+  { nombre: "Bandera 3x2", agregado: false, anteriores: ["Bandera grande"], materiales: [] },
+  { nombre: "Lienzo simple", agregado: false, anteriores: [], materiales: [{ nombre: "Cinta", falta: null }, { nombre: "Velcro", falta: "valor" }] },
+];
+const RESERVADOS = ["backlight", "backlight + caja"];
+
 const cobroDe = (modo, t) => (modo === "por_textil" ? t.cobro : modo);
 
 export default {
@@ -91,7 +99,43 @@ export default {
     return { ok: true };
   },
 
-  obtener_precios_cajas: () => ({ cajas: structuredClone(cajas), solo_lectura: false }),
+  obtener_precios_cajas: () => ({
+    cajas: structuredClone(cajas), solo_lectura: false, margenes_cm: { ...margenes }, margenes_solo_lectura: false,
+    materiales_perfiles: { "PERFIL 100 MM DOBLE": [{ nombre: "Aluminio 100 mm", falta: null }] },
+  }),
+  guardar_margenes_corte(m) {
+    const malos = Object.entries(m).filter(([, v]) => !(v >= 0 && v <= 20));
+    if (malos.length) return { ok: false, errores: Object.fromEntries(malos.map(([k]) => [k, "Tiene que ser un margen entre 0 y 20 cm."])) };
+    margenes = { ...m };
+    return { ok: true };
+  },
+
+  obtener_productos: () => structuredClone(productos),
+  agregar_producto({ nombre }) {
+    nombre = (nombre || "").trim();
+    if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
+    if (RESERVADOS.includes(nombre.toLowerCase())) return { ok: false, errores: { nombre: `«${nombre}» es un nombre reservado de Inventario.` } };
+    if (productos.some((p) => igual(p.nombre, nombre))) return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
+    productos.push({ nombre, agregado: true, anteriores: [], materiales: [] });
+    return { ok: true };
+  },
+  renombrar_producto(actual, { nombre }) {
+    nombre = (nombre || "").trim();
+    const p = productos.find((x) => x.nombre === actual);
+    if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
+    if (productos.some((x) => x !== p && igual(x.nombre, nombre))) return { ok: false, errores: { nombre: "Ya existe uno con ese nombre." } };
+    if (nombre !== actual) Object.assign(p, { nombre, anteriores: [...p.anteriores, actual] });
+    return { ok: true, materiales: p.materiales.length };
+  },
+  quitar_producto(nombre) {
+    const p = productos.find((x) => x.nombre === nombre);
+    productos = productos.filter((x) => x !== p);
+    return { ok: true, materiales: p?.materiales.length || 0 };
+  },
+  obtener_materiales_backlight: () => [
+    { nombre: "Backlight", materiales: [{ nombre: "Silicona", falta: null }] },
+    { nombre: "Backlight + Caja", materiales: [] },
+  ],
   guardar_precios_cajas(nuevas) {
     const malos = Object.values(nuevas).flatMap((v) => (typeof v === "object" ? Object.values(v) : [v])).filter(sinValor);
     if (malos.length) return { ok: false, errores: [{ mensaje: "Falta un valor." }] };

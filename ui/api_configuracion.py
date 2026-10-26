@@ -9,7 +9,7 @@ Proveedores sigue en ui/api_inventario.py: es la misma lista que usan los
 formularios de Inventario.
 """
 
-from core import catalogo, precios_componentes, precios_textiles, reglas_cobro
+from core import catalogo, corte_backlight, precios_componentes, precios_textiles, reglas_cobro
 from core import repositorio as _repo
 from core import repositorio_inventario as _repo_inv
 from core import repositorio_materiales as _repo_mat
@@ -88,14 +88,59 @@ class ApiConfiguracion:
     # ── Cajas de Backlight ───────────────────────────────────────────────
 
     def obtener_precios_cajas(self) -> dict:
-        """{"cajas": {sección: {clave: valor}, "pintura_por_ml"}, "solo_lectura"}
+        """Configuración › Backlight:
+
+            {"cajas": {sección: {clave: valor}, "pintura_por_ml"}, "solo_lectura",
+             "materiales_perfiles": {perfil: [{"nombre", "falta"}]},   ← asociados en Inventario
+             "margenes_cm": {"caja_terminada", "area_visual"}, "margenes_solo_lectura"}
+
         ("fp" con los watts como texto: así viaja un objeto a JavaScript)."""
         cajas = precios_componentes.cajas()
         cajas["fp"] = {str(k): v for k, v in cajas["fp"].items()}
-        return {"cajas": cajas, "solo_lectura": precios_componentes.solo_lectura("cajas")}
+        asociados = _repo_mat.materiales_de_estructuras()
+        return {"cajas": cajas, "solo_lectura": precios_componentes.solo_lectura("cajas"),
+                "materiales_perfiles": {p: asociados[p] for p in cajas["perfiles"] if p in asociados},
+                "margenes_cm": {k: round(v * 100, 2) for k, v in corte_backlight.cargar().items()},
+                "margenes_solo_lectura": corte_backlight.solo_lectura()}
 
     def guardar_precios_cajas(self, cajas: dict) -> dict:
         return precios_componentes.guardar_cajas(cajas or {})
+
+    def guardar_margenes_corte(self, margenes_cm: dict) -> dict:
+        """margenes_cm: {"caja_terminada", "area_visual"} en cm."""
+        d = margenes_cm or {}
+        def a_metros(v):
+            try:
+                return float(str(v).replace(",", ".")) / 100
+            except (TypeError, ValueError):
+                return None
+        return corte_backlight.guardar({k: a_metros(d.get(k)) for k in corte_backlight.POR_DEFECTO})
+
+    # ── Productos ────────────────────────────────────────────────────────
+
+    def obtener_productos(self) -> list[dict]:
+        """[{"nombre", "agregado", "anteriores", "materiales": [{"nombre", "falta"}]}]
+        en el orden del cotizador — con los materiales de Inventario asociados."""
+        catalogo.refrescar()
+        asociados = _repo_mat.materiales_de_productos()
+        return [{**p, "materiales": asociados.get(p["nombre"], [])} for p in catalogo.productos_detalle()]
+
+    def obtener_materiales_backlight(self) -> list[dict]:
+        """[{"nombre": "Backlight" | "Backlight + Caja", "materiales": [...]}]:
+        los materiales asociados a los nombres reservados de Inventario, que no
+        son productos del cotizador pero se muestran junto a ellos."""
+        asociados = _repo_mat.materiales_de_productos()
+        return [{"nombre": n, "materiales": asociados.get(n, [])}
+                for n in (_repo_mat.PRODUCTO_BACKLIGHT, _repo_mat.PRODUCTO_BACKLIGHT_CAJA)]
+
+    def agregar_producto(self, datos: dict) -> dict:
+        return catalogo.agregar_producto((datos or {}).get("nombre"))
+
+    def renombrar_producto(self, actual: str, datos: dict) -> dict:
+        return catalogo.renombrar_producto(actual, (datos or {}).get("nombre"))
+
+    def quitar_producto(self, nombre: str) -> dict:
+        return catalogo.quitar_producto(nombre)
 
     # ── Clientes y contactos ─────────────────────────────────────────────
 
