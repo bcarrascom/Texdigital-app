@@ -44,9 +44,11 @@ export default function RutasAnimadas() {
   // La X nativa de la ventana: Python pregunta en qué ruta estamos para
   // decidir entre cerrar la app o volver (ver ApiApp._al_cerrar_nativo).
   useEffect(() => { api.notificar_ruta(location.pathname); }, [location.pathname]);
+  // Una página con algo sin guardar puede interceptar la X (ver
+  // pages/Configuracion: pregunta si guardar antes de salir).
   useEffect(() => {
     window.TD = window.TD || {};
-    window.TD.volver = volver;
+    window.TD.volver = () => { if (!window.TD.interceptarVolver?.()) volver(); };
   }, [volver]);
 
   return (

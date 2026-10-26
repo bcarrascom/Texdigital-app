@@ -10,10 +10,10 @@ let ajustes = {
     { nombre: "Blackout", ancho: 1.48, cobro: "fijo", valor: 12000 },
     { nombre: "Felpa gruesa", ancho: 1.38, cobro: "rollo", valor: 12000 },
     { nombre: "Gasa", ancho: 1.46, cobro: "fijo", valor: 12000 },
-    { nombre: "Lona mate", ancho: 3.2, cobro: "rollo", valor: null },
-    { nombre: "Poliéster satinado", ancho: 1.5, cobro: "rollo", valor: null },
+    { nombre: "Lona mate", ancho: 3.2, cobro: "rollo", valor: 9500 },
+    { nombre: "Poliéster satinado", ancho: 1.5, cobro: "rollo", valor: 8000 },
     { nombre: "Tela backlit", ancho: 3, cobro: "fijo", valor: 14000, backlight: true },
-    { nombre: "Tela sin rollos", ancho: 1.5, cobro: "rollo", valor: null },
+    { nombre: "Tela sin rollos", ancho: 1.5, cobro: "rollo", valor: 7000 },
   ],
 };
 
@@ -74,7 +74,6 @@ let productos = [
 ];
 const RESERVADOS = ["backlight", "backlight + caja"];
 
-const cobroDe = (modo, t) => (modo === "por_textil" ? t.cobro : modo);
 
 export default {
   obtener_precios_textiles: () => ({
@@ -84,7 +83,7 @@ export default {
 
   guardar_precios_textiles(datos) {
     const errores = datos.textiles
-      .filter((t) => (t.valor == null ? cobroDe(datos.modo, t) === "fijo" : !(t.valor > 0)))
+      .filter((t) => t.valor == null || !(t.valor > 0))
       .map((t) => ({ textil: t.nombre, mensaje: t.valor == null ? "Falta el valor por metro." : "El valor tiene que ser un monto mayor que 0." }));
     if (errores.length) return { ok: false, errores };
     ajustes = { modo: datos.modo, textiles: ajustes.textiles.map((t) => ({ ...t, ...datos.textiles.find((x) => x.nombre === t.nombre) })) };
@@ -157,7 +156,7 @@ export default {
     else if (ajustes.textiles.some((t) => t.nombre.toLowerCase() === nombre.toLowerCase())) errores.nombre = "Ya existe uno con ese nombre.";
     const n = parseFloat(String(ancho).replace(",", "."));
     if (!(n > 0 && n <= 10)) errores.ancho = "El ancho tiene que ser más que 0 y hasta 10 m.";
-    if (valor == null && ajustes.modo !== "rollo") errores.valor = "Falta el valor por metro.";
+    if (valor == null) errores.valor = "Falta el valor por metro.";
     if (Object.keys(errores).length) return { ok: false, errores };
     ajustes.textiles.push({ nombre, ancho: n, cobro: "fijo", valor: valor ?? null, backlight, agregado: true, anteriores: [] });
     return { ok: true };
@@ -184,6 +183,17 @@ export default {
     if (!(valor > 0)) return { ok: false, errores: { valor: "Falta el valor." } };
     componentes[tipo].push({ nombre, valor, unidad, materiales: [], agregado: true });
     return { ok: true };
+  },
+
+  quitar_textil(nombre) {
+    const r = rollos.filter((x) => x.nombre_textil === nombre).length;
+    ajustes.textiles = ajustes.textiles.filter((t) => t.nombre !== nombre);
+    return { ok: true, rollos: r };
+  },
+  quitar_componente(tipo, nombre) {
+    const c = componentes[tipo].find((x) => x.nombre === nombre);
+    componentes[tipo] = componentes[tipo].filter((x) => x !== c);
+    return { ok: true, materiales: c?.materiales?.length || 0 };
   },
 
   obtener_clientes: () => structuredClone(clientes).sort((a, b) => a.empresa.localeCompare(b.empresa, "es")),

@@ -7,6 +7,7 @@ import * as fmt from "@/utils/formato";
 import { BarraGuardar, Grupo, NotaSoloLectura } from "./Ajustes";
 import { FilaPrecio } from "./ListaPrecios";
 import { nombresMateriales } from "./Productos";
+import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
 
 /* Backlight: los márgenes de costura del corte de la tela (ver
    core/corte_backlight.py) y lo que vale cada pieza de una caja (ver
@@ -60,6 +61,23 @@ const aBorrador = (cajas) => ({
     [clave, Object.fromEntries(Object.entries(cajas[clave]).map(([k, v]) => [k, fmt.clp(v)]))])),
   pintura_por_ml: fmt.clp(cajas.pintura_por_ml),
 });
+/* Los cambios del borrador, uno por línea, para el diálogo de salir. */
+function describirCambios(original, actual) {
+  const cambios = [];
+  for (const m of MARGENES) {
+    const a = original.margenes[m.clave], b = actual.margenes[m.clave];
+    if (a !== b) cambios.push(`Corte de la tela · ${m.nombre}: +${a || "?"} cm → +${b || "?"} cm`);
+  }
+  for (const s of SECCIONES) {
+    for (const [k, v] of Object.entries(actual[s.clave])) {
+      const antes = original[s.clave][k];
+      if (antes !== v) cambios.push(`${s.titulo.split(" · ")[0]} · ${s.nombre ? s.nombre(k) : k}: ${montoOVacio(antes)} → ${montoOVacio(v)}`);
+    }
+  }
+  if (original.pintura_por_ml !== actual.pintura_por_ml) cambios.push(`Pintura: ${montoOVacio(original.pintura_por_ml)} → ${montoOVacio(actual.pintura_por_ml)}`);
+  return cambios;
+}
+
 const aBorradorMargenes = (m) => Object.fromEntries(MARGENES.map(({ clave }) => [clave, String(m[clave]).replace(".", ",")]));
 
 export default function Cajas() {
@@ -88,6 +106,12 @@ export default function Cajas() {
     }
     return malos;
   }, [actual]);
+  useCambiosPendientes({
+    cambios: borrador && original ? describirCambios(original, borrador) : [],
+    error: Object.keys(errores).length
+      ? (Object.keys(errores).length === 1 ? "1 valor falta o no es válido." : `${Object.keys(errores).length} valores faltan o no son válidos.`) : null,
+    guardar,
+  });
   if (cargando || !actual) return <Cargando />;
 
   const soloLectura = datos.solo_lectura;
@@ -98,7 +122,7 @@ export default function Cajas() {
   const cambiar = (seccion, k, valor) => setBorrador({ ...actual, [seccion]: { ...actual[seccion], [k]: valor } });
 
   async function guardar() {
-    if (cantidadErrores || guardando) return;
+    if (cantidadErrores || guardando) return false;
     setGuardando(true);
     try {
       // Los precios y los márgenes son dos archivos: se guarda solo lo que cambió.
@@ -109,15 +133,16 @@ export default function Cajas() {
           [clave, Object.fromEntries(Object.entries(precios[clave]).map(([k, v]) => [k, fmt.leerClp(v)]))]));
         enviar.pintura_por_ml = fmt.leerClp(precios.pintura_por_ml);
         const r = await api.guardar_precios_cajas(enviar);
-        if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return; }
+        if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return false; }
       }
       if (JSON.stringify(margenes) !== JSON.stringify(margenesAntes)) {
         const r = await api.guardar_margenes_corte(Object.fromEntries(MARGENES.map(({ clave }) => [clave, leerCm(margenes[clave])])));
-        if (!r?.ok) { aviso(Object.values(r?.errores || {})[0] || "No se pudo guardar.", "error"); return; }
+        if (!r?.ok) { aviso(Object.values(r?.errores || {})[0] || "No se pudo guardar.", "error"); return false; }
       }
       await recargar();
       setBorrador(null);
       aviso("Ajustes de Backlight guardados.", "info");
+      return true;
     } finally {
       setGuardando(false);
     }

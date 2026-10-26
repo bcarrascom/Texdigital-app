@@ -8,10 +8,12 @@ import Dialogo from "@/components/Dialogo/Dialogo";
 import IconoRollos from "@/assets/svg/spiral.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoEditar from "@/assets/svg/pencil.svg?react";
+import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 import IconoMas from "@/assets/svg/plus.svg?react";
 import * as fmt from "@/utils/formato";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
-import { DialogoTextil } from "./DialogosCatalogo";
+import { DialogoQuitar, DialogoTextil } from "./DialogosCatalogo";
+import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
 
 /* Textiles: cuánto se cobra por metro de cada uno (ver
    core/precios_textiles.py). Cada textil se cobra por un valor fijo, escrito
@@ -42,7 +44,6 @@ const PIE_MODO = {
   por_textil: "Cada textil se cobra como diga su propio switch.",
 };
 
-const cobroDe = (modo, t) => (modo === "por_textil" ? t.cobro : modo);
 
 /* Misma regla que core.precios_textiles.validar: {nombre: mensaje}. */
 function validar(modo, textiles) {
@@ -50,10 +51,26 @@ function validar(modo, textiles) {
   for (const t of textiles) {
     const valor = fmt.leerClp(t.valor);
     if (valor == null) {
-      if (cobroDe(modo, t) === "fijo") errores[t.nombre] = "Falta el valor por metro.";
+      // Obligatorio también por rollo: es lo que se cobra si ningún rollo alcanza.
+      errores[t.nombre] = "Falta el valor por metro.";
     } else if (!(valor > 0)) errores[t.nombre] = "El valor tiene que ser mayor que 0.";
   }
   return errores;
+}
+
+/* Los cambios del borrador, uno por línea, para el diálogo de salir. */
+const NOMBRE_MODO = Object.fromEntries(MODOS.map((m) => [m.valor, m.etiqueta]));
+const NOMBRE_COBRO = { fijo: "valor fijo", rollo: "por rollo" };
+function describirCambios(original, actual) {
+  const cambios = [];
+  if (original.modo !== actual.modo) cambios.push(`Cómo se cobran los textiles: ${NOMBRE_MODO[original.modo]} → ${NOMBRE_MODO[actual.modo]}`);
+  actual.textiles.forEach((t, k) => {
+    const o = original.textiles[k];
+    if (!o) return;
+    if (o.cobro !== t.cobro) cambios.push(`${t.nombre}: se cobra ${NOMBRE_COBRO[o.cobro]} → ${NOMBRE_COBRO[t.cobro]}`);
+    if (o.valor !== t.valor) cambios.push(`${t.nombre}: ${montoOVacio(o.valor)} → ${montoOVacio(t.valor)} por metro`);
+  });
+  return cambios;
 }
 
 /* El borrador: lo que se edita, con el valor como texto ("$12.000"). */
@@ -69,11 +86,17 @@ export default function Textiles() {
   const [guardando, setGuardando] = useState(false);
   const [rollosDe, setRollosDe] = useState(null);   // textil del diálogo "valor de todos los rollos"
   const [editando, setEditando] = useState(null);   // null | "nuevo" | el textil a editar
+  const [quitando, setQuitando] = useState(null);   // el textil a quitar
 
   // Lo guardado, como borrador: comparar contra esto dice si hay cambios.
   const original = useMemo(() => (datos ? aBorrador(datos) : null), [datos]);
   const actual = borrador || original;
   const errores = useMemo(() => (actual ? validar(actual.modo, actual.textiles) : {}), [actual]);
+  useCambiosPendientes({
+    cambios: borrador && original ? describirCambios(original, borrador) : [],
+    error: Object.keys(errores).length ? `${fmt.plural(Object.keys(errores).length, "textil necesita", "textiles necesitan")} un valor válido.` : null,
+    guardar,
+  });
   if (cargando || !actual) return <Cargando />;
 
   const soloLectura = datos.solo_lectura;
@@ -92,7 +115,7 @@ export default function Textiles() {
     cambiar({ textiles: actual.textiles.map((t) => (t.nombre === nombre ? { ...t, ...cambio } : t)) });
 
   async function guardar() {
-    if (cantidadErrores || guardando) return;
+    if (cantidadErrores || guardando) return false;
     setGuardando(true);
     try {
       const r = await api.guardar_precios_textiles({
@@ -101,11 +124,12 @@ export default function Textiles() {
       });
       if (!r?.ok) {
         aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error");
-        return;
+        return false;
       }
       await recargar();
       setBorrador(null);
       aviso("Precios de textiles guardados.", "info");
+      return true;
     } finally {
       setGuardando(false);
     }
@@ -126,13 +150,15 @@ export default function Textiles() {
 
       <Grupo titulo={fmt.plural(actual.textiles.length, "textil", "textiles")}
              pie={actual.modo === "fijo" ? "El valor es por metro lineal; en Backlight, por metro cuadrado."
-               : "Por metro lineal (en Backlight, por metro cuadrado). En los que se cobran por rollo el valor es opcional: se usa solo si el textil no tiene ningún rollo con valor."}>
+               : "Por metro lineal (en Backlight, por metro cuadrado). En los que se cobran por rollo, este valor se cobra cuando ningún rollo alcanza para el producto (el cotizador lo avisa)."}>
         {actual.textiles.map((t) => (
           <FilaTextil key={t.nombre} textil={t} resumen={resumen[t.nombre]} modo={actual.modo}
                       error={errores[t.nombre]} soloLectura={soloLectura} inventario={datos.inventario}
                       onCambiar={(cambio) => cambiarTextil(t.nombre, cambio)}
                       onRollos={() => setRollosDe(resumen[t.nombre])}
-                      onEditar={soloLecturaCatalogo ? null : () => abrirEdicion(resumen[t.nombre])} />
+                      onEditar={soloLecturaCatalogo ? null : () => abrirEdicion(resumen[t.nombre])}
+                      onQuitar={soloLecturaCatalogo ? null : () => (hayCambios
+                        ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setQuitando(resumen[t.nombre]))} />
         ))}
         {!soloLecturaCatalogo && <Fila etiqueta="Agregar textil" icono={IconoMas} color="#2E9D5B" onClick={() => abrirEdicion("nuevo")} />}
       </Grupo>
@@ -147,6 +173,17 @@ export default function Textiles() {
                             aviso(cambiados ? `${fmt.plural(cambiados, "rollo", "rollos")} de ${textil} con el valor nuevo.`
                               : `Los rollos de ${textil} ya tenían ese valor.`, "info");
                           }} />
+
+      <DialogoQuitar abierto={!!quitando} nombre={quitando?.nombre} que="textil"
+                     avisos={[quitando?.rollos?.rollos && `Sus ${fmt.plural(quitando.rollos.rollos, "rollo", "rollos")} en Inventario quedan como están, pero no se podrá cotizar con ${quitando.rollos.rollos === 1 ? "él" : "ellos"}.`]}
+                     quitar={() => api.quitar_textil(quitando.nombre)} onCerrar={() => setQuitando(null)}
+                     onHecho={async () => {
+                       const nombre = quitando.nombre;
+                       setQuitando(null);
+                       await recargar();
+                       setBorrador(null);
+                       aviso(`${nombre} quitado.`, "info");
+                     }} />
 
       <DialogoTextil abierto={!!editando} textil={editando === "nuevo" ? null : editando} modoCobro={actual.modo}
                      onCerrar={() => setEditando(null)}
@@ -172,11 +209,8 @@ function textoRollos(r) {
   return partes.join(" · ");
 }
 
-function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, onCambiar, onRollos, onEditar }) {
-  const cobro = cobroDe(modo, t);
+function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, onCambiar, onRollos, onEditar, onQuitar }) {
   const r = resumen?.rollos;
-  // Por rollo, sin ningún rollo con valor, el textil cae al valor fijo (o sale sin precio).
-  const sinPrecio = cobro === "rollo" && !(r?.minimo != null) && !fmt.leerClp(t.valor);
   const id = `valor-${t.nombre}`;
   return (
     <div className="fila-ajuste fila-textil" data-invalido={error ? "" : undefined}>
@@ -188,14 +222,13 @@ function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, 
             .filter(Boolean).join(" · ")}
         </span>
         {error && <span className="fila-textil__error">{error}</span>}
-        {!error && sinPrecio && <span className="fila-textil__aviso">Sin rollos con valor ni valor fijo: se cotizaría sin precio.</span>}
       </span>
       {modo === "por_textil" && (
         <Segmento etiqueta={`Cómo se cobra ${t.nombre}`} opciones={COBROS} valor={t.cobro}
                   deshabilitado={soloLectura} onCambiar={(c) => onCambiar({ cobro: c })} />
       )}
       <input className="entrada entrada--num fila-textil__valor" id={id} type="text" inputMode="numeric" autoComplete="off"
-             placeholder={cobro === "rollo" ? "Opcional" : "$0"} aria-invalid={error ? true : undefined}
+             placeholder="$0" aria-invalid={error ? true : undefined}
              disabled={soloLectura} value={t.valor}
              onChange={(e) => onCambiar({ valor: fmt.clp(e.target.value) })} />
       {onEditar && (
@@ -209,6 +242,12 @@ function FilaTextil({ textil: t, resumen, modo, error, soloLectura, inventario, 
                 aria-label={`Cambiar el valor de todos los rollos de ${t.nombre}`}
                 disabled={soloLectura || !r} onClick={onRollos}>
           <IconoRollos />
+        </button>
+      )}
+      {onQuitar && (
+        <button className="btn-fila-ajuste btn-fila-ajuste--peligro" type="button" title="Quitar"
+                aria-label={`Quitar ${t.nombre}`} onClick={onQuitar}>
+          <IconoEliminar />
         </button>
       )}
     </div>

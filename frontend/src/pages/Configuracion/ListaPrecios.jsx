@@ -6,7 +6,9 @@ import Cargando from "@/components/Cargando/Cargando";
 import IconoMas from "@/assets/svg/plus.svg?react";
 import * as fmt from "@/utils/formato";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
-import { DialogoComponente } from "./DialogosCatalogo";
+import { DialogoComponente, DialogoQuitar } from "./DialogosCatalogo";
+import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
+import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 
 /* Estructuras y Terminaciones: cuánto se cobra por cada una (ver
    core/precios_componentes.py). Los nombres son los del catálogo de la app;
@@ -56,12 +58,20 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [agregando, setAgregando] = useState(false);
+  const [quitando, setQuitando] = useState(null);   // la fila (de datos) a quitar
 
   const original = useMemo(() => (datos ? aBorrador(datos.filas) : null), [datos]);
   const actual = borrador || original;
   const errores = useMemo(() => Object.fromEntries((actual || [])
     .filter((f) => !(fmt.leerClp(f.valor) > 0))
     .map((f) => [f.nombre, f.valor === "" ? "Falta el valor." : "El valor tiene que ser mayor que 0."])), [actual]);
+  useCambiosPendientes({
+    cambios: borrador && original
+      ? borrador.flatMap((f, k) => (original[k] && original[k].valor !== f.valor ? [`${f.nombre}: ${montoOVacio(original[k].valor)} → ${montoOVacio(f.valor)}`] : []))
+      : [],
+    error: Object.keys(errores).length ? `${fmt.plural(Object.keys(errores).length, singular, plural)} sin un valor válido.` : null,
+    guardar,
+  });
   if (cargando || !actual) return <Cargando />;
 
   const hayCambios = JSON.stringify(actual) !== JSON.stringify(original);
@@ -69,14 +79,15 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
   const info = Object.fromEntries(datos.filas.map((f) => [f.nombre, f]));
 
   async function guardar() {
-    if (cantidadErrores || guardando) return;
+    if (cantidadErrores || guardando) return false;
     setGuardando(true);
     try {
       const r = await api.guardar_precios_componentes(tipo, actual.map((f) => ({ nombre: f.nombre, valor: fmt.leerClp(f.valor) })));
-      if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return; }
+      if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return false; }
       await recargar();
       setBorrador(null);
       aviso(`Precios de ${plural} guardados.`, "info");
+      return true;
     } finally {
       setGuardando(false);
     }
@@ -94,7 +105,9 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
                         sub={m.sub || [UNIDAD[i.unidad], i.agregado && "agregada en Configuración"].filter(Boolean).join(" · ")}
                         ayuda={m.ayuda} nota={m.nota}
                         error={errores[f.nombre]} deshabilitado={datos.solo_lectura}
-                        onCambiar={(valor) => setBorrador(actual.map((x) => (x.nombre === f.nombre ? { ...x, valor } : x)))} />
+                        onCambiar={(valor) => setBorrador(actual.map((x) => (x.nombre === f.nombre ? { ...x, valor } : x)))}
+                        onQuitar={datos.solo_lectura || datos.catalogo_solo_lectura ? null : () => (hayCambios
+                          ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setQuitando(i))} />
           );
         })}
         {!datos.solo_lectura && !datos.catalogo_solo_lectura && (
@@ -102,6 +115,16 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
                 onClick={() => (hayCambios ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setAgregando(true))} />
         )}
       </Grupo>
+      <DialogoQuitar abierto={!!quitando} nombre={quitando?.nombre} que={singular}
+                     avisos={[quitando?.materiales?.length && `${quitando.materiales.map((m) => m.nombre).join(", ")} ${quitando.materiales.length === 1 ? "deja" : "dejan"} de estar asociado${quitando.materiales.length === 1 ? "" : "s"} a esta ${singular}.`]}
+                     quitar={() => api.quitar_componente(tipo, quitando.nombre)} onCerrar={() => setQuitando(null)}
+                     onHecho={async () => {
+                       const nombre = quitando.nombre;
+                       setQuitando(null);
+                       await recargar();
+                       setBorrador(null);
+                       aviso(`${nombre} quitada.`, "info");
+                     }} />
       <DialogoComponente abierto={agregando} tipo={tipo} singular={singular} onCerrar={() => setAgregando(false)}
                          onHecho={async () => {
                            setAgregando(false);
@@ -117,7 +140,7 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
 
 /* Una fila con nombre, una línea chica debajo y el monto a la derecha. La
    usan también Cajas. */
-export function FilaPrecio({ id, nombre, sub, ayuda, nota, error, valor, deshabilitado, onCambiar }) {
+export function FilaPrecio({ id, nombre, sub, ayuda, nota, error, valor, deshabilitado, onCambiar, onQuitar }) {
   return (
     <div className="fila-ajuste fila-textil" data-invalido={error ? "" : undefined}>
       <span className="fila-textil__info">
@@ -130,6 +153,12 @@ export function FilaPrecio({ id, nombre, sub, ayuda, nota, error, valor, deshabi
       <input className="entrada entrada--num fila-textil__valor" id={id} type="text" inputMode="numeric" autoComplete="off"
              placeholder="$0" aria-invalid={error ? true : undefined} disabled={deshabilitado} value={valor}
              onChange={(e) => onCambiar(fmt.clp(e.target.value))} />
+      {onQuitar && (
+        <button className="btn-fila-ajuste btn-fila-ajuste--peligro" type="button" title="Quitar"
+                aria-label={`Quitar ${nombre}`} onClick={onQuitar}>
+          <IconoEliminar />
+        </button>
+      )}
     </div>
   );
 }

@@ -74,9 +74,14 @@ def valores(tipo: str) -> dict[str, dict]:
 
 
 def cargar_lista(tipo: str) -> list[dict]:
-    """[{"nombre", "valor", "unidad": "un." | "ML"}] en el orden del catálogo."""
+    """[{"nombre", "valor", "unidad": "un." | "ML"}] en el orden del catálogo,
+    sin las quitadas (ver core.catalogo: su valor sigue, pero ya no se eligen)."""
+    from core.catalogo import _leer
+    quitadas = {q.casefold() for q in _leer()[f"{tipo}_quitadas"]}
     filas = []
     for nombre, v in valores(tipo).items():
+        if nombre.casefold() in quitadas:
+            continue
         clave, valor = next(iter(v.items()))
         filas.append({"nombre": nombre, "valor": valor, "unidad": "ML" if clave == "valorML" else "un."})
     return filas

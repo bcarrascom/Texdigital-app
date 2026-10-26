@@ -184,6 +184,15 @@
 
 /* El diálogo vive fuera de la página (<dialog> en la capa superior), pero
    sigue dentro de .pag-configuracion en el DOM. */
+.pag-configuracion .dlg-salir {
+  width: min(92vw, 34rem);
+  .dlg-salir__lista {
+    display: grid; gap: var(--e-1); margin: var(--e-3) 0 0; padding-left: 1.2rem;
+    max-height: 16rem; overflow-y: auto;
+    font-size: var(--t-sm); color: var(--c-texto); font-variant-numeric: tabular-nums;
+  }
+  .dlg-salir__nota { margin-top: var(--e-3); }
+}
 .pag-configuracion .dlg-catalogo {
   width: min(92vw, 30rem);
   .dlg-catalogo__campos { display: grid; gap: var(--e-4); margin-top: var(--e-4); }

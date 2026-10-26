@@ -47,6 +47,9 @@ class ApiConfiguracion:
         d = datos or {}
         return catalogo.editar_textil(nombre_actual, d.get("nombre"), d.get("ancho"), bool(d.get("backlight")))
 
+    def quitar_textil(self, nombre: str) -> dict:
+        return catalogo.quitar_textil(nombre)
+
     def guardar_precios_textiles(self, datos: dict) -> dict:
         return precios_textiles.guardar(datos or {})
 
@@ -79,6 +82,9 @@ class ApiConfiguracion:
 
     def guardar_precios_componentes(self, tipo: str, filas: list) -> dict:
         return precios_componentes.guardar_lista(tipo, filas)
+
+    def quitar_componente(self, tipo: str, nombre: str) -> dict:
+        return catalogo.quitar_componente(tipo, nombre)
 
     def agregar_componente(self, tipo: str, datos: dict) -> dict:
         """datos: {nombre, unidad: "un." | "ML", valor} — ver core.catalogo.agregar_componente."""

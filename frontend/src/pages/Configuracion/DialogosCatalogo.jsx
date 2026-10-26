@@ -62,7 +62,7 @@ function FormularioTextil({ textil, modoCobro, onCerrar, onHecho }) {
   );
   const renombra = !nuevo && f.nombre.trim() && f.nombre.trim() !== textil.nombre;
   const rollos = textil?.rollos?.rollos || 0;
-  const valorOpcional = modoCobro === "rollo";
+  const porRollo = modoCobro === "rollo";
 
   return (
     <form onSubmit={confirmar} onKeyDown={enterGuarda} noValidate>
@@ -83,9 +83,9 @@ function FormularioTextil({ textil, modoCobro, onCerrar, onHecho }) {
           <span className="campo__ayuda">Aparece en la lista de telas de Backlight del cotizador (tiene que ser translúcida).</span>
         </div>
         {nuevo && (
-          <Campo id="cat-valor" etiqueta={valorOpcional ? "Valor por metro (opcional)" : "Valor por metro"} requerido={!valorOpcional}
+          <Campo id="cat-valor" etiqueta="Valor por metro" requerido
                  invalido={!!errores.valor} error={errores.valor}
-                 ayuda={valorOpcional ? "Los textiles se cobran por rollo: este valor se usa solo si no tiene rollos con valor." : "Por metro lineal; en Backlight, por m²."}>
+                 ayuda={porRollo ? "Por metro lineal (en Backlight, por m²). Se cobra cuando ningún rollo alcanza para el producto." : "Por metro lineal; en Backlight, por m²."}>
             <input className="entrada entrada--num" id="cat-valor" type="text" inputMode="numeric" autoComplete="off"
                    placeholder="$0" value={f.valor} onChange={(e) => set("valor", fmt.clp(e.target.value))} />
           </Campo>
@@ -101,7 +101,7 @@ function FormularioTextil({ textil, modoCobro, onCerrar, onHecho }) {
         </p>
       )}
       {/* Un campo opcional no muestra su error abajo (ver Campo): va acá. */}
-      <ErrorGeneral texto={errores.general || (valorOpcional && errores.valor)} />
+      <ErrorGeneral texto={errores.general} />
       <div className="dlg__acciones">
         <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
         <button className="btn btn--primario btn--chico" type="submit" disabled={enviando}>
@@ -154,6 +154,41 @@ function FormularioComponente({ tipo, singular, onCerrar, onHecho }) {
       <div className="dlg__acciones">
         <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
         <button className="btn btn--primario btn--chico" type="submit" disabled={enviando}>Agregar</button>
+      </div>
+    </form>
+  );
+}
+
+// ── Quitar un textil, una estructura o una terminación ─────────────────────
+
+/* La confirmación de quitar (ver core/catalogo.py: sale de las listas donde
+   se elige, pero sus datos siguen para lo ya hecho). `avisos`: lo que pasa
+   además, una línea cada uno. `quitar` llama a Python y devuelve su respuesta. */
+export function DialogoQuitar({ abierto, nombre, que, avisos = [], quitar, onCerrar, onHecho }) {
+  return (
+    <Dialogo abierto={abierto} onCerrar={onCerrar} className="dlg--desenfoque dlg-catalogo">
+      {abierto && <FormularioQuitar nombre={nombre} que={que} avisos={avisos} quitar={quitar} onCerrar={onCerrar} onHecho={onHecho} />}
+    </Dialogo>
+  );
+}
+
+function FormularioQuitar({ nombre, que, avisos, quitar, onCerrar, onHecho }) {
+  const { errores, enviando, confirmar } = useEnvio(quitar, onHecho);
+  return (
+    <form onSubmit={confirmar} noValidate>
+      <h2 className="dlg__titulo">¿Quitar {nombre}?</h2>
+      <p className="dlg__texto">
+        Deja de aparecer en el cotizador{que === "textil" ? ", en Inventario al cargar rollos" : ""} y en Configuración.
+        Las cotizaciones y OPs ya hechas que {que === "textil" ? "lo" : "la"} usan no cambian.
+        Si después {que === "textil" ? "lo" : "la"} vuelves a agregar con el mismo nombre, vuelve.
+      </p>
+      {avisos.filter(Boolean).map((t) => (
+        <p key={t} className="ajustes-nota ajustes-nota--aviso dlg-catalogo__nota" role="status"><IconoAviso aria-hidden="true" /><span>{t}</span></p>
+      ))}
+      <ErrorGeneral texto={errores.general} />
+      <div className="dlg__acciones">
+        <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
+        <button className="btn btn--peligro btn--chico" type="submit" disabled={enviando}>Quitar</button>
       </div>
     </form>
   );
