@@ -44,6 +44,17 @@ const FILTROS = [
 ];
 const seMovio = (f) => Boolean(f.ingresado || f.usado);
 
+/* Cómo contar lo vendido (pedido de Bruno, 2026-10-26): al aprobar, cada
+   consumo guarda lo que cobró la cotización con y sin IVA y con y sin
+   descuento (ver core/reportes_inventario.py, "valores_vendidos"); estos dos
+   switches eligen cuál ver. Por defecto, sin IVA y con descuento: lo que de
+   verdad entró, neto. Un reporte guardado antes de esto solo trae
+   "valor_vendido": se muestra ese, sea cual sea la elección. */
+const IVA = [{ valor: "sin_iva", etiqueta: "Sin IVA" }, { valor: "con_iva", etiqueta: "Con IVA" }];
+const DESCUENTO = [{ valor: "con_descuento", etiqueta: "Con descuento" }, { valor: "sin_descuento", etiqueta: "Sin descuento" }];
+const claveVendido = ({ iva, descuento }) => (descuento === "con_descuento" ? `${iva}_con_descuento` : iva);
+const vendido = (x, forma) => x.valores_vendidos?.[claveVendido(forma)] ?? x.valor_vendido;
+
 export default function ReportesInventario() {
   const [params, setParams] = useSearchParams();
   const { datos: meses, cargando } = useDatos(() => api.abrir_reportes_inventario(), []);
@@ -54,6 +65,7 @@ export default function ReportesInventario() {
   const elegir = (m) => setParams({ anio: m.anio, mes: m.mes }, { replace: true });
   // Acá y no en Reporte: se mantiene al pasar de un mes a otro.
   const [filtro, setFiltro] = useState("todos");
+  const [forma, setForma] = useState({ iva: "sin_iva", descuento: "con_descuento" });
 
   return (
     <Pagina tema="inventario" titulo="Reportes de inventario" className="pag-reportes-inventario">
@@ -68,7 +80,7 @@ export default function ReportesInventario() {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div key={`${elegido.anio}-${elegido.mes}`} className="reportes__cuerpo"
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FUNDIDO}>
-                <Reporte mes={elegido} filtro={filtro} onFiltrar={setFiltro} />
+                <Reporte mes={elegido} filtro={filtro} onFiltrar={setFiltro} forma={forma} onForma={setForma} />
               </motion.div>
             </AnimatePresence>
           </div>
@@ -102,7 +114,7 @@ function ListaMeses({ meses, elegido, onElegir }) {
   );
 }
 
-function Reporte({ mes, filtro, onFiltrar }) {
+function Reporte({ mes, filtro, onFiltrar, forma, onForma }) {
   const { datos: r, cargando } = useDatos(() => api.obtener_reporte_inventario(mes.anio, mes.mes), [mes.anio, mes.mes]);
   if (cargando) return <Cargando />;
   if (!r) return <p className="reportes__vacio">No se pudo leer el reporte de {nombreMes(mes)}.</p>;
@@ -120,12 +132,19 @@ function Reporte({ mes, filtro, onFiltrar }) {
               : `Mes en curso · al ${r.generado}, se actualiza cada vez que se abre esta página`}
           </p>
         </div>
-        <Segmento etiqueta="Qué filas mostrar" opciones={FILTROS} valor={filtro} onCambiar={onFiltrar} />
+        <div className="reporte__opciones">
+          <Segmento etiqueta="Valor vendido con o sin IVA" opciones={IVA} valor={forma.iva}
+                    onCambiar={(iva) => onForma({ ...forma, iva })} />
+          <Segmento etiqueta="Valor vendido con o sin descuento" opciones={DESCUENTO} valor={forma.descuento}
+                    onCambiar={(descuento) => onForma({ ...forma, descuento })} />
+          <Segmento etiqueta="Qué filas mostrar" opciones={FILTROS} valor={filtro} onCambiar={onFiltrar} />
+        </div>
       </div>
 
       <div className="reporte__cifras">
-        <Cifra etiqueta="Valor vendido" valor={fmt.pesos(t.valor_vendido)}
-               detalle={`Textiles ${fmt.pesos(t.textiles.valor_vendido)} · Materiales ${fmt.pesos(t.materiales.valor_vendido)}`} />
+        <Cifra etiqueta={`Valor vendido · ${forma.iva === "con_iva" ? "con IVA" : "sin IVA"}, ${forma.descuento === "con_descuento" ? "con descuento" : "sin descuento"}`}
+               valor={fmt.pesos(vendido(t, forma))}
+               detalle={`Textiles ${fmt.pesos(vendido(t.textiles, forma))} · Materiales ${fmt.pesos(vendido(t.materiales, forma))}`} />
         <Cifra etiqueta="Valor restante" valor={fmt.pesos(t.valor_restante)}
                detalle={`Textiles ${fmt.pesos(t.textiles.valor_restante)} · Materiales ${fmt.pesos(t.materiales.valor_restante)}`} />
         <Cifra etiqueta="Tela usada" valor={`${fmt.cantidad(t.textiles.usado)} m`} detalle="En OPs, ajustes y rollos decomisionados" />
@@ -133,11 +152,11 @@ function Reporte({ mes, filtro, onFiltrar }) {
                detalle={r.cerrado ? "Al cierre del mes" : "Hoy"} />
       </div>
 
-      <Tabla titulo="Textiles" columna="Textil" filas={r.textiles} total={t.textiles} conCantidades
+      <Tabla titulo="Textiles" columna="Textil" filas={r.textiles} total={t.textiles} conCantidades forma={forma}
              soloMovimientos={soloMovimientos}
              detalle={(f) => fmt.plural(f.rollos, "rollo", "rollos")}
              sinValor={(f) => (f.sin_valor === f.rollos ? "Sin valor de venta" : `${fmt.plural(f.sin_valor, "rollo", "rollos")} sin valor de venta`)} />
-      <Tabla titulo="Materiales" columna="Material" filas={r.materiales} total={t.materiales}
+      <Tabla titulo="Materiales" columna="Material" filas={r.materiales} total={t.materiales} forma={forma}
              soloMovimientos={soloMovimientos}
              sinValor={() => "Sin valor de venta"} />
     </>
@@ -165,7 +184,7 @@ function Cifra({ etiqueta, valor, detalle }) {
    Con `soloMovimientos` se esconden las filas que no ingresaron ni usaron
    nada; el total sigue siendo el de todas (lo de las escondidas también está
    en bodega), y por eso lo dice. */
-function Tabla({ titulo, columna, filas: todas, total, conCantidades = false, soloMovimientos = false, detalle, sinValor }) {
+function Tabla({ titulo, columna, filas: todas, total, conCantidades = false, soloMovimientos = false, detalle, sinValor, forma }) {
   const filas = soloMovimientos ? todas.filter(seMovio) : todas;
   const filtrando = filas.length !== todas.length;
   return (
@@ -207,7 +226,7 @@ function Tabla({ titulo, columna, filas: todas, total, conCantidades = false, so
                         {!f[clave] && guionSiCero ? <span className="sin-dato">—</span> : `${fmt.cantidad(f[clave])} ${f.unidad}`}
                       </td>
                     ))}
-                    <td className="num"><Plata valor={f.valor_vendido} sinValor={aviso && !f.valor_vendido} /></td>
+                    <td className="num"><Plata valor={vendido(f, forma)} sinValor={aviso && !vendido(f, forma)} /></td>
                     <td className="num"><Plata valor={f.valor_restante} sinValor={aviso && !f.valor_restante} /></td>
                   </tr>
                 );
@@ -217,7 +236,7 @@ function Tabla({ titulo, columna, filas: todas, total, conCantidades = false, so
                 {CANTIDADES.map(([clave]) => (
                   <td key={clave} className="num">{conCantidades ? `${fmt.cantidad(total[clave])} m` : ""}</td>
                 ))}
-                <td className="num">{fmt.pesos(total.valor_vendido)}</td>
+                <td className="num">{fmt.pesos(vendido(total, forma))}</td>
                 <td className="num">{fmt.pesos(total.valor_restante)}</td>
               </tr>
             </tbody>

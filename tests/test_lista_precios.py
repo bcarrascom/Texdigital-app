@@ -165,5 +165,24 @@ class TestCambios(_Base):
                              ("Ojetillos", 50.0, 80.0, "/un."))
 
 
+
+class TestCobrosPorProducto(_Base):
+    """Lo que la cotización cobró, en sus cuatro formas, para los reportes de
+    Inventario (decisión de Bruno, 2026-10-26)."""
+
+    def test_con_el_descuento_del_contacto(self):
+        datos = {**_cotizacion(), "Descuento": 10}
+        datos = self.guardar_con_lista(datos)
+        cobro = lista_precios.cobros_por_producto(datos)[0]["textil"]
+        # 3 ML × $10.000, 10 % de descuento, IVA 19 %.
+        self.assertEqual(cobro, {"sin_iva": 30000.0, "sin_iva_con_descuento": 27000.0,
+                                 "con_iva": 35700.0, "con_iva_con_descuento": 32130.0})
+
+    def test_sin_descuento(self):
+        datos = self.guardar_con_lista(_cotizacion())
+        cobro = lista_precios.cobros_por_producto(datos)[0]["textil"]
+        self.assertEqual(cobro["sin_iva"], cobro["sin_iva_con_descuento"])
+
+
 if __name__ == "__main__":
     unittest.main()

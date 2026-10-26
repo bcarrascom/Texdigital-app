@@ -6,6 +6,7 @@ import Cargando from "@/components/Cargando/Cargando";
 import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 import IconoMas from "@/assets/svg/plus.svg?react";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
+import { useCambiosPendientes } from "./cambiosPendientes";
 
 /* Reglas de cobro: el IVA, el mínimo que se cobra por textil y los tramos
    del descuento por volumen (ver core/reglas_cobro.py). Ajuste GLOBAL; cada
@@ -29,6 +30,19 @@ const aBorrador = (r) => ({
   // De menor a mayor, como se leen: "desde 10 m², 5 %".
   tramos: [...r.tramos_descuento].sort((a, b) => a[0] - b[0]).map(([m2, pct]) => ({ m2: mostrar(m2), pct: mostrar(pct) })),
 });
+
+/* Los cambios del borrador, uno por línea, para el diálogo de salir. */
+const textoTramos = (tramos) => tramos.map((t) => `desde ${t.m2 || "?"} m² ${t.pct || "?"} %`).join(" · ") || "sin tramos";
+function describirCambios(original, actual) {
+  const cambios = [];
+  if (original.iva !== actual.iva) cambios.push(`IVA: ${original.iva} % → ${actual.iva || "?"} %`);
+  if (original.ml_minimo !== actual.ml_minimo) cambios.push(`Mínimo de textiles: ${original.ml_minimo} ML → ${actual.ml_minimo || "?"} ML`);
+  if (original.m2_minimo !== actual.m2_minimo) cambios.push(`Mínimo de Backlight: ${original.m2_minimo} m² → ${actual.m2_minimo || "?"} m²`);
+  if (JSON.stringify(original.tramos) !== JSON.stringify(actual.tramos)) {
+    cambios.push(`Descuento por volumen: ${textoTramos(original.tramos)} → ${textoTramos(actual.tramos)}`);
+  }
+  return cambios;
+}
 
 /* Misma regla que core.reglas_cobro.validar: {campo: mensaje}. */
 function validar(b) {
@@ -57,6 +71,12 @@ export default function Reglas() {
   const original = useMemo(() => (datos ? aBorrador(datos.reglas) : null), [datos]);
   const actual = borrador || original;
   const errores = useMemo(() => (actual ? validar(actual) : {}), [actual]);
+  useCambiosPendientes({
+    cambios: borrador && original ? describirCambios(original, borrador) : [],
+    error: Object.keys(errores).length
+      ? (Object.keys(errores).length === 1 ? "hay 1 valor que no es válido." : `hay ${Object.keys(errores).length} valores que no son válidos.`) : null,
+    guardar,
+  });
   if (cargando || !actual) return <Cargando />;
 
   const soloLectura = datos.solo_lectura;
@@ -69,17 +89,18 @@ export default function Reglas() {
   const cambiarTramo = (i, cambio) => cambiar({ tramos: actual.tramos.map((t, k) => (k === i ? { ...t, ...cambio } : t)) });
 
   async function guardar() {
-    if (cantidadErrores || guardando) return;
+    if (cantidadErrores || guardando) return false;
     setGuardando(true);
     try {
       const r = await api.guardar_reglas_cobro({
         iva: leer(actual.iva), ml_minimo: leer(actual.ml_minimo), m2_minimo: leer(actual.m2_minimo),
         tramos_descuento: actual.tramos.map((t) => [leer(t.m2), leer(t.pct)]),
       });
-      if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return; }
+      if (!r?.ok) { aviso(r?.errores?.[0]?.mensaje || "No se pudo guardar.", "error"); return false; }
       await recargar();
       setBorrador(null);
       aviso("Reglas de cobro guardadas.", "info");
+      return true;
     } finally {
       setGuardando(false);
     }

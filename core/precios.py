@@ -785,3 +785,35 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
         "iva_pct":              iva_pct,
         "total":                total,
     }
+
+
+def descuento_por_linea(productos: list[dict], descuento_pct: float = 0.0,
+                        despacho: float = 0.0, instalacion: float = 0.0, **kwargs) -> list[dict]:
+    """Qué parte de cada producto se llevó el descuento de la cotización:
+    [{"impresion": fracción, "resto": fracción}] (0,1 = 10 %), alineado con
+    `productos` — para repartir el descuento del total entre lo que se
+    vendió (ver core.lista_precios.cobros_por_producto, pedido de Bruno
+    2026-10-26: los reportes muestran lo vendido con y sin descuento).
+
+    Misma regla que costo_cotizacion, que aplica UNO de los dos descuentos:
+      - el % del contacto ("normal"): a todo el producto, salvo a la impresión
+        de las líneas que cobran el piso mínimo;
+      - el de volumen ("textil"): solo a la impresión, con el % del tramo de
+        su grupo, y tampoco a las líneas en piso mínimo.
+    "resto" es todo lo que no es la impresión (estructuras, terminaciones,
+    caja, materiales)."""
+    if not productos:
+        return []
+    totales = costo_cotizacion(productos, descuento_pct, despacho=despacho, instalacion=instalacion, **kwargs)
+    en_minimo = en_piso_minimo_por_producto(productos, **kwargs)
+    if totales["fuente_descuento"] == "normal":
+        f = (descuento_pct or 0.0) / 100
+        return [{"impresion": 0.0 if m else f, "resto": f} for m in en_minimo]
+    tramos = _reglas(kwargs.get("reglas"))["tramos_descuento"]
+    grupos: dict = {}
+    for p in productos:
+        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append(p)
+    pct_grupo = {clave: tramo_descuento_textil(sum(_area_producto(p) for p in grupo), tramos)
+                 for clave, grupo in grupos.items()}
+    return [{"impresion": 0.0 if m else pct_grupo[_clave_grupo_descuento_textil(p)] / 100, "resto": 0.0}
+            for p, m in zip(productos, en_minimo)]

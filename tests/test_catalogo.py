@@ -59,13 +59,13 @@ class _Base(unittest.TestCase):
         parches = [
             mock.patch.object(ajustes_globales, "_CONF_DIR", self.conf),
             mock.patch.object(repo_inv, "_ruta_base", lambda: base / "Inventario"),
+            mock.patch.object(repo_mat, "_ruta_base", lambda: base / "Inventario"),
             mock.patch.object(catalogo, "_semillas_cache", SEMILLAS),
             mock.patch.dict(repo.TEXTILES_ANCHOS, {}),
             mock.patch.dict(repo.TEXTILES_VALORES, {}),
             mock.patch.dict(repo.ESTRUCTURAS_LEGADO_VALORES, {}),
             mock.patch.dict(repo.TERMINACIONES_LEGADO_VALORES, {}),
             mock.patch.dict(config.MODULOS_HABILITADOS, {"inventario": True}),
-            mock.patch.object(repo_mat, "_leer_indice", lambda: {"productos": {}, "estructuras": {}}),
         ]
         for p in parches:
             p.start()
@@ -104,9 +104,9 @@ class TestTextiles(_Base):
             self.assertIn(campo, r["errores"])
         self.assertEqual(repo.TEXTILES, [LONA, GASA])
 
-    def test_por_rollo_se_puede_agregar_sin_valor(self):
+    def test_por_rollo_tambien_hace_falta_el_valor(self):
         precios_textiles.guardar({"modo": "rollo", "textiles": []})
-        self.assertTrue(catalogo.agregar_textil("Otro", 1.5)["ok"])
+        self.assertIn("valor", catalogo.agregar_textil("Otro", 1.5)["errores"])
 
     def test_otra_instalacion_lo_cambio_en_dropbox(self):
         self.conf.mkdir(parents=True)
@@ -182,6 +182,44 @@ class TestComponentes(_Base):
             r = catalogo.agregar_componente("terminaciones", *datos)
             self.assertIn(campo, r["errores"])
         self.assertEqual(repo.TERMINACIONES_LEGADO, ["Basta"])
+
+
+
+class TestQuitar(_Base):
+    """Quitar saca de las listas donde se elige, pero los datos siguen para
+    las cotizaciones viejas; agregarlo de nuevo lo devuelve (2026-10-26)."""
+
+    def test_quitar_un_textil(self):
+        repo_inv.crear_rollo(LONA, 1.5, 50, valor=12000)
+        self.assertEqual(catalogo.quitar_textil(LONA), {"ok": True, "rollos": 1})
+        self.assertEqual(repo.TEXTILES, [GASA])
+        self.assertEqual(repo.TEXTILES_ANCHOS[LONA], 1.5)                 # una cotización vieja sigue calculando
+        self.assertNotIn(LONA, [t["nombre"] for t in precios_textiles.cargar()["textiles"]])
+        self.assertEqual([r["nombre_textil"] for r in repo_inv.listar_rollos()], [LONA])   # el rollo queda
+
+    def test_agregar_de_nuevo_un_textil_quitado_lo_devuelve(self):
+        catalogo.quitar_textil(LONA)
+        self.assertEqual(catalogo.agregar_textil("lona TEST", 1.6, valor=9000), {"ok": True})
+        self.assertEqual(repo.TEXTILES, [LONA, GASA])                       # a su lugar, con su nombre
+        self.assertEqual(repo.TEXTILES_ANCHOS[LONA], 1.6)
+
+    def test_quitar_una_estructura_suelta_sus_materiales(self):
+        catalogo.agregar_componente("estructuras", "Riel", "ML", 900)
+        m = repo_mat.ingresar_material("Tornillo", 10)
+        repo_mat.editar_material(m["id"], "Tornillo", "unidad", valor=10, tipo_consumo="fijo_por_producto",
+                                 consumo_parametros={"n": 1}, estructuras_asociadas=["Riel", "Asta"])
+        self.assertEqual(catalogo.quitar_componente("estructuras", "Riel"), {"ok": True, "materiales": 1})
+        self.assertEqual(repo.ESTRUCTURAS_LEGADO, ["Asta"])
+        self.assertIn("Riel", repo.ESTRUCTURAS_LEGADO_VALORES)             # su valor sigue
+        self.assertNotIn("Riel", [f["nombre"] for f in precios_componentes.cargar_lista("estructuras")])
+        self.assertEqual(repo_mat.obtener_material(m["id"])["estructuras_asociadas"], ["Asta"])
+
+    def test_quitar_y_devolver_una_terminacion_de_la_app(self):
+        self.assertTrue(catalogo.quitar_componente("terminaciones", "Basta")["ok"])
+        self.assertEqual(repo.TERMINACIONES_LEGADO, [])
+        self.assertTrue(catalogo.agregar_componente("terminaciones", "basta", "ML", 2500)["ok"])
+        self.assertEqual(repo.TERMINACIONES_LEGADO, ["Basta"])
+        self.assertEqual(precios_componentes.valores("terminaciones")["Basta"], {"valorUNIT": 2500.0})   # su unidad de siempre
 
 
 if __name__ == "__main__":

@@ -17,10 +17,12 @@ Y un interruptor general decide cuál vale:
 
 El rollo "del que va a salir la tela" es el mismo que elegiría Inventario al
 aprobar (el más chico que alcanza solo, ver _asignar_rollos_por_producto),
-mirado producto por producto con el stock de hoy. Si ningún rollo alcanza,
-el más nuevo de ese textil; si ningún rollo tiene valor, el valor fijo del
-textil (si tiene). Sin nada de eso, el textil sale sin precio (0), igual
-que un textil que no está en el catálogo.
+mirado producto por producto con el stock de hoy. Si ningún rollo alcanza
+—o el que alcanza no tiene valor—, se cobra el valor fijo del textil y el
+cotizador lo avisa (decisión de Bruno, 2026-10-26). Por eso el valor fijo
+es OBLIGATORIO en todos los textiles, también en los que se cobran por
+rollo: es el respaldo. Un textil sin valor (datos de antes de esa regla)
+sale sin precio (0), igual que uno que no está en el catálogo.
 
 En Conf/precios_textiles.json:
     {"version": 1, "modo": "fijo" | "rollo" | "por_textil",
@@ -131,8 +133,8 @@ def validar(modo, textiles: list[dict]) -> list[dict]:
             continue
         valor = t.get("valor")
         if valor in (None, ""):
-            if cobro_efectivo(modo, t.get("cobro")) == "fijo":
-                errores.append({"textil": nombre, "mensaje": "Falta el valor por metro."})
+            # Obligatorio también por rollo: es lo que se cobra si ningún rollo alcanza.
+            errores.append({"textil": nombre, "mensaje": "Falta el valor por metro."})
             continue
         n = _numero(valor)
         if n is None or n <= 0:
@@ -204,24 +206,38 @@ def _nombre_textil(d: dict) -> str:
     return nombre_textil((d.get("tela") if "tela" in d else d.get("textil")) or "")
 
 
-def _valor_por_rollo(d: dict, nombre: str, rollos: list[dict]) -> float | None:
-    """El valor del rollo del que saldría este producto, ver docstring del módulo."""
+def _por_rollo(d: dict, rollos: list[dict]) -> tuple[float | None, str, str | None]:
+    """(valor, motivo, id del rollo) del rollo del que saldría este producto,
+    ver docstring del módulo. motivo: "rollo" (el más chico que alcanza, con
+    su valor), "sin_rollo" (ninguno alcanza) o "rollo_sin_valor" (el que
+    alcanza no tiene valor). Sin valor en los dos últimos: vale el fijo."""
     from core.repositorio_inventario import rollo_para_producto
 
     rollo = rollo_para_producto(d, rollos)
-    if rollo is not None and rollo.get("valor") is not None:
-        return float(rollo["valor"])
-    del_textil = [r for r in rollos if r.get("nombre_textil") == nombre and r.get("valor") is not None]
-    # Primero los que se pueden usar (estado activo), y entre ellos el más nuevo.
-    del_textil.sort(key=lambda r: (r.get("estado", "activo") == "activo", r.get("id", "")))
-    return float(del_textil[-1]["valor"]) if del_textil else None
+    if rollo is None:
+        return None, "sin_rollo", None
+    if rollo.get("valor") is None:
+        return None, "rollo_sin_valor", rollo.get("id")
+    return float(rollo["valor"]), "rollo", rollo.get("id")
 
 
 def valorizador(ajustes: dict | None = None):
     """Una función producto → valor por metro de su textil (o None si no
     tiene), para core.precios.costo_producto(valor_textil=...). Lee los
     ajustes al crearla y los rollos recién la primera vez que un producto
-    se cobra por rollo, una sola vez: crear una por cálculo, no guardarla."""
+    se cobra por rollo, una sola vez: crear una por cálculo, no guardarla.
+
+    La función trae además `.detalle(producto)`: de dónde sale ese valor, para
+    que el cotizador avise cuando un textil se cotiza sin precio o sin un rollo
+    que alcance (pedido de Bruno, 2026-10-26):
+
+        {"textil", "cobro": "fijo" | "rollo", "valor": número | None,
+         "origen": "fijo" | "rollo" | "sin_rollo" | "rollo_sin_valor",
+         "rollo": id | None}
+
+    "sin_rollo" / "rollo_sin_valor": se cobra por rollo, pero ningún rollo
+    alcanza (o el que alcanza no tiene valor), así que vale el fijo. "valor"
+    None: el textil no tiene valor fijo (se cotiza en $0)."""
     from core.repositorio_inventario import listar_rollos
 
     ajustes = ajustes or cargar()
@@ -229,15 +245,29 @@ def valorizador(ajustes: dict | None = None):
     por_rollo = {t["nombre"] for t in ajustes["textiles"] if cobro_efectivo(ajustes["modo"], t["cobro"]) == "rollo"}
     rollos = None
 
-    def valor(d: dict) -> float | None:
+    def detalle(d: dict) -> dict:
         nonlocal rollos
         nombre = _nombre_textil(d)
         if nombre in por_rollo:
             if rollos is None:
                 rollos = listar_rollos()
-            desde_rollo = _valor_por_rollo(d, nombre, rollos)
-            if desde_rollo is not None:
-                return desde_rollo
-        return fijos.get(nombre)
+            v, motivo, rollo = _por_rollo(d, rollos)
+            if v is not None:
+                return {"textil": nombre, "cobro": "rollo", "valor": v, "origen": motivo, "rollo": rollo}
+            return {"textil": nombre, "cobro": "rollo", "valor": fijos.get(nombre), "origen": motivo, "rollo": rollo}
+        return {"textil": nombre, "cobro": "fijo", "valor": fijos.get(nombre), "origen": "fijo", "rollo": None}
 
+    def valor(d: dict) -> float | None:
+        return detalle(d)["valor"]
+
+    valor.detalle = detalle
     return valor
+
+
+def textiles_sin_precio(ajustes: dict | None = None) -> list[str]:
+    """Los textiles sin valor fijo. Desde 2026-10-26 el valor fijo es
+    obligatorio (ver `validar`), así que solo pasa con datos de antes: el
+    cotizador avisa apenas se elige uno, porque podría cotizarse en $0."""
+    ajustes = ajustes or cargar()
+    fijos = valores_fijos(ajustes)
+    return [t["nombre"] for t in ajustes["textiles"] if t["nombre"] not in fijos]

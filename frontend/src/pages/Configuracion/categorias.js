@@ -28,8 +28,8 @@ import { Estructuras, Terminaciones } from "./ListaPrecios";
 export const CATEGORIAS = [
   {
     clave: "general", titulo: "General", Icono: IconoGeneral, color: "#8E8E93", Contenido: General,
-    desc: "La versión de la app, las actualizaciones, el tamaño del texto y el manual de uso.",
-    palabras: "versión actualizar actualizaciones texto tamaño letra escala zoom manual ayuda",
+    desc: "La versión de la app, el tamaño del texto y el manual de uso.",
+    palabras: "versión texto tamaño letra escala zoom manual ayuda",
   },
   {
     clave: "textiles", titulo: "Textiles", Icono: IconoTextiles, color: "#AF52DE", Contenido: Textiles,

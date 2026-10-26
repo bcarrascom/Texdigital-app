@@ -190,9 +190,6 @@ class ApiApp:
         else:
             self._aviso(f'Todavía no hay pantalla para "{destino}".', "aviso")
 
-    def buscar_actualizacion(self) -> None:
-        self._aviso("Todavía no está conectado el buscador de actualizaciones.", "info")
-
     # ── Ver cotización ───────────────────────────────────────────────────────
 
     def obtener_cotizacion(self, numero) -> dict | None:
@@ -282,7 +279,7 @@ class ApiApp:
     def guardar_cotizacion(self, estado: dict, abrir: bool = False) -> dict:
         return self._cotizacion.guardar_cotizacion(estado, abrir)
 
-    def guardar_cliente(self, empresa, rut, razon_social) -> bool:
+    def guardar_cliente(self, empresa, rut, razon_social) -> dict:
         return self._cotizacion.guardar_cliente(empresa, rut, razon_social)
 
     def guardar_contacto(self, contacto, email, descuento, condicion) -> None:
@@ -365,6 +362,12 @@ class ApiApp:
 
     def agregar_componente(self, tipo, datos) -> dict:
         return self._configuracion.agregar_componente(tipo, datos)
+
+    def quitar_textil(self, nombre) -> dict:
+        return self._configuracion.quitar_textil(nombre)
+
+    def quitar_componente(self, tipo, nombre) -> dict:
+        return self._configuracion.quitar_componente(tipo, nombre)
 
     # ── Configuración › Clientes y contactos ─────────────────────────────────
 

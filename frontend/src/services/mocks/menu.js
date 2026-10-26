@@ -37,5 +37,4 @@ export default {
     ],
     avisos_produccion: ops.slice(1),
   }),
-  buscar_actualizacion: () => window.TD?.aviso?.("Todavía no está conectado el buscador de actualizaciones.", "info"),
 };

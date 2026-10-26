@@ -1,4 +1,4 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { useAvisos } from "@/context/AvisosContext";
 import Segmento from "@/components/Segmento/Segmento";
 import * as fmt from "@/utils/formato";
@@ -12,16 +12,63 @@ const TIPOS = [{ valor: "estandar", etiqueta: "Estándar" }, { valor: "backlight
 const IMPRESIONES = [{ valor: "Cara única" }, { valor: "Tiro y retiro" }];
 const TERMINACIONES_CAJA = [{ valor: CAJA_TERMINADA, etiqueta: "Caja terminada" }, { valor: "AREA VISUAL", etiqueta: "Área visual" }];
 
+/* El aviso del textil, debajo de su campo (pedido de Bruno, 2026-10-26):
+     · sin precio — se cotizaría en $0 (ver cat.textiles_sin_precio, que se
+       sabe apenas se elige, sin medidas; solo pasa con datos viejos: el valor
+       fijo es obligatorio);
+     · se cobra por rollo y ninguno alcanza para este producto (o el que
+       alcanza no tiene valor) — se cotiza con su valor fijo, y hay un atajo
+       para cargar un rollo (ver c.precio_textil, que necesita las medidas:
+       viene del cálculo).
+   Devuelve { texto, rollo: bool } o null. */
+function avisoTextil(nombre, cat, c) {
+  if (!nombre) return null;
+  const pt = c.precio_textil;
+  if ((cat.textiles_sin_precio || []).includes(nombre) || (pt && pt.valor == null)) {
+    return { texto: `«${nombre}» no tiene precio: se cotiza en $0. Ponle un valor en Configuración › Textiles${pt?.cobro === "rollo" ? " o a sus rollos" : ""}.` };
+  }
+  if (pt?.origen === "sin_rollo") {
+    return { texto: `Ningún rollo de «${nombre}» alcanza para este producto: se cotiza con su valor fijo (${fmt.pesos(pt.valor)}/m).`, rollo: true };
+  }
+  if (pt?.origen === "rollo_sin_valor") {
+    return { texto: `El rollo ${pt.rollo} de «${nombre}», que alcanza, no tiene valor de venta: se cotiza con el valor fijo del textil (${fmt.pesos(pt.valor)}/m).` };
+  }
+  return null;
+}
+
+function AvisoTextil({ aviso, textil, onNuevoRollo }) {
+  if (!aviso) return null;
+  return (
+    <span className="campo__aviso-textil" role="status">
+      {aviso.texto}
+      {aviso.rollo && onNuevoRollo && (
+        <button className="btn btn--secundario btn--chico" type="button" onClick={() => onNuevoRollo(textil)}>+ Cargar rollo nuevo</button>
+      )}
+    </span>
+  );
+}
+
 /* 1.5 → "1,5" (los márgenes de corte, ver Configuración › Backlight). */
 const cm = (n) => String(n).replace(".", ",");
 
 const PanelProducto = forwardRef(function PanelProducto(
-  { p, i, total, cat, onCambiar, onTipo, onDuplicar, onQuitar, onSiguiente }, ref,
+  { p, i, total, cat, onCambiar, onTipo, onDuplicar, onQuitar, onSiguiente, onNuevoRollo }, ref,
 ) {
+  const aviso = useAvisos();
   const bl = p.tipo === "backlight";
   const conPerfil = bl && p.perfil !== SIN_CAJA;
   const c = p.calc || {};
   const anchoMax = c.ancho_max != null ? `Ancho máximo de impresión: ${c.ancho_max} m` : "";
+  const textil = (bl ? p.tela : p.textil)?.trim() || "";
+  const avisoT = avisoTextil(textil, cat, c);
+
+  /* Al elegir un textil sin precio, además del aviso en el campo, un toast:
+     es lo que no se puede pasar por alto. Una vez por textil elegido. */
+  const avisado = useRef("");
+  useEffect(() => {
+    if (avisoT && !avisoT.rollo && avisado.current !== textil) aviso(avisoT.texto, "aviso", 6000);
+    avisado.current = avisoT && !avisoT.rollo ? textil : "";
+  }, [textil, avisoT?.texto]);
 
   // Campo de texto simple: el estado se actualiza en cada tecla.
   const campo = (clave) => ({ value: p[clave] ?? "", onChange: (e) => onCambiar({ [clave]: e.target.value }) });
@@ -51,6 +98,7 @@ const PanelProducto = forwardRef(function PanelProducto(
                     <label className="campo__etiqueta" data-requerido>Textil</label>
                     <input className="entrada" type="text" list="lista-textiles" autoComplete="off" {...campo("textil")} />
                     <span className="campo__ayuda">{anchoMax}</span>
+                    <AvisoTextil aviso={avisoT} textil={textil} onNuevoRollo={onNuevoRollo} />
                   </div>
                   <div className="campo campo--switch">
                     <span className="campo__etiqueta" aria-hidden="true">&nbsp;</span>
@@ -69,6 +117,7 @@ const PanelProducto = forwardRef(function PanelProducto(
                     <Selector valor={p.tela} opciones={[["", "— Sin tela —"], ...(cat.telas_backlight || [])]}
                               onCambiar={(v) => onCambiar({ tela: v })} />
                     <span className="campo__ayuda">{anchoMax}</span>
+                    <AvisoTextil aviso={avisoT} textil={textil} onNuevoRollo={onNuevoRollo} />
                   </div>
                   <div className="campo">
                     <label className="campo__etiqueta">Caja / perfil</label>

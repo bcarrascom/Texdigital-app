@@ -19,7 +19,16 @@ guarda solo lo que se cambió:
      "terminaciones_agregadas": [{"nombre", "unidad"}],
      "productos_agregados":    [nombre],
      "productos_renombrados":  {nombre anterior: nombre actual},
-     "productos_quitados":     [nombre]}
+     "productos_quitados":     [nombre],
+     "textiles_quitados", "estructuras_quitadas", "terminaciones_quitadas": [nombre]}
+
+Quitar un textil, una estructura o una terminación (pedido de Bruno,
+2026-10-26, solo desde Configuración y con confirmación) lo saca de las
+listas donde se ELIGE (cotizador, Inventario, Configuración), pero no borra
+sus datos: su ancho y su valor siguen ahí para las cotizaciones y OPs ya
+hechas que lo usan. Agregarlo de nuevo con el mismo nombre lo devuelve.
+Los rollos de un textil quitado quedan en Inventario como estaban; los
+materiales asociados a una estructura quitada dejan de estarlo.
 
 Un producto es solo un nombre (lo que se elige en el cotizador); lo único
 que cuelga de él son los materiales de Inventario asociados (ver
@@ -121,13 +130,21 @@ def _leer() -> dict:
         "productos_agregados": [_texto(n) for n in g.get("productos_agregados") or [] if isinstance(n, str) and _texto(n)],
         "productos_renombrados": {k: v for k, v in mapa("productos_renombrados").items() if isinstance(v, str) and k != v},
         "productos_quitados": [n for n in g.get("productos_quitados") or [] if isinstance(n, str)],
+        "textiles_quitados": [n for n in g.get("textiles_quitados") or [] if isinstance(n, str)],
+        "estructuras_quitadas": [n for n in g.get("estructuras_quitadas") or [] if isinstance(n, str)],
+        "terminaciones_quitadas": [n for n in g.get("terminaciones_quitadas") or [] if isinstance(n, str)],
     }
 
 
-def textiles(datos: dict | None = None) -> list[dict]:
+def _quitado(nombre: str, quitados: list[str]) -> bool:
+    return nombre.casefold() in {q.casefold() for q in quitados}
+
+
+def textiles(datos: dict | None = None, con_quitados: bool = False) -> list[dict]:
     """[{"nombre", "ancho", "backlight", "agregado": bool, "anteriores": [nombres]}]
     — los textiles vigentes, primero los de la app (con su nombre actual) y
-    después los agregados."""
+    después los agregados. `con_quitados`: también los quitados (con
+    "quitado": True), que siguen valiendo para las cotizaciones viejas."""
     datos = datos or _leer()
     s = _semillas()
     renombrados = datos["textiles_renombrados"]
@@ -145,7 +162,8 @@ def textiles(datos: dict | None = None) -> list[dict]:
         if isinstance(datos["textiles_backlight"].get(f["nombre"]), bool):
             f["backlight"] = datos["textiles_backlight"][f["nombre"]]
         f["anteriores"] = sorted(viejo for viejo, nuevo in renombrados.items() if nuevo == f["nombre"])
-    return filas
+        f["quitado"] = _quitado(f["nombre"], datos["textiles_quitados"])
+    return filas if con_quitados else [f for f in filas if not f["quitado"]]
 
 
 def alias_textiles() -> dict[str, str]:
@@ -163,15 +181,18 @@ def telas_backlight() -> list[str]:
     return [t["nombre"] for t in textiles() if t["backlight"]]
 
 
-def componentes(tipo: str, datos: dict | None = None) -> list[dict]:
-    """[{"nombre", "unidad", "agregado"}] de estructuras o terminaciones."""
+def componentes(tipo: str, datos: dict | None = None, con_quitados: bool = False) -> list[dict]:
+    """[{"nombre", "unidad", "agregado", "quitado"}] de estructuras o
+    terminaciones (sin las quitadas, salvo `con_quitados`)."""
     datos = datos or _leer()
     nombres, valores = _semillas()[tipo]
     filas = [{"nombre": n, "unidad": "ML" if "valorML" in valores.get(n, {}) else "un.", "agregado": False}
              for n in nombres if n in valores]
     filas += [{"nombre": _texto(c["nombre"]), "unidad": c.get("unidad") if c.get("unidad") in UNIDADES else "un.",
                "agregado": True} for c in datos[f"{tipo}_agregadas"]]
-    return filas
+    for f in filas:
+        f["quitado"] = _quitado(f["nombre"], datos[f"{tipo}_quitadas"])
+    return filas if con_quitados else [f for f in filas if not f["quitado"]]
 
 
 # ── Aplicar a los catálogos de core.repositorio ─────────────────────────────
@@ -205,8 +226,8 @@ def _aplicar(datos: dict) -> None:
     from core import repositorio
 
     s = _semillas()
-    filas = textiles(datos)
-    repositorio.TEXTILES[:] = [t["nombre"] for t in filas]
+    filas = textiles(datos, con_quitados=True)   # los quitados no se eligen, pero sus anchos siguen valiendo
+    repositorio.TEXTILES[:] = [t["nombre"] for t in filas if not t["quitado"]]
     repositorio.PRODUCTOS[:] = productos(datos)
     anchos = {t["nombre"]: t["ancho"] for t in filas if t["ancho"] is not None}
     # Los nombres anteriores también, para las cotizaciones que los usan.
@@ -224,8 +245,10 @@ def _aplicar(datos: dict) -> None:
         ("terminaciones", repositorio.TERMINACIONES_LEGADO, repositorio.TERMINACIONES_LEGADO_VALORES),
     ):
         nombres_base, valores_base = s[tipo]
-        agregadas = [c for c in componentes(tipo, datos) if c["agregado"]]
-        nombres_obj[:] = list(nombres_base) + [c["nombre"] for c in agregadas]
+        todas = componentes(tipo, datos, con_quitados=True)
+        agregadas = [c for c in todas if c["agregado"]]
+        # Las quitadas no se eligen, pero su valor sigue (cotizaciones viejas).
+        nombres_obj[:] = [c["nombre"] for c in todas if not c["quitado"]]
         valores_obj.clear()
         valores_obj.update({n: dict(v) for n, v in valores_base.items()})
         # Su valor está en Configuración (core.precios_componentes); acá, 0 de base.
@@ -274,33 +297,56 @@ def solo_lectura() -> bool:
 # ── Textiles ────────────────────────────────────────────────────────────────
 
 def agregar_textil(nombre: str, ancho, backlight: bool = False, valor=None) -> dict:
-    """Un textil nuevo, con su ancho y su valor por metro. El valor puede
-    faltar solo si el textil se va a cobrar por rollo (ver core.precios_textiles).
+    """Un textil nuevo, con su ancho y su valor por metro (obligatorio: es lo
+    que se cobra si ningún rollo alcanza, ver core.precios_textiles).
     {"ok": True} o {"ok": False, "errores": {campo: mensaje}}."""
     from core import precios_textiles
 
     datos = _leer()
     nombre = _texto(nombre)
     errores = {}
-    if (m := _validar_nombre(nombre, [t["nombre"] for t in textiles(datos)], datos["textiles_renombrados"])):
+    quitado = next((q for q in datos["textiles_quitados"] if q.casefold() == nombre.casefold()), None)
+    if quitado is None and (m := _validar_nombre(nombre, [t["nombre"] for t in textiles(datos, con_quitados=True)],
+                                                 datos["textiles_renombrados"])):
         errores["nombre"] = m
     ancho, m = _validar_ancho(ancho)
     if m:
         errores["ancho"] = m
-    ajustes = precios_textiles.cargar()
     con_valor = valor not in (None, "")
-    if con_valor and not (_numero(valor) or 0) > 0:
-        errores["valor"] = "El valor tiene que ser un monto mayor que 0."
-    elif not con_valor and precios_textiles.cobro_efectivo(ajustes["modo"], "fijo") == "fijo":
+    if not con_valor:
         errores["valor"] = "Falta el valor por metro."
+    elif not (_numero(valor) or 0) > 0:
+        errores["valor"] = "El valor tiene que ser un monto mayor que 0."
     if errores:
         return {"ok": False, "errores": errores}
 
-    datos["textiles_agregados"].append({"nombre": nombre, "ancho": ancho, "backlight": bool(backlight)})
+    if quitado is not None:
+        # Uno quitado vuelve, con el ancho y lo de Backlight que se escribió ahora.
+        nombre = next(t["nombre"] for t in textiles(datos, con_quitados=True) if t["nombre"].casefold() == quitado.casefold())
+        datos["textiles_quitados"] = [q for q in datos["textiles_quitados"] if q != quitado]
+        datos["textiles_anchos"][nombre] = ancho
+        datos["textiles_backlight"][nombre] = bool(backlight)
+    else:
+        datos["textiles_agregados"].append({"nombre": nombre, "ancho": ancho, "backlight": bool(backlight)})
     if (m := _guardar(datos)):
         return {"ok": False, "errores": {"general": m}}
-    precios_textiles.fijar(nombre, cobro="fijo", valor=_numero(valor) if con_valor else None)
+    if con_valor or quitado is None:
+        precios_textiles.fijar(nombre, cobro="fijo", valor=_numero(valor) if con_valor else None)
     return {"ok": True}
+
+
+def quitar_textil(nombre: str) -> dict:
+    """Saca un textil de las listas donde se elige (ver docstring del módulo).
+    {"ok": True, "rollos": n que quedan en Inventario} o {"ok": False, "errores"}."""
+    from core.repositorio_inventario import listar_rollos
+
+    datos = _leer()
+    if not any(t["nombre"] == nombre for t in textiles(datos)):
+        return {"ok": False, "errores": {"general": "Ese textil ya no existe: recarga la página."}}
+    datos["textiles_quitados"].append(nombre)
+    if (m := _guardar(datos)):
+        return {"ok": False, "errores": {"general": m}}
+    return {"ok": True, "rollos": sum(1 for r in listar_rollos() if r.get("nombre_textil") == nombre)}
 
 
 def editar_textil(nombre_actual: str, nombre_nuevo: str, ancho, backlight: bool) -> dict:
@@ -368,7 +414,8 @@ def agregar_componente(tipo: str, nombre: str, unidad: str, valor) -> dict:
     datos = _leer()
     nombre = _texto(nombre)
     errores = {}
-    if (m := _validar_nombre(nombre, [c["nombre"] for c in componentes(tipo, datos)])):
+    quitada = next((q for q in datos[f"{tipo}_quitadas"] if q.casefold() == nombre.casefold()), None)
+    if quitada is None and (m := _validar_nombre(nombre, [c["nombre"] for c in componentes(tipo, datos, con_quitados=True)])):
         errores["nombre"] = m
     if unidad not in UNIDADES:
         errores["unidad"] = "Elige si se cobra por unidad o por metro lineal."
@@ -377,11 +424,34 @@ def agregar_componente(tipo: str, nombre: str, unidad: str, valor) -> dict:
     if errores:
         return {"ok": False, "errores": errores}
 
-    datos[f"{tipo}_agregadas"].append({"nombre": nombre, "unidad": unidad})
+    if quitada is not None:
+        # Una quitada vuelve, con su unidad de siempre y el valor que se escribió ahora.
+        nombre = next(c["nombre"] for c in componentes(tipo, datos, con_quitados=True) if c["nombre"].casefold() == quitada.casefold())
+        datos[f"{tipo}_quitadas"] = [q for q in datos[f"{tipo}_quitadas"] if q != quitada]
+    else:
+        datos[f"{tipo}_agregadas"].append({"nombre": nombre, "unidad": unidad})
     if (m := _guardar(datos)):
         return {"ok": False, "errores": {"general": m}}
     precios_componentes.fijar(tipo, nombre, _numero(valor))
     return {"ok": True}
+
+
+def quitar_componente(tipo: str, nombre: str) -> dict:
+    """Saca una estructura o terminación de las listas donde se elige (ver
+    docstring del módulo). Una estructura deja de estar asociada a sus
+    materiales. {"ok": True, "materiales": n} o {"ok": False, "errores"}."""
+    from core.repositorio_materiales import renombrar_asociacion
+
+    if tipo not in TIPOS_COMPONENTE:
+        return {"ok": False, "errores": {"general": "Tipo desconocido."}}
+    datos = _leer()
+    if not any(c["nombre"] == nombre for c in componentes(tipo, datos)):
+        return {"ok": False, "errores": {"general": "Ya no existe: recarga la página."}}
+    datos[f"{tipo}_quitadas"].append(nombre)
+    if (m := _guardar(datos)):
+        return {"ok": False, "errores": {"general": m}}
+    materiales = renombrar_asociacion("estructuras", nombre, None) if tipo == "estructuras" else 0
+    return {"ok": True, "materiales": materiales}
 
 
 # ── Productos ───────────────────────────────────────────────────────────────

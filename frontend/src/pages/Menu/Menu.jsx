@@ -214,8 +214,6 @@ export default function Menu() {
           {contexto.version && <span>v{contexto.version}</span>}
           <ControlTexto />
           <button className="cab-btn cab-btn--icono" title="Manual de uso" onClick={() => api.abrir_manual()}>?</button>
-          <button className="cab-btn cab-btn--icono" title="Buscar actualizaciones"
-                  onClick={() => api.buscar_actualizacion()}>⟳</button>
           {import.meta.env.DEV && (
             <Link className="cab-btn" to={rutas.desarrollo()} title="Pantallas migradas (solo en desarrollo)">dev</Link>
           )}

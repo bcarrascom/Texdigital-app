@@ -58,6 +58,18 @@ export function rut(raw) {
   return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
 }
 
+/* Si el dígito verificador del RUT calza (módulo 11). La versión canónica es
+   core.repositorio.rut_valido: si allá cambia, acá también. */
+export function rutValido(raw) {
+  const s = String(raw ?? "").replace(/[^\dkK]/g, "").toUpperCase();
+  if (s.length < 2 || !/^\d+$/.test(s.slice(0, -1))) return false;
+  const cuerpo = s.slice(0, -1), dv = s.slice(-1);
+  let suma = 0;
+  [...cuerpo].reverse().forEach((d, i) => { suma += Number(d) * (2 + (i % 6)); });
+  const resto = 11 - (suma % 11);
+  return dv === (resto === 11 ? "0" : resto === 10 ? "K" : String(resto));
+}
+
 /* plural(3, "rollo", "rollos") → "3 rollos" */
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 

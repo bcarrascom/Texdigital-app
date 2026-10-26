@@ -76,10 +76,10 @@ class TestLeerYGuardar(_Base):
         self.assertEqual(_fila(datos, LONA), {"nombre": LONA, "ancho": 1.5, "cobro": "fijo", "valor": 10000.0})
 
     def test_guardar_y_volver_a_leer(self):
-        self.assertEqual(self.guardar("por_textil", **{LONA: ("rollo", None), GASA: ("fijo", 9000)}), {"ok": True})
+        self.assertEqual(self.guardar("por_textil", **{LONA: ("rollo", 7000), GASA: ("fijo", 9000)}), {"ok": True})
         datos = precios_textiles.cargar()
         self.assertEqual(datos["modo"], "por_textil")
-        self.assertEqual((_fila(datos, LONA)["cobro"], _fila(datos, LONA)["valor"]), ("rollo", None))
+        self.assertEqual((_fila(datos, LONA)["cobro"], _fila(datos, LONA)["valor"]), ("rollo", 7000.0))
         self.assertEqual(_fila(datos, GASA)["valor"], 9000.0)
 
     def test_lo_que_no_conoce_esta_version_se_conserva(self):
@@ -111,17 +111,17 @@ class TestValidar(_Base):
         self.assertEqual([(e["textil"], e["mensaje"]) for e in r["errores"]], [(GASA, "Falta el valor por metro.")])
         self.assertFalse((self.conf / "precios_textiles.json").exists())
 
-    def test_todos_por_rollo_no_necesitan_valor_fijo(self):
-        self.assertEqual(self.guardar("rollo", **{LONA: ("fijo", None), GASA: ("fijo", None)}), {"ok": True})
-
-    def test_segun_cada_textil_solo_piden_valor_los_fijos(self):
-        self.assertTrue(self.guardar("por_textil", **{LONA: ("rollo", None), GASA: ("fijo", 1)})["ok"])
-        r = self.guardar("por_textil", **{LONA: ("rollo", None), GASA: ("fijo", None)})
-        self.assertEqual([e["textil"] for e in r["errores"]], [GASA])
+    def test_por_rollo_tambien_hace_falta_el_valor_fijo(self):
+        # Es lo que se cobra si ningún rollo alcanza (decisión de Bruno, 2026-10-26).
+        r = self.guardar("rollo", **{LONA: ("fijo", None), GASA: ("fijo", 1)})
+        self.assertEqual([e["textil"] for e in r["errores"]], [LONA])
+        r = self.guardar("por_textil", **{LONA: ("rollo", None), GASA: ("fijo", 1)})
+        self.assertEqual([e["textil"] for e in r["errores"]], [LONA])
+        self.assertTrue(self.guardar("por_textil", **{LONA: ("rollo", 5), GASA: ("fijo", 1)})["ok"])
 
     def test_un_valor_cero_o_negativo_no_vale(self):
         for malo in (0, -5, "abc"):
-            r = self.guardar("rollo", **{LONA: ("fijo", malo), GASA: ("fijo", None)})
+            r = self.guardar("rollo", **{LONA: ("fijo", malo), GASA: ("fijo", 1)})
             self.assertFalse(r["ok"], malo)
 
     def test_por_rollo_sin_inventario_no_vale(self):
@@ -147,26 +147,26 @@ class TestValorizar(_Base):
         self.assertEqual(self.valor(_producto(alto=3)), 12000.0)    # 3 + 1 m entra en el chico
         self.assertEqual(self.valor(_producto(alto=10)), 14000.0)   # 11 m solo entran en el grande
 
-    def test_por_rollo_sin_rollo_que_alcance_usa_el_mas_nuevo(self):
+    def test_por_rollo_sin_rollo_que_alcance_cobra_el_fijo(self):
         self.rollos()
         self.guardar("rollo", **{LONA: ("fijo", 11000), GASA: ("fijo", 1)})
-        self.assertEqual(self.valor(_producto(alto=80)), 14000.0)
+        self.assertEqual(self.valor(_producto(alto=80)), 11000.0)
+        self.assertEqual(precios_textiles.valorizador().detalle(_producto(alto=80))["origen"], "sin_rollo")
 
-    def test_por_rollo_sin_rollos_con_valor_cae_al_fijo(self):
-        self.guardar("rollo", **{LONA: ("fijo", 11000), GASA: ("fijo", None)})
+    def test_por_rollo_sin_rollos_cobra_el_fijo(self):
+        self.guardar("rollo", **{LONA: ("fijo", 11000), GASA: ("fijo", 1)})
         self.assertEqual(self.valor(_producto()), 11000.0)
-        self.assertIsNone(self.valor(_producto(GASA)))
 
     def test_segun_cada_textil(self):
         self.rollos()
         repo_inv.crear_rollo(GASA, 1.5, 50, valor=9999)
-        self.guardar("por_textil", **{LONA: ("rollo", None), GASA: ("fijo", 8500)})
+        self.guardar("por_textil", **{LONA: ("rollo", 9999), GASA: ("fijo", 8500)})
         self.assertEqual(self.valor(_producto(LONA)), 12000.0)
         self.assertEqual(self.valor(_producto(GASA)), 8500.0)
 
     def test_costo_producto_cobra_con_el_valor_del_rollo(self):
         self.rollos()
-        self.guardar("rollo", **{LONA: ("fijo", None), GASA: ("fijo", None)})
+        self.guardar("rollo", **{LONA: ("fijo", 1), GASA: ("fijo", 1)})
         costo = costo_producto(_producto(alto=3), **repo_mat.kwargs_precios())
         self.assertAlmostEqual(costo["costo_impresion"], 3 * 12000)
 
@@ -178,6 +178,24 @@ class TestValorizar(_Base):
         for r in repo_inv.listar_rollos():
             valores[r["nombre_textil"]].add(r["valor"])
         self.assertEqual(valores, {LONA: {13000.0}, GASA: {9999.0}})
+
+
+    def test_detalle_dice_de_donde_sale_el_valor(self):
+        self.rollos()
+        self.assertTrue(self.guardar("por_textil", **{LONA: ("rollo", 11000), GASA: ("rollo", 7000)})["ok"])
+        detalle = precios_textiles.valorizador().detalle
+        self.assertEqual(detalle(_producto(alto=3))["origen"], "rollo")
+        self.assertEqual((detalle(_producto(alto=80))["origen"], detalle(_producto(alto=80))["valor"]), ("sin_rollo", 11000.0))
+        # Sin rollos: el fijo.
+        self.assertEqual(detalle(_producto(GASA)), {"textil": GASA, "cobro": "rollo", "valor": 7000.0, "origen": "sin_rollo", "rollo": None})
+
+    def test_textiles_sin_precio(self):
+        # Solo con datos de antes de que el valor fijo fuera obligatorio.
+        self.conf.mkdir(parents=True)
+        (self.conf / "precios_textiles.json").write_text(json.dumps({
+            "version": 1, "modo": "rollo", "textiles": {GASA: {"cobro": "rollo", "valor": None}}}), encoding="utf-8")
+        self.assertEqual(precios_textiles.textiles_sin_precio(), [GASA])
+
 
 
 class TestCotizacionPorRollo(_Base):
@@ -193,7 +211,7 @@ class TestCotizacionPorRollo(_Base):
             self.addCleanup(p.stop)
         repo_inv.crear_rollo(LONA, 1.5, 6, valor=12000)
         self.grande = repo_inv.crear_rollo(LONA, 1.5, 50, valor=14000)
-        self.guardar("rollo", **{LONA: ("fijo", None), GASA: ("fijo", None)})
+        self.guardar("rollo", **{LONA: ("fijo", 1), GASA: ("fijo", 1)})
         self.internos = [_producto(alto=3), _producto(alto=10)]
 
     def datos(self):

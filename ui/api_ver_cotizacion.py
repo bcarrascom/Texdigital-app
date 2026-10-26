@@ -281,7 +281,10 @@ class ApiVerCotizacion:
 
             productos_json = datos.get("productos", [])
             productos_internos = [producto_desde_json(p) for p in productos_json]
-            asignaciones = consumir_para_op(productos_internos, int(numero), datos.get("Empresa", ""))
+            # Lo que cobró la cotización, producto por producto: cada consumo
+            # lo guarda para el reporte mensual (ver core.lista_precios).
+            cobros = lista_precios.cobros_por_producto(datos)
+            asignaciones = consumir_para_op(productos_internos, int(numero), datos.get("Empresa", ""), cobros)
             # Se graba en el producto ANTES de crear la OP (promover_a_op copia
             # `datos` tal cual) — así el panel de producción (display_op.html)
             # sabe de qué rollo(s) sacar la tela de cada producto sin tener que
@@ -291,7 +294,7 @@ class ApiVerCotizacion:
                     producto_json["RollosUsados"] = rollos_usados
 
             consumir_materiales_para_op(
-                productos_internos, int(numero), datos.get("Empresa", ""), consumos_manuales,
+                productos_internos, int(numero), datos.get("Empresa", ""), consumos_manuales, cobros=cobros,
             )
 
             # La OP se lleva la lista de precios con que se cotizó (ver
