@@ -28,6 +28,8 @@
 
   /* ── El reporte ─────────────────────────────────────────────────────────── */
   .reportes__cuerpo { display: grid; gap: var(--e-5); min-width: 0; }
+  .reporte__cab { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--e-3); }
+  .reporte__conteo { font-weight: var(--peso-medio); text-transform: none; letter-spacing: 0; }
   .reporte__titulo { font-size: var(--t-2xl); font-weight: var(--peso-fuerte); line-height: 1.1; }
   .reporte__bajada { margin-top: var(--e-2); font-size: var(--t-sm); color: var(--c-texto-suave); }
 

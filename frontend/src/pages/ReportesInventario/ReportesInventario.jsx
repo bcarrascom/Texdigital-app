@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
@@ -6,6 +7,7 @@ import Pagina from "@/components/Pagina/Pagina";
 import Cabecera from "@/components/Cabecera/Cabecera";
 import Cargando from "@/components/Cargando/Cargando";
 import Etiqueta from "@/components/Etiqueta/Etiqueta";
+import Segmento from "@/components/Segmento/Segmento";
 import * as fmt from "@/utils/formato";
 import "./ReportesInventario.css";
 
@@ -33,6 +35,14 @@ const CANTIDADES = [
   ["usado", "Usado", true],
   ["restante", "Restante", false],
 ];
+/* Qué filas mostrar: todas, o solo las que se movieron en el mes (algo
+   ingresado o usado) — con muchos rollos y materiales quietos, lo que
+   cambió se pierde entre los que no. */
+const FILTROS = [
+  { valor: "todos", etiqueta: "Todos" },
+  { valor: "movimientos", etiqueta: "Con movimientos" },
+];
+const seMovio = (f) => Boolean(f.ingresado || f.usado);
 
 export default function ReportesInventario() {
   const [params, setParams] = useSearchParams();
@@ -42,6 +52,8 @@ export default function ReportesInventario() {
   const pedido = { anio: Number(params.get("anio")), mes: Number(params.get("mes")) };
   const elegido = lista.find((m) => m.anio === pedido.anio && m.mes === pedido.mes) || lista[0] || null;
   const elegir = (m) => setParams({ anio: m.anio, mes: m.mes }, { replace: true });
+  // Acá y no en Reporte: se mantiene al pasar de un mes a otro.
+  const [filtro, setFiltro] = useState("todos");
 
   return (
     <Pagina tema="inventario" titulo="Reportes de inventario" className="pag-reportes-inventario">
@@ -56,7 +68,7 @@ export default function ReportesInventario() {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div key={`${elegido.anio}-${elegido.mes}`} className="reportes__cuerpo"
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FUNDIDO}>
-                <Reporte mes={elegido} />
+                <Reporte mes={elegido} filtro={filtro} onFiltrar={setFiltro} />
               </motion.div>
             </AnimatePresence>
           </div>
@@ -90,21 +102,25 @@ function ListaMeses({ meses, elegido, onElegir }) {
   );
 }
 
-function Reporte({ mes }) {
+function Reporte({ mes, filtro, onFiltrar }) {
   const { datos: r, cargando } = useDatos(() => api.obtener_reporte_inventario(mes.anio, mes.mes), [mes.anio, mes.mes]);
   if (cargando) return <Cargando />;
   if (!r) return <p className="reportes__vacio">No se pudo leer el reporte de {nombreMes(mes)}.</p>;
 
   const t = r.totales;
+  const soloMovimientos = filtro === "movimientos";
   return (
     <>
       <div className="reporte__cab">
-        <h1 className="reporte__titulo">{nombreMes(r)}</h1>
-        <p className="reporte__bajada">
-          {r.cerrado
-            ? `Mes cerrado · calculado el ${r.generado}`
-            : `Mes en curso · al ${r.generado}, se actualiza cada vez que se abre esta página`}
-        </p>
+        <div>
+          <h1 className="reporte__titulo">{nombreMes(r)}</h1>
+          <p className="reporte__bajada">
+            {r.cerrado
+              ? `Mes cerrado · calculado el ${r.generado}`
+              : `Mes en curso · al ${r.generado}, se actualiza cada vez que se abre esta página`}
+          </p>
+        </div>
+        <Segmento etiqueta="Qué filas mostrar" opciones={FILTROS} valor={filtro} onCambiar={onFiltrar} />
       </div>
 
       <div className="reporte__cifras">
@@ -118,9 +134,11 @@ function Reporte({ mes }) {
       </div>
 
       <Tabla titulo="Textiles" columna="Textil" filas={r.textiles} total={t.textiles} conCantidades
+             soloMovimientos={soloMovimientos}
              detalle={(f) => fmt.plural(f.rollos, "rollo", "rollos")}
              sinValor={(f) => (f.sin_valor === f.rollos ? "Sin valor de venta" : `${fmt.plural(f.sin_valor, "rollo", "rollos")} sin valor de venta`)} />
       <Tabla titulo="Materiales" columna="Material" filas={r.materiales} total={t.materiales}
+             soloMovimientos={soloMovimientos}
              sinValor={() => "Sin valor de venta"} />
     </>
   );
@@ -142,13 +160,24 @@ function Cifra({ etiqueta, valor, detalle }) {
    venta — por eso no es usado × valor. Las cantidades se suman en el total
    solo en textiles (todo es metros); en materiales se mezclan unidades y
    metros, así que su total es solo de plata. Una fila con algo sin valor de
-   venta lo dice debajo del nombre: su plata no está completa. */
-function Tabla({ titulo, columna, filas, total, conCantidades = false, detalle, sinValor }) {
+   venta lo dice debajo del nombre: su plata no está completa.
+
+   Con `soloMovimientos` se esconden las filas que no ingresaron ni usaron
+   nada; el total sigue siendo el de todas (lo de las escondidas también está
+   en bodega), y por eso lo dice. */
+function Tabla({ titulo, columna, filas: todas, total, conCantidades = false, soloMovimientos = false, detalle, sinValor }) {
+  const filas = soloMovimientos ? todas.filter(seMovio) : todas;
+  const filtrando = filas.length !== todas.length;
   return (
     <section className="reporte__seccion">
-      <h2 className="seccion-titulo">{titulo}</h2>
+      <h2 className="seccion-titulo">
+        {titulo}
+        {filtrando && <span className="reporte__conteo"> · {filas.length} de {todas.length}</span>}
+      </h2>
       <div className="tabla-caja">
-        {filas.length ? (
+        {!filas.length && todas.length ? (
+          <p className="reportes__vacio">Ningún {titulo === "Textiles" ? "textil" : "material"} tuvo movimientos este mes.</p>
+        ) : filas.length ? (
           <table className="tabla reporte__tabla">
             <thead>
               <tr>
@@ -184,7 +213,7 @@ function Tabla({ titulo, columna, filas, total, conCantidades = false, detalle, 
                 );
               })}
               <tr data-total="">
-                <td>Total</td>
+                <td>{filtrando ? "Total, con los sin movimientos" : "Total"}</td>
                 {CANTIDADES.map(([clave]) => (
                   <td key={clave} className="num">{conCantidades ? `${fmt.cantidad(total[clave])} m` : ""}</td>
                 ))}
