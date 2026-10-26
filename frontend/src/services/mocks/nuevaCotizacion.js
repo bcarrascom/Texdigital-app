@@ -6,7 +6,8 @@ const TEXTILES_ANCHOS = { "Poliéster satinado": 1.5, "Lona mate": 3.2, "Felpa g
 
 const catalogos = {
   productos: ["Pendón roller", "Lienzo", "Bandera", "Telón", "Cojín"],
-  textiles: ["Poliéster satinado", "Lona mate", "Felpa gruesa"],
+  textiles: ["Poliéster satinado", "Lona mate", "Felpa gruesa", "Tela sin precio"],
+  textiles_sin_precio: ["Tela sin precio"],
   textiles_anchos: TEXTILES_ANCHOS,
   telas_backlight: ["Tela backlit", "Tela backlit premium"],
   estructuras: ["Roller 85", "Roller 100", "Bastidor", "Ojetillos"],
@@ -62,9 +63,13 @@ function calcular(p) {
   const detalle_terminaciones = detalle(p.terminaciones, 2500);
   const costo_extras = [...Object.values(detalle_estructuras), ...Object.values(detalle_terminaciones)].reduce((a, b) => a + b, 0);
   const total = costo_impresion + costo_extras;
+  // "Lona mate" se cobra por rollo y, pasado 10 ML, ningún rollo alcanza (ver avisoTextil).
+  const precio_textil = p.textil === "Lona mate"
+    ? { textil: p.textil, cobro: "rollo", valor: ml > 10 ? 9500 : 9000, origen: ml > 10 ? "sin_rollo" : "rollo", rollo: ml > 10 ? null : "0030" }
+    : null;
   return {
     ml, costo_impresion, costo_extras, detalle_estructuras, detalle_terminaciones,
-    total, valor_unitario: Math.round(total / cant), ancho_max, error,
+    total, valor_unitario: Math.round(total / cant), ancho_max, error, precio_textil,
   };
 }
 
@@ -110,6 +115,7 @@ export default {
     console.info("[mock] guardar_cotizacion", estado, { abrir });
     return { numero: Number(estado.cliente.numero) };
   },
-  guardar_cliente: (empresa, rut) => !catalogos.clientes.some((c) => c.rut === rut && c.empresa !== empresa),
+  guardar_cliente: (empresa, rut) => (catalogos.clientes.some((c) => c.rut === rut && c.empresa !== empresa)
+    ? { ok: false, error: "Ese RUT ya está registrado a nombre de otra empresa: revisa el RUT." } : { ok: true }),
   guardar_contacto: () => undefined,
 };

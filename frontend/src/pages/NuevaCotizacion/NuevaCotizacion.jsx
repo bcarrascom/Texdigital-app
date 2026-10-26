@@ -403,9 +403,9 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
             onGuardarCliente={async () => {
               const c = estado.cliente;
               if (!c.empresa.trim()) { aviso("El campo Empresa es obligatorio para guardar.", "error"); return; }
-              const ok = await api.guardar_cliente(c.empresa, c.rut, c.razon_social);
-              if (ok) aviso("Cliente guardado.", "info");
-              else aviso("Ese RUT ya está registrado a nombre de otra empresa — revisá el RUT.", "error", 6000);
+              const r = await api.guardar_cliente(c.empresa, c.rut, c.razon_social);
+              if (r?.ok) aviso("Cliente guardado.", "info");
+              else aviso(r?.error || "No se pudo guardar el cliente.", "error", 6000);
             }}
             onGuardarContacto={async () => {
               const c = estado.cliente;
@@ -428,6 +428,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
                     onDuplicar={() => duplicarProducto(i)}
                     onQuitar={() => pedirQuitar(i)}
                     onSiguiente={() => irA(i + 1 < productos.length ? i + 1 : "resumen")}
+                    onNuevoRollo={nuevoRollo}
                   />
                 ))}
                 <Resumen

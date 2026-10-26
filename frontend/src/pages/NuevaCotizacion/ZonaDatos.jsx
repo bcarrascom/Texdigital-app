@@ -111,10 +111,13 @@ const ZonaDatos = forwardRef(function ZonaDatos({
                 <input className="entrada" id="empresa" type="text" list="lista-empresas" autoComplete="off"
                        value={cliente.empresa} onChange={(e) => elegirEmpresa(e.target.value)} />
               </div>
-              <div className="campo">
+              {/* El dígito verificador se revisa mientras se escribe, una vez
+                  que el RUT tiene largo de RUT: así no se marca en rojo a mitad. */}
+              <div className="campo" data-invalido={cliente.rut.replace(/[^\dkK]/g, "").length >= 8 && !fmt.rutValido(cliente.rut) ? "" : undefined}>
                 <label className="campo__etiqueta" htmlFor="rut">RUT</label>
-                <input className="entrada" id="rut" type="text" autoComplete="off" placeholder="12.345.678-9"
+                <input className="entrada" id="rut" type="text" autoComplete="off" placeholder="12.345.678-5"
                        {...campo("rut", fmt.rut)} />
+                <span className="campo__error">El RUT no es válido: revisa el dígito verificador.</span>
               </div>
             </div>
             <div className="fila fila--2 fila--accion">

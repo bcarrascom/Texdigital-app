@@ -206,6 +206,11 @@
      así cae solo a la altura de los inputs de al lado, sin números mágicos. La
      segunda fila mide lo mismo que un input (3rem) y el switch se centra ahí. */
   .campo--switch { grid-template-rows: auto 3rem; align-items: center; }
+  /* Textil sin precio, o ningún rollo alcanza (ver avisoTextil en PanelProducto). */
+  .campo__aviso-textil {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--e-2);
+    font-size: var(--t-xs); color: var(--c-aviso);
+  }
   /* El switch vertical apilado mide más que la fila de 3rem, pero esa fila de
      3rem es justo la altura de los selects vecinos (Luces 1, Luces 2): en vez
      de agrandar la fila (lo que lo baja y empuja lo que viene después), se

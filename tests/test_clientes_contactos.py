@@ -95,6 +95,11 @@ class TestClientes(_Base):
         self.assertFalse(repo.eliminar_cliente("Café del Puerto")["ok"])
 
 
+    def test_el_cotizador_tampoco_guarda_un_rut_invalido(self):
+        self.assertEqual(repo.guardar_cliente("Otra", "76.086.428-4", ""), "rut_invalido")
+        self.assertEqual(repo.cargar_clientes(), [])
+        self.assertTrue(repo.guardar_cliente("Otra", RUT, ""))
+
 class TestContactos(_Base):
 
     def test_crear_y_editar(self):

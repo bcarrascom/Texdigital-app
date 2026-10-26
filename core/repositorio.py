@@ -150,7 +150,7 @@ def cargar_clientes() -> list[dict]:
     return _leer_json(CLIENTES_PATH)
 
 
-def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool:
+def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool | str:
     """Agrega un cliente nuevo a clientes.json si no existe ya (dedup por
     empresa). El RUT es el identificador interno real de un cliente — dos
     empresas no pueden compartir uno (ver grupo "Direcciones de <cliente>"
@@ -161,11 +161,18 @@ def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool:
     avisa al usuario en ese caso. Si el cliente ya existe tal cual (mismo
     nombre de empresa — el caso común de volver a guardar una cotización
     de un cliente ya guardado) no hace nada pero devuelve True: no es un
-    conflicto, es un no-op esperado."""
+    conflicto, es un no-op esperado.
+
+    Un RUT con el dígito verificador malo no se guarda (misma validación que
+    Configuración › Clientes, ver rut_valido — pedido de Bruno, 2026-10-26):
+    devuelve "rut_invalido" en vez de False, para que el cotizador diga cuál
+    es el problema."""
     clientes = cargar_clientes()
     for c in clientes:
         if c["empresa"].lower() == empresa.lower():
             return True  # ya existe, no duplicar — no es un error
+    if (rut or "").strip() and not rut_valido(rut):
+        return "rut_invalido"
     rut_fmt = formatear_rut(rut or "")
     if rut_fmt and any(formatear_rut(c.get("rut", "")) == rut_fmt for c in clientes):
         return False  # RUT ya usado por otra empresa

@@ -31,7 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
-from core import catalogo, corte_backlight, lista_precios
+from core import catalogo, corte_backlight, lista_precios, precios_textiles
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
 )
@@ -375,6 +375,8 @@ class ApiCotizacion:
             # No CUALQUIER textil sirve para backlight (necesita ser
             # translúcido): los marcados en Configuración › Textiles.
             "telas_backlight": catalogo.telas_backlight(),
+            # Los que se cotizarían en $0: el cotizador avisa al elegirlos.
+            "textiles_sin_precio": precios_textiles.textiles_sin_precio(),
             # Los márgenes de costura del corte, en cm, para el texto de ayuda
             # del switch "caja terminada / área visual" (ver core.corte_backlight).
             "margenes_corte_cm": {k: round(v * 100, 2) for k, v in corte_backlight.cargar().items()},
@@ -449,9 +451,13 @@ class ApiCotizacion:
 
         interno = _producto_a_interno(p)
         error, ancho_max = _error_medida(interno, ancho, alto)
-        costo = costo_producto(
-            interno, ml_o_area_facturable=ml_o_area_facturable, **(precios or kwargs_precios()),
-        )
+        precios = precios or kwargs_precios()
+        costo = costo_producto(interno, ml_o_area_facturable=ml_o_area_facturable, **precios)
+        # De dónde sale el valor del textil, para avisar si no tiene precio o
+        # si se cobra por rollo y ningún rollo alcanza (ver
+        # core.precios_textiles.valorizador).
+        detalle = getattr(precios.get("valor_textil"), "detalle", None)
+        precio_textil = detalle(interno) if detalle and (interno.get("tela") or interno.get("textil")) else None
 
         if p.get("tipo") == "backlight":
             materiales = []
@@ -489,6 +495,7 @@ class ApiCotizacion:
                 "error": error,
                 "valor_unitario": costo["valor_unitario"],
                 "total": costo["total"],
+                "precio_textil": precio_textil,
             }
 
         return {
@@ -501,6 +508,7 @@ class ApiCotizacion:
             "valor_unitario": costo["valor_unitario"],
             "ancho_max": ancho_max,
             "error": error,
+            "precio_textil": precio_textil,
         }
 
     def numero_disponible(self, numero, propio=None) -> bool:
@@ -595,8 +603,15 @@ class ApiCotizacion:
 
         return {"numero": numero}
 
-    def guardar_cliente(self, empresa, rut, razon_social) -> bool:
-        return guardar_cliente(empresa, rut, razon_social)
+    def guardar_cliente(self, empresa, rut, razon_social) -> dict:
+        """{"ok": True} o {"ok": False, "error": mensaje} (ver
+        core.repositorio.guardar_cliente)."""
+        r = guardar_cliente(empresa, rut, razon_social)
+        if r == "rut_invalido":
+            return {"ok": False, "error": "El RUT no es válido: revisa el dígito verificador."}
+        if not r:
+            return {"ok": False, "error": "Ese RUT ya está registrado a nombre de otra empresa: revisa el RUT."}
+        return {"ok": True}
 
     def guardar_contacto(self, contacto, email, descuento, condicion) -> None:
         guardar_contacto(contacto, email, descuento, condicion)
