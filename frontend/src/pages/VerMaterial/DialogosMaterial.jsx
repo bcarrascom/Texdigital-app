@@ -245,9 +245,11 @@ export function EditarMaterial({ m, onCerrar, onGuardado }) {
         {f.consumo && (
           <>
             <ListaAsociada id="dme-productos" etiqueta="Productos que lo gastan" lista="lista-productos-catalogo"
-                           placeholder="Buscar producto…" items={productos} onCambiar={setProductos} />
-            <ListaAsociada id="dme-estructuras" etiqueta="Estructuras que lo gastan" lista="lista-estructuras-catalogo"
-                           placeholder="Buscar estructura…" items={estructuras} onCambiar={setEstructuras} />
+                           placeholder="Buscar producto…" items={productos} onCambiar={setProductos}
+                           ayuda="«Backlight»: todos los backlight. «Backlight + Caja»: solo los que llevan caja (con un perfil elegido)." />
+            <ListaAsociada id="dme-estructuras" etiqueta="Estructuras o perfiles que lo gastan" lista="lista-estructuras-catalogo"
+                           placeholder="Buscar estructura o perfil…" items={estructuras} onCambiar={setEstructuras}
+                           ayuda="Un perfil de caja (PERFIL …) lo gasta cada backlight con caja de ese perfil, y se cobra además del precio del perfil. En una estructura, en cambio, reemplaza su valor." />
           </>
         )}
       </div>
@@ -261,7 +263,7 @@ export function EditarMaterial({ m, onCerrar, onGuardado }) {
 
 /* Lista aditiva con lupa y "+" redondo: 0..N nombres de un catálogo, sin
    repetidos. Enter agrega (no guarda el formulario). */
-function ListaAsociada({ id, etiqueta, lista, placeholder, items, onCambiar }) {
+function ListaAsociada({ id, etiqueta, lista, placeholder, items, onCambiar, ayuda }) {
   const [texto, setTexto] = useState("");
   function agregar() {
     const t = texto.trim();
@@ -269,7 +271,7 @@ function ListaAsociada({ id, etiqueta, lista, placeholder, items, onCambiar }) {
     setTexto("");
   }
   return (
-    <Campo id={id} etiqueta={etiqueta}>
+    <Campo id={id} etiqueta={etiqueta} ayuda={ayuda}>
       <div className="aditiva">
         <div className="aditiva__alta">
           <div className="entrada-icono">
