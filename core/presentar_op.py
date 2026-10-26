@@ -18,23 +18,22 @@ from core.titulo_impresion import titulo_impresion
 from core.repositorio_cotizaciones import producto_desde_json
 from core.precios import calcular_ml, parsear_valor_manual
 from core.repositorio import TEXTILES_ANCHOS, ESTRUCTURAS_VALORES
+from core import corte_backlight
 
 RUTA_PLANTILLA = RECURSOS / "plantilla_op.html"
 
 # Márgenes de costura para el corte de tela de backlight. La fórmula es la misma
 # del Excel original (=SI($J$7="CAJA TERMINADA",[@ANCHO]+0.013,[@ANCHO]+0.023))
-# pero los VALORES ya no: desde 2026-10-01 son 1,5 y 2,5 cm (antes 1,3 y 2,3) por
-# pedido de Bruno. Si alguna vez se vuelve a generar el Excel de OP, su fórmula
-# interna sigue con los valores viejos — ver excel/generador_documentos.py, que
-# solo escribe J7 y no toca la fórmula.
+# pero los VALORES ya no: desde 2026-10-01 eran 1,5 y 2,5 cm (antes 1,3 y 2,3), y
+# desde 2026-10-25 se editan en Configuración › Backlight (ver
+# core.corte_backlight). Si alguna vez se vuelve a generar el Excel de OP, su
+# fórmula interna sigue con los valores viejos — ver excel/generador_documentos.py,
+# que solo escribe J7 y no toca la fórmula.
 # "TerminacionesCaja" se guarda POR PRODUCTO (switch en el panel de backlight de
 # nueva-cotizacion.html), no por OP: una misma OP puede mezclar cajas ya armadas
 # con cajas que hay que montar. En la versión Tkinter era un valor único por
 # cotización (vivía en el formulario del cliente) — las OPs guardadas con ese
 # esquema se siguen leyendo, ver _terminaciones_caja_de.
-_MARGEN_CAJA_TERMINADA = 0.015
-_MARGEN_AREA_VISUAL    = 0.025
-
 _ETIQUETA_TERMINACIONES_CAJA = {
     "CAJA TERMINADA": "Caja terminada",
     "AREA VISUAL":    "Área visual",
@@ -42,11 +41,10 @@ _ETIQUETA_TERMINACIONES_CAJA = {
 
 
 def _margen_corte(terminaciones_caja: str) -> float:
-    """Margen de costura que se le suma a cada medida: 1,5 cm si la caja viene
-    terminada, 2,5 cm si lo que se midió es el área visual (hay que envolver más
-    perfil). Cualquier otro valor cae a área visual, que es el margen más
-    grande: ante la duda, sobra tela en vez de faltar."""
-    return _MARGEN_CAJA_TERMINADA if terminaciones_caja == "CAJA TERMINADA" else _MARGEN_AREA_VISUAL
+    """Margen de costura que se le suma a cada medida: el de caja terminada si
+    la caja viene terminada, el de área visual si lo que se midió es el área
+    visual (hay que envolver más perfil) — ver core.corte_backlight.margen."""
+    return corte_backlight.margen(terminaciones_caja)
 
 
 def _corte(medida: float, terminaciones_caja: str) -> float:

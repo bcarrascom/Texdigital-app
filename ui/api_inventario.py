@@ -148,12 +148,23 @@ class ApiInventario:
         producto (ver core.repositorio_materiales.PRODUCTO_BACKLIGHT): asociarle
         un material lo hace gastar en todo backlight, con caja o sin caja. Era lo
         que faltaba para la silicona, que se aplica a todos y no tenía ningún
-        nombre al que colgarse (pedido de Bruno, 2026-10-01)."""
-        return [_repo_mat.PRODUCTO_BACKLIGHT] + list(repositorio.PRODUCTOS)
+        nombre al que colgarse (pedido de Bruno, 2026-10-01). Después
+        "Backlight + Caja": solo los backlight con un perfil elegido (2026-10-25)."""
+        catalogo.refrescar()
+        return [_repo_mat.PRODUCTO_BACKLIGHT, _repo_mat.PRODUCTO_BACKLIGHT_CAJA] + list(repositorio.PRODUCTOS)
+
+    def cargar_perfiles_catalogo(self) -> list[str]:
+        """Los perfiles de caja de backlight: entre las "estructuras" asociables
+        a un material, pero se cobran distinto (ver core.precios)."""
+        return list(repositorio.PERFILES)
 
     def cargar_estructuras_catalogo(self) -> list[str]:
+        """Las estructuras, y después los perfiles de caja de backlight: un
+        material asociado a un perfil lo gasta cada backlight con caja de ese
+        perfil (pedido de Bruno, 2026-10-25, ver
+        core.repositorio_materiales.claves_consumo)."""
         catalogo.refrescar()
-        return list(repositorio.ESTRUCTURAS_LEGADO)
+        return list(repositorio.ESTRUCTURAS_LEGADO) + [p for p in repositorio.PERFILES if p not in repositorio.ESTRUCTURAS_LEGADO]
 
     def ajustar_cantidad_material(self, id_: str, nueva_cantidad, descripcion: str = "") -> dict | None:
         return self._con_metricas(_repo_mat.ajustar_cantidad(id_, nueva_cantidad, descripcion))

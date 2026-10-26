@@ -31,6 +31,10 @@ _ARCHIVO_CAJAS = "precios_cajas"
 # Las secciones de una caja con un precio por clave ("fp": por watts).
 SECCIONES_CAJA = ("luces", "traseras", "armado", "fp", "perfiles")
 
+# Un perfil puede valer $0: con materiales asociados, es la forma de cobrar
+# solo los materiales (decisión de Bruno, 2026-10-25, ver core.precios).
+_PUEDEN_SER_CERO = {"perfiles"}
+
 
 def _numero(v) -> float | None:
     if v is None or isinstance(v, bool) or v == "":
@@ -78,10 +82,12 @@ def cargar_lista(tipo: str) -> list[dict]:
     return filas
 
 
-def _validar_valor(v) -> str | None:
+def _validar_valor(v, cero: bool = False) -> str | None:
     if v in (None, ""):
         return "Falta el valor."
     n = _numero(v)
+    if cero and n is not None and n == 0:
+        return None
     if n is None or n <= 0:
         return "El valor tiene que ser un monto mayor que 0."
     return None
@@ -124,9 +130,10 @@ def cajas() -> dict:
     guardado = guardado if isinstance(guardado, dict) else {}
     for seccion in SECCIONES_CAJA:
         g = guardado.get(seccion) if isinstance(guardado.get(seccion), dict) else {}
+        minimo_ok = (lambda n: n >= 0) if seccion in _PUEDEN_SER_CERO else (lambda n: n > 0)
         for clave in vigentes[seccion]:
             n = _numero(g.get(str(clave)))
-            if n is not None and n > 0:
+            if n is not None and minimo_ok(n):
                 vigentes[seccion][clave] = n
     n = _numero(guardado.get("pintura_por_ml"))
     if n is not None and n > 0:
@@ -146,7 +153,7 @@ def guardar_cajas(datos: dict) -> dict:
         cajas_nuevas[seccion] = {}
         for clave in PRECIOS_CAJAS[seccion]:
             v = enviados.get(str(clave))
-            if (m := _validar_valor(v)):
+            if (m := _validar_valor(v, cero=seccion in _PUEDEN_SER_CERO)):
                 errores.append({"seccion": seccion, "clave": str(clave), "mensaje": m})
             else:
                 cajas_nuevas[seccion][str(clave)] = _numero(v)

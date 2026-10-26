@@ -93,6 +93,13 @@ TIPOS_CONSUMO_VALIDOS = (
 # catálogo se llama así.
 PRODUCTO_BACKLIGHT = "Backlight"
 
+# Igual, pero solo para los backlight CON caja (un perfil elegido) — pedido de
+# Bruno (2026-10-25): lo que gasta el armado de la caja no lo gasta una tela
+# sola. Y cada perfil de caja (recursos/perfiles.json) se ofrece como una
+# "estructura" más: un material asociado a "PERFIL 60 MM" lo gasta cada
+# backlight con ese perfil (ver claves_consumo).
+PRODUCTO_BACKLIGHT_CAJA = "Backlight + Caja"
+
 
 def _inventario_habilitado() -> bool:
     """True salvo que core.config.MODULOS_HABILITADOS["inventario"] esté en False
@@ -193,13 +200,14 @@ def _reconstruir_indice_consumo() -> None:
     _ruta_indice().write_text(json.dumps(indice, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def materiales_para_producto(nombre_producto: str, nombres_estructuras: list[str] | None = None) -> list[dict]:
+def materiales_para_producto(nombre_producto: str | list[str], nombres_estructuras: list[str] | None = None) -> list[dict]:
     """Materiales (con tipo_consumo, no solo el nombre) que aplican a un
     producto — por su propio nombre (catálogo Productos, o el nombre reservado
     PRODUCTO_BACKLIGHT) y/o por cualquiera de sus Estructuras — vía el índice
     invertido, sin escanear todos los materiales. Deduplicado: un material
     asociado tanto al producto como a una de sus estructuras aparece una sola
-    vez. Quien llama resuelve el nombre con nombre_producto_para_consumo.
+    vez. Quien llama resuelve los nombres con claves_consumo (un backlight con
+    caja responde a dos nombres de producto: "Backlight" y "Backlight + Caja").
 
     Con el módulo Inventario apagado devuelve [] (ver _inventario_habilitado):
     es la consulta de la que cuelga TODO lo que materiales le hace a una
@@ -209,9 +217,11 @@ def materiales_para_producto(nombre_producto: str, nombres_estructuras: list[str
         return []
     indice = _leer_indice()
     ids: list[str] = []
-    for id_ in indice.get("productos", {}).get(nombre_producto, []):
-        if id_ not in ids:
-            ids.append(id_)
+    nombres_producto = [nombre_producto] if isinstance(nombre_producto, str) else list(nombre_producto)
+    for nombre in nombres_producto:
+        for id_ in indice.get("productos", {}).get(nombre, []):
+            if id_ not in ids:
+                ids.append(id_)
     for nombre_estructura in (nombres_estructuras or []):
         for id_ in indice.get("estructuras", {}).get(nombre_estructura, []):
             if id_ not in ids:
@@ -750,6 +760,54 @@ def es_backlight(producto_interno: dict) -> bool:
     return "tela" in producto_interno
 
 
+def perfil_de_caja(producto_interno: dict) -> str | None:
+    """El perfil de la caja de un backlight, o None si no es backlight o no
+    lleva caja ("Sin caja")."""
+    if not es_backlight(producto_interno):
+        return None
+    caja = producto_interno.get("caja")
+    perfil = caja.get("perfil") if isinstance(caja, dict) else None
+    return perfil if perfil and perfil != "Sin caja" else None
+
+
+def claves_consumo(producto_interno: dict) -> tuple[list[str], list[str]]:
+    """(nombres de producto, nombres de estructura) con los que este producto
+    busca sus materiales asociados (ver materiales_para_producto):
+
+      - un producto estándar: su producto (con el nombre ACTUAL, si se renombró
+        después de cotizar, ver core.catalogo) y sus estructuras;
+      - un backlight: "Backlight"; con caja, además "Backlight + Caja" y su
+        perfil como estructura (ver PRODUCTO_BACKLIGHT_CAJA)."""
+    from core.catalogo import nombre_producto
+    if es_backlight(producto_interno):
+        perfil = perfil_de_caja(producto_interno)
+        if perfil:
+            return [PRODUCTO_BACKLIGHT, PRODUCTO_BACKLIGHT_CAJA], [perfil]
+        return [PRODUCTO_BACKLIGHT], []
+    producto = nombre_producto(producto_interno.get("producto", "") or "")
+    return ([producto] if producto else []), list(producto_interno.get("estructuras", []) or [])
+
+
+def renombrar_asociacion(clave: str, viejo: str, nuevo: str | None) -> int:
+    """Cambia `viejo` por `nuevo` en las asociaciones de todos los materiales
+    (clave: "productos" o "estructuras"); con `nuevo` en None, la saca. Para
+    renombrar o quitar un producto en Configuración (ver core.catalogo).
+    Devuelve cuántos materiales cambió."""
+    campo = f"{clave}_asociados" if clave == "productos" else f"{clave}_asociadas"
+    cambiados = 0
+    for m in listar_materiales():
+        nombres = m.get(campo) or []
+        if viejo not in nombres:
+            continue
+        m[campo] = [n for n in (nuevo if n == viejo else n for n in nombres) if n is not None]
+        m[campo] = list(dict.fromkeys(m[campo]))
+        _escribir_material(m)
+        cambiados += 1
+    if cambiados:
+        _reconstruir_indice_consumo()
+    return cambiados
+
+
 def nombre_producto_para_consumo(producto_interno: dict) -> str:
     """El nombre con el que este producto busca materiales asociados (ver
     materiales_para_producto). Un backlight responde al nombre reservado
@@ -902,15 +960,12 @@ def consumir_para_op(
 
     acumulado: dict[str, float] = {}
     for producto in productos_internos:
-        # Un backlight responde al nombre reservado "Backlight" (ver
-        # nombre_producto_para_consumo): no tiene producto de catálogo propio ni
-        # lista de Estructuras, así que ese nombre es su única vía de asociación
-        # — y alcanza para lo que se gasta en TODOS los backlight, con caja o sin
-        # caja, que es el caso de la silicona.
-        nombre_producto = nombre_producto_para_consumo(producto)
-        nombres_estructuras = list(producto.get("estructuras", []) or [])
+        # Un backlight responde a los nombres reservados "Backlight" (todos) y
+        # "Backlight + Caja" (con caja), y al perfil de su caja como estructura
+        # (ver claves_consumo).
+        nombres_producto, nombres_estructuras = claves_consumo(producto)
 
-        for material in materiales_para_producto(nombre_producto, nombres_estructuras):
+        for material in materiales_para_producto(nombres_producto, nombres_estructuras):
             tipo_consumo = material.get("tipo_consumo")
             if tipo_consumo == "manual":
                 if material["id"] not in consumos_manuales:
@@ -1041,9 +1096,8 @@ def consumo_estimado(productos_internos: list[dict]) -> dict[str, dict]:
         return {}
     total: dict[str, dict] = {}
     for producto in productos_internos:
-        nombre_producto = nombre_producto_para_consumo(producto)
-        nombres_estructuras = list(producto.get("estructuras", []) or [])
-        for material in materiales_para_producto(nombre_producto, nombres_estructuras):
+        nombres_producto, nombres_estructuras = claves_consumo(producto)
+        for material in materiales_para_producto(nombres_producto, nombres_estructuras):
             if material.get("tipo_consumo") in (None, "manual"):
                 continue
             consumo = calcular_consumo(material, producto)
@@ -1122,9 +1176,8 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
     if not _inventario_habilitado():
         return vacio
 
-    nombres_estructuras = list(producto_interno.get("estructuras", []) or [])
-    nombre_producto = nombre_producto_para_consumo(producto_interno)
-    if not nombres_estructuras and not nombre_producto:
+    nombres_producto, nombres_estructuras = claves_consumo(producto_interno)
+    if not nombres_estructuras and not nombres_producto:
         return vacio
 
     indice = _leer_indice()
@@ -1166,9 +1219,10 @@ def cobro_materiales_producto(producto_interno: dict) -> dict:
 
     ids_ya_cobrados = {id_ for e in nombres_estructuras for id_ in por_estructura.get(e, [])}
     materiales_producto: dict[str, float] = {}
-    for id_ in por_producto.get(nombre_producto, []):
+    for nombre_producto, id_ in [(n, i) for n in nombres_producto for i in por_producto.get(n, [])]:
         if id_ in ids_ya_cobrados:
             continue
+        ids_ya_cobrados.add(id_)   # asociado a "Backlight" y a "Backlight + Caja": se cobra una vez
         material = obtener_material(id_)
         if material is None:
             continue
@@ -1330,20 +1384,14 @@ def kwargs_precios() -> dict:
     }
 
 
-def materiales_de_estructuras() -> dict[str, list[dict]]:
-    """{estructura: [{"nombre", "falta": None | "valor" | "consumo"}]} de las
-    estructuras con materiales asociados — para Configuración › Estructuras,
-    que muestra que esas se cobran por sus materiales y no por su valor.
-
-    "falta" dice si un material, hoy, no se puede cobrar en NINGÚN producto
-    (ver _cobrable): sin valor de venta, o sin una fórmula de consumo que se
-    resuelva al cotizar. En ese caso la estructura entera cae a su valor de
-    Configuración. (Que la fórmula dé 0 depende de las medidas de cada
-    producto, así que eso no se puede saber acá.) Vacío con Inventario apagado."""
+def _materiales_por_nombre(clave: str) -> dict[str, list[dict]]:
+    """{nombre: [{"nombre", "falta"}]} de los materiales asociados a cada
+    nombre del índice (clave: "estructuras" o "productos"). Ver
+    materiales_de_estructuras para qué es "falta"."""
     if not _inventario_habilitado():
         return {}
     resultado: dict[str, list[dict]] = {}
-    for nombre, ids in _leer_indice().get("estructuras", {}).items():
+    for nombre, ids in _leer_indice().get(clave, {}).items():
         materiales = []
         for id_ in ids:
             m = obtener_material(id_)
@@ -1355,6 +1403,26 @@ def materiales_de_estructuras() -> dict[str, list[dict]]:
         if materiales:
             resultado[nombre] = materiales
     return resultado
+
+
+def materiales_de_productos() -> dict[str, list[dict]]:
+    """Lo mismo que materiales_de_estructuras, por producto (incluidos los
+    nombres reservados "Backlight" y "Backlight + Caja") — para que
+    Configuración › Productos muestre qué materiales gasta cada uno."""
+    return _materiales_por_nombre("productos")
+
+
+def materiales_de_estructuras() -> dict[str, list[dict]]:
+    """{estructura: [{"nombre", "falta": None | "valor" | "consumo"}]} de las
+    estructuras con materiales asociados — para Configuración › Estructuras,
+    que muestra que esas se cobran por sus materiales y no por su valor.
+
+    "falta" dice si un material, hoy, no se puede cobrar en NINGÚN producto
+    (ver _cobrable): sin valor de venta, o sin una fórmula de consumo que se
+    resuelva al cotizar. En ese caso la estructura entera cae a su valor de
+    Configuración. (Que la fórmula dé 0 depende de las medidas de cada
+    producto, así que eso no se puede saber acá.) Vacío con Inventario apagado."""
+    return _materiales_por_nombre("estructuras")
 
 
 def estructuras_legado_valores_efectivos() -> dict:

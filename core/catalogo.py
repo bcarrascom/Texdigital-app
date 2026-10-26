@@ -1,10 +1,11 @@
 """
 core/catalogo.py
-QUÉ textiles, estructuras y terminaciones existen — un ajuste GLOBAL (ver
-core.ajustes_globales), editable en Configuración. Pedido de Bruno
-(2026-10-22): agregar estructuras y terminaciones, y agregar y renombrar
-textiles, sin esperar una versión nueva de la app. Cuánto vale cada uno es
-otro tema (core.precios_textiles, core.precios_componentes).
+QUÉ textiles, estructuras, terminaciones y productos existen — un ajuste
+GLOBAL (ver core.ajustes_globales), editable en Configuración. Pedido de
+Bruno (2026-10-22): agregar estructuras y terminaciones, y agregar y
+renombrar textiles, sin esperar una versión nueva de la app; y (2026-10-25)
+agregar, renombrar y quitar productos. Cuánto vale cada uno es otro tema
+(core.precios_textiles, core.precios_componentes).
 
 Lo que trae la app (recursos/*.json) es la base; en Conf/catalogo.json se
 guarda solo lo que se cambió:
@@ -15,7 +16,17 @@ guarda solo lo que se cambió:
      "textiles_anchos":        {nombre: ancho}        (cambios de ancho)
      "textiles_backlight":     {nombre: true/false}   (si sirve para Backlight)
      "estructuras_agregadas":  [{"nombre", "unidad": "un." | "ML"}],
-     "terminaciones_agregadas": [{"nombre", "unidad"}]}
+     "terminaciones_agregadas": [{"nombre", "unidad"}],
+     "productos_agregados":    [nombre],
+     "productos_renombrados":  {nombre anterior: nombre actual},
+     "productos_quitados":     [nombre]}
+
+Un producto es solo un nombre (lo que se elige en el cotizador); lo único
+que cuelga de él son los materiales de Inventario asociados (ver
+core.repositorio_materiales), así que renombrarlo o quitarlo los arrastra.
+Como con los textiles, el nombre anterior de un producto renombrado queda
+como alias: una cotización vieja que se aprueba sigue gastando sus
+materiales (ver `nombre_producto`).
 
 Cómo llega al resto de la app: core.repositorio carga los catálogos una vez
 (TEXTILES, TEXTILES_ANCHOS, ESTRUCTURAS_LEGADO...) y todo el código usa esos
@@ -69,6 +80,7 @@ def _semillas() -> dict:
             "textiles": textiles, "anchos": anchos, "valores": valores, "backlight": list(_TELAS_BACKLIGHT),
             "estructuras": (estructuras, estructuras_valores),
             "terminaciones": (terminaciones, terminaciones_valores),
+            "productos": repositorio.cargar_productos(),
         }
     return _semillas_cache
 
@@ -106,6 +118,9 @@ def _leer() -> dict:
         "textiles_backlight": mapa("textiles_backlight"),
         "estructuras_agregadas": lista("estructuras_agregadas"),
         "terminaciones_agregadas": lista("terminaciones_agregadas"),
+        "productos_agregados": [_texto(n) for n in g.get("productos_agregados") or [] if isinstance(n, str) and _texto(n)],
+        "productos_renombrados": {k: v for k, v in mapa("productos_renombrados").items() if isinstance(v, str) and k != v},
+        "productos_quitados": [n for n in g.get("productos_quitados") or [] if isinstance(n, str)],
     }
 
 
@@ -192,6 +207,7 @@ def _aplicar(datos: dict) -> None:
     s = _semillas()
     filas = textiles(datos)
     repositorio.TEXTILES[:] = [t["nombre"] for t in filas]
+    repositorio.PRODUCTOS[:] = productos(datos)
     anchos = {t["nombre"]: t["ancho"] for t in filas if t["ancho"] is not None}
     # Los nombres anteriores también, para las cotizaciones que los usan.
     anchos.update({viejo: anchos[nuevo] for viejo, nuevo in datos["textiles_renombrados"].items() if nuevo in anchos})
@@ -366,3 +382,106 @@ def agregar_componente(tipo: str, nombre: str, unidad: str, valor) -> dict:
         return {"ok": False, "errores": {"general": m}}
     precios_componentes.fijar(tipo, nombre, _numero(valor))
     return {"ok": True}
+
+
+# ── Productos ───────────────────────────────────────────────────────────────
+
+# Nombres que usa Inventario para asociar materiales a TODOS los backlight
+# (ver core.repositorio_materiales): no pueden ser el nombre de un producto.
+def _reservados() -> set[str]:
+    from core.repositorio_materiales import PRODUCTO_BACKLIGHT, PRODUCTO_BACKLIGHT_CAJA
+    return {PRODUCTO_BACKLIGHT.casefold(), PRODUCTO_BACKLIGHT_CAJA.casefold()}
+
+
+def productos(datos: dict | None = None) -> list[str]:
+    """Los productos vigentes: los de la app (con su nombre actual) y después
+    los agregados, sin los quitados."""
+    datos = datos or _leer()
+    renombrados = datos["productos_renombrados"]
+    quitados = {n.casefold() for n in datos["productos_quitados"]}
+    nombres = [renombrados.get(n, n) for n in _semillas()["productos"]] + datos["productos_agregados"]
+    vistos, resultado = set(), []
+    for n in nombres:
+        if n.casefold() in quitados or n.casefold() in vistos:
+            continue
+        vistos.add(n.casefold())
+        resultado.append(n)
+    return resultado
+
+
+def productos_detalle() -> list[dict]:
+    """[{"nombre", "agregado", "anteriores": [nombres]}] para Configuración."""
+    datos = _leer()
+    agregados = {n.casefold() for n in datos["productos_agregados"]}
+    renombrados = datos["productos_renombrados"]
+    return [{"nombre": n, "agregado": n.casefold() in agregados,
+             "anteriores": sorted(v for v, a in renombrados.items() if a == n)} for n in productos(datos)]
+
+
+def nombre_producto(nombre: str) -> str:
+    """El nombre ACTUAL de un producto, si `nombre` es uno anterior."""
+    return _leer()["productos_renombrados"].get(nombre, nombre)
+
+
+def _validar_producto(nombre: str, datos: dict, actual: str | None = None) -> str | None:
+    if nombre.casefold() in _reservados():
+        return f"«{nombre}» es un nombre reservado de Inventario (los materiales que gastan todos los backlight)."
+    otros = [n for n in productos(datos) if actual is None or n != actual]
+    ocupados = {v: a for v, a in datos["productos_renombrados"].items() if a != actual}
+    return _validar_nombre(nombre, otros, ocupados)
+
+
+def agregar_producto(nombre: str) -> dict:
+    """{"ok": True} o {"ok": False, "errores": {campo: mensaje}}. Si es uno de
+    la app que se había quitado, vuelve a su lugar."""
+    datos = _leer()
+    nombre = _texto(nombre)
+    quitado = next((q for q in datos["productos_quitados"] if q.casefold() == nombre.casefold()), None)
+    if quitado is None and (m := _validar_producto(nombre, datos)):
+        return {"ok": False, "errores": {"nombre": m}}
+    if quitado is not None:
+        datos["productos_quitados"] = [q for q in datos["productos_quitados"] if q != quitado]
+    else:
+        datos["productos_agregados"].append(nombre)
+    if (m := _guardar(datos)):
+        return {"ok": False, "errores": {"general": m}}
+    return {"ok": True}
+
+
+def renombrar_producto(actual: str, nuevo: str) -> dict:
+    """Cambia el nombre de un producto y el de sus asociaciones en Inventario.
+    {"ok": True, "materiales": n} o {"ok": False, "errores": {...}}."""
+    from core.repositorio_materiales import renombrar_asociacion
+
+    datos = _leer()
+    if actual not in productos(datos):
+        return {"ok": False, "errores": {"general": "Ese producto ya no existe: recarga la página."}}
+    nuevo = _texto(nuevo)
+    if nuevo == actual:
+        return {"ok": True, "materiales": 0}
+    if (m := _validar_producto(nuevo, datos, actual)):
+        return {"ok": False, "errores": {"nombre": m}}
+    datos["productos_agregados"] = [nuevo if n == actual else n for n in datos["productos_agregados"]]
+    renombrados = {v: (nuevo if n == actual else n) for v, n in datos["productos_renombrados"].items()}
+    renombrados[actual] = nuevo
+    datos["productos_renombrados"] = {v: n for v, n in renombrados.items() if v != n}
+    if (m := _guardar(datos)):
+        return {"ok": False, "errores": {"general": m}}
+    return {"ok": True, "materiales": renombrar_asociacion("productos", actual, nuevo)}
+
+
+def quitar_producto(nombre: str) -> dict:
+    """Saca un producto del cotizador y de las asociaciones de Inventario. Las
+    cotizaciones y OPs ya hechas lo conservan. {"ok": True, "materiales": n}."""
+    from core.repositorio_materiales import renombrar_asociacion
+
+    datos = _leer()
+    if nombre not in productos(datos):
+        return {"ok": False, "errores": {"general": "Ese producto ya no existe: recarga la página."}}
+    if nombre in datos["productos_agregados"]:
+        datos["productos_agregados"] = [n for n in datos["productos_agregados"] if n != nombre]
+    else:
+        datos["productos_quitados"].append(nombre)
+    if (m := _guardar(datos)):
+        return {"ok": False, "errores": {"general": m}}
+    return {"ok": True, "materiales": renombrar_asociacion("productos", nombre, None)}

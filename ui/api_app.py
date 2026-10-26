@@ -406,6 +406,27 @@ class ApiApp:
     def guardar_precios_cajas(self, cajas) -> dict:
         return self._configuracion.guardar_precios_cajas(cajas)
 
+    def guardar_margenes_corte(self, margenes_cm) -> dict:
+        return self._configuracion.guardar_margenes_corte(margenes_cm)
+
+    def obtener_productos(self) -> list[dict]:
+        return self._configuracion.obtener_productos()
+
+    def obtener_materiales_backlight(self) -> list[dict]:
+        return self._configuracion.obtener_materiales_backlight()
+
+    def cargar_perfiles_catalogo(self) -> list[str]:
+        return self._inventario.cargar_perfiles_catalogo()
+
+    def agregar_producto(self, datos) -> dict:
+        return self._configuracion.agregar_producto(datos)
+
+    def renombrar_producto(self, actual, datos) -> dict:
+        return self._configuracion.renombrar_producto(actual, datos)
+
+    def quitar_producto(self, nombre) -> dict:
+        return self._configuracion.quitar_producto(nombre)
+
     def obtener_reglas_cobro(self) -> dict:
         return self._configuracion.obtener_reglas_cobro()
 

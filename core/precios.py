@@ -361,6 +361,15 @@ def costo_producto(
         detalle_materiales_bl = (cobro_bl or {}).get("detalle", {})
         costo_materiales = sum((cobro_bl or {}).get("materiales_producto", {}).values())
 
+        # El perfil de la caja con materiales asociados (pedido de Bruno,
+        # 2026-10-25, ver core.repositorio_materiales.claves_consumo): lo que
+        # gastan sus materiales se cobra ADEMÁS del precio del perfil de
+        # Configuración › Backlight (decisión de Bruno: para cobrar solo uno de
+        # los dos, el otro se deja en $0). A diferencia de una estructura, que
+        # sí reemplaza su valor.
+        perfil = d["caja"].get("perfil") if isinstance(d.get("caja"), dict) else None
+        costo_materiales += ((cobro_bl or {}).get("estructuras") or {}).get(perfil, 0.0)
+
         resultado = {
             "ml_o_area":          area,
             "costo_impresion":    costo_impresion,
