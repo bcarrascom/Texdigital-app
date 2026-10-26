@@ -496,6 +496,7 @@ def _agregar_registro(
     numero_op=None, cliente: str | None = None, tema: str | None = None, obs: str | None = None,
     estado_nuevo: str | None = None, valor_venta: float | None = None,
     valor_anterior: float | None = None, valor_nuevo: float | None = None,
+    cobrado: dict | None = None,
 ) -> None:
     """Un solo formato de entrada para TODO lo que le pasa a un rollo —
     ajuste manual de cantidad, consumo automático o cambio de Activo/
@@ -522,7 +523,12 @@ def _agregar_registro(
     momento del consumo, y valor_anterior/valor_nuevo (tipo="precio") el
     cambio de valor — pedido de Bruno (2026-10-24): el reporte mensual
     valoriza lo usado con lo que valía cuando se vendió, y lo restante con
-    lo que valía al cerrar el mes. Las dos cosas no cambian los metros."""
+    lo que valía al cerrar el mes. Las dos cosas no cambian los metros.
+
+    cobrado (tipo="consumo") es lo que cobró la cotización por la tela que
+    salió de este rollo, con y sin IVA y descuento (desde 2026-10-26, ver
+    core.lista_precios.cobros_por_producto): el reporte lo cuenta como
+    vendido en vez de metros × valor del rollo."""
     entrada = {
         "id":                        uuid.uuid4().hex,
         "fecha":                     _hoy_dma(),
@@ -537,6 +543,8 @@ def _agregar_registro(
         entrada["tema"] = (tema or "").strip()
         entrada["obs"] = (obs or "").strip()
         entrada["valor_venta"] = float(valor_venta) if valor_venta is not None else None
+        if cobrado is not None:
+            entrada["cobrado"] = dict(cobrado)
     if tipo == "activacion":
         entrada["estado_nuevo"] = estado_nuevo
     if tipo == "precio":
@@ -892,7 +900,8 @@ def calcular_faltantes(productos_internos: list[dict]) -> list[dict]:
     return faltantes
 
 
-def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str = "") -> list[list[dict]]:
+def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str = "",
+                     cobros: list[dict] | None = None) -> list[list[dict]]:
     """Descuenta de los rollos el material que gasta `productos_internos`
     — se llama SOLO al aprobar una cotización (ui/dialogo_aprobar.py),
     nunca antes: es el único momento en que el material se da por gastado
@@ -938,9 +947,15 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     Con Inventario apagado (ver _inventario_habilitado) no toca NADA: cada
     producto queda sin rollo asignado (mismas listas vacías que "no
     alcanzó"), así que ninguna OP aprobada con el módulo apagado escribe
-    RollosUsados ni descuenta ningún rollo."""
+    RollosUsados ni descuenta ningún rollo.
+
+    `cobros`: lo que cobró la cotización por cada producto, en el mismo orden
+    (ver core.lista_precios.cobros_por_producto); el registro de consumo de
+    cada rollo guarda la suma de lo que cobraron los productos que salieron de
+    él ("cobrado", en sus cuatro formas), para el reporte mensual."""
     if not _inventario_habilitado():
         return [[] for _ in productos_internos]
+    from core.lista_precios import sumar_variantes
     rollos = listar_rollos()
     asignaciones = _asignar_rollos_por_producto(productos_internos, rollos)
     descripcion = f"OP {numero_op}" + (f" · {referencia}" if referencia else "")
@@ -955,7 +970,8 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
     # unidos.
     consumo_por_rollo: dict[str, dict] = {}
 
-    for producto, asign in zip(productos_internos, asignaciones):
+    cobros = cobros or [None] * len(productos_internos)
+    for producto, asign, cobro in zip(productos_internos, asignaciones, cobros):
         rollo_elegido = asign["rollo"]
         if rollo_elegido is None:
             asignacion_por_producto.append([])
@@ -964,8 +980,10 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
         necesario = asign["necesario"]
         asignacion_por_producto.append([{"id": rollo_elegido["id"], "metros": round(necesario, 3)}])
 
-        acumulado = consumo_por_rollo.setdefault(rollo_elegido["id"], {"metros": 0.0, "temas": [], "obss": []})
+        acumulado = consumo_por_rollo.setdefault(rollo_elegido["id"], {"metros": 0.0, "temas": [], "obss": [], "cobrado": None})
         acumulado["metros"] += necesario
+        if cobro is not None:
+            acumulado["cobrado"] = sumar_variantes(acumulado["cobrado"], cobro.get("textil"))
         tema = (producto.get("tema") or "").strip()
         obs = (producto.get("obs") or "").strip()
         if tema and tema not in acumulado["temas"]:
@@ -983,7 +1001,7 @@ def consumir_para_op(productos_internos: list[dict], numero_op, referencia: str 
             r, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
             numero_op=numero_op, cliente=referencia,
             tema="; ".join(datos["temas"]), obs="; ".join(datos["obss"]),
-            valor_venta=r.get("valor"),
+            valor_venta=r.get("valor"), cobrado=datos["cobrado"],
         )
         tocados[id_rollo] = r
 

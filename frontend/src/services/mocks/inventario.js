@@ -95,7 +95,20 @@ function reporteEnCurso() {
   return { ...base, anio: ahora.getFullYear(), mes: ahora.getMonth() + 1, cerrado: false,
            generado: `${hoy()} ${ahora.toTimeString().slice(0, 5)}` };
 }
-const todosLosReportes = () => [reporteEnCurso(), ...reportesCerrados.slice().reverse()];
+/* Las cuatro formas del valor vendido (ver core/reportes_inventario.py): acá,
+   inventadas a partir del valor_vendido, con un 5 % de descuento y 19 % de IVA. */
+function conFormas(x) {
+  if (!x || typeof x !== "object") return x;
+  if (Array.isArray(x)) return x.map(conFormas);
+  const y = Object.fromEntries(Object.entries(x).map(([k, v]) => [k, conFormas(v)]));
+  if (typeof x.valor_vendido === "number") {
+    const v = x.valor_vendido / 0.95;
+    y.valores_vendidos = { sin_iva: Math.round(v), sin_iva_con_descuento: x.valor_vendido,
+                           con_iva: Math.round(v * 1.19), con_iva_con_descuento: Math.round(x.valor_vendido * 1.19) };
+  }
+  return y;
+}
+const todosLosReportes = () => [conFormas(reporteEnCurso()), ...reportesCerrados.slice().reverse()];
 
 export default {
   abrir_reportes_inventario: () => todosLosReportes().map(({ anio, mes, cerrado }) => ({ anio, mes, cerrado })),

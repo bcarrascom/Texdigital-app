@@ -172,11 +172,20 @@ class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
 
     def test_aprobar_guarda_el_consumo_en_el_reporte_del_mes(self):
         repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
-        repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
-        self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
+        with mock.patch.dict("core.repositorio.TEXTILES_VALORES", {"TelaTest": 1200.0}):
+            repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
+            self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
         fila = self._textil_del_mes()
-        self.assertEqual(fila["usado"], 11.0)
-        self.assertEqual(fila["valor_vendido"], 11000.0)
+        self.assertEqual(fila["usado"], 11.0)                  # 10 ML + 1 de tensión
+        # Lo vendido es lo que COBRÓ la cotización (10 ML × $1.200), no los
+        # metros que salieron × el valor del rollo (decisión de Bruno, 2026-10-26),
+        # en sus cuatro formas. Con 15 m² impresos le toca el 5 % de descuento por
+        # volumen, y el IVA es 19 %.
+        consumo = repo_inv.listar_rollos()[0]["usos"][0]
+        self.assertEqual(consumo["cobrado"], {"sin_iva": 12000.0, "sin_iva_con_descuento": 11400.0,
+                                              "con_iva": 14280.0, "con_iva_con_descuento": 13566.0})
+        self.assertEqual(fila["valores_vendidos"], consumo["cobrado"])
+        self.assertEqual(fila["valor_vendido"], 11400.0)   # por defecto: sin IVA, con descuento
 
     def test_recotizar_devuelve_la_tela_y_revierte_el_reporte(self):
         r = repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)

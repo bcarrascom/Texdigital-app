@@ -154,6 +154,13 @@ class TestBacklightCajaYPerfiles(_Base):
         self.assertEqual(repo_mat.materiales_para_producto(*repo_mat.claves_consumo(_backlight("PERFIL 80 MM"))), [])
 
 
+    def test_el_consumo_guarda_lo_que_cobro_la_cotizacion(self):
+        m = self.material("Silicona", productos=["Backlight"], valor=100)
+        montos = {"sin_iva": 250.0, "sin_iva_con_descuento": 225.0, "con_iva": 297.5, "con_iva_con_descuento": 267.75}
+        repo_mat.consumir_para_op([_backlight()], 1, "Cliente", cobros=[{"textil": None, "materiales": {"Silicona": montos}}])
+        consumo = next(h for h in repo_mat.obtener_material(m["id"])["historial"] if h["tipo"] == "consumo")
+        self.assertEqual(consumo["cobrado"], montos)
+
 class TestCorteBacklight(_Base):
 
     def test_por_defecto(self):

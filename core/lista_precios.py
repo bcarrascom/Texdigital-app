@@ -50,7 +50,9 @@ import copy
 import hashlib
 import json
 
-from core.precios import costo_cotizacion, costo_producto, ml_o_area_facturable_por_producto, parsear_valor_manual
+from core.precios import (
+    costo_cotizacion, costo_producto, descuento_por_linea, ml_o_area_facturable_por_producto, parsear_valor_manual,
+)
 
 VERSION = 3
 
@@ -204,6 +206,59 @@ def totales(datos: dict, internos: list[dict], kwargs: dict) -> dict:
 def _por_producto(internos: list[dict], kwargs: dict) -> list[float]:
     facturables = ml_o_area_facturable_por_producto(internos, **kwargs)
     return [costo_producto(d, ml_o_area_facturable=f, **kwargs)["total"] for d, f in zip(internos, facturables)]
+
+
+# Las cuatro formas de contar lo que se cobró (pedido de Bruno, 2026-10-26:
+# el reporte de Inventario deja elegir cuál ver).
+VARIANTES_COBRO = ("sin_iva", "sin_iva_con_descuento", "con_iva", "con_iva_con_descuento")
+
+
+def variantes(monto: float, descuento: float, iva_pct: float) -> dict:
+    """Un monto neto en sus cuatro formas: con/sin IVA y con/sin descuento
+    (`descuento` como fracción: 0,1 = 10 %)."""
+    con_descuento = monto * (1 - descuento)
+    con_iva = 1 + iva_pct / 100
+    return {"sin_iva": round(monto, 2), "sin_iva_con_descuento": round(con_descuento, 2),
+            "con_iva": round(monto * con_iva, 2), "con_iva_con_descuento": round(con_descuento * con_iva, 2)}
+
+
+def cobros_por_producto(datos: dict) -> list[dict]:
+    """Lo que la cotización COBRA, producto por producto y con SU lista de
+    precios y reglas, en las cuatro formas de VARIANTES_COBRO:
+
+        {"textil": {variante: monto de la impresión},
+         "materiales": {nombre: {variante: monto}}}
+
+    Al aprobarla, cada consumo de Inventario guarda esto (ver
+    core.repositorio_inventario.consumir_para_op y
+    core.repositorio_materiales.consumir_para_op): el reporte mensual cuenta
+    como vendido lo que cobró la cotización, y deja elegir con o sin IVA y
+    descuento (pedido de Bruno, 2026-10-26). El descuento, que es del total,
+    se reparte por producto con la misma regla que lo calculó (ver
+    core.precios.descuento_por_linea)."""
+    internos, kwargs = internos_congelados(datos)
+    t = totales(datos, internos, kwargs)
+    lineas = descuento_por_linea(internos, datos.get("Descuento", 0.0) or 0.0, despacho=datos.get("Despacho") or 0.0,
+                                 instalacion=datos.get("Instalacion") or 0.0, **kwargs)
+    facturables = ml_o_area_facturable_por_producto(internos, **kwargs)
+    cobros = []
+    for d, f, desc in zip(internos, facturables, lineas):
+        c = costo_producto(d, ml_o_area_facturable=f, **kwargs)
+        cobros.append({
+            "textil": variantes(c["costo_impresion"], desc["impresion"], t["iva_pct"]),
+            "materiales": {n: variantes(det.get("monto", 0.0), desc["resto"], t["iva_pct"])
+                           for n, det in (c.get("detalle_materiales") or {}).items()},
+        })
+    return cobros
+
+
+def sumar_variantes(a: dict | None, b: dict | None) -> dict | None:
+    """Suma dos montos en sus cuatro formas (None si los dos son None)."""
+    if a is None:
+        return dict(b) if b is not None else None
+    if b is None:
+        return dict(a)
+    return {k: round(a.get(k, 0.0) + b.get(k, 0.0), 2) for k in VARIANTES_COBRO}
 
 
 # ── Comparar con los precios de hoy ─────────────────────────────────────────

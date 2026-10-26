@@ -376,6 +376,7 @@ def _agregar_historial(
     gasto_unitario_anterior: float | None = None,
     valor_anterior: float | None = None, valor_nuevo: float | None = None,
     valor_venta: float | None = None, gasto_unitario: float | None = None,
+    cobrado: dict | None = None,
 ) -> dict:
     """Un solo formato de entrada para todo lo que le pasa a un material —
     mismo espíritu que _agregar_registro de rollos (guarda cantidad de
@@ -426,6 +427,12 @@ def _agregar_historial(
         entrada["cliente"]   = (cliente or "").strip()
         entrada["valor_venta"]    = float(valor_venta) if valor_venta is not None else None
         entrada["gasto_unitario"] = float(gasto_unitario) if gasto_unitario is not None else None
+        # Lo que cobró la cotización por este material, con y sin IVA y
+        # descuento (ver consumir_para_op); el reporte mensual lo cuenta como
+        # vendido. Sin él (la cotización no lo cobró aparte), vale consumido ×
+        # valor de venta.
+        if cobrado is not None:
+            entrada["cobrado"] = dict(cobrado)
         if valor_venta is None:
             entrada["ganancia"] = None
         else:
@@ -916,7 +923,7 @@ def calcular_consumo(material: dict, producto_interno: dict) -> float:
 
 def consumir_para_op(
     productos_internos: list[dict], numero_op, referencia: str = "",
-    consumos_manuales: dict[str, float] | None = None,
+    consumos_manuales: dict[str, float] | None = None, cobros: list[dict] | None = None,
 ) -> dict[str, float]:
     """Descuenta de los materiales lo que gasta `productos_internos` — se
     llama SOLO al aprobar una cotización (ui/api_ver_cotizacion.py::
@@ -959,6 +966,13 @@ def consumir_para_op(
     descripcion = f"OP {numero_op}" + (f" · {referencia}" if referencia else "")
 
     acumulado: dict[str, float] = {}
+    # Lo que cobró la cotización por cada material (ver core.lista_precios.
+    # cobros_por_producto): queda en el registro de consumo para el reporte.
+    from core.lista_precios import sumar_variantes
+    cobrado: dict[str, dict] = {}
+    for producto, cobro in zip(productos_internos, cobros or [None] * len(productos_internos)):
+        for nombre, montos in ((cobro or {}).get("materiales") or {}).items():
+            cobrado[nombre] = sumar_variantes(cobrado.get(nombre), montos)
     for producto in productos_internos:
         # Un backlight responde a los nombres reservados "Backlight" (todos) y
         # "Backlight + Caja" (con caja), y al perfil de su caja como estructura
@@ -995,6 +1009,7 @@ def consumir_para_op(
             m, tipo="consumo", anterior=anterior, nuevo=nuevo, descripcion=descripcion,
             numero_op=numero_op, cliente=referencia,
             valor_venta=valor_venta, gasto_unitario=m.get("gasto_unitario"),
+            cobrado=cobrado.get(m.get("nombre")),
         )
         if valor_venta is not None:
             m["vendido_acumulado"] = round(

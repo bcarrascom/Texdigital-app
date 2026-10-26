@@ -38,10 +38,20 @@ Las cuatro cantidades de cada fila, en el orden en que pasan las cosas:
 Con eso inicial + ingresado − usado da siempre el restante.
 
 El valor, igual para rollos y materiales (pedido de Bruno, 2026-10-24):
-  "valor_vendido"  lo que se vendió: cada consumo de OP con lo que valía la
-                   cosa en ese momento (el valor que guardó la entrada). No
-                   sale de "usado": un ajuste que resta tela no es una venta,
-                   así que gasta cantidad sin sumar valor.
+  "valores_vendidos" lo que se vendió: lo que COBRÓ la cotización por cada
+                   consumo de OP (el "cobrado" que guardó la entrada al
+                   aprobarla — decisión de Bruno, 2026-10-26; se revierte
+                   con el consumo si la OP se recotiza), en las cuatro formas
+                   de core.lista_precios.VARIANTES_COBRO: con y sin IVA, con
+                   y sin descuento. La página de reportes deja elegir cuál
+                   ver. Un consumo sin "cobrado" (anterior a esa fecha, o un
+                   material que la cotización no cobró aparte) vale lo
+                   consumido × lo que valía la cosa en ese momento, sin
+                   descuento, y con el IVA de hoy en las formas "con IVA".
+                   No sale de "usado": un ajuste que resta tela no es una
+                   venta, así que gasta cantidad sin sumar valor.
+  "valor_vendido"  el de "sin IVA, con descuento" (lo que de verdad entró,
+                   neto), para quien lea el archivo sin elegir.
   "valor_restante" lo restante al valor que regía el último día del mes
                    (en el mes en curso, el de hoy), sacado de las entradas
                    tipo "precio" del historial.
@@ -60,6 +70,11 @@ from pathlib import Path
 from core.rutas import DATOS, _detectar_dropbox
 from core import repositorio_inventario as _repo_inv
 from core import repositorio_materiales as _repo_mat
+from core.lista_precios import VARIANTES_COBRO, sumar_variantes, variantes
+
+# La forma de "valores_vendidos" que va en "valor_vendido" (ver docstring).
+VARIANTE_POR_DEFECTO = "sin_iva_con_descuento"
+_CERO = {k: 0.0 for k in VARIANTES_COBRO}
 
 MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
          "agosto", "septiembre", "octubre", "noviembre", "diciembre")
@@ -139,7 +154,7 @@ def _ajustes(entradas: list[dict], inicio: date, fin: date, antes: str, despues:
     return restado, sumado
 
 
-def _reporte_textiles(inicio: date, fin: date) -> list[dict]:
+def _reporte_textiles(inicio: date, fin: date, iva_pct: float) -> list[dict]:
     """Una fila por textil, sumando sus rollos. Cuenta también los
     decomisionados: uno que se terminó a mitad de mes se usó ese mes."""
     from core.catalogo import nombre_textil
@@ -183,16 +198,16 @@ def _reporte_textiles(inicio: date, fin: date) -> list[dict]:
         fila = por_textil.setdefault(nombre, {
             "nombre": nombre, "unidad": "m", "rollos": 0,
             "inicial": 0.0, "ingresado": 0.0, "usado": 0.0, "restante": 0.0,
-            "valor_vendido": 0.0, "valor_restante": 0.0, "sin_valor": 0,
+            "valores_vendidos": dict(_CERO), "valor_restante": 0.0, "sin_valor": 0,
         })
         fila["rollos"] += 1
         fila["inicial"] += inicial
         fila["ingresado"] += ingresado
         fila["usado"] += usado
         fila["restante"] += restante
-        valor_vendido, falta_vendido = _valor_vendido(usos, consumos, antes, despues, r.get("valor"))
+        vendidos, falta_vendido = _valor_vendido(usos, consumos, antes, despues, r.get("valor"), iva_pct)
         valor = _valor_al(usos, fin, r.get("valor"))
-        fila["valor_vendido"] += valor_vendido
+        fila["valores_vendidos"] = sumar_variantes(fila["valores_vendidos"], vendidos)
         if valor is not None:
             fila["valor_restante"] += restante * float(valor)
         if falta_vendido or (valor is None and restante > 0):
@@ -201,20 +216,25 @@ def _reporte_textiles(inicio: date, fin: date) -> list[dict]:
 
 
 def _valor_vendido(entradas: list[dict], consumos: list[dict], antes: str, despues: str,
-                   actual: float | None) -> tuple[float, bool]:
-    """(valor de lo consumido, si a algo le faltó valor). Cada consumo se
-    valoriza con lo que valía cuando se vendió: el valor_venta que guardó
-    la entrada, o —en una entrada anterior a que existiera ese campo— el
-    valor que regía ese día según el historial de precios (ver _valor_al)."""
-    total, falta = 0.0, False
+                   actual: float | None, iva_pct: float) -> tuple[dict, bool]:
+    """({variante: valor de lo consumido}, si a algo le faltó valor). Cada
+    consumo vale lo que cobró la cotización ("cobrado", ver docstring del
+    módulo); sin eso, lo consumido × lo que valía cuando se vendió: el
+    valor_venta que guardó la entrada, o —en una entrada anterior a que
+    existiera ese campo— el valor que regía ese día según el historial de
+    precios (ver _valor_al)."""
+    total, falta = dict(_CERO), False
     for e in consumos:
+        if isinstance(e.get("cobrado"), dict):
+            total = sumar_variantes(total, e["cobrado"])
+            continue
         valor = e.get("valor_venta")
         if valor is None:
             valor = _valor_al(entradas, _fecha(e.get("fecha")), actual)
         if valor is None:
             falta = True
             continue
-        total += _movido([e], antes, despues) * float(valor)
+        total = sumar_variantes(total, variantes(_movido([e], antes, despues) * float(valor), 0.0, iva_pct))
     return total, falta
 
 
@@ -230,7 +250,7 @@ def _valor_al(entradas: list[dict], dia: date, actual: float | None) -> float | 
     return actual
 
 
-def _reporte_materiales(inicio: date, fin: date) -> list[dict]:
+def _reporte_materiales(inicio: date, fin: date, iva_pct: float) -> list[dict]:
     """Una fila por material. Un material que se borró ya no está en
     ningún lado: no aparece en los meses que se calculen después."""
     filas = []
@@ -252,13 +272,13 @@ def _reporte_materiales(inicio: date, fin: date) -> list[dict]:
         if not any((inicial, ingresado, usado, restante)):
             continue
 
-        valor_vendido, falta_vendido = _valor_vendido(entradas, consumos, antes, despues, m.get("valor"))
+        vendidos, falta_vendido = _valor_vendido(entradas, consumos, antes, despues, m.get("valor"), iva_pct)
         valor = _valor_al(entradas, fin, m.get("valor"))
         sin_valor = 1 if falta_vendido or (valor is None and restante) else 0
         filas.append(_redondear({
             "nombre": m.get("nombre", ""), "unidad": "m" if m.get("tipo") == "metro" else "un.",
             "inicial": inicial, "ingresado": ingresado, "usado": usado, "restante": restante,
-            "valor_vendido": valor_vendido, "valor_restante": 0.0 if valor is None else restante * float(valor),
+            "valores_vendidos": vendidos, "valor_restante": 0.0 if valor is None else restante * float(valor),
             "sin_valor": sin_valor,
         }))
     return filas
@@ -267,13 +287,15 @@ def _reporte_materiales(inicio: date, fin: date) -> list[dict]:
 def _redondear(fila: dict) -> dict:
     for clave in CANTIDADES:
         fila[clave] = round(fila[clave], 3)
-    for clave in ("valor_vendido", "valor_restante"):
-        fila[clave] = round(fila[clave], 2)
+    fila["valores_vendidos"] = {k: round(v, 2) for k, v in fila["valores_vendidos"].items()}
+    fila["valor_vendido"] = fila["valores_vendidos"][VARIANTE_POR_DEFECTO]
+    fila["valor_restante"] = round(fila["valor_restante"], 2)
     return fila
 
 
 def _totales(filas: list[dict]) -> dict:
     return {
+        "valores_vendidos": {k: round(sum(f["valores_vendidos"][k] for f in filas), 2) for k in VARIANTES_COBRO},
         "valor_vendido":  round(sum(f["valor_vendido"] for f in filas), 2),
         "valor_restante": round(sum(f["valor_restante"] for f in filas), 2),
     }
@@ -284,8 +306,10 @@ def generar_reporte(anio: int, mes: int, hoy: date | None = None) -> dict:
     lo guarda). "cerrado" si el mes ya terminó."""
     hoy = hoy or date.today()
     inicio, fin = _limites(anio, mes)
-    textiles = _reporte_textiles(inicio, fin)
-    materiales = _reporte_materiales(inicio, fin)
+    from core.reglas_cobro import cargar as reglas
+    iva_pct = float(reglas()["iva"])   # solo para los consumos sin "cobrado"
+    textiles = _reporte_textiles(inicio, fin, iva_pct)
+    materiales = _reporte_materiales(inicio, fin, iva_pct)
     tot_textiles, tot_materiales = _totales(textiles), _totales(materiales)
     return {
         "anio":     anio,
@@ -293,6 +317,7 @@ def generar_reporte(anio: int, mes: int, hoy: date | None = None) -> dict:
         "cerrado":  fin < hoy,
         "generado": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "totales": {
+            "valores_vendidos": sumar_variantes(tot_textiles["valores_vendidos"], tot_materiales["valores_vendidos"]),
             "valor_vendido":  round(tot_textiles["valor_vendido"] + tot_materiales["valor_vendido"], 2),
             "valor_restante": round(tot_textiles["valor_restante"] + tot_materiales["valor_restante"], 2),
             "textiles": {
