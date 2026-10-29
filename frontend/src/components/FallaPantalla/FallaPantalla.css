@@ -1,0 +1,5 @@
+.falla__detalle {
+  display: block; margin-top: var(--e-3);
+  font-size: var(--t-sm); color: var(--c-texto-suave); overflow-wrap: anywhere;
+}
+.falla__boton { margin-top: var(--e-5); }
