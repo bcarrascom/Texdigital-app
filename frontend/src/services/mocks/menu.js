@@ -37,4 +37,35 @@ export default {
     ],
     avisos_produccion: ops.slice(1),
   }),
+  // Actualizaciones (ui/api_actualizacion.py): hay una nueva, y "instalar"
+  // simula la descarga. Con ?actualizacion=al_dia|error|recien en la URL,
+  // arranca en ese estado.
+  estado_actualizacion: () => {
+    const e = { ...actualizacion, recien_actualizado: recienActualizado };
+    recienActualizado = false;
+    return e;
+  },
+  buscar_actualizacion: () => {
+    actualizacion = { fase: "buscando", version: "2.1.0" };
+    setTimeout(() => { actualizacion = { fase: "disponible", version: "2.1.0", nueva: "v2.1.1" }; }, 1500);
+    return actualizacion;
+  },
+  instalar_actualizacion: () => {
+    actualizacion = { fase: "descargando", version: "2.1.0", nueva: "v2.1.1", progreso: 0 };
+    const id = setInterval(() => {
+      const progreso = actualizacion.progreso + 9;
+      actualizacion = progreso >= 100
+        ? { fase: "listo", version: "2.1.0", nueva: "v2.1.1" }
+        : { ...actualizacion, progreso };
+      if (progreso >= 100) clearInterval(id);
+    }, 300);
+    return actualizacion;
+  },
 };
+
+const inicio = new URLSearchParams(location.search).get("actualizacion");
+let recienActualizado = inicio === "recien";
+let actualizacion = {
+  al_dia: { fase: "al_dia", version: "2.1.0" },
+  error: { fase: "error", version: "2.1.0", error: "No se pudo conectar con el servidor de actualizaciones. Revisa la conexión a internet." },
+}[inicio] || { fase: "disponible", version: "2.1.0", nueva: "v2.1.1" };

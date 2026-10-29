@@ -76,6 +76,14 @@ class TestBuscarActualizacion(unittest.TestCase):
         self._frozen_patch = mock.patch.object(sys, "frozen", True, create=True)
         self._frozen_patch.start()
         self.addCleanup(self._frozen_patch.stop)
+        # Una versión final instalada (con "0.0.0-dev" buscaría betas, ver
+        # test_una_beta_instalada_busca_betas).
+        version = mock.patch.object(act, "VERSION", "2.1.0")
+        version.start()
+        self.addCleanup(version.stop)
+        entorno = mock.patch.dict("os.environ", {act.VAR_ENTORNO_PRERELEASE: ""})
+        entorno.start()
+        self.addCleanup(entorno.stop)
 
     def _mock_respuesta(self, data: dict):
         cm = mock.MagicMock()
@@ -168,19 +176,57 @@ class TestBuscarActualizacion(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])):
             self.assertIsNone(act.buscar_actualizacion(incluir_prerelease=True))
 
+    def test_una_beta_instalada_busca_betas(self):
+        lista = [{"tag_name": "v2.1.0-rc4",
+                  "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "rc4"}]}]
+        with mock.patch.object(act, "VERSION", "2.1.0-rc3"), mock.patch.object(sys, "platform", "win32"),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(lista)) as m:
+            release = act.buscar_actualizacion()
+        self.assertEqual(m.call_args[0][0].full_url, act.API_RELEASES)
+        self.assertEqual(release["url"], "rc4")
+
+    def test_una_version_final_no_busca_betas(self):
+        data = {"tag_name": "v2.1.0", "assets": []}
+        with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(data)) as m:
+            self.assertIsNone(act.buscar_actualizacion())
+        self.assertEqual(m.call_args[0][0].full_url, act.API_ULTIMO_RELEASE)
+
+    def test_la_variable_de_entorno_busca_betas_desde_una_final(self):
+        with mock.patch.dict("os.environ", {act.VAR_ENTORNO_PRERELEASE: "1"}),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])) as m:
+            act.buscar_actualizacion()
+        self.assertEqual(m.call_args[0][0].full_url, act.API_RELEASES)
+
+    def test_con_betas_salta_un_release_que_todavia_no_tiene_paquete(self):
+        # El workflow crea el release y después sube los archivos.
+        lista = [
+            {"tag_name": "v2.1.0-rc5", "assets": []},
+            {"tag_name": "v2.1.0-rc4",
+             "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "rc4"}]},
+        ]
+        with mock.patch.object(act, "VERSION", "2.1.0-rc3"), mock.patch.object(sys, "platform", "win32"),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(lista)):
+            release = act.buscar_actualizacion(incluir_prerelease=True)
+        self.assertEqual(release["tag"], "v2.1.0-rc4")
+
+    def test_con_betas_toma_la_version_mas_nueva_no_la_primera(self):
+        zip_ = lambda url: [{"name": "SistemaGestion-windows.zip", "browser_download_url": url}]
+        lista = [
+            {"tag_name": "v2.1.0-rc9", "assets": zip_("rc9")},
+            {"tag_name": "v2.1.0", "assets": zip_("final")},
+            {"tag_name": "v2.2.0-rc1", "assets": zip_("borrador"), "draft": True},
+        ]
+        with mock.patch.object(act, "VERSION", "2.1.0-rc3"), mock.patch.object(sys, "platform", "win32"),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(lista)):
+            release = act.buscar_actualizacion(incluir_prerelease=True)
+        self.assertEqual(release["url"], "final")
+
 
 class TestScriptDeReemplazoEsSeguro(unittest.TestCase):
     """
-    Confirmado a mano (v1.4.0 -> v1.4.1 en Windows): si Remove-Item no
-    alcanza a borrar la carpeta instalada (locks transitorios justo
-    después de que el proceso viejo termina) y el script igual hace
-    Move-Item contra ese destino, PowerShell mueve la carpeta nueva
-    ADENTRO de la vieja en vez de reemplazarla — quedó un
-    "Sistema de Gestion\\Sistema de Gestion\\" anidado, con el .exe viejo
-    todavía en el lugar que se relanza. Estos tests verifican que el
-    script generado ahora SIEMPRE verifica que el borrado funcionó antes
-    de mover, tanto en Windows como en macOS/Linux — no ejecutan
-    PowerShell/sh de verdad, solo inspeccionan el texto generado.
+    Confirmado a mano (v1.4.0 -> v1.4.1 en Windows): justo después de que
+    el proceso viejo termina, Windows a veces todavía tiene archivos de la
+    instalación tomados. El script ya no BORRA la carpeta vieja (un borrado
+    a medias la dejaba rota): la APARTA, pone la nueva en su lugar, y si
+    algo falla la devuelve y abre la instalada. Estos tests inspeccionan el
+    texto generado; los tres casos (normal, carpeta tomada, la nueva no
+    llega) se corrieron de verdad en PowerShell el 2026-10-28.
     """
 
     def setUp(self):
@@ -188,37 +234,46 @@ class TestScriptDeReemplazoEsSeguro(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self._tmp_path = Path(self._tmp.name)
         self._instalada = self._tmp_path / "instalada" / "Sistema de Gestion"
-        self._nueva = self._tmp_path / "nueva" / "Sistema de Gestion"
+        self._nueva = self._tmp_path / "instalada" / "Sistema de Gestion.nueva" / "Sistema de Gestion"
 
-    def test_windows_no_mueve_si_el_borrado_no_se_verifico(self):
+    def _ps1(self):
         with mock.patch("subprocess.Popen"):
             act._lanzar_actualizador_windows(
                 self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion.exe")
-        contenido = (self._tmp_path / "actualizar.ps1").read_text(encoding="utf-8")
-        # Move-Item debe estar DENTRO del bloque "if (-not (Test-Path...))",
-        # nunca ejecutarse incondicionalmente después de Remove-Item.
-        self.assertIn("Test-Path", contenido)
-        idx_if = contenido.index("if (-not (Test-Path")
-        idx_move = contenido.index("Move-Item")
-        self.assertGreater(idx_move, idx_if)
+        return (self._tmp_path / "actualizar.ps1").read_text(encoding="utf-8-sig")
 
-    def test_windows_reintenta_el_borrado_antes_de_rendirse(self):
-        with mock.patch("subprocess.Popen"):
-            act._lanzar_actualizador_windows(
-                self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion.exe")
-        contenido = (self._tmp_path / "actualizar.ps1").read_text(encoding="utf-8")
-        self.assertIn("intentos", contenido)
-        self.assertIn("Remove-Item", contenido)
-
-    def test_unix_no_mueve_si_el_borrado_no_se_verifico(self):
+    def _sh(self):
         with mock.patch("subprocess.Popen"):
             act._lanzar_actualizador_unix(
                 self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion")
-        contenido = (self._tmp_path / "actualizar.sh").read_text(encoding="utf-8")
-        self.assertIn('if [ ! -e "$DESTINO" ]; then', contenido)
-        idx_if = contenido.index('if [ ! -e "$DESTINO" ]')
-        idx_mv = contenido.index("mv ")
-        self.assertGreater(idx_mv, idx_if)
+        return (self._tmp_path / "actualizar.sh").read_text(encoding="utf-8")
+
+    def test_windows_aparta_la_vieja_con_reintentos_y_no_la_borra_antes(self):
+        contenido = self._ps1()
+        self.assertIn("Rename-Item -LiteralPath $destino", contenido)
+        self.assertIn("$intentos -lt 30", contenido)
+        # Lo instalado solo se borra si la nueva NO llegó (para devolver la vieja).
+        self.assertGreater(contenido.index("Remove-Item -LiteralPath $destino"), contenido.index("Move-Item"))
+
+    def test_windows_solo_mueve_la_nueva_si_aparto_la_vieja(self):
+        contenido = self._ps1()
+        idx_aborta = contenido.index("if (-not $apartada)")
+        idx_move = contenido.index("Move-Item")
+        self.assertGreater(idx_move, contenido.index("} else {", idx_aborta))
+
+    def test_windows_siempre_vuelve_a_abrir_la_app(self):
+        contenido = self._ps1()
+        # Abortado, actualizado (avisando) y devuelta la vieja.
+        self.assertEqual(contenido.count("Start-Process -FilePath $exe"), 3)
+        self.assertIn("-ArgumentList '--actualizado'", contenido)
+
+    def test_unix_aparta_la_vieja_y_la_devuelve_si_falla(self):
+        contenido = self._sh()
+        self.assertIn('mv "$DESTINO" "$RESPALDO"', contenido)
+        idx_mv_nueva = contenido.index(f'elif mv "{self._nueva}" "$DESTINO"')
+        self.assertGreater(idx_mv_nueva, contenido.index("if [ $apartada -eq 0 ]"))
+        self.assertGreater(contenido.index('rm -rf "$DESTINO"'), idx_mv_nueva)
+        self.assertIn('mv "$RESPALDO" "$DESTINO"', contenido)
 
 
 if __name__ == "__main__":

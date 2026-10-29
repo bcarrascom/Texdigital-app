@@ -5,12 +5,15 @@ import { useApp } from "@/context/AppContext";
 import { useExpansion } from "@/context/ExpansionContext";
 import { useAtajo } from "@/hooks/useAtajo";
 import { useDatos } from "@/hooks/useDatos";
+import { useActualizacion } from "@/hooks/useActualizacion";
+import { useAvisos } from "@/context/AvisosContext";
 import { MODULOS, rutas } from "@/router/rutas";
 import Pagina from "@/components/Pagina/Pagina";
 import { ControlTexto } from "@/components/Cabecera/Cabecera";
 import { TarjetaCotizacion, TarjetaDespacho, TarjetaOp, TarjetaPendiente, TarjetaRollo } from "@/components/Tarjeta/Tarjeta";
 import Modulo, { varsMazo } from "./Modulo";
 import AvisoMenu from "./AvisoMenu";
+import DialogoActualizacion from "@/components/Actualizacion/DialogoActualizacion";
 import IconoConfiguracion from "@/assets/svg/cog-fino.svg?react";
 import { fechaDMAaTime, plural } from "@/utils/formato";
 import "./Menu.css";
@@ -56,6 +59,13 @@ export default function Menu() {
   const botonesAviso = useRef({});   // clave de módulo → <button> de su aviso (si se ve)
   const [avisoAbierto, setAvisoAbierto] = useState(null);
   const cerrarAviso = useCallback(() => setAvisoAbierto(null), []);
+
+  // La app busca una versión nueva al abrir (ver ui/api_actualizacion.py):
+  // si hay, el pie ofrece instalarla.
+  const aviso = useAvisos();
+  const actualizacion = useActualizacion({ alActualizarse: (v) => aviso(`La app se actualizó a la v${v}.`, "info", 5000) });
+  const [dialogoActualizar, setDialogoActualizar] = useState(false);
+  const hayVersionNueva = ["disponible", "descargando", "listo"].includes(actualizacion.estado?.fase);
 
   // Volviendo de un módulo: el color se contrae hasta su caja. Se captura
   // al montar, antes de que contraer() lo limpie.
@@ -212,6 +222,11 @@ export default function Menu() {
         <footer className="menu__pie">
           <span>{contexto.fecha}</span>
           {contexto.version && <span>v{contexto.version}</span>}
+          {hayVersionNueva && (
+            <button className="btn btn--primario btn--chico" onClick={() => setDialogoActualizar(true)}>
+              Actualizar a {actualizacion.estado.nueva}
+            </button>
+          )}
           <ControlTexto />
           <button className="cab-btn cab-btn--icono" title="Manual de uso" onClick={() => api.abrir_manual()}>?</button>
           {import.meta.env.DEV && (
@@ -219,6 +234,7 @@ export default function Menu() {
           )}
         </footer>
       </div>
+      <DialogoActualizacion abierto={dialogoActualizar} {...actualizacion} onCerrar={() => setDialogoActualizar(false)} />
     </Pagina>
   );
 }

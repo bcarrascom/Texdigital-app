@@ -36,6 +36,15 @@ def _iso_a_dma(iso: str) -> str:
     return f"{dia}/{mes}/{anio}"
 
 
+def _texto_caja(caja) -> str:
+    """Mismo criterio que ui.api_ver_op._texto_caja — duplicado a propósito,
+    ver ui/api_ver_despacho.py. La pantalla dibuja "caja" como etiqueta: el
+    objeto de caja (perfil/luces/fp) tumbaba la página entera."""
+    if isinstance(caja, dict):
+        return caja.get("perfil") or "Con caja"
+    return caja or "Sin caja"
+
+
 def _producto_a_json_pantalla(p_json: dict, p_interno: dict, costo: dict) -> dict:
     """Producto en el shape que espera ver-cotizacion.html — mismos
     campos independiente del tipo, vacíos los que no correspondan."""
@@ -48,7 +57,7 @@ def _producto_a_json_pantalla(p_json: dict, p_interno: dict, costo: dict) -> dic
         "estructuras":   [] if es_bl else list(p_interno.get("estructuras", [])),
         "terminaciones": [] if es_bl else list(p_interno.get("terminaciones", [])),
         "tela":          p_interno.get("tela", "") if es_bl else "",
-        "caja":          p_interno.get("caja", "") if es_bl else "",
+        "caja":          _texto_caja(p_interno.get("caja", "")) if es_bl else "",
         "tema":          p_interno.get("tema", ""),
         "obs":           p_interno.get("obs", ""),
         "ancho":         p_interno.get("ancho", 0.0),

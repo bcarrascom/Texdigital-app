@@ -4,6 +4,7 @@ import { AnimatePresence } from "motion/react";
 import { api } from "@/services/api";
 import { useVolver } from "@/hooks/useVolver";
 import { MODULOS } from "@/router/rutas";
+import FallaPantalla from "@/components/FallaPantalla/FallaPantalla";
 
 import Menu from "@/pages/Menu/Menu";
 import Modulos from "@/pages/Modulos/Modulos";
@@ -52,29 +53,31 @@ export default function RutasAnimadas() {
   }, [volver]);
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={clave}>
-        <Route path="/" element={<Menu />} />
-        <Route path="/dev" element={<IndiceDesarrollo />} />
+    <FallaPantalla clave={location.pathname}>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={clave}>
+          <Route path="/" element={<Menu />} />
+          <Route path="/dev" element={<IndiceDesarrollo />} />
 
-        {/* Módulos: una sola página para los cuatro (ver pages/Modulos) */}
-        {MODULOS.map((m) => <Route key={m.clave} path={`/${m.clave}`} element={<Modulos />} />)}
+          {/* Módulos: una sola página para los cuatro (ver pages/Modulos) */}
+          {MODULOS.map((m) => <Route key={m.clave} path={`/${m.clave}`} element={<Modulos />} />)}
 
-        <Route path="/cotizaciones/nueva" element={<NuevaCotizacion />} />
-        <Route path="/cotizaciones/:numero/editar" element={<NuevaCotizacion modo="editar" />} />
-        <Route path="/cotizaciones/pendientes/:id" element={<NuevaCotizacion modo="pendiente" />} />
-        <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
-        <Route path="/ops/historial" element={<HistorialOps />} />
-        <Route path="/ops/:numero" element={<VerOp />} />
-        <Route path="/inventario/rollos/:id" element={<VerRollo />} />
-        <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
-        <Route path="/inventario/reportes" element={<ReportesInventario />} />
-        <Route path="/configuracion/:categoria?" element={<Configuracion />} />
-        <Route path="/despachos/direcciones" element={<GestionarDirecciones />} />
-        <Route path="/despachos/:numero/asignar" element={<AsignarDespacho />} />
-        <Route path="/despachos/:numero" element={<VerDespacho />} />
-        <Route path="*" element={<PendienteMigrar />} />
-      </Routes>
-    </AnimatePresence>
+          <Route path="/cotizaciones/nueva" element={<NuevaCotizacion />} />
+          <Route path="/cotizaciones/:numero/editar" element={<NuevaCotizacion modo="editar" />} />
+          <Route path="/cotizaciones/pendientes/:id" element={<NuevaCotizacion modo="pendiente" />} />
+          <Route path="/cotizaciones/:numero" element={<VerCotizacion />} />
+          <Route path="/ops/historial" element={<HistorialOps />} />
+          <Route path="/ops/:numero" element={<VerOp />} />
+          <Route path="/inventario/rollos/:id" element={<VerRollo />} />
+          <Route path="/inventario/materiales/:id" element={<VerMaterial />} />
+          <Route path="/inventario/reportes" element={<ReportesInventario />} />
+          <Route path="/configuracion/:categoria?" element={<Configuracion />} />
+          <Route path="/despachos/direcciones" element={<GestionarDirecciones />} />
+          <Route path="/despachos/:numero/asignar" element={<AsignarDespacho />} />
+          <Route path="/despachos/:numero" element={<VerDespacho />} />
+          <Route path="*" element={<PendienteMigrar />} />
+        </Routes>
+      </AnimatePresence>
+    </FallaPantalla>
   );
 }

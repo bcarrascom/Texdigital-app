@@ -44,6 +44,7 @@ from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 from ui.api_inventario import ApiInventario
 from ui.api_configuracion import ApiConfiguracion
+from ui.api_actualizacion import ApiActualizacion
 
 
 def _abrir_manual_usuario() -> None:
@@ -84,6 +85,11 @@ class ApiApp:
         self._gestionar_direcciones = ApiGestionarDirecciones()
         self._inventario = ApiInventario()
         self._configuracion = ApiConfiguracion()
+        # Busca una versión nueva al abrir, en segundo plano; el menú la
+        # ofrece si hay. "--actualizado": la abrió el script de
+        # core.actualizador recién terminado el reemplazo.
+        self._actualizacion = ApiActualizacion(recien_actualizado="--actualizado" in sys.argv)
+        self._actualizacion.buscar()
         _migrar_inventario_formato_viejo()
         # Los textiles, estructuras y terminaciones agregados o renombrados
         # en Configuración (ver core.catalogo).
@@ -172,6 +178,17 @@ class ApiApp:
             return
         script = f"window.TD && TD.aviso({json.dumps(texto)}, {json.dumps(tipo)}, {ms})"
         self._ventana.evaluate_js(script)
+
+    # ── Actualizaciones (ver ui/api_actualizacion.py) ───────────────────────
+
+    def estado_actualizacion(self) -> dict:
+        return self._actualizacion.estado()
+
+    def buscar_actualizacion(self) -> dict:
+        return self._actualizacion.buscar()
+
+    def instalar_actualizacion(self) -> dict:
+        return self._actualizacion.instalar()
 
     # ── Menú ─────────────────────────────────────────────────────────────────
 

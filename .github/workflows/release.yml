@@ -149,7 +149,12 @@ jobs:
           path: artefactos
           merge-multiple: true
 
+      # Un tag con guion (v2.1.0-rc3) sale como Pre-release: el
+      # actualizador de la app (core/actualizador.py) nunca se lo ofrece a
+      # una versión final, solo a otra beta — así se prueba sin que les
+      # llegue a los usuarios.
       - name: Publicar en Release
         uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
