@@ -267,6 +267,18 @@ class TestScriptDeReemplazoEsSeguro(unittest.TestCase):
         self.assertEqual(contenido.count("Start-Process -FilePath $exe"), 3)
         self.assertIn("-ArgumentList '--actualizado'", contenido)
 
+    def test_el_script_no_arranca_dentro_de_la_instalacion(self):
+        # Confirmado a mano (rc3 -> rc4): abierta con doble clic, la app
+        # trabaja en su carpeta, y si el script la heredaba, él mismo
+        # impedía renombrarla.
+        for lanzar in (act._lanzar_actualizador_windows, act._lanzar_actualizador_unix):
+            with mock.patch("subprocess.Popen") as popen:
+                lanzar(self._instalada, self._nueva, self._tmp_path, "Sistema de Gestion.exe")
+            cwd = Path(popen.call_args.kwargs["cwd"])
+            self.assertNotIn(self._instalada, [cwd, *cwd.parents])
+            self.assertNotEqual(cwd, self._tmp_path)
+        self.assertIn("-WorkingDirectory $destino", self._ps1())
+
     def test_unix_aparta_la_vieja_y_la_devuelve_si_falla(self):
         contenido = self._sh()
         self.assertIn('mv "$DESTINO" "$RESPALDO"', contenido)
