@@ -54,7 +54,9 @@ class ApiHistorialOps:
         return filas
 
     def buscar_historial(self, filtros: dict) -> list[dict]:
-        """Cruza TODOS los meses — texto busca en número/nombre; cliente,
+        """Cruza TODOS los meses — texto busca en número/nombre/cliente
+        (el buscador del módulo OPs manda acá lo que no encontró entre las
+        activas); cliente,
         material, desde/hasta son cada uno opcional y se combinan todos
         (Y, no O) — mismo criterio que demo.js::buscar_historial."""
         filtros = filtros or {}
@@ -69,6 +71,7 @@ class ApiHistorialOps:
             if texto and not (
                 texto in str(datos.get("Cotizacion", "")).lower()
                 or texto in datos.get("Nombre", "").lower()
+                or texto in datos.get("Empresa", "").lower()
             ):
                 continue
             if cliente and cliente not in datos.get("Empresa", "").lower():

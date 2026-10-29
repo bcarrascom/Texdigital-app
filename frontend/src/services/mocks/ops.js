@@ -80,7 +80,7 @@ export default {
   buscar_historial({ texto = "", cliente = "", material = "" } = {}) {
     const t = texto.toLowerCase(), c = cliente.toLowerCase(), mat = material.toLowerCase();
     return structuredClone(OPS.filter((o) =>
-      (!t || String(o.numero).includes(t) || o.nombre.toLowerCase().includes(t))
+      (!t || String(o.numero).includes(t) || o.nombre.toLowerCase().includes(t) || o.empresa.toLowerCase().includes(t))
       && (!c || o.empresa.toLowerCase().includes(c))
       && (!mat || o.productos.some((p) => [p.textil, p.tela, p.caja, ...p.estructuras].some((x) => x?.toLowerCase().includes(mat))))));
   },
