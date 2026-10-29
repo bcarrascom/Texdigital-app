@@ -180,5 +180,17 @@ class TestCorteBacklight(_Base):
         self.assertEqual(set(r["errores"]), {"caja_terminada", "area_visual"})
 
 
+class TestVerCotizacionCaja(unittest.TestCase):
+    """La pantalla recibe la caja como texto: el objeto (perfil/luces/fp)
+    tumbaba ver-cotización (se vio con la cotización de prueba 9999)."""
+
+    def test_la_caja_llega_como_texto(self):
+        from ui.api_ver_cotizacion import _producto_a_json_pantalla
+        costo = {"ml_o_area": 1.0, "total": 1000.0}
+        con_caja = {"tela": "", "caja": {"perfil": "PERFIL 80 MM", "watts": 30.0}}
+        self.assertEqual(_producto_a_json_pantalla({}, con_caja, costo)["caja"], "PERFIL 80 MM")
+        self.assertEqual(_producto_a_json_pantalla({}, {"tela": "", "caja": ""}, costo)["caja"], "Sin caja")
+
+
 if __name__ == "__main__":
     unittest.main()
