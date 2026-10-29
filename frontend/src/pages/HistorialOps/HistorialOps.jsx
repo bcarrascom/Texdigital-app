@@ -100,7 +100,7 @@ export default function HistorialOps() {
               </select>
             </div>
             <div className="filtros__busqueda">
-              <input className="entrada" type="search" placeholder="Buscar por número o nombre…"
+              <input className="entrada" type="search" placeholder="Buscar por número, cliente o trabajo…"
                      value={busqueda} onChange={(e) => { setBusqueda(e.target.value); cambiar({ q: e.target.value }); }} />
               {/* El puntito avisa que hay filtros aplicados: si no, cerrar el
                   diálogo borra el rastro de por qué el listado sale filtrado. */}

@@ -10,9 +10,9 @@ const hoyMas = (dias) => {
 };
 
 const ops = [
-  { numero: 9012, empresa: "Tiendas Ejemplo SpA", fecha_entrega: hoyMas(5) },
-  { numero: 9011, empresa: "Café del Puerto", fecha_entrega: hoyMas(-2) },
-  { numero: 9008, empresa: "Clínica Norte", fecha_entrega: hoyMas(-6) },
+  { numero: 9012, empresa: "Tiendas Ejemplo SpA", nombre: "Pendones liquidación", fecha_entrega: hoyMas(5) },
+  { numero: 9011, empresa: "Café del Puerto", nombre: "Toldo terraza", fecha_entrega: hoyMas(-2) },
+  { numero: 9008, empresa: "Clínica Norte", nombre: "Backlight recepción", fecha_entrega: hoyMas(-6) },
 ];
 
 export default {
@@ -20,9 +20,12 @@ export default {
     pendientes: [
       { id: "p-1", nombre_trabajo: "Vitrinas navidad", completos: 2, total: 5 },
     ],
-    cotizaciones: ["Tiendas Ejemplo SpA", "Café del Puerto", "Gimnasio Activo", "Clínica Norte",
-      "Librería Central", "Hotel Mirador", "Constructora Andes", "Pastelería Dulce", "Óptica Visión", "Colegio San Marcos"]
-      .map((empresa, i) => ({ numero: 9015 - i, empresa, fecha: `${18 - i}/10/2026` })),
+    cotizaciones: [["Tiendas Ejemplo SpA", "Vitrinas verano"], ["Café del Puerto", "Menú mural"],
+      ["Gimnasio Activo", "Lienzos sala"], ["Clínica Norte", "Señalética pasillos"],
+      ["Librería Central", "Backlight entrada"], ["Hotel Mirador", "Pendones lobby"],
+      ["Constructora Andes", "Malla fachada"], ["Pastelería Dulce", "Toldo vitrina"],
+      ["Óptica Visión", "Vinilo vidrios"], ["Colegio San Marcos", "Telón acto"]]
+      .map(([empresa, nombre], i) => ({ numero: 9015 - i, empresa, nombre, fecha: `${18 - i}/10/2026` })),
     ops,
     ...resumenDespachos(),
     rollos: [

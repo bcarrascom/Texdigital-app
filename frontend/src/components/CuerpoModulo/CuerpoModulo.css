@@ -30,7 +30,38 @@
      estira la única columna del grid más allá del ancho del cuerpo, en vez
      de que su .tabla-caja scrollee por su cuenta. */
   .modulo-seccion { min-width: 0; }
-  .modulo-seccion > .seccion-titulo { color: var(--c-tema-fuerte); opacity: .8; }
+  .modulo-seccion > .seccion-titulo,
+  .modulo-seccion__cab > .seccion-titulo { color: var(--c-tema-fuerte); opacity: .8; }
+  .modulo-seccion__cab {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: var(--e-2) var(--e-4); margin-bottom: var(--e-3);
+  }
+  .modulo-seccion__cab > .seccion-titulo { margin-bottom: 0; }
+
+  /* ── Buscador del listado ─────────────────────────────────────────────── */
+  .modulo-buscar {
+    display: flex; align-items: center; gap: var(--e-2);
+    width: min(100%, 22rem); min-height: 2.3rem; padding: 0 var(--e-3);
+    background: var(--c-superficie);
+    border: 1.5px solid color-mix(in srgb, var(--c-tema-borde) 55%, transparent);
+    border-radius: var(--r-md);
+    color: var(--c-texto-tenue); cursor: text;
+    transition: border-color var(--m-rapida) var(--ease-salida);
+  }
+  .modulo-buscar:hover { border-color: var(--c-tema-borde); }
+  .modulo-buscar:focus-within { border-color: var(--c-tema-fuerte); outline: 3px solid var(--c-foco); outline-offset: 1px; }
+  .modulo-buscar svg { width: .95rem; height: .95rem; flex: none; }
+  .modulo-buscar input {
+    flex: 1; min-width: 0; border: 0; background: none; outline: none;
+    font: inherit; font-size: var(--t-sm); color: var(--c-texto);
+  }
+  /* "Buscar en todo el historial": un link, no otra tarjeta de acción. */
+  .modulo-buscar-mas {
+    margin-top: var(--e-3); padding: 0; border: 0; background: none;
+    font: inherit; font-size: var(--t-sm); font-weight: var(--peso-medio);
+    color: var(--c-tema-fuerte); cursor: pointer;
+  }
+  .modulo-buscar-mas:hover { text-decoration: underline; }
 
   .modulo-cuerpo__titulo {
     font-size: var(--t-3xl); font-weight: var(--peso-fuerte);

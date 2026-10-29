@@ -7,12 +7,13 @@ import * as fmt from "@/utils/formato";
    hacer click; `style` deja pasar las variables del mazo (--i, --fila). */
 
 /* `className` y el resto de las props (onDoubleClick, data-*...) pasan al botón. */
-export default function Tarjeta({ num, sub, pie, progreso, incompleta, title, onClick, style, className = "", children, ...resto }) {
+export default function Tarjeta({ num, sub, nombre, pie, progreso, incompleta, title, onClick, style, className = "", children, ...resto }) {
   return (
     <button type="button" className={`reg${incompleta ? " reg--incompleta" : ""}${className ? ` ${className}` : ""}`}
             title={title} onClick={onClick} style={style} {...resto}>
       <span className="reg__num">{num}</span>
       <span className="reg__sub">{sub}</span>
+      {nombre && <span className="reg__nombre">{nombre}</span>}
       {pie && <span className="reg__pie">{pie}</span>}
       {children}
       {/* La barra vive en el CANTO de la tarjeta: escondida detrás del
@@ -35,9 +36,12 @@ function useAbrir() {
 
 const porcentaje = (parte, total) => (total ? Math.round((parte / total) * 100) : 0);
 
-export function TarjetaCotizacion({ c, style }) {
+/* `conNombre` (el del trabajo) solo en el listado del módulo, donde se lo
+   puede buscar: en el mazo del menú la tarjeta es de alto fijo. */
+export function TarjetaCotizacion({ c, style, conNombre }) {
   const abrir = useAbrir();
-  return <Tarjeta num={c.numero} sub={c.empresa || "—"} style={style}
+  return <Tarjeta num={c.numero} sub={c.empresa || "—"} nombre={conNombre ? c.nombre : undefined} style={style}
+                  title={[`Cotización ${c.numero}`, c.empresa, c.nombre].filter(Boolean).join(" · ")}
                   onClick={() => abrir(rutas.verCotizacion(c.numero))} />;
 }
 
@@ -53,13 +57,14 @@ export function TarjetaPendiente({ p, style }) {
 }
 
 /* `conEntrega` solo en el listado del módulo: en el mazo del menú la tarjeta
-   es de alto fijo y no hay lugar para la fecha y la cuenta regresiva. */
+   es de alto fijo y no hay lugar para el nombre del trabajo, la fecha y la
+   cuenta regresiva. */
 export function TarjetaOp({ o, style, conEntrega }) {
   const abrir = useAbrir();
   return (
-    <Tarjeta num={o.numero} sub={o.empresa || "—"} style={style}
+    <Tarjeta num={o.numero} sub={o.empresa || "—"} nombre={conEntrega ? o.nombre : undefined} style={style}
              pie={conEntrega ? o.fecha_entrega || "" : undefined}
-             title={`OP ${o.numero} · ${o.empresa || ""} · entrega ${o.fecha_entrega || "—"}`}
+             title={`OP ${o.numero} · ${o.empresa || ""}${o.nombre ? ` · ${o.nombre}` : ""} · entrega ${o.fecha_entrega || "—"}`}
              onClick={() => abrir(rutas.verOp(o.numero))}>
       {conEntrega && <span className="reg__entrega">{fmt.textoEntrega(o.fecha_entrega)}</span>}
     </Tarjeta>

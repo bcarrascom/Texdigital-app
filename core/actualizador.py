@@ -235,6 +235,12 @@ def ruta_log_actualizador() -> Path:
     return Path(tempfile.gettempdir()) / "SistemaGestion_actualizador.log"
 
 
+# Carpeta de trabajo del script de reemplazo: nunca la de la instalación
+# (ver OJO 3 en _lanzar_actualizador_windows), ni su carpeta temporal, que
+# el script borra al final.
+_CWD_SCRIPT = tempfile.gettempdir()
+
+
 def _respaldo_de(instalada: Path) -> Path:
     """Donde se aparta la instalación vieja mientras se pone la nueva."""
     return instalada.with_name(instalada.name + ".anterior")
@@ -262,6 +268,12 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
     # OJO 2 — confirmado a mano (v1.4.2 -> v1.4.3): el script se borra su
     # carpeta temporal al final siempre, así que sin un log a una ruta FIJA
     # (ver ruta_log_actualizador) no queda rastro de qué falló.
+    #
+    # OJO 3 — confirmado a mano (v2.1.0-rc3 -> rc4): abierta con doble clic,
+    # la app tiene como carpeta de trabajo la de la instalación, y el script
+    # la heredaba: PowerShell mismo la tenía "en uso" y Rename-Item fallaba
+    # los 30 intentos. El script arranca en la carpeta temporal del sistema
+    # (ver _CWD_SCRIPT) y abre la app con la suya (-WorkingDirectory).
     log = _ps1_literal(ruta_log_actualizador())
     respaldo = _respaldo_de(instalada)
     ps1 = tmp / "actualizar.ps1"
@@ -295,12 +307,12 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
         "}\n"
         "if (-not $apartada) {\n"
         '    Log "ABORTADO: la carpeta vieja no se pudo apartar. No se toco nada; se abre la version instalada."\n'
-        "    Start-Process -FilePath $exe\n"
+        "    Start-Process -FilePath $exe -WorkingDirectory $destino\n"
         "} else {\n"
         "    try {\n"
         f"        Move-Item -LiteralPath '{_ps1_literal(nueva)}' -Destination $destino -ErrorAction Stop\n"
         '        Log "Move-Item OK"\n'
-        "        Start-Process -FilePath $exe -ArgumentList '--actualizado'\n"
+        "        Start-Process -FilePath $exe -WorkingDirectory $destino -ArgumentList '--actualizado'\n"
         '        Log "Start-Process lanzado"\n'
         "        Remove-Item -LiteralPath $respaldo -Recurse -Force -ErrorAction SilentlyContinue\n"
         "    } catch {\n"
@@ -309,7 +321,7 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
         "            Remove-Item -LiteralPath $destino -Recurse -Force -ErrorAction SilentlyContinue\n"
         "        }\n"
         f"        Rename-Item -LiteralPath $respaldo -NewName '{_ps1_literal(instalada.name)}' -ErrorAction SilentlyContinue\n"
-        "        Start-Process -FilePath $exe\n"
+        "        Start-Process -FilePath $exe -WorkingDirectory $destino\n"
         "    }\n"
         "}\n"
         f"Remove-Item -LiteralPath '{_ps1_literal(nueva.parent)}' -Recurse -Force -ErrorAction SilentlyContinue\n"
@@ -341,6 +353,7 @@ def _lanzar_actualizador_windows(instalada: Path, nueva: Path, tmp: Path, exe_no
         ],
         creationflags=flags,
         close_fds=True,
+        cwd=_CWD_SCRIPT,
     )
 
 
@@ -404,7 +417,7 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
         encoding="utf-8",
     )
     script.chmod(0o755)
-    subprocess.Popen(["/bin/sh", str(script)], start_new_session=True)
+    subprocess.Popen(["/bin/sh", str(script)], start_new_session=True, cwd=_CWD_SCRIPT)
 
 
 def aplicar_actualizacion(release: dict, on_progreso=None) -> None:
