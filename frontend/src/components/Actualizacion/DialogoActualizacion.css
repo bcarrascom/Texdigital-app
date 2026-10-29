@@ -1,0 +1,16 @@
+.dlg-actualizacion { width: min(90vw, 26rem); }
+
+/* La barra de la descarga. Sin tamaño conocido (o mientras busca), un
+   tramo que va y viene. */
+.act-barra {
+  margin-top: var(--e-4); height: 6px; border-radius: 999px; overflow: hidden;
+  background: var(--c-borde);
+}
+.act-barra > span {
+  display: block; height: 100%; border-radius: inherit; background: var(--c-tema-fuerte);
+  transition: width var(--m-media) var(--ease-salida);
+}
+.act-barra[data-indeterminada] > span { width: 30%; animation: act-barra-ir 1.2s ease-in-out infinite alternate; }
+@keyframes act-barra-ir { from { transform: translateX(-10%); } to { transform: translateX(240%); } }
+
+.act-pct { margin-top: var(--e-2); font-size: var(--t-xs); color: var(--c-texto-suave); font-variant-numeric: tabular-nums; min-height: 1em; }
