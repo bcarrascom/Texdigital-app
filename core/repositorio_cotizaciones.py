@@ -124,7 +124,8 @@ def numero_en_uso(numero: int, excluir: int | None = None) -> bool:
 
 def listar_cotizaciones() -> list[dict]:
     """Lista todas las cotizaciones activas (JSON/, con sus subcarpetas
-    AAAA/MM) — {numero, empresa, fecha} por cada una, más nuevas primero.
+    AAAA/MM) — {numero, empresa, nombre, fecha} por cada una, más nuevas
+    primero (nombre: el del trabajo, para el buscador del módulo).
     No incluye las de Historial/ (esas son las que ya se aprobaron a OP) ni
     los "pendientes" (cotizaciones a medio hacer — ver
     core.repositorio_pendientes.listar_pendientes, un concepto aparte).
@@ -147,6 +148,7 @@ def listar_cotizaciones() -> list[dict]:
         entradas.append({
             "numero":  numero,
             "empresa": datos.get("Empresa", "—"),
+            "nombre":  datos.get("Nombre", ""),
             "fecha":   datos.get("Fecha", "—"),
         })
     entradas.sort(key=lambda e: e["numero"], reverse=True)

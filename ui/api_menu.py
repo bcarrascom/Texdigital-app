@@ -38,11 +38,13 @@ def _completos_pendiente(p: dict) -> tuple[int, int]:
 
 
 def _ops_activas() -> list[dict]:
-    """OPs con Estado == "activa", de todos los meses."""
+    """OPs con Estado == "activa", de todos los meses. "nombre" (el del
+    trabajo) es para el buscador del módulo OPs."""
     activas = [
         {
             "numero":        datos.get("Cotizacion"),
             "empresa":       datos.get("Empresa", "—"),
+            "nombre":        datos.get("Nombre", ""),
             "fecha_entrega": datos.get("Fecha_entrega", ""),
         }
         for datos in listar_todas_las_ops()

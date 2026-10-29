@@ -27,6 +27,7 @@ def _cotizacion(numero, fecha):
     return {
         "Cotizacion": numero,
         "Empresa": f"Empresa {numero}",
+        "Nombre": f"Trabajo {numero}",
         "Fecha": fecha,
         "productos": [],
     }
@@ -77,6 +78,7 @@ class TestListarCotizaciones(_ConRutaTemporal):
         lista = repo_cot.listar_cotizaciones()
         self.assertEqual([e["numero"] for e in lista], [1003, 1002, 1001])
         self.assertEqual(lista[0]["empresa"], "Empresa 1003")
+        self.assertEqual(lista[0]["nombre"], "Trabajo 1003")
         self.assertEqual(lista[0]["fecha"], "03/01/2025")
 
     def test_no_incluye_las_movidas_a_historial(self):
