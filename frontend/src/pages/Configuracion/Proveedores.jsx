@@ -8,19 +8,22 @@ import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 import IconoGuardar from "@/assets/svg/check.svg?react";
 import IconoCancelar from "@/assets/svg/x.svg?react";
 import IconoMas from "@/assets/svg/plus.svg?react";
-import { plural } from "@/utils/formato";
 import { Fila, Grupo } from "./Ajustes";
+import { BuscadorLista, filtrar, tituloLista } from "./ListaGestion";
 
 /* Proveedores: la lista simple de proveedores.json (ver core/repositorio.py),
    con alta, renombrar en el lugar y eliminar. Es la que sugieren los
    formularios de rollos y materiales — y también crece sola: un proveedor
-   nuevo escrito ahí se agrega acá al guardar. */
+   nuevo escrito ahí se agrega acá al guardar. En orden alfabético
+   (core.orden), con buscador. */
 export default function Proveedores() {
   const aviso = useAvisos();
   const { datos, cargando, recargar } = useDatos(() => api.cargar_proveedores(), []);
   const proveedores = datos || [];
   const [editando, setEditando] = useState(null);   // nombre en edición, o null
   const [nuevo, setNuevo] = useState("");
+  const [buscar, setBuscar] = useState("");
+  const visibles = filtrar(proveedores, buscar, (p) => p);
 
   async function agregar() {
     const nombre = nuevo.trim();
@@ -64,9 +67,10 @@ export default function Proveedores() {
         </div>
       </Grupo>
 
-      <Grupo titulo={proveedores.length ? plural(proveedores.length, "proveedor", "proveedores") : null}
+      {proveedores.length > 0 && <BuscadorLista valor={buscar} onCambiar={setBuscar} que="proveedor" />}
+      <Grupo titulo={proveedores.length ? tituloLista(buscar, visibles.length, proveedores.length, "proveedor", "proveedores") : null}
              pie="Los rollos y materiales que ya tienen un proveedor no cambian al renombrarlo o eliminarlo acá: guardan una copia del nombre, no un enlace a esta lista.">
-        {proveedores.length ? proveedores.map((p) => p === editando
+        {visibles.length ? visibles.map((p) => p === editando
           ? <FilaEditando key={p} nombre={p} onGuardar={(n) => renombrar(p, n)} onCancelar={() => setEditando(null)} />
           : (
             <Fila key={p} etiqueta={p} className="fila-ajuste--acciones">
@@ -74,7 +78,7 @@ export default function Proveedores() {
               <button className="btn-fila-ajuste btn-fila-ajuste--peligro" type="button" title="Eliminar" onClick={() => eliminar(p)}><IconoEliminar /></button>
             </Fila>
           ))
-          : <p className="ajustes-vacio">Todavía no hay proveedores guardados.</p>}
+          : <p className="ajustes-vacio">{proveedores.length ? `Ningún proveedor coincide con “${buscar.trim()}”.` : "Todavía no hay proveedores guardados."}</p>}
       </Grupo>
     </>
   );

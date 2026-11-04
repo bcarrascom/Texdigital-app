@@ -12,7 +12,7 @@ import * as fmt from "@/utils/formato";
 import { Fila, Grupo } from "./Ajustes";
 
 /* Una lista de Configuración que se gestiona de a un elemento (Clientes,
-   Contactos, Productos): buscador, "Agregar" arriba y editar/eliminar en cada
+   Contactos, Productos): buscador (BuscadorLista, abajo), "Agregar" arriba y editar/eliminar en cada
    fila (aparecen al pasar el mouse, como en Proveedores). Cada cosa se hace en
    un diálogo que se aplica al confirmar.
 
@@ -28,6 +28,35 @@ import { Fila, Grupo } from "./Ajustes";
 /* Sin tildes ni mayúsculas, como el buscador de la barra lateral. */
 export const normalizar = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+/* Lo que calza con la búsqueda: cada palabra tiene que estar en texto(x),
+   en cualquier orden ("mate lona" encuentra "Lona mate"). */
+export function filtrar(items, buscar, texto) {
+  const palabras = normalizar(buscar).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return items;
+  return items.filter((x) => {
+    const t = normalizar(texto(x));
+    return palabras.every((p) => t.includes(p));
+  });
+}
+
+/* El buscador de una lista de Configuración (Textiles, Estructuras,
+   Terminaciones, Productos, Clientes, Contactos, Proveedores). Con algo
+   escrito, Escape lo limpia en vez de salir de Configuración. */
+export function BuscadorLista({ valor, onCambiar, que }) {
+  return (
+    <label className="ajustes-buscar ajustes-buscar--lista">
+      <IconoBuscar aria-hidden="true" />
+      <input type="search" placeholder={`Buscar ${que}`} aria-label={`Buscar ${que}`} value={valor}
+             onChange={(e) => onCambiar(e.target.value)}
+             onKeyDown={(e) => { if (e.key === "Escape" && valor) { e.preventDefault(); e.stopPropagation(); onCambiar(""); } }} />
+    </label>
+  );
+}
+
+/* El título del grupo: "12 textiles", o "3 de 12" mientras se busca. */
+export const tituloLista = (buscar, visibles, total, singular, plural) =>
+  (buscar.trim() ? `${visibles} de ${total}` : fmt.plural(total, singular, plural));
+
 const capital = (s) => s[0].toUpperCase() + s.slice(1);
 
 export default function ListaGestion({ cargar, clave, singular, plural, texto, sub, Formulario, Eliminar, mensajes = {} }) {
@@ -38,8 +67,7 @@ export default function ListaGestion({ cargar, clave, singular, plural, texto, s
   if (cargando) return <Cargando />;
 
   const items = datos || [];
-  const filtro = normalizar(buscar.trim());
-  const visibles = filtro ? items.filter((x) => normalizar(texto(x)).includes(filtro)) : items;
+  const visibles = filtrar(items, buscar, texto);
   const cerrar = () => setDialogo(null);
   const hecho = async (mensaje) => { cerrar(); await recargar(); aviso(mensaje, "info"); };
   const editado = mensajes.editado || (() => `${capital(singular)} actualizado.`);
@@ -47,14 +75,9 @@ export default function ListaGestion({ cargar, clave, singular, plural, texto, s
 
   return (
     <>
-      <label className="ajustes-buscar ajustes-buscar--lista">
-        <IconoBuscar aria-hidden="true" />
-        <input type="search" placeholder={`Buscar ${singular}`} aria-label={`Buscar ${singular}`} value={buscar}
-               onChange={(e) => setBuscar(e.target.value)}
-               onKeyDown={(e) => { if (e.key === "Escape" && buscar) { e.preventDefault(); e.stopPropagation(); setBuscar(""); } }} />
-      </label>
+      <BuscadorLista valor={buscar} onCambiar={setBuscar} que={singular} />
 
-      <Grupo titulo={filtro ? `${visibles.length} de ${items.length}` : fmt.plural(items.length, singular, plural)}>
+      <Grupo titulo={tituloLista(buscar, visibles.length, items.length, singular, plural)}>
         <Fila etiqueta={`Agregar ${singular}`} icono={IconoMas} color="#2E9D5B" onClick={() => setDialogo({ tipo: "nuevo" })} />
         {visibles.map((x) => (
           <div key={x[clave]} className="fila-ajuste fila-ajuste--acciones fila-gestion">
@@ -71,7 +94,7 @@ export default function ListaGestion({ cargar, clave, singular, plural, texto, s
           </div>
         ))}
         {!visibles.length && (
-          <p className="ajustes-vacio">{filtro ? `Ningún ${singular} coincide con “${buscar.trim()}”.` : `Todavía no hay ${plural}.`}</p>
+          <p className="ajustes-vacio">{buscar.trim() ? `Ningún ${singular} coincide con “${buscar.trim()}”.` : `Todavía no hay ${plural}.`}</p>
         )}
       </Grupo>
 

@@ -14,6 +14,7 @@ import * as fmt from "@/utils/formato";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
 import { DialogoQuitar, DialogoTextil } from "./DialogosCatalogo";
 import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
+import { BuscadorLista, filtrar, tituloLista } from "./ListaGestion";
 
 /* Textiles: cuánto se cobra por metro de cada uno (ver
    core/precios_textiles.py). Cada textil se cobra por un valor fijo, escrito
@@ -26,7 +27,10 @@ import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
 
    Agregar un textil y cambiarle el nombre o el ancho (el lápiz) son aparte,
    en un diálogo que se aplica al confirmar (ver core/catalogo.py). Con
-   precios sin guardar no se deja: al volver a cargar se perderían. */
+   precios sin guardar no se deja: al volver a cargar se perderían.
+
+   Vienen en orden alfabético (core.orden). El buscador solo esconde filas:
+   lo que se cambió en una que no se ve se guarda igual. */
 
 const MODOS = [
   { valor: "fijo", etiqueta: "Valor fijo" },
@@ -87,6 +91,7 @@ export default function Textiles() {
   const [rollosDe, setRollosDe] = useState(null);   // textil del diálogo "valor de todos los rollos"
   const [editando, setEditando] = useState(null);   // null | "nuevo" | el textil a editar
   const [quitando, setQuitando] = useState(null);   // el textil a quitar
+  const [buscar, setBuscar] = useState("");
 
   // Lo guardado, como borrador: comparar contra esto dice si hay cambios.
   const original = useMemo(() => (datos ? aBorrador(datos) : null), [datos]);
@@ -103,6 +108,7 @@ export default function Textiles() {
   const hayCambios = JSON.stringify(actual) !== JSON.stringify(original);
   const cantidadErrores = Object.keys(errores).length;
   const resumen = Object.fromEntries(datos.textiles.map((t) => [t.nombre, t]));
+  const visibles = filtrar(actual.textiles, buscar, (t) => [t.nombre, ...(resumen[t.nombre]?.anteriores || [])].join(" "));
 
   const cambiar = (cambio) => setBorrador({ ...actual, ...cambio });
   const soloLecturaCatalogo = soloLectura || datos.catalogo_solo_lectura;
@@ -148,10 +154,12 @@ export default function Textiles() {
         </Fila>
       </Grupo>
 
-      <Grupo titulo={fmt.plural(actual.textiles.length, "textil", "textiles")}
+      <BuscadorLista valor={buscar} onCambiar={setBuscar} que="textil" />
+
+      <Grupo titulo={tituloLista(buscar, visibles.length, actual.textiles.length, "textil", "textiles")}
              pie={actual.modo === "fijo" ? "El valor es por metro lineal; en Backlight, por metro cuadrado."
                : "Por metro lineal (en Backlight, por metro cuadrado). En los que se cobran por rollo, este valor se cobra cuando ningún rollo alcanza para el producto (el cotizador lo avisa)."}>
-        {actual.textiles.map((t) => (
+        {visibles.map((t) => (
           <FilaTextil key={t.nombre} textil={t} resumen={resumen[t.nombre]} modo={actual.modo}
                       error={errores[t.nombre]} soloLectura={soloLectura} inventario={datos.inventario}
                       onCambiar={(cambio) => cambiarTextil(t.nombre, cambio)}
@@ -160,6 +168,7 @@ export default function Textiles() {
                       onQuitar={soloLecturaCatalogo ? null : () => (hayCambios
                         ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setQuitando(resumen[t.nombre]))} />
         ))}
+        {!visibles.length && <p className="ajustes-vacio">Ningún textil coincide con “{buscar.trim()}”.</p>}
         {!soloLecturaCatalogo && <Fila etiqueta="Agregar textil" icono={IconoMas} color="#2E9D5B" onClick={() => abrirEdicion("nuevo")} />}
       </Grupo>
 
