@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import SwitchIconos from "@/components/SwitchIconos/SwitchIconos";
 import IconoNombre from "@/assets/svg/a-large-small.svg?react";
@@ -8,6 +8,7 @@ import IconoMostrar from "@/assets/svg/eye.svg?react";
 import IconoNoPriorizar from "@/assets/svg/eye-dashed.svg?react";
 import IconoOcultar from "@/assets/svg/eye-off.svg?react";
 import CeldasPlata from "./Plata";
+import { useRecordado, useScrollRecordado } from "./memoria";
 import * as fmt from "@/utils/formato";
 
 /* La tabla de rollos de tela. Cada celda combina varios datos (un
@@ -50,27 +51,41 @@ function aplicarModo(lista, modo) {
   return lista;
 }
 
+/* Las filas en el orden en que se ven. También lo usan ↑/↓ en la ficha de un
+   rollo, para pasar al de arriba o al de abajo (ver VerRollo.jsx). */
+export const ORDEN_POR_DEFECTO = { buscar: "", orden: "id", modo: "mostrar" };
+export function filasRollos(rollos, { buscar, orden, modo } = ORDEN_POR_DEFECTO) {
+  const filtro = buscar.trim().toLowerCase();
+  const encontrados = filtro ? rollos.filter((r) => [r.id, r.nombre_textil].some((v) => String(v || "").toLowerCase().includes(filtro))) : rollos;
+  return aplicarModo(ordenar(encontrados, orden), modo);
+}
+
 /* memo: no se vuelve a dibujar cuando cambia algo de la página que no le
    toca (p. ej. abrir un diálogo) — ver Inventario.jsx. */
 export default memo(function TablaRollos({ rollos, buscarInicial = "", onAbrir, onCambiarEstado, botonNuevo, onNuevo }) {
-  const [buscar, setBuscar] = useState(buscarInicial);
-  // Una búsqueda que llega por la URL (el aviso de stock) pisa la escrita.
-  useEffect(() => { if (buscarInicial) setBuscar(buscarInicial); }, [buscarInicial]);
-  const [orden, setOrden] = useState("id");
-  const [modo, setModo] = useState("mostrar");
+  // Búsqueda, orden, modo y scroll siguen al volver de un rollo (ver memoria.js).
+  const [buscar, setBuscar] = useRecordado("rollos", "buscar", buscarInicial || ORDEN_POR_DEFECTO.buscar);
+  // Una búsqueda que llega por la URL (el aviso de stock) pisa la escrita, si
+  // cambia con la tabla a la vista. Al volver de un rollo la URL trae la de
+  // antes: esa no pisa lo que se escribió después.
+  const buscarPrevio = useRef(buscarInicial);
+  useEffect(() => {
+    if (buscarInicial && buscarInicial !== buscarPrevio.current) setBuscar(buscarInicial);
+    buscarPrevio.current = buscarInicial;
+  }, [buscarInicial]);
+  const [orden, setOrden] = useRecordado("rollos", "orden", ORDEN_POR_DEFECTO.orden);
+  const [modo, setModo] = useRecordado("rollos", "modo", ORDEN_POR_DEFECTO.modo);
+  const raiz = useRef(null);
+  useScrollRecordado("rollos", raiz);
 
-  const filtro = buscar.trim().toLowerCase();
-  const filas = aplicarModo(
-    ordenar(filtro ? rollos.filter((r) => [r.id, r.nombre_textil].some((v) => String(v || "").toLowerCase().includes(filtro))) : rollos, orden),
-    modo,
-  );
+  const filas = filasRollos(rollos, { buscar, orden, modo });
   // El separador "Inactivos" va justo antes del primero, y solo si hay
   // algún activo arriba (si son todos de un tipo, no hay nada que separar).
   const primerInactivo = modo === "no-priorizar" ? filas.findIndex((r) => !activo(r)) : -1;
 
   return (
     <>
-      <div className="barra-inventario">
+      <div className="barra-inventario" ref={raiz}>
         <input className="entrada" type="search" placeholder="Buscar por ID o textil…"
                value={buscar} onChange={(e) => setBuscar(e.target.value)} />
         <SwitchIconos opciones={ORDENES} valor={orden} onCambiar={setOrden} etiqueta="Ordenar rollos por" />
@@ -126,7 +141,7 @@ function FilaRollo({ r, onAbrir, onCambiarEstado }) {
                     onClick={(e) => { e.stopPropagation(); onCambiarEstado(); }} />
             {r.nombre_textil || "—"}
           </span>
-          <span className="celda-combo__detalle"><span className="celda-combo__id">#{r.id}</span> · {fmt.cantidad(r.ancho)} m</span>
+          <span className="celda-combo__detalle"><span className="celda-combo__id">#{r.id}</span>{r.ancho ? ` · ${fmt.cantidad(r.ancho)} m` : ""}</span>
         </div>
       </td>
       <td>

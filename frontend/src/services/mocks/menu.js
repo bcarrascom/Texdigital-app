@@ -29,9 +29,9 @@ export default {
     ops,
     ...resumenDespachos(),
     rollos: [
-      { id: "R-031", nombre_textil: "Tela backlit", metros_restantes: 12.5, metros_iniciales: 50 },
-      { id: "R-030", nombre_textil: "Lona mate", metros_restantes: 40, metros_iniciales: 50 },
-      { id: "R-028", nombre_textil: "Poliéster satinado", metros_restantes: 3, metros_iniciales: 100 },
+      { id: "0031", nombre_textil: "Tela backlit", metros_restantes: 12.5, metros_iniciales: 50 },
+      { id: "0030", nombre_textil: "Lona mate", metros_restantes: 40, metros_iniciales: 50 },
+      { id: "0028", nombre_textil: "Poliéster satinado", metros_restantes: 3, metros_iniciales: 100 },
     ],
     avisos_inventario: [
       { textil: "Poliéster satinado", severidad: "roja", metros: 3 },

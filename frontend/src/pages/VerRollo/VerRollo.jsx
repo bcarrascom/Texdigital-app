@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
+import { motion } from "motion/react";
 import { api } from "@/services/api";
 import { useDatos } from "@/hooks/useDatos";
+import { useAtajo } from "@/hooks/useAtajo";
 import { useAvisos } from "@/context/AvisosContext";
 import { rutas } from "@/router/rutas";
 import Pagina from "@/components/Pagina/Pagina";
@@ -12,6 +14,11 @@ import Etiqueta from "@/components/Etiqueta/Etiqueta";
 import { Dato, Datos } from "@/components/Detalle/Detalle";
 import Historial, { EnlaceOp } from "@/pages/Inventario/Historial";
 import Campo, { enterGuarda } from "@/components/Campo/Campo";
+import CampoTextil, { textilDe } from "@/pages/Inventario/CampoTextil";
+import { TEXTIL_DESCONOCIDO, useTextilCreado } from "@/pages/Inventario/DialogosInventario";
+import { DialogoTextil } from "@/pages/Configuracion/DialogosCatalogo";
+import { filasRollos, ORDEN_POR_DEFECTO } from "@/pages/Inventario/TablaRollos";
+import { recordado } from "@/pages/Inventario/memoria";
 import * as fmt from "@/utils/formato";
 import "@/pages/Inventario/Ficha.css";
 
@@ -30,6 +37,7 @@ const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activ
 const esActivo = (r) => (r.estado || "activo") === "activo";
 const redondear = (n) => Math.round(n * 100) / 100;
 const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
+const PASO = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };   // ↑/↓ entre rollos: corto, no un slide entero
 
 async function cargarRollo(id) {
   const [rollo, textiles, proveedores] = await Promise.all([
@@ -38,15 +46,57 @@ async function cargarRollo(id) {
   return { rollo: rollo || null, textiles: textiles || [], proveedores: proveedores || [] };
 }
 
+/* ↑/↓: el rollo de arriba o el de abajo, con vuelta (pedido de Bruno,
+   2026-11-04). En el orden en que se veía la tabla de Inventario si se llegó
+   desde ella (búsqueda, orden e inactivos, ver pages/Inventario/memoria.js);
+   si no, o si este rollo no está en esa lista, en el de siempre. Como entre
+   OPs (hooks/useFichaPaginada): el paso reemplaza la entrada del historial,
+   así "Volver" vuelve a la tabla, y el rollo de destino se pide antes de
+   navegar. Devuelve los ya pedidos, para que la página no los pida de nuevo. */
+function usePasoEntreRollos(id) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const precargados = useRef(new Map());
+  const pidiendo = useRef(false);
+
+  async function pasar(paso) {
+    if (pidiendo.current) return;   // uno a la vez
+    pidiendo.current = true;
+    try {
+      const todos = (await api.listar_rollos()) || [];
+      const desdeLaTabla = location.state?.desde?.startsWith(rutas.inventario());
+      let lista = filasRollos(todos, desdeLaTabla ? { ...ORDEN_POR_DEFECTO, ...recordado("rollos") } : ORDEN_POR_DEFECTO);
+      if (!lista.some((r) => r.id === id)) lista = filasRollos(todos);
+      const i = lista.findIndex((r) => r.id === id);
+      if (i < 0 || lista.length < 2) return;
+      const vecino = lista[(i + paso + lista.length) % lista.length].id;
+      precargados.current.set(vecino, await cargarRollo(vecino));
+      navigate(rutas.verRollo(vecino), { replace: true, state: { ...location.state, deslizar: paso } });
+    } finally {
+      pidiendo.current = false;
+    }
+  }
+  useAtajo("arrowup", () => pasar(-1));
+  useAtajo("arrowdown", () => pasar(1));
+  return precargados;
+}
+
 export default function VerRollo() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const aviso = useAvisos();
-  const { datos, cargando, recargar } = useDatos(() => cargarRollo(id), [id]);
+  const precargados = usePasoEntreRollos(id);
+  const { datos, cargando, recargar } = useDatos(() => {
+    const listo = precargados.current.get(id);
+    precargados.current.delete(id);   // una sola vez: recargar() pide de nuevo
+    return listo ?? cargarRollo(id);
+  }, [id]);
   const [dialogo, setDialogo] = useState(null);   // "editar" | "ajustar" | "activacion" | "decomisionar" | null
+  const [textilNuevo, setTextilNuevo] = useState(null);     // "Textil nuevo" de Editar: { nombre } con su diálogo abierto
+  const [textilCreado, setTextilCreado] = useState(null);   // { nombre, ancho } recién agregado
   const r = datos?.rollo;
-  const cerrar = () => setDialogo(null);
+  const cerrar = () => { setDialogo(null); setTextilCreado(null); };
 
   async function cambiarEstado(descripcion) {
     const activoNuevo = !esActivo(r);
@@ -75,6 +125,12 @@ export default function VerRollo() {
                             [navigate, location.pathname]);
   const titulo = r ? `Rollo #${r.id} · ${r.nombre_textil || ""}` : "Rollo";
 
+  // Un rollo nuevo con ↑/↓ arranca arriba de todo, y entra desde el lado al
+  // que se fue (abajo con ↓). Al entrar a la página, sin animación propia.
+  const contenido = useRef(null);
+  useLayoutEffect(() => { if (contenido.current) contenido.current.scrollTop = 0; }, [r?.id]);
+  const paso = location.state?.deslizar;
+
   return (
     <Pagina tema="inventario" titulo={titulo} className="pag-ficha-inventario">
       <Cabecera titulo={titulo}>
@@ -88,15 +144,18 @@ export default function VerRollo() {
         )}
       </Cabecera>
 
-      <main className="contenido">
-        {cargando ? <Cargando /> : !r ? (
+      <main className="contenido" ref={contenido}>
+        {/* Pasando con ↑/↓ se sigue viendo el rollo de antes hasta que llega
+            el nuevo (ya pedido: es un instante), en vez de "Cargando". */}
+        {cargando && !r ? <Cargando /> : !r ? (
           <p className="seccion-titulo">No se pudo cargar el rollo.</p>
         ) : (
-          <div className="ficha">
+          <motion.div key={r.id} className="ficha" transition={PASO}
+                      initial={paso ? { opacity: 0, y: 18 * paso } : false} animate={{ opacity: 1, y: 0 }}>
             <Hoja r={r} />
             <Historial entradas={r.usos || SIN_ENTRADAS} vista={vista} onDeshacer={deshacer}
                        vacio="Todavía no hay ningún ajuste o consumo registrado para este rollo." />
-          </div>
+          </motion.div>
         )}
       </main>
 
@@ -107,9 +166,18 @@ export default function VerRollo() {
           </datalist>
 
           <Dialogo abierto={dialogo === "editar"} onCerrar={cerrar} className="dlg-ficha">
-            <EditarRollo r={r} textiles={datos.textiles} onCerrar={cerrar}
+            <EditarRollo r={r} textiles={datos.textiles} textilCreado={textilCreado} onTextilNuevo={(nombre) => setTextilNuevo({ nombre })}
+                         onCerrar={cerrar}
                          onGuardado={async () => { cerrar(); await recargar(); aviso("Rollo actualizado.", "info"); }} />
           </Dialogo>
+          {/* Por encima de "Editar rollo" y fuera de él: ver Inventario.jsx. */}
+          <DialogoTextil abierto={!!textilNuevo} nombreInicial={textilNuevo?.nombre} onCerrar={() => setTextilNuevo(null)}
+                         onHecho={async (_r, textil) => {
+                           setTextilNuevo(null);
+                           await recargar();   // la lista de textiles del campo
+                           setTextilCreado(textil);
+                           aviso(`«${textil.nombre}» agregado a Configuración › Textiles.`, "info");
+                         }} />
 
           <Dialogo abierto={dialogo === "ajustar"} onCerrar={cerrar} className="dlg-ficha">
             <AjustarRollo r={r} onCerrar={cerrar}
@@ -152,7 +220,8 @@ function Hoja({ r }) {
         <Etiqueta tipo={activo ? "ok" : "neutra"}>{activo ? "Activo" : "Inactivo"}</Etiqueta>
       </div>
       <Datos lista={[
-        ["Ancho", `${fmt.cantidad(r.ancho)} m`],
+        // El de su textil en Configuración; sin ancho ahí, "—".
+        ["Ancho", r.ancho ? `${fmt.cantidad(r.ancho)} m` : "—"],
         ["Proveedor", r.proveedor || "—"],
         ["Fecha de ingreso", r.fecha, { mono: true }],
         ["Compra", r.precio_compra ? fmt.pesos(r.precio_compra) : "—", { mono: true }],
@@ -205,23 +274,27 @@ function vistaUso(u, abrirOp) {
 
 /* ── Diálogos ───────────────────────────────────────────────────────────── */
 
-function EditarRollo({ r, textiles, onCerrar, onGuardado }) {
+/* Sin ancho: es el del textil, se cambia en Configuración › Textiles. */
+function EditarRollo({ r, textiles, textilCreado, onTextilNuevo, onCerrar, onGuardado }) {
   const [f, setF] = useState({
-    textil: r.nombre_textil || "", ancho: r.ancho ?? "", proveedor: r.proveedor || "",
+    textil: r.nombre_textil || "", proveedor: r.proveedor || "",
     compra: r.precio_compra ? fmt.clp(r.precio_compra) : "", valor: r.valor != null ? fmt.clp(r.valor) : "",
   });
   const [errores, setErrores] = useState({});
   const set = (clave, valor) => setF((x) => ({ ...x, [clave]: valor }));
+  useTextilCreado(textilCreado, setF);
+  // El textil que ya tenía se puede dejar aunque no esté en Configuración
+  // (los que vienen de la planilla con su nombre de allá).
+  const textil = textilDe(textiles, f.textil) || (f.textil.trim() === r.nombre_textil ? r.nombre_textil : null);
 
   async function guardar(e) {
     e.preventDefault();
-    const ancho = parseFloat(f.ancho);
-    const faltan = { textil: !f.textil, ancho: !(ancho > 0) };
+    const faltan = { textil: !textil };
     setErrores(faltan);
     if (Object.values(faltan).some(Boolean)) return;
     const proveedor = f.proveedor.trim();
     if (proveedor) await api.guardar_proveedor(proveedor);
-    await api.editar_rollo(r.id, f.textil, ancho, fmt.leerClp(f.compra) || 0, fmt.leerClp(f.valor), proveedor);
+    await api.editar_rollo(r.id, textil, fmt.leerClp(f.compra) || 0, fmt.leerClp(f.valor), proveedor);
     onGuardado();
   }
 
@@ -229,16 +302,8 @@ function EditarRollo({ r, textiles, onCerrar, onGuardado }) {
     <form onSubmit={guardar} onKeyDown={enterGuarda}>
       <h2 className="dlg__titulo">Editar rollo</h2>
       <div className="dlg-ficha__campos">
-        <Campo id="dre-textil" etiqueta="Textil" requerido invalido={errores.textil}>
-          <select className="entrada" id="dre-textil" data-autofoco value={f.textil} onChange={(e) => set("textil", e.target.value)}>
-            <option value="" disabled>Seleccionar textil…</option>
-            {/* El textil actual aunque ya no esté en el catálogo: si no, el select quedaría vacío. */}
-            {(textiles.includes(f.textil) || !f.textil ? textiles : [f.textil, ...textiles]).map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </Campo>
-        <Campo id="dre-ancho" etiqueta="Ancho de tela (m)" requerido invalido={errores.ancho}>
-          <input className="entrada" id="dre-ancho" type="number" step="0.01" min="0" value={f.ancho} onChange={(e) => set("ancho", e.target.value)} />
-        </Campo>
+        <CampoTextil id="dre-textil" textiles={textiles} valor={f.textil} onCambiar={(v) => set("textil", v)} onNuevo={onTextilNuevo}
+                     invalido={errores.textil} error={f.textil.trim() ? TEXTIL_DESCONOCIDO : undefined} autofoco />
         <div className="fila fila--proveedor">
           <Campo id="dre-proveedor" etiqueta="Proveedor">
             <input className="entrada" id="dre-proveedor" type="text" list="lista-proveedores" autoComplete="off" placeholder="Opcional"

@@ -1,0 +1,6 @@
+/* El campo Textil de un rollo (CampoTextil.jsx): el texto y, a su derecha,
+   "Textil nuevo" del mismo alto. Sin la página delante: lo usan los
+   diálogos de Inventario y de la ficha del rollo. */
+.campo-textil { display: flex; gap: var(--e-2); }
+.campo-textil .entrada { flex: 1; min-width: 0; }
+.campo-textil__nuevo { flex: none; min-height: 3rem; white-space: nowrap; }

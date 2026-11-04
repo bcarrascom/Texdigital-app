@@ -88,7 +88,7 @@ class _ConRutasTemporales(unittest.TestCase):
 class TestAprobarConStockSuficiente(_ConRutasTemporales):
 
     def test_aprobar_devuelve_ok(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210))
 
         resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -96,7 +96,7 @@ class TestAprobarConStockSuficiente(_ConRutasTemporales):
         self.assertEqual(resultado, {"ok": True})
 
     def test_aprobar_crea_la_op_y_archiva_la_cotizacion(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210))
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -107,7 +107,7 @@ class TestAprobarConStockSuficiente(_ConRutasTemporales):
     def test_aprobar_descuenta_el_stock_correcto(self):
         # necesita ml = alto (10) porque ancho tela == ancho producto == 1.5,
         # + 1 de MARGEN_TENSION_ML (core.repositorio_inventario) = 11
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -120,8 +120,8 @@ class TestAprobarConStockSuficiente(_ConRutasTemporales):
         # JSON de la OP — no recalcula nada, la asignación se decide acá,
         # una sola vez, priorizando el rollo más chico (ver
         # core.repositorio_inventario.consumir_para_op).
-        rollo_chico = repo_inv.crear_rollo("TelaTest", 1.5, 3)
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        rollo_chico = repo_inv.crear_rollo("TelaTest", 3)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=2.0, cantidad=1))  # necesita 2+1=3
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -138,7 +138,7 @@ class TestAprobarConStockSuficiente(_ConRutasTemporales):
         # serializarlas: la segunda tiene que encontrar la cotización ya
         # archivada y no tocar stock — un Barrier fuerza a los dos hilos a
         # arrancar en el mismo instante para no depender del timing real.
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))  # necesita 10+1=11
 
         barrera = threading.Barrier(2)
@@ -171,7 +171,7 @@ class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
         return next(f for f in reporte["textiles"] if f["nombre"] == "TelaTest")
 
     def test_aprobar_guarda_el_consumo_en_el_reporte_del_mes(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        repo_inv.crear_rollo("TelaTest", 100, valor=1000.0)
         with mock.patch.dict("core.repositorio.TEXTILES_VALORES", {"TelaTest": 1200.0}):
             repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
             self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -188,7 +188,7 @@ class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
         self.assertEqual(fila["valor_vendido"], 11400.0)   # por defecto: sin IVA, con descuento
 
     def test_recotizar_devuelve_la_tela_y_revierte_el_reporte(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        r = repo_inv.crear_rollo("TelaTest", 100, valor=1000.0)
         repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
 
@@ -203,7 +203,7 @@ class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
         self.assertNotIn("RollosUsados", repo_cot.cargar_cotizacion(4210)["productos"][0])
 
     def test_aprobar_de_nuevo_despues_de_recotizar_consume_una_sola_vez(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=1000.0)
+        repo_inv.crear_rollo("TelaTest", 100, valor=1000.0)
         repo_cot.guardar_cotizacion(_cotizacion(4210, alto=10.0))
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
         recotizar_op(4210)
@@ -215,7 +215,7 @@ class TestReportesAlAprobarYRecotizar(_ConRutasTemporales):
 class TestAprobarConStockInsuficiente(_ConRutasTemporales):
 
     def test_aprobar_devuelve_faltantes_sin_aprobar(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)  # necesita 10+1 (margen), hay 5
+        repo_inv.crear_rollo("TelaTest", 5)  # necesita 10+1 (margen), hay 5
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         resultado = self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -230,7 +230,7 @@ class TestAprobarConStockInsuficiente(_ConRutasTemporales):
         self.assertAlmostEqual(resultado["faltantes"][0]["faltante"], 11.0)
 
     def test_aprobar_bloqueado_no_crea_op_ni_toca_stock(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("TelaTest", 5)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -240,7 +240,7 @@ class TestAprobarConStockInsuficiente(_ConRutasTemporales):
         self.assertEqual(repo_inv.stock_por_textil()["TelaTest"], 5.0)  # intacto
 
     def test_verificar_materiales_del_boton_aprobar_da_lo_mismo_que_el_bloqueo(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("TelaTest", 5)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         faltantes = self.api.verificar_materiales(4210)
@@ -280,7 +280,7 @@ class TestAprobarConInventarioApagado(_ConRutasTemporales):
         self.assertIsNotNone(repo_ops.cargar_op(4210))
 
     def test_no_escribe_rollosusados_en_la_op(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -289,7 +289,7 @@ class TestAprobarConInventarioApagado(_ConRutasTemporales):
         self.assertNotIn("RollosUsados", op["productos"][0])
 
     def test_no_toca_stock_aunque_haya_rollos(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=1))
 
         self.api.aprobar_cotizacion(4210, "2026-08-29", "2026-09-15")
@@ -318,12 +318,12 @@ class TestVerificarMaterialesDeBorrador(_ConRutasTemporales):
         }
 
     def test_borrador_con_stock_suficiente_no_reporta_nada(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         faltantes = self.api_cot.verificar_materiales([self._producto_frontend()])
         self.assertEqual(faltantes, [])
 
     def test_borrador_con_stock_insuficiente_reporta_faltante(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("TelaTest", 5)
         faltantes = self.api_cot.verificar_materiales([self._producto_frontend()])
         self.assertEqual(len(faltantes), 1)
         self.assertEqual(faltantes[0]["textil"], "TelaTest")
@@ -341,7 +341,7 @@ class TestAprobarConsumeMateriales(_ConRutasTemporales):
     los materiales no textiles con tipo_consumo asociados al producto."""
 
     def test_material_fijo_por_producto_se_descuenta_solo(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         material = repo_mat.ingresar_material(
             "Ojal", 50, "unidad", tipo_consumo="fijo_por_producto",
             consumo_parametros={"n": 4}, productos_asociados=["Pendón"],
@@ -358,7 +358,7 @@ class TestAprobarConsumeMateriales(_ConRutasTemporales):
         self.assertEqual(consumos[0]["numero_op"], 4210)
 
     def test_material_sin_asociacion_no_se_toca(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         material = repo_mat.ingresar_material("Ojal", 50, "unidad")
         repo_cot.guardar_cotizacion(_cotizacion(4210, ancho=1.5, alto=10.0, cantidad=3))
 
@@ -367,7 +367,7 @@ class TestAprobarConsumeMateriales(_ConRutasTemporales):
         self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 50)
 
     def test_material_manual_sin_monto_no_se_toca(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         material = repo_mat.ingresar_material(
             "Bastidor", 20, "unidad", tipo_consumo="manual", productos_asociados=["Pendón"],
         )
@@ -379,7 +379,7 @@ class TestAprobarConsumeMateriales(_ConRutasTemporales):
         self.assertEqual(repo_mat.obtener_material(material["id"])["cantidad"], 20)
 
     def test_material_manual_con_monto_se_descuenta(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         material = repo_mat.ingresar_material(
             "Bastidor", 20, "unidad", tipo_consumo="manual", productos_asociados=["Pendón"],
         )
@@ -409,7 +409,7 @@ class TestAprobarConsumeMateriales(_ConRutasTemporales):
         self.assertEqual(pendientes[0]["nombre"], "Bastidor")
 
     def test_bloqueo_por_stock_de_rollos_no_toca_materiales(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)  # insuficiente: necesita 11
+        repo_inv.crear_rollo("TelaTest", 5)  # insuficiente: necesita 11
         material = repo_mat.ingresar_material(
             "Ojal", 50, "unidad", tipo_consumo="fijo_por_producto",
             consumo_parametros={"n": 4}, productos_asociados=["Pendón"],

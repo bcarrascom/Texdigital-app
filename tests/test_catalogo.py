@@ -125,7 +125,7 @@ class TestRenombrar(_Base):
     def test_renombrar_se_lleva_los_rollos_el_ancho_y_el_precio(self):
         precios_textiles.guardar({"modo": "fijo", "textiles": [
             {"nombre": LONA, "cobro": "fijo", "valor": 11000}, {"nombre": GASA, "cobro": "fijo", "valor": 8000}]})
-        repo_inv.crear_rollo(LONA, 1.5, 50, valor=12000)
+        repo_inv.crear_rollo(LONA, 50, valor=12000)
         r = catalogo.editar_textil(LONA, "Lona nueva", 1.5, False)
         self.assertEqual(r, {"ok": True, "rollos": 1})
         self.assertEqual(repo.TEXTILES, ["Lona nueva", GASA])
@@ -135,7 +135,7 @@ class TestRenombrar(_Base):
         self.assertEqual(catalogo.textiles()[0]["anteriores"], [LONA])
 
     def test_una_cotizacion_con_el_nombre_anterior_sigue_funcionando(self):
-        repo_inv.crear_rollo(LONA, 1.5, 50, valor=12000)
+        repo_inv.crear_rollo(LONA, 50, valor=12000)
         catalogo.editar_textil(LONA, "Lona nueva", 1.5, False)
         d = _producto(LONA)
         costo = costo_producto(d, **repo_mat.kwargs_precios())
@@ -190,7 +190,7 @@ class TestQuitar(_Base):
     las cotizaciones viejas; agregarlo de nuevo lo devuelve (2026-10-26)."""
 
     def test_quitar_un_textil(self):
-        repo_inv.crear_rollo(LONA, 1.5, 50, valor=12000)
+        repo_inv.crear_rollo(LONA, 50, valor=12000)
         self.assertEqual(catalogo.quitar_textil(LONA), {"ok": True, "rollos": 1})
         self.assertEqual(repo.TEXTILES, [GASA])
         self.assertEqual(repo.TEXTILES_ANCHOS[LONA], 1.5)                 # una cotización vieja sigue calculando

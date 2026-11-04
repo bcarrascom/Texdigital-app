@@ -29,6 +29,7 @@ import ReportesInventario from "@/pages/ReportesInventario/ReportesInventario";
 const MISMA_PAGINA = [
   /^\/cotizaciones\/\d+$/,                      // entre cotizaciones (VerCotizacion)
   /^\/ops\/\d+$/,                               // entre OPs (VerOp)
+  /^\/inventario\/rollos\/[^/]+$/,              // entre rollos con ↑/↓ (VerRollo)
   /^\/(inventario|cotizaciones|ops|despachos)$/,  // entre módulos (Modulos)
   /^\/configuracion(\/[\w-]+)?$/,                 // entre categorías de Configuración
 ];
