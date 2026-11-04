@@ -21,6 +21,7 @@ de acá es el que vale cuando no.
 import copy
 
 from core import ajustes_globales
+from core.orden import alfabetico
 
 VERSION = 1
 
@@ -74,7 +75,7 @@ def valores(tipo: str) -> dict[str, dict]:
 
 
 def cargar_lista(tipo: str) -> list[dict]:
-    """[{"nombre", "valor", "unidad": "un." | "ML"}] en el orden del catálogo,
+    """[{"nombre", "valor", "unidad": "un." | "ML"}] en orden alfabético,
     sin las quitadas (ver core.catalogo: su valor sigue, pero ya no se eligen)."""
     from core.catalogo import _leer
     quitadas = {q.casefold() for q in _leer()[f"{tipo}_quitadas"]}
@@ -84,7 +85,7 @@ def cargar_lista(tipo: str) -> list[dict]:
             continue
         clave, valor = next(iter(v.items()))
         filas.append({"nombre": nombre, "valor": valor, "unidad": "ML" if clave == "valorML" else "un."})
-    return filas
+    return alfabetico(filas, lambda f: f["nombre"])
 
 
 def _validar_valor(v, cero: bool = False) -> str | None:

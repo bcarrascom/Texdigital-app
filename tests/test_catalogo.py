@@ -86,7 +86,7 @@ class TestTextiles(_Base):
     def test_agregar_un_textil(self):
         r = catalogo.agregar_textil("  Lino   nuevo ", "1,6", backlight=True, valor=13000)
         self.assertEqual(r, {"ok": True})
-        self.assertEqual(repo.TEXTILES, [LONA, GASA, "Lino nuevo"])
+        self.assertEqual(repo.TEXTILES, [GASA, "Lino nuevo", LONA])   # en orden alfabético
         self.assertEqual(repo.TEXTILES_ANCHOS["Lino nuevo"], 1.6)
         self.assertIn("Lino nuevo", catalogo.telas_backlight())
         fila = next(t for t in precios_textiles.cargar()["textiles"] if t["nombre"] == "Lino nuevo")
@@ -102,7 +102,7 @@ class TestTextiles(_Base):
             r = catalogo.agregar_textil(**datos)
             self.assertFalse(r["ok"], campo)
             self.assertIn(campo, r["errores"])
-        self.assertEqual(repo.TEXTILES, [LONA, GASA])
+        self.assertEqual(repo.TEXTILES, [GASA, LONA])
 
     def test_por_rollo_tambien_hace_falta_el_valor(self):
         precios_textiles.guardar({"modo": "rollo", "textiles": []})
@@ -117,7 +117,7 @@ class TestTextiles(_Base):
         ruta.write_text(json.dumps({"version": 1, "textiles_agregados": [{"nombre": "Remoto 2", "ancho": 2}]}), encoding="utf-8")
         os.utime(ruta, ns=(ruta.stat().st_mtime_ns + 10**9,) * 2)
         catalogo.refrescar()
-        self.assertEqual(repo.TEXTILES, [LONA, GASA, "Remoto 2"])
+        self.assertEqual(repo.TEXTILES, [GASA, LONA, "Remoto 2"])
 
 
 class TestRenombrar(_Base):
@@ -128,11 +128,11 @@ class TestRenombrar(_Base):
         repo_inv.crear_rollo(LONA, 50, valor=12000)
         r = catalogo.editar_textil(LONA, "Lona nueva", 1.5, False)
         self.assertEqual(r, {"ok": True, "rollos": 1})
-        self.assertEqual(repo.TEXTILES, ["Lona nueva", GASA])
+        self.assertEqual(repo.TEXTILES, [GASA, "Lona nueva"])
         self.assertEqual([x["nombre_textil"] for x in repo_inv.listar_rollos()], ["Lona nueva"])
         fila = next(t for t in precios_textiles.cargar()["textiles"] if t["nombre"] == "Lona nueva")
         self.assertEqual(fila["valor"], 11000.0)
-        self.assertEqual(catalogo.textiles()[0]["anteriores"], [LONA])
+        self.assertEqual(catalogo.textiles()[1]["anteriores"], [LONA])
 
     def test_una_cotizacion_con_el_nombre_anterior_sigue_funcionando(self):
         repo_inv.crear_rollo(LONA, 50, valor=12000)
@@ -149,7 +149,7 @@ class TestRenombrar(_Base):
         self.assertEqual(catalogo.alias_textiles(), {LONA: "C", "B": "C"})
         self.assertTrue(catalogo.editar_textil("C", LONA, 1.5, False)["ok"])
         self.assertEqual(catalogo.alias_textiles(), {"B": LONA, "C": LONA})
-        self.assertEqual(repo.TEXTILES, [LONA, GASA])
+        self.assertEqual(repo.TEXTILES, [GASA, LONA])
 
     def test_no_puede_tomar_el_nombre_anterior_de_otro(self):
         catalogo.editar_textil(LONA, "Lona nueva", 1.5, False)
@@ -200,7 +200,7 @@ class TestQuitar(_Base):
     def test_agregar_de_nuevo_un_textil_quitado_lo_devuelve(self):
         catalogo.quitar_textil(LONA)
         self.assertEqual(catalogo.agregar_textil("lona TEST", 1.6, valor=9000), {"ok": True})
-        self.assertEqual(repo.TEXTILES, [LONA, GASA])                       # a su lugar, con su nombre
+        self.assertEqual(repo.TEXTILES, [GASA, LONA])                       # a su lugar, con su nombre
         self.assertEqual(repo.TEXTILES_ANCHOS[LONA], 1.6)
 
     def test_quitar_una_estructura_suelta_sus_materiales(self):
@@ -220,6 +220,25 @@ class TestQuitar(_Base):
         self.assertTrue(catalogo.agregar_componente("terminaciones", "basta", "ML", 2500)["ok"])
         self.assertEqual(repo.TERMINACIONES_LEGADO, ["Basta"])
         self.assertEqual(precios_componentes.valores("terminaciones")["Basta"], {"valorUNIT": 2500.0})   # su unidad de siempre
+
+
+
+class TestOrdenAlfabetico(unittest.TestCase):
+    """core.orden: sin mayúsculas ni tildes, y los números por su valor
+    (pedido de Bruno, 2026-11-04: las listas, en orden alfabético siempre)."""
+
+    def test_mayusculas_tildes_y_numeros(self):
+        from core.orden import alfabetico
+        self.assertEqual(
+            alfabetico(["Popelina 310", "lona", "Ciré", "Popelina 155", "Canvas strobelno", "Canvas 260", "cire b", "Ñandú"]),
+            ["Canvas 260", "Canvas strobelno", "Ciré", "cire b", "lona", "Ñandú", "Popelina 155", "Popelina 310"])
+        self.assertEqual(alfabetico(["PERFIL 100 MM", "PERFIL 60 MM", "PERFIL 80 MM"]),
+                         ["PERFIL 60 MM", "PERFIL 80 MM", "PERFIL 100 MM"])
+
+    def test_por_un_campo(self):
+        from core.orden import alfabetico
+        self.assertEqual([c["empresa"] for c in alfabetico([{"empresa": "Zeta"}, {"empresa": "alfa"}], lambda c: c["empresa"])],
+                         ["alfa", "Zeta"])
 
 
 if __name__ == "__main__":

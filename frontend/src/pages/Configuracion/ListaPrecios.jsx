@@ -9,12 +9,14 @@ import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
 import { DialogoComponente, DialogoQuitar } from "./DialogosCatalogo";
 import { montoOVacio, useCambiosPendientes } from "./cambiosPendientes";
 import IconoEliminar from "@/assets/svg/trash-2.svg?react";
+import { BuscadorLista, filtrar, tituloLista } from "./ListaGestion";
 
 /* Estructuras y Terminaciones: cuánto se cobra por cada una (ver
    core/precios_componentes.py). Los nombres son los del catálogo de la app;
    acá se cambia el valor. Ajuste GLOBAL (Dropbox), se guarda todo junto y no
    se deja guardar con un valor vacío o en 0. Agregar una nueva es aparte, en
-   un diálogo que se aplica al confirmar (ver core/catalogo.py). */
+   un diálogo que se aplica al confirmar (ver core/catalogo.py). Vienen en
+   orden alfabético (core.orden); el buscador solo esconde filas. */
 
 const UNIDAD = { "un.": "por unidad", ML: "por metro lineal" };
 
@@ -42,23 +44,24 @@ export function textoMateriales(materiales) {
 }
 
 export function Estructuras() {
-  return <ListaPrecios tipo="estructuras" singular="estructura" plural="estructuras"
+  return <ListaPrecios tipo="estructuras" singular="estructura" plural="estructuras" ninguna="Ninguna estructura"
                        pie="Para que una estructura se cobre por lo que gasta de un material de Inventario, asócialo en la ficha del material (Inventario › Materiales › Editar). Que se llamen igual no los conecta." />;
 }
 
 export function Terminaciones() {
-  return <ListaPrecios tipo="terminaciones" singular="terminación" plural="terminaciones" />;
+  return <ListaPrecios tipo="terminaciones" singular="terminación" plural="terminaciones" ninguna="Ninguna terminación" />;
 }
 
 const aBorrador = (filas) => filas.map((f) => ({ nombre: f.nombre, valor: f.valor == null ? "" : fmt.clp(f.valor) }));
 
-function ListaPrecios({ tipo, singular, plural, pie }) {
+function ListaPrecios({ tipo, singular, plural, ninguna, pie }) {
   const aviso = useAvisos();
   const { datos, cargando, recargar } = useDatos(() => api.obtener_precios_componentes(tipo), [tipo]);
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [agregando, setAgregando] = useState(false);
   const [quitando, setQuitando] = useState(null);   // la fila (de datos) a quitar
+  const [buscar, setBuscar] = useState("");
 
   const original = useMemo(() => (datos ? aBorrador(datos.filas) : null), [datos]);
   const actual = borrador || original;
@@ -77,6 +80,7 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
   const hayCambios = JSON.stringify(actual) !== JSON.stringify(original);
   const cantidadErrores = Object.keys(errores).length;
   const info = Object.fromEntries(datos.filas.map((f) => [f.nombre, f]));
+  const visibles = filtrar(actual, buscar, (f) => [f.nombre, ...(info[f.nombre]?.materiales || []).map((m) => m.nombre)].join(" "));
 
   async function guardar() {
     if (cantidadErrores || guardando) return false;
@@ -96,8 +100,9 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
   return (
     <>
       <NotaSoloLectura visible={datos.solo_lectura} />
-      <Grupo titulo={fmt.plural(actual.length, singular, plural)} pie={pie}>
-        {actual.map((f) => {
+      <BuscadorLista valor={buscar} onCambiar={setBuscar} que={singular} />
+      <Grupo titulo={tituloLista(buscar, visibles.length, actual.length, singular, plural)} pie={pie}>
+        {visibles.map((f) => {
           const i = info[f.nombre];
           const m = textoMateriales(i.materiales);
           return (
@@ -110,6 +115,7 @@ function ListaPrecios({ tipo, singular, plural, pie }) {
                           ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setQuitando(i))} />
           );
         })}
+        {!visibles.length && <p className="ajustes-vacio">{ninguna} coincide con “{buscar.trim()}”.</p>}
         {!datos.solo_lectura && !datos.catalogo_solo_lectura && (
           <Fila etiqueta={`Agregar ${singular}`} icono={IconoMas} color="#2E9D5B"
                 onClick={() => (hayCambios ? aviso("Primero guarda o descarta los cambios de precios.", "aviso") : setAgregando(true))} />

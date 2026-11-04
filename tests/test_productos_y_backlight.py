@@ -72,7 +72,7 @@ class TestProductos(_Base):
 
     def test_agregar(self):
         self.assertEqual(catalogo.agregar_producto("  Gorro   lana "), {"ok": True})
-        self.assertEqual(repo.PRODUCTOS, ["Pendón", "Bandera 3x2", "Gorro lana"])
+        self.assertEqual(repo.PRODUCTOS, ["Bandera 3x2", "Gorro lana", "Pendón"])   # en orden alfabético
 
     def test_lo_que_no_se_deja_agregar(self):
         for nombre in ("pendón", "", "Backlight", "backlight + caja"):
@@ -81,9 +81,9 @@ class TestProductos(_Base):
     def test_renombrar_se_lleva_los_materiales_y_deja_alias(self):
         m = self.material("Ojetillo", productos=["Pendón"])
         self.assertEqual(catalogo.renombrar_producto("Pendón", "Pendón roller"), {"ok": True, "materiales": 1})
-        self.assertEqual(repo.PRODUCTOS, ["Pendón roller", "Bandera 3x2"])
+        self.assertEqual(repo.PRODUCTOS, ["Bandera 3x2", "Pendón roller"])
         self.assertEqual(repo_mat.obtener_material(m["id"])["productos_asociados"], ["Pendón roller"])
-        self.assertEqual(catalogo.productos_detalle()[0]["anteriores"], ["Pendón"])
+        self.assertEqual(catalogo.productos_detalle()[1]["anteriores"], ["Pendón"])
         # Una cotización vieja con el nombre anterior sigue gastando ese material.
         nombres, _ = repo_mat.claves_consumo({"producto": "Pendón", "textil": "T", "estructuras": []})
         self.assertEqual([x["nombre"] for x in repo_mat.materiales_para_producto(nombres)], ["Ojetillo"])
@@ -94,7 +94,7 @@ class TestProductos(_Base):
         self.assertEqual(repo.PRODUCTOS, ["Bandera 3x2"])
         self.assertEqual(repo_mat.obtener_material(m["id"])["productos_asociados"], ["Bandera 3x2"])
         self.assertTrue(catalogo.agregar_producto("pendón")["ok"])
-        self.assertEqual(repo.PRODUCTOS, ["Pendón", "Bandera 3x2"])   # vuelve a su lugar
+        self.assertEqual(repo.PRODUCTOS, ["Bandera 3x2", "Pendón"])   # vuelve a su lugar
 
     def test_quitar_uno_agregado(self):
         catalogo.agregar_producto("Gorro")

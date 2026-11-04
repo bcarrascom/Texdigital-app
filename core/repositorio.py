@@ -26,6 +26,7 @@ import json
 import shutil
 import uuid
 
+from core.orden import alfabetico
 from core.rutas import CONF as _CONF_DIR, DATOS as _DATOS_DIR, RECURSOS as _RECURSOS_DIR
 
 SEP = "|"  # separador del viejo formato clientes.txt/contactos.txt (solo para migrar)
@@ -146,8 +147,9 @@ def formatear_rut(rut_raw: str) -> str:
 
 
 def cargar_clientes() -> list[dict]:
-    """Lee clientes.json y devuelve lista de dicts {empresa, rut, razon_social}."""
-    return _leer_json(CLIENTES_PATH)
+    """Lee clientes.json y devuelve lista de dicts {empresa, rut, razon_social},
+    en orden alfabético (ver core.orden)."""
+    return alfabetico(_leer_json(CLIENTES_PATH), lambda c: c.get("empresa", ""))
 
 
 def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool | str:
@@ -301,7 +303,7 @@ def cargar_contactos() -> list[dict]:
     for c in contactos:
         if "descuento" not in c and "fuente" in c:
             c["descuento"] = c.pop("fuente")
-    return contactos
+    return alfabetico(contactos, lambda c: c.get("contacto", ""))
 
 
 def guardar_contacto(contacto: str, email: str, descuento: str, condicion: str):
@@ -383,8 +385,8 @@ def eliminar_contacto(nombre: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_proveedores() -> list[str]:
-    """Lee proveedores.json: lista de nombres de proveedor."""
-    return _leer_json(PROVEEDORES_PATH)
+    """Lee proveedores.json: lista de nombres de proveedor, en orden alfabético."""
+    return alfabetico(_leer_json(PROVEEDORES_PATH))
 
 
 def guardar_proveedor(nombre: str) -> None:
@@ -568,8 +570,8 @@ def guardar_preferencia(clave: str, valor) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_productos() -> list[str]:
-    """Lee productos.json: lista de nombres de producto."""
-    return _leer_json(_RECURSOS_DIR / "productos.json")
+    """Lee productos.json: lista de nombres de producto, en orden alfabético."""
+    return alfabetico(_leer_json(_RECURSOS_DIR / "productos.json"))
 
 
 def cargar_regiones() -> list[str]:
@@ -607,7 +609,7 @@ def cargar_textiles() -> tuple[list[str], dict[str, float], dict[str, float]]:
                 valores[nombre] = float(item["valor"])
             except (TypeError, ValueError):
                 pass
-    return nombres, anchos, valores
+    return alfabetico(nombres), anchos, valores
 
 
 PRODUCTOS                                = cargar_productos()
@@ -621,8 +623,8 @@ TEXTILES, TEXTILES_ANCHOS, TEXTILES_VALORES = cargar_textiles()
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cargar_perfiles() -> list[str]:
-    """Lee perfiles.json: lista de nombres de perfil de caja."""
-    return _leer_json(_RECURSOS_DIR / "perfiles.json")
+    """Lee perfiles.json: lista de nombres de perfil de caja, en orden alfabético."""
+    return alfabetico(_leer_json(_RECURSOS_DIR / "perfiles.json"))
 
 
 def cargar_luces() -> list[dict]:
@@ -767,7 +769,7 @@ def _cargar_legado(nombre_archivo: str) -> tuple[list[str], dict[str, dict]]:
                 valores[nombre] = {"valorUNIT": float(item["valor"])}
             except (TypeError, ValueError):
                 pass
-    return nombres, valores
+    return alfabetico(nombres), valores
 
 
 def cargar_estructuras_legado() -> tuple[list[str], dict[str, dict]]:
