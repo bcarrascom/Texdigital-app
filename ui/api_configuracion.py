@@ -11,6 +11,7 @@ formularios de Inventario.
 
 from core import catalogo, corte_backlight, precios_componentes, precios_textiles, reglas_cobro
 from core import repositorio as _repo
+from core.orden import alfabetico
 from core import repositorio_inventario as _repo_inv
 from core import repositorio_materiales as _repo_mat
 
@@ -100,9 +101,13 @@ class ApiConfiguracion:
              "materiales_perfiles": {perfil: [{"nombre", "falta"}]},   ← asociados en Inventario
              "margenes_cm": {"caja_terminada", "area_visual"}, "margenes_solo_lectura"}
 
-        ("fp" con los watts como texto: así viaja un objeto a JavaScript)."""
+        ("fp" con los watts como texto: así viaja un objeto a JavaScript). Las
+        luces, perfiles y traseras en orden alfabético; las fuentes, por watts,
+        y el armado, por tramo."""
         cajas = precios_componentes.cajas()
-        cajas["fp"] = {str(k): v for k, v in cajas["fp"].items()}
+        cajas["fp"] = {str(k): v for k, v in sorted(cajas["fp"].items())}
+        for seccion in ("luces", "perfiles", "traseras"):
+            cajas[seccion] = {k: cajas[seccion][k] for k in alfabetico(cajas[seccion])}
         asociados = _repo_mat.materiales_de_estructuras()
         return {"cajas": cajas, "solo_lectura": precios_componentes.solo_lectura("cajas"),
                 "materiales_perfiles": {p: asociados[p] for p in cajas["perfiles"] if p in asociados},
@@ -151,7 +156,8 @@ class ApiConfiguracion:
     # ── Clientes y contactos ─────────────────────────────────────────────
 
     def obtener_clientes(self) -> list[dict]:
-        """[{"empresa", "rut", "razon_social", "direcciones": n}] por nombre."""
+        """[{"empresa", "rut", "razon_social", "direcciones": n}] por nombre
+        (core.repositorio.cargar_clientes ya los da en orden alfabético)."""
         direcciones: dict[str, int] = {}
         for d in _repo.cargar_direcciones():
             rut = _repo.formatear_rut(d.get("rut", ""))
@@ -159,7 +165,7 @@ class ApiConfiguracion:
         clientes = [{"empresa": c.get("empresa", ""), "rut": c.get("rut", ""), "razon_social": c.get("razon_social", ""),
                      "direcciones": direcciones.get(_repo.formatear_rut(c.get("rut", "")), 0) if c.get("rut") else 0}
                     for c in _repo.cargar_clientes()]
-        return sorted(clientes, key=lambda c: c["empresa"].casefold())
+        return clientes
 
     def crear_cliente(self, datos: dict) -> dict:
         return _repo.crear_cliente(datos or {})
@@ -175,7 +181,7 @@ class ApiConfiguracion:
         contactos = [{"contacto": c.get("contacto", ""), "email": c.get("email", ""),
                       "descuento": c.get("descuento", "") or "0", "condicion": c.get("condicion", "")}
                      for c in _repo.cargar_contactos()]
-        return sorted(contactos, key=lambda c: c["contacto"].casefold())
+        return contactos   # ya en orden alfabético (core.repositorio.cargar_contactos)
 
     def crear_contacto(self, datos: dict) -> dict:
         return _repo.crear_contacto(datos or {})

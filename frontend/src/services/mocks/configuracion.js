@@ -1,7 +1,7 @@
 /* Mocks de Configuración: precios y reglas (ver ui/api_configuracion.py).
    Los rollos son los mismos de mocks/inventario.js, así el resumen y "valor
    de todos los rollos" se ven también en Inventario. */
-import { anchosTextiles, rollos, textiles } from "./inventario";
+import { alfabetico, anchosTextiles, rollos, textiles } from "./inventario";
 
 let ajustes = {
   modo: "por_textil",
@@ -78,7 +78,7 @@ const RESERVADOS = ["backlight", "backlight + caja"];
 export default {
   obtener_precios_textiles: () => ({
     modo: ajustes.modo, inventario: true, solo_lectura: false,
-    textiles: ajustes.textiles.map((t) => ({ ...t, rollos: resumen(t.nombre) })),
+    textiles: alfabetico(ajustes.textiles.map((t) => ({ ...t, rollos: resumen(t.nombre) })), (t) => t.nombre),
   }),
 
   guardar_precios_textiles(datos) {
@@ -90,7 +90,7 @@ export default {
     return { ok: true };
   },
 
-  obtener_precios_componentes: (tipo) => ({ filas: structuredClone(componentes[tipo]), solo_lectura: false }),
+  obtener_precios_componentes: (tipo) => ({ filas: alfabetico(structuredClone(componentes[tipo]), (f) => f.nombre), solo_lectura: false }),
   guardar_precios_componentes(tipo, filas) {
     const errores = filas.filter((f) => sinValor(f.valor)).map((f) => ({ nombre: f.nombre, mensaje: "Falta el valor." }));
     if (errores.length) return { ok: false, errores };
@@ -99,7 +99,8 @@ export default {
   },
 
   obtener_precios_cajas: () => ({
-    cajas: structuredClone(cajas), solo_lectura: false, margenes_cm: { ...margenes }, margenes_solo_lectura: false,
+    cajas: { ...structuredClone(cajas), ...Object.fromEntries(["luces", "perfiles", "traseras"].map((s) =>
+      [s, Object.fromEntries(alfabetico(Object.entries(cajas[s]), ([k]) => k))])) }, solo_lectura: false, margenes_cm: { ...margenes }, margenes_solo_lectura: false,
     materiales_perfiles: { "PERFIL 100 MM DOBLE": [{ nombre: "Aluminio 100 mm", falta: null }] },
   }),
   guardar_margenes_corte(m) {
@@ -109,7 +110,7 @@ export default {
     return { ok: true };
   },
 
-  obtener_productos: () => structuredClone(productos),
+  obtener_productos: () => alfabetico(structuredClone(productos), (p) => p.nombre),
   agregar_producto({ nombre }) {
     nombre = (nombre || "").trim();
     if (!nombre) return { ok: false, errores: { nombre: "Falta el nombre." } };
@@ -203,7 +204,7 @@ export default {
     return { ok: true, materiales: c?.materiales?.length || 0 };
   },
 
-  obtener_clientes: () => structuredClone(clientes).sort((a, b) => a.empresa.localeCompare(b.empresa, "es")),
+  obtener_clientes: () => alfabetico(structuredClone(clientes), (c) => c.empresa),
   crear_cliente(d) {
     const empresa = (d.empresa || "").trim();
     if (!empresa) return { ok: false, errores: { empresa: "Falta el nombre de la empresa." } };
@@ -226,7 +227,7 @@ export default {
     clientes = clientes.filter((x) => x !== c);
     return { ok: true, direcciones: c?.direcciones || 0 };
   },
-  obtener_contactos: () => structuredClone(contactos).sort((a, b) => a.contacto.localeCompare(b.contacto, "es")),
+  obtener_contactos: () => alfabetico(structuredClone(contactos), (c) => c.contacto),
   crear_contacto(d) {
     const contacto = (d.contacto || "").trim();
     if (!contacto) return { ok: false, errores: { contacto: "Falta el nombre." } };

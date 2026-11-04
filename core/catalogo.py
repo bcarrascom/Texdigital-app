@@ -57,6 +57,7 @@ Renombrar un textil:
 """
 
 from core import ajustes_globales
+from core.orden import alfabetico
 
 NOMBRE = "catalogo"
 VERSION = 1
@@ -142,8 +143,8 @@ def _quitado(nombre: str, quitados: list[str]) -> bool:
 
 def textiles(datos: dict | None = None, con_quitados: bool = False) -> list[dict]:
     """[{"nombre", "ancho", "backlight", "agregado": bool, "anteriores": [nombres]}]
-    — los textiles vigentes, primero los de la app (con su nombre actual) y
-    después los agregados. `con_quitados`: también los quitados (con
+    — los textiles vigentes, los de la app (con su nombre actual) y los
+    agregados, en orden alfabético (ver core.orden). `con_quitados`: también los quitados (con
     "quitado": True), que siguen valiendo para las cotizaciones viejas."""
     datos = datos or _leer()
     s = _semillas()
@@ -163,6 +164,7 @@ def textiles(datos: dict | None = None, con_quitados: bool = False) -> list[dict
             f["backlight"] = datos["textiles_backlight"][f["nombre"]]
         f["anteriores"] = sorted(viejo for viejo, nuevo in renombrados.items() if nuevo == f["nombre"])
         f["quitado"] = _quitado(f["nombre"], datos["textiles_quitados"])
+    filas = alfabetico(filas, lambda f: f["nombre"])
     return filas if con_quitados else [f for f in filas if not f["quitado"]]
 
 
@@ -183,7 +185,7 @@ def telas_backlight() -> list[str]:
 
 def componentes(tipo: str, datos: dict | None = None, con_quitados: bool = False) -> list[dict]:
     """[{"nombre", "unidad", "agregado", "quitado"}] de estructuras o
-    terminaciones (sin las quitadas, salvo `con_quitados`)."""
+    terminaciones (sin las quitadas, salvo `con_quitados`), en orden alfabético."""
     datos = datos or _leer()
     nombres, valores = _semillas()[tipo]
     filas = [{"nombre": n, "unidad": "ML" if "valorML" in valores.get(n, {}) else "un.", "agregado": False}
@@ -192,6 +194,7 @@ def componentes(tipo: str, datos: dict | None = None, con_quitados: bool = False
                "agregado": True} for c in datos[f"{tipo}_agregadas"]]
     for f in filas:
         f["quitado"] = _quitado(f["nombre"], datos[f"{tipo}_quitadas"])
+    filas = alfabetico(filas, lambda f: f["nombre"])
     return filas if con_quitados else [f for f in filas if not f["quitado"]]
 
 
@@ -464,8 +467,8 @@ def _reservados() -> set[str]:
 
 
 def productos(datos: dict | None = None) -> list[str]:
-    """Los productos vigentes: los de la app (con su nombre actual) y después
-    los agregados, sin los quitados."""
+    """Los productos vigentes: los de la app (con su nombre actual) y los
+    agregados, sin los quitados, en orden alfabético."""
     datos = datos or _leer()
     renombrados = datos["productos_renombrados"]
     quitados = {n.casefold() for n in datos["productos_quitados"]}
@@ -476,7 +479,7 @@ def productos(datos: dict | None = None) -> list[str]:
             continue
         vistos.add(n.casefold())
         resultado.append(n)
-    return resultado
+    return alfabetico(resultado)
 
 
 def productos_detalle() -> list[dict]:

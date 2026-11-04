@@ -31,6 +31,7 @@ from core.repositorio import (
     cargar_clientes, cargar_contactos, guardar_cliente, guardar_contacto,
 )
 from core.calculo_cajas import calcular_caja
+from core.orden import alfabetico
 from core import catalogo, corte_backlight, lista_precios, precios_textiles
 from core.precios import (
     costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
@@ -393,7 +394,7 @@ class ApiCotizacion:
                 n for n in TERMINACIONES_LEGADO if "valorUNIT" in TERMINACIONES_LEGADO_VALORES.get(n, {})
             ],
             "perfiles": PERFILES,
-            "luces": [l["corto"] for l in LUCES],
+            "luces": alfabetico(l["corto"] for l in LUCES),
             "clientes": [
                 {"empresa": c.get("empresa", ""), "rut": c.get("rut", ""),
                  "razon_social": c.get("razon_social", "")}

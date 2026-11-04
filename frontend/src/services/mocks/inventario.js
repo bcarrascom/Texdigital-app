@@ -51,6 +51,10 @@ export const rollos = [
 export const anchosTextiles = { "Felpa gruesa": 1.38, "Lona mate": 3.2, "Poliéster satinado": 1.5, "Tela backlit": 3 };
 export const textiles = Object.keys(anchosTextiles);
 
+/* Como core.orden.alfabetico: sin mayúsculas ni tildes, y los números por su valor. */
+const ORDEN = new Intl.Collator("es", { numeric: true, sensitivity: "base" });
+export const alfabetico = (lista, por = (x) => x) => [...lista].sort((a, b) => ORDEN.compare(por(a), por(b)));
+
 /* Mismas reglas que core.repositorio_inventario.validar_id (sin los
    decomisionados, que acá no se guardan). */
 const numeroRollo = (n) => String(n).padStart(4, "0");
@@ -137,8 +141,8 @@ export default {
   obtener_rollo: (id) => devolverRollo(rolloPorId(id)),
   listar_materiales: () => structuredClone(materiales.map(conMetricasMaterial)),
   obtener_material: (id) => devolverMaterial(materialPorId(id)),
-  cargar_textiles_inventario: () => [...textiles],
-  cargar_proveedores: () => [...proveedores],
+  cargar_textiles_inventario: () => alfabetico(textiles),
+  cargar_proveedores: () => alfabetico(proveedores),
   cargar_nombres_materiales: () => materiales.map((m) => m.nombre),
   cargar_productos_catalogo: () => ["Backlight", "Backlight + Caja", "Pendón", "Telón", "Bandera", "Lienzo"],
   cargar_perfiles_catalogo: () => ["PERFIL 60 MM", "PERFIL 100 MM DOBLE"],
