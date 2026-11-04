@@ -129,19 +129,6 @@
   .btn-fila-ajuste:disabled { opacity: .4; cursor: not-allowed; }
   .btn-fila-ajuste:disabled:hover { border-color: var(--c-borde-fuerte); background: var(--c-superficie); }
 
-  /* Una nota dentro de la página (no un toast): "solo lectura", advertencias. */
-  .ajustes-nota {
-    display: flex; align-items: flex-start; gap: var(--e-2);
-    padding: var(--e-3) var(--e-4); border-radius: var(--r-lg);
-    font-size: var(--t-sm); color: var(--c-texto);
-  }
-  .ajustes-nota svg { width: 1.1rem; height: 1.1rem; flex: none; margin-top: .1rem; }
-  .ajustes-nota--aviso {
-    background: var(--c-aviso-suave);
-    border: 1.5px solid color-mix(in srgb, var(--c-aviso) 35%, transparent);
-  }
-  .ajustes-nota--aviso svg { color: var(--c-aviso); }
-
   /* ── Textiles ───────────────────────────────────────────────────────── */
   .fila-textil { flex-wrap: wrap; row-gap: var(--e-1); }
   .fila-textil__info { flex: 1 1 12rem; min-width: 0; display: grid; gap: .1rem; }
@@ -182,8 +169,23 @@
   .barra-guardar__texto--error { color: var(--c-error); }
 }
 
-/* El diálogo vive fuera de la página (<dialog> en la capa superior), pero
-   sigue dentro de .pag-configuracion en el DOM. */
+/* Una nota dentro de la página (no un toast): "solo lectura", advertencias.
+   Fuera de .pag-configuracion porque también la usa el diálogo de agregar
+   textil, que se abre desde Inventario ("Textil nuevo" de un rollo). */
+.ajustes-nota {
+  display: flex; align-items: flex-start; gap: var(--e-2);
+  padding: var(--e-3) var(--e-4); border-radius: var(--r-lg);
+  font-size: var(--t-sm); color: var(--c-texto);
+}
+.ajustes-nota svg { width: 1.1rem; height: 1.1rem; flex: none; margin-top: .1rem; }
+.ajustes-nota--aviso {
+  background: var(--c-aviso-suave);
+  border: 1.5px solid color-mix(in srgb, var(--c-aviso) 35%, transparent);
+}
+.ajustes-nota--aviso svg { color: var(--c-aviso); }
+
+/* Los diálogos viven fuera de la página (<dialog> en la capa superior), pero
+   siguen dentro de .pag-configuracion en el DOM. */
 .pag-configuracion .dlg-salir {
   width: min(92vw, 34rem);
   .dlg-salir__lista {
@@ -193,7 +195,8 @@
   }
   .dlg-salir__nota { margin-top: var(--e-3); }
 }
-.pag-configuracion .dlg-catalogo {
+/* Sin .pag-configuracion delante: también se abre desde Inventario. */
+.dlg-catalogo {
   width: min(92vw, 30rem);
   .dlg-catalogo__campos { display: grid; gap: var(--e-4); margin-top: var(--e-4); }
   .dlg-catalogo__nota { margin-top: var(--e-4); }

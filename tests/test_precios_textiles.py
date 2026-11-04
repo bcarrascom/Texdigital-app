@@ -133,8 +133,8 @@ class TestValorizar(_Base):
 
     def rollos(self):
         # Lona: uno chico (6 m, $12.000) y uno grande (50 m, $14.000), el más nuevo.
-        self.chico = repo_inv.crear_rollo(LONA, 1.5, 6, valor=12000)
-        self.grande = repo_inv.crear_rollo(LONA, 1.5, 50, valor=14000)
+        self.chico = repo_inv.crear_rollo(LONA, 6, valor=12000)
+        self.grande = repo_inv.crear_rollo(LONA, 50, valor=14000)
 
     def test_fijo_usa_el_valor_de_configuracion(self):
         self.rollos()
@@ -159,7 +159,7 @@ class TestValorizar(_Base):
 
     def test_segun_cada_textil(self):
         self.rollos()
-        repo_inv.crear_rollo(GASA, 1.5, 50, valor=9999)
+        repo_inv.crear_rollo(GASA, 50, valor=9999)
         self.guardar("por_textil", **{LONA: ("rollo", 9999), GASA: ("fijo", 8500)})
         self.assertEqual(self.valor(_producto(LONA)), 12000.0)
         self.assertEqual(self.valor(_producto(GASA)), 8500.0)
@@ -172,7 +172,7 @@ class TestValorizar(_Base):
 
     def test_cambiar_todos_los_rollos_de_un_textil(self):
         self.rollos()
-        repo_inv.crear_rollo(GASA, 1.5, 50, valor=9999)
+        repo_inv.crear_rollo(GASA, 50, valor=9999)
         self.assertEqual(repo_inv.fijar_valor_rollos(LONA, 13000), 2)
         valores = {r["nombre_textil"]: set() for r in repo_inv.listar_rollos()}
         for r in repo_inv.listar_rollos():
@@ -209,8 +209,8 @@ class TestCotizacionPorRollo(_Base):
         for p in (mats, cobro):
             p.start()
             self.addCleanup(p.stop)
-        repo_inv.crear_rollo(LONA, 1.5, 6, valor=12000)
-        self.grande = repo_inv.crear_rollo(LONA, 1.5, 50, valor=14000)
+        repo_inv.crear_rollo(LONA, 6, valor=12000)
+        self.grande = repo_inv.crear_rollo(LONA, 50, valor=14000)
         self.guardar("rollo", **{LONA: ("fijo", 1), GASA: ("fijo", 1)})
         self.internos = [_producto(alto=3), _producto(alto=10)]
 

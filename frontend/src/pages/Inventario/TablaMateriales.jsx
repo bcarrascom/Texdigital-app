@@ -1,6 +1,7 @@
-import { memo, useState } from "react";
+import { memo, useRef } from "react";
 import IconoFlecha from "@/assets/svg/arrow-down.svg?react";
 import CeldasPlata from "./Plata";
+import { useRecordado, useScrollRecordado } from "./memoria";
 import * as fmt from "@/utils/formato";
 
 /* La tabla de materiales no textiles (ver core/repositorio_materiales.py):
@@ -59,15 +60,18 @@ function ordenar(lista, { columna, direccion }) {
 /* memo: no se vuelve a dibujar cuando cambia algo de la página que no le
    toca (p. ej. abrir un diálogo) — ver Inventario.jsx. */
 export default memo(function TablaMateriales({ materiales, onAbrir, botonNuevo, onNuevo }) {
-  const [buscar, setBuscar] = useState("");
-  const [orden, setOrden] = useState(POR_DEFECTO);
+  // Búsqueda, orden y scroll siguen al volver de un material (ver memoria.js).
+  const [buscar, setBuscar] = useRecordado("materiales", "buscar", "");
+  const [orden, setOrden] = useRecordado("materiales", "orden", POR_DEFECTO);
+  const raiz = useRef(null);
+  useScrollRecordado("materiales", raiz);
   const filtro = buscar.trim().toLowerCase();
   const filas = ordenar(filtro ? materiales.filter((m) => (m.nombre || "").toLowerCase().includes(filtro)) : materiales, orden);
   const enDefecto = orden.columna === POR_DEFECTO.columna && orden.direccion === POR_DEFECTO.direccion;
 
   return (
     <>
-      <div className="barra-inventario">
+      <div className="barra-inventario" ref={raiz}>
         <input className="entrada" type="search" placeholder="Buscar material…"
                value={buscar} onChange={(e) => setBuscar(e.target.value)} />
         <button ref={botonNuevo} className="btn-nuevo" type="button" title="Ingresar material" onClick={onNuevo}>+</button>

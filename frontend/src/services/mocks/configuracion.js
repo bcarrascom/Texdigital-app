@@ -1,7 +1,7 @@
 /* Mocks de Configuración: precios y reglas (ver ui/api_configuracion.py).
    Los rollos son los mismos de mocks/inventario.js, así el resumen y "valor
    de todos los rollos" se ven también en Inventario. */
-import { rollos } from "./inventario";
+import { anchosTextiles, rollos, textiles } from "./inventario";
 
 let ajustes = {
   modo: "por_textil",
@@ -150,7 +150,7 @@ export default {
   },
 
   agregar_textil({ nombre, ancho, backlight, valor }) {
-    nombre = (nombre || "").trim();
+    nombre = (nombre || "").split(/\s+/).filter(Boolean).join(" ");   // como core.catalogo._texto
     const errores = {};
     if (!nombre) errores.nombre = "Falta el nombre.";
     else if (ajustes.textiles.some((t) => t.nombre.toLowerCase() === nombre.toLowerCase())) errores.nombre = "Ya existe uno con ese nombre.";
@@ -159,6 +159,8 @@ export default {
     if (valor == null) errores.valor = "Falta el valor por metro.";
     if (Object.keys(errores).length) return { ok: false, errores };
     ajustes.textiles.push({ nombre, ancho: n, cobro: "fijo", valor: valor ?? null, backlight, agregado: true, anteriores: [] });
+    textiles.push(nombre);   // los que se eligen para un rollo en Inventario
+    anchosTextiles[nombre] = n;
     return { ok: true };
   },
   editar_textil(actual, { nombre, ancho, backlight }) {
@@ -174,6 +176,11 @@ export default {
       t.anteriores = [...(t.anteriores || []), actual];
     }
     Object.assign(t, { nombre, ancho: parseFloat(String(ancho).replace(",", ".")), backlight });
+    // El ancho de los rollos es el del textil (ver mocks/inventario.js).
+    delete anchosTextiles[actual];
+    anchosTextiles[nombre] = t.ancho;
+    const i = textiles.indexOf(actual);
+    if (i >= 0) textiles[i] = nombre;
     return { ok: true, rollos: renombrados };
   },
   agregar_componente(tipo, { nombre, unidad, valor }) {

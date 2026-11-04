@@ -184,21 +184,45 @@ def listar_decomisionados() -> list[dict]:
     return [r for r in rollos if r is not None]
 
 
-def _siguiente_id() -> str:
-    """4 dígitos, con ceros a la izquierda, siguiente al mayor ID que haya
-    existido — se deriva de los nombres de archivo (Activos/ Y
-    Decomisionados/, para que un ID nunca se reuse aunque el rollo
-    original ya se haya decomisionado) en vez de llevar un contador aparte
-    (mismo espíritu que core.repositorio_despachos.siguiente_numero_guia).
-    Empieza en "0001"."""
-    maximo = 0
+ID_MAXIMO = 9999
+
+
+def _ids_usados() -> set[int]:
+    """Los IDs de todos los rollos que existen o existieron — se derivan de
+    los nombres de archivo (Activos/ Y Decomisionados/, para que un ID nunca
+    se reuse aunque el rollo original ya se haya decomisionado) en vez de
+    llevar un contador aparte (mismo espíritu que
+    core.repositorio_despachos.siguiente_numero_guia)."""
+    usados = set()
     for carpeta in (carpeta_activos(), carpeta_decomisionados()):
         for archivo in carpeta.rglob("*.json"):
             try:
-                maximo = max(maximo, int(archivo.stem))
+                usados.add(int(archivo.stem))
             except ValueError:
                 continue
-    return f"{maximo + 1:04d}"
+    return usados
+
+
+def siguiente_id() -> str:
+    """4 dígitos, con ceros a la izquierda, siguiente al mayor ID que haya
+    existido. Empieza en "0001"."""
+    return f"{max(_ids_usados(), default=0) + 1:04d}"
+
+
+def validar_id(texto) -> tuple[str | None, str | None]:
+    """El número que se eligió a mano para un rollo nuevo (pedido de Bruno,
+    2026-11-04: p. ej. el de la etiqueta del rollo). ("0042", None) si se
+    puede usar, o (None, mensaje). No se repite ninguno que exista o haya
+    existido (ver _ids_usados)."""
+    t = str(texto or "").strip().lstrip("#")
+    if not (t.isascii() and t.isdigit()) or not 0 < int(t) <= ID_MAXIMO:
+        return None, f"Tiene que ser un número entre 1 y {ID_MAXIMO}."
+    id_ = f"{int(t):04d}"
+    if int(t) in _ids_usados():
+        if (carpeta_activos() / f"{id_}.json").exists():
+            return None, f"Ya existe el rollo #{id_}."
+        return None, f"El #{id_} fue de un rollo decomisionado: los números no se vuelven a usar."
+    return id_, None
 
 
 def _es_del_mes_en_curso(fecha_dma: str) -> bool:
@@ -328,11 +352,29 @@ def valor_sugerido_textil(nombre_textil: str) -> float | None:
     return valor_fijo(nombre_textil)
 
 
+def ancho_rollo(r: dict) -> float | None:
+    """El ancho de un rollo es el de su textil en Configuración › Textiles
+    (pedido de Bruno, 2026-11-04): un mismo textil con dos anchos son dos
+    textiles, que se distinguen en el nombre ("Mesh mate 160" y "Mesh mate
+    180"). Ya no se guarda en el rollo. Uno con un textil que no está en el
+    catálogo (los de la planilla que todavía tienen el nombre de allá) usa el
+    que traía guardado, si tiene. None si no hay ninguno."""
+    from core.repositorio import TEXTILES_ANCHOS   # con los nombres anteriores de los renombrados
+
+    ancho = TEXTILES_ANCHOS.get(r.get("nombre_textil", ""))
+    return ancho or r.get("ancho") or None
+
+
 def crear_rollo(
-    nombre_textil: str, ancho: float, metros_restantes: float,
+    nombre_textil: str, metros_restantes: float,
     precio_compra: float = 0.0, valor: float | None = None, proveedor: str = "",
+    id_: str | None = None,
 ) -> dict:
-    """metros_iniciales YA NO lo ingresa el usuario (pedido de Bruno,
+    """`id_`: el número elegido a mano (ver validar_id; ValueError si no se
+    puede usar). Sin él, el siguiente (ver siguiente_id). El ancho no se
+    guarda: es el del textil (ver ancho_rollo).
+
+    metros_iniciales YA NO lo ingresa el usuario (pedido de Bruno,
     2026-09-03: antes se podía cargar un rollo "usado" con menos metros
     iniciales que restantes, algo que en la práctica nunca se usaba bien y
     generaba confusión) — un rollo SIEMPRE entra al sistema completo:
@@ -345,13 +387,18 @@ def crear_rollo(
     `precio_compra` (lo que pagó la empresa por el rollo) y `proveedor`
     son puramente informativos, no entran en ningún cálculo de stock/
     consumo — quedan en 0.0/"" si no se informan."""
+    if id_ in (None, ""):
+        id_ = siguiente_id()
+    else:
+        id_, error = validar_id(id_)
+        if error:
+            raise ValueError(error)
     metros_restantes = float(metros_restantes)
     if valor is None:
         valor = valor_sugerido_textil(nombre_textil)
     nuevo = {
-        "id":               _siguiente_id(),
+        "id":               id_,
         "nombre_textil":    nombre_textil.strip(),
-        "ancho":            float(ancho),
         "metros_iniciales": metros_restantes,
         "metros_restantes": metros_restantes,
         "fecha":            _hoy_dma(),
@@ -366,19 +413,24 @@ def crear_rollo(
 
 
 def editar_rollo(
-    id_: str, nombre_textil: str, ancho: float,
+    id_: str, nombre_textil: str,
     precio_compra: float = 0.0, valor: float | None = None, proveedor: str = "",
 ) -> dict | None:
-    """nombre_textil/ancho/precio_compra/valor/proveedor son editables
-    después de creado — metros_iniciales/restantes se manejan aparte (ver
+    """nombre_textil/precio_compra/valor/proveedor son editables después de
+    creado — metros_iniciales/restantes se manejan aparte (ver
     ajustar_restante) y Estado tiene su propio toggle (ver
     cambiar_estado_rollo), para que ninguno de los dos se pise sin dejar
-    rastro por acá."""
+    rastro por acá. El ancho es el del textil (ver ancho_rollo)."""
+    from core.repositorio import TEXTILES_ANCHOS
+
     r = obtener_rollo(id_)
     if r is None:
         return None
     r["nombre_textil"] = nombre_textil.strip()
-    r["ancho"] = float(ancho)
+    # El que traía guardado (de antes de 2026-11-04) sobra apenas su textil
+    # tiene ancho en el catálogo.
+    if TEXTILES_ANCHOS.get(r["nombre_textil"]):
+        r.pop("ancho", None)
     r["precio_compra"] = float(precio_compra) if precio_compra else 0.0
     _fijar_valor(r, float(valor) if valor is not None else None)
     r["proveedor"] = (proveedor or "").strip()

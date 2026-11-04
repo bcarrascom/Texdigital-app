@@ -479,17 +479,23 @@ class ApiApp:
     def valor_sugerido_textil(self, nombre_textil) -> float | None:
         return self._inventario.valor_sugerido_textil(nombre_textil)
 
+    def siguiente_id_rollo(self) -> str:
+        return self._inventario.siguiente_id_rollo()
+
+    def validar_id_rollo(self, texto) -> dict:
+        return self._inventario.validar_id_rollo(texto)
+
     def crear_rollo(
-        self, nombre_textil, ancho, metros_restantes,
-        precio_compra=0.0, valor=None, proveedor="",
+        self, nombre_textil, metros_restantes,
+        precio_compra=0.0, valor=None, proveedor="", id_=None,
     ) -> dict:
-        return self._inventario.crear_rollo(nombre_textil, ancho, metros_restantes, precio_compra, valor, proveedor)
+        return self._inventario.crear_rollo(nombre_textil, metros_restantes, precio_compra, valor, proveedor, id_)
 
     def editar_rollo(
-        self, id_, nombre_textil, ancho,
+        self, id_, nombre_textil,
         precio_compra=0.0, valor=None, proveedor="",
     ) -> dict | None:
-        return self._inventario.editar_rollo(id_, nombre_textil, ancho, precio_compra, valor, proveedor)
+        return self._inventario.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor)
 
     def cambiar_estado_rollo(self, id_, activo: bool) -> dict | None:
         return self._inventario.cambiar_estado_rollo(id_, activo)

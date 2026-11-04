@@ -40,25 +40,30 @@ export function ErrorGeneral({ texto }) {
 
 // ── Textil: agregar (textil = null) o editar ───────────────────────────────
 
-export function DialogoTextil({ abierto, textil, modoCobro, onCerrar, onHecho }) {
+/* También lo abre "Textil nuevo" de un rollo en Inventario, con el nombre
+   que se escribió (`nombreInicial`). onHecho(r, {nombre}) recibe el nombre
+   que quedó guardado, para que el rollo lo tome. El ancho de la tela es el
+   de sus rollos (ver core.repositorio_inventario.ancho_rollo). */
+export function DialogoTextil({ abierto, textil, nombreInicial = "", modoCobro, onCerrar, onHecho }) {
   return (
     <Dialogo abierto={abierto} onCerrar={onCerrar} className="dlg--desenfoque dlg-catalogo">
-      <FormularioTextil textil={textil} modoCobro={modoCobro} onCerrar={onCerrar} onHecho={onHecho} />
+      <FormularioTextil textil={textil} nombreInicial={nombreInicial} modoCobro={modoCobro} onCerrar={onCerrar} onHecho={onHecho} />
     </Dialogo>
   );
 }
 
-function FormularioTextil({ textil, modoCobro, onCerrar, onHecho }) {
+function FormularioTextil({ textil, nombreInicial, modoCobro, onCerrar, onHecho }) {
   const nuevo = !textil;
   const [f, setF] = useState({
-    nombre: textil?.nombre ?? "", ancho: anchoTexto(textil?.ancho), backlight: !!textil?.backlight, valor: "",
+    nombre: textil?.nombre ?? nombreInicial, ancho: anchoTexto(textil?.ancho), backlight: !!textil?.backlight, valor: "",
   });
   const set = (clave, valor) => setF((x) => ({ ...x, [clave]: valor }));
   const { errores, enviando, confirmar } = useEnvio(
     () => (nuevo
       ? api.agregar_textil({ nombre: f.nombre, ancho: f.ancho, backlight: f.backlight, valor: fmt.leerClp(f.valor) })
       : api.editar_textil(textil.nombre, { nombre: f.nombre, ancho: f.ancho, backlight: f.backlight })),
-    onHecho,
+    // El nombre con los espacios como lo guarda Python (core.catalogo._texto).
+    (r) => onHecho(r, { nombre: f.nombre.split(/\s+/).filter(Boolean).join(" ") }),
   );
   const renombra = !nuevo && f.nombre.trim() && f.nombre.trim() !== textil.nombre;
   const rollos = textil?.rollos?.rollos || 0;
@@ -73,7 +78,7 @@ function FormularioTextil({ textil, modoCobro, onCerrar, onHecho }) {
                  value={f.nombre} onChange={(e) => set("nombre", e.target.value)} />
         </Campo>
         <Campo id="cat-ancho" etiqueta="Ancho de la tela (m)" requerido invalido={!!errores.ancho} error={errores.ancho}
-               ayuda="El ancho del rollo: con él se calculan los metros lineales y el ancho máximo de impresión.">
+               ayuda="El de todos sus rollos: con él se calculan los metros lineales y el ancho máximo de impresión. Un textil que viene en dos anchos son dos textiles (p. ej. «Mesh mate 160» y «Mesh mate 180»).">
           <input className="entrada entrada--num" id="cat-ancho" type="text" inputMode="decimal" autoComplete="off"
                  placeholder="1,48" value={f.ancho} onChange={(e) => set("ancho", e.target.value.replace(/[^\d,.]/g, ""))} />
         </Campo>

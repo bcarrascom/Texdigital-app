@@ -30,23 +30,41 @@ const uso = (tipo, fecha, anterior, nuevo, extra = {}) =>
 
 let siguienteRollo = 32;
 export const rollos = [
-  { id: "R-031", nombre_textil: "Tela backlit", ancho: 3, metros_iniciales: 50, metros_restantes: 12.5, estado: "activo", proveedor: "Textiles del Sur", fecha: "02/10/2026", precio_compra: 380000, valor: 14000,
+  { id: "0031", nombre_textil: "Tela backlit", metros_iniciales: 50, metros_restantes: 12.5, estado: "activo", proveedor: "Textiles del Sur", fecha: "02/10/2026", precio_compra: 380000, valor: 14000,
     usos: [
       uso("consumo", "05/10/2026", 50, 41.2, { numero_op: 9008, cliente: "Clínica Norte", tema: "Señalética interior", obs: "" }),
       uso("ajuste", "09/10/2026", 41.2, 39.7, { descripcion: "Recorte con error de medida." }),
       uso("consumo", "14/10/2026", 39.7, 24.5, { numero_op: 9011, cliente: "Café del Puerto", tema: "Menú de pared", obs: "Urgente" }),
       uso("consumo", "18/10/2026", 24.5, 12.5, { numero_op: 9012, cliente: "Tiendas Ejemplo SpA", tema: "Campaña verano", obs: "" }),
     ] },
-  { id: "R-030", nombre_textil: "Lona mate", ancho: 3.2, metros_iniciales: 50, metros_restantes: 40, estado: "activo", proveedor: "Lonas Chile", fecha: "28/09/2026", precio_compra: 250000, valor: 9000,
+  { id: "0030", nombre_textil: "Lona mate", metros_iniciales: 50, metros_restantes: 40, estado: "activo", proveedor: "Lonas Chile", fecha: "28/09/2026", precio_compra: 250000, valor: 9000,
     usos: [uso("consumo", "01/10/2026", 50, 40, { numero_op: 9005, cliente: "Tiendas Ejemplo SpA", tema: "Vitrinas otoño" })] },
-  { id: "R-029", nombre_textil: "Poliéster satinado", ancho: 1.5, metros_iniciales: 100, metros_restantes: 3, estado: "activo", proveedor: "Textiles del Sur", fecha: "15/09/2026", precio_compra: 0, valor: 7500, usos: [] },
-  { id: "R-027", nombre_textil: "Felpa gruesa", ancho: 1.4, metros_iniciales: 60, metros_restantes: 22, estado: "inactivo", proveedor: "", fecha: "01/08/2026", precio_compra: 0, valor: 11000,
+  { id: "0029", nombre_textil: "Poliéster satinado", metros_iniciales: 100, metros_restantes: 3, estado: "activo", proveedor: "Textiles del Sur", fecha: "15/09/2026", precio_compra: 0, valor: 7500, usos: [] },
+  { id: "0027", nombre_textil: "Felpa gruesa", metros_iniciales: 60, metros_restantes: 22, estado: "inactivo", proveedor: "", fecha: "01/08/2026", precio_compra: 0, valor: 11000,
     usos: [uso("activacion", "20/09/2026", 22, 22, { estado_nuevo: "inactivo", descripcion: "Tela con manchas de humedad, revisar con el proveedor." })] },
-  { id: "R-025", nombre_textil: "Poliéster satinado", ancho: 1.5, metros_iniciales: 100, metros_restantes: 64, estado: "inactivo", proveedor: "Importadora Andes", fecha: "20/07/2026", precio_compra: 420000, valor: 7500, usos: [] },
+  { id: "0025", nombre_textil: "Poliéster satinado", metros_iniciales: 100, metros_restantes: 64, estado: "inactivo", proveedor: "Importadora Andes", fecha: "20/07/2026", precio_compra: 420000, valor: 7500, usos: [] },
 ];
 
-const conMetricasRollo = (r) => ({ ...r, ...metricas({ costo: r.precio_compra ? Math.round(r.precio_compra / r.metros_iniciales) : null,
-  valor: r.valor, inicial: r.metros_iniciales, restante: r.metros_restantes }) });
+/* Los textiles de Configuración (los que agrega mocks/configuracion.js
+   también, como en Python), con su ancho: el de sus rollos (ver
+   core.repositorio_inventario.ancho_rollo). */
+export const anchosTextiles = { "Felpa gruesa": 1.38, "Lona mate": 3.2, "Poliéster satinado": 1.5, "Tela backlit": 3 };
+export const textiles = Object.keys(anchosTextiles);
+
+/* Mismas reglas que core.repositorio_inventario.validar_id (sin los
+   decomisionados, que acá no se guardan). */
+const numeroRollo = (n) => String(n).padStart(4, "0");
+function validarIdRollo(texto) {
+  const t = String(texto || "").trim().replace(/^#/, "");
+  if (!/^\d+$/.test(t) || !(parseInt(t, 10) > 0 && parseInt(t, 10) <= 9999)) return { id: null, error: "Tiene que ser un número entre 1 y 9999." };
+  const id = numeroRollo(parseInt(t, 10));
+  if (rollos.some((r) => r.id === id)) return { id: null, error: `Ya existe el rollo #${id}.` };
+  return { id, error: null };
+}
+
+const conMetricasRollo = (r) => ({ ...r, ancho: anchosTextiles[r.nombre_textil] ?? null,
+  ...metricas({ costo: r.precio_compra ? Math.round(r.precio_compra / r.metros_iniciales) : null,
+                valor: r.valor, inicial: r.metros_iniciales, restante: r.metros_restantes }) });
 const rolloPorId = (id) => rollos.find((x) => x.id === id);
 const devolverRollo = (r) => (r ? structuredClone(conMetricasRollo(r)) : null);
 
@@ -119,7 +137,7 @@ export default {
   obtener_rollo: (id) => devolverRollo(rolloPorId(id)),
   listar_materiales: () => structuredClone(materiales.map(conMetricasMaterial)),
   obtener_material: (id) => devolverMaterial(materialPorId(id)),
-  cargar_textiles_inventario: () => ["Felpa gruesa", "Lona mate", "Poliéster satinado", "Tela backlit"],
+  cargar_textiles_inventario: () => [...textiles],
   cargar_proveedores: () => [...proveedores],
   cargar_nombres_materiales: () => materiales.map((m) => m.nombre),
   cargar_productos_catalogo: () => ["Backlight", "Backlight + Caja", "Pendón", "Telón", "Bandera", "Lienzo"],
@@ -127,18 +145,27 @@ export default {
   cargar_estructuras_catalogo: () => ["Bastidor 10 cm", "Bastidor 5 cm", "Tubo de aluminio", "Pie metálico", "PERFIL 60 MM", "PERFIL 100 MM DOBLE"],
   valor_sugerido_textil: (textil) => rollos.find((r) => r.nombre_textil === textil)?.valor ?? 8000,
 
-  crear_rollo(nombre_textil, ancho, metros, precio_compra, valor, proveedor) {
-    const r = { id: `R-0${siguienteRollo++}`, nombre_textil, ancho, metros_iniciales: metros, metros_restantes: metros,
+  siguiente_id_rollo: () => numeroRollo(siguienteRollo),
+  validar_id_rollo: validarIdRollo,
+  crear_rollo(nombre_textil, metros, precio_compra, valor, proveedor, id_) {
+    let id = numeroRollo(siguienteRollo);
+    if (id_) {
+      const v = validarIdRollo(id_);
+      if (v.error) return { error: v.error };
+      id = v.id;
+    }
+    siguienteRollo = Math.max(siguienteRollo, parseInt(id, 10) + 1);
+    const r = { id, nombre_textil, metros_iniciales: metros, metros_restantes: metros,
                 estado: "activo", proveedor, fecha: hoy(), precio_compra, valor, usos: [] };
     rollos.unshift(r);
     return devolverRollo(r);
   },
-  editar_rollo(id, nombre_textil, ancho, precio_compra, valor, proveedor) {
+  editar_rollo(id, nombre_textil, precio_compra, valor, proveedor) {
     const r = rolloPorId(id);
     if (r && r.valor !== valor) {
       r.usos.push(uso("precio", hoy(), r.metros_restantes, r.metros_restantes, { valor_anterior: r.valor, valor_nuevo: valor }));
     }
-    if (r) Object.assign(r, { nombre_textil, ancho, precio_compra, valor, proveedor });
+    if (r) Object.assign(r, { nombre_textil, precio_compra, valor, proveedor });
     return devolverRollo(r);
   },
   cambiar_estado_rollo(id, activo) {

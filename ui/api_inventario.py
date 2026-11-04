@@ -34,15 +34,20 @@ class ApiInventario:
     # mes") o cuentas de dos campos guardados, así que calcularlas al servir evita
     # que queden desactualizadas y le ahorra a la UI saber de dónde sale cada una.
 
+    # El ancho también se agrega acá: es el del textil en Configuración (ver
+    # core.repositorio_inventario.ancho_rollo), así que cambia con él.
     def _con_metricas_rollo(self, r: dict | None) -> dict | None:
         if r is not None:
             r.update(_repo.metricas_rollo(r))
+            r["ancho"] = _repo.ancho_rollo(r)
         return r
 
     def listar_rollos(self) -> list[dict]:
+        catalogo.refrescar()
         return [self._con_metricas_rollo(r) for r in _repo.listar_rollos()]
 
     def obtener_rollo(self, id_: str) -> dict | None:
+        catalogo.refrescar()
         return self._con_metricas_rollo(_repo.obtener_rollo(id_))
 
     def cargar_textiles(self) -> list[str]:
@@ -64,17 +69,31 @@ class ApiInventario:
     def valor_sugerido_textil(self, nombre_textil: str) -> float | None:
         return _repo.valor_sugerido_textil(nombre_textil)
 
+    def siguiente_id_rollo(self) -> str:
+        return _repo.siguiente_id()
+
+    def validar_id_rollo(self, texto) -> dict:
+        """{"id": "0042" | None, "error": mensaje | None} — ver core.repositorio_inventario.validar_id."""
+        id_, error = _repo.validar_id(texto)
+        return {"id": id_, "error": error}
+
     def crear_rollo(
-        self, nombre_textil: str, ancho, metros_restantes,
-        precio_compra=0.0, valor=None, proveedor="",
+        self, nombre_textil: str, metros_restantes,
+        precio_compra=0.0, valor=None, proveedor="", id_=None,
     ) -> dict:
-        return _repo.crear_rollo(nombre_textil, ancho, metros_restantes, precio_compra, valor, proveedor)
+        """El rollo creado, o {"error": mensaje} si el número elegido ya no
+        se puede usar (otra instalación lo tomó mientras se llenaba el formulario)."""
+        try:
+            return _repo.crear_rollo(nombre_textil, metros_restantes, precio_compra, valor, proveedor, id_)
+        except ValueError as e:
+            return {"error": str(e)}
 
     def editar_rollo(
-        self, id_: str, nombre_textil: str, ancho,
+        self, id_: str, nombre_textil: str,
         precio_compra=0.0, valor=None, proveedor="",
     ) -> dict | None:
-        return _repo.editar_rollo(id_, nombre_textil, ancho, precio_compra, valor, proveedor)
+        catalogo.refrescar()
+        return _repo.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor)
 
     def cambiar_estado_rollo(self, id_: str, activo: bool) -> dict | None:
         return _repo.cambiar_estado_rollo(id_, activo)

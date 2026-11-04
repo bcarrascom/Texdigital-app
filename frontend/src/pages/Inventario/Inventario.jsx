@@ -3,12 +3,15 @@ import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { api } from "@/services/api";
 import { rutas } from "@/router/rutas";
+import { useAvisos } from "@/context/AvisosContext";
 import SwitchIconos from "@/components/SwitchIconos/SwitchIconos";
 import IconoTextiles from "@/assets/svg/spiral.svg?react";
 import IconoMateriales from "@/assets/svg/boxes.svg?react";
+import { DialogoTextil } from "@/pages/Configuracion/DialogosCatalogo";
 import TablaRollos from "./TablaRollos";
 import TablaMateriales from "./TablaMateriales";
 import { DialogoMaterial, DialogoRollo } from "./DialogosInventario";
+import { entrarAlModulo, seguirClave } from "./memoria";
 import "./Inventario.css";
 
 /* Contenido del módulo Inventario (antes, su panel en menu.html): dos tablas
@@ -46,15 +49,26 @@ export async function cargarInventario() {
 
 export default function Inventario({ datos, recargar }) {
   const navigate = useNavigate();
-  const { pathname, search } = useLocation();
+  const aviso = useAvisos();
+  const { pathname, search, key } = useLocation();
   const [params, setParams] = useSearchParams();
   const vista = params.get("vista") === "materiales" ? "materiales" : "textiles";
   const d = datos || VACIO;
+
+  // El scroll y lo elegido en cada tabla, si se vuelve de un rollo o material
+  // (ver memoria.js). Antes de que se dibujen las tablas, que lo leen.
+  useState(() => entrarAlModulo(key));
+  useEffect(() => seguirClave(key), [key]);
 
   const masRollo = useRef(null);
   const masMaterial = useRef(null);
   const [dialogo, setDialogo] = useState(null);   // "rollo" | "material" | null
   const [textilInicial, setTextilInicial] = useState("");
+  /* "Textil nuevo" del rollo: el diálogo de Configuración por encima del de
+     "Rollo nuevo" (acá y no dentro de él: un Escape o un Enter adentro
+     llegarían también al de abajo). */
+  const [textilNuevo, setTextilNuevo] = useState(null);     // { nombre } con el diálogo abierto
+  const [textilCreado, setTextilCreado] = useState(null);   // { nombre, ancho } recién agregado
 
   /* Llegando con ?nuevo_textil: se abre "Rollo nuevo" con el textil elegido y
      el parámetro se saca (si no, volver a esta pantalla lo reabriría). */
@@ -62,6 +76,7 @@ export default function Inventario({ datos, recargar }) {
   useEffect(() => {
     if (!nuevoTextil) return;
     setTextilInicial(nuevoTextil);
+    setTextilCreado(null);
     setParams((p) => { const n = new URLSearchParams(p); n.delete("nuevo_textil"); return n; }, { replace: true });
     // Después del primer cuadro: el botón "+" de donde nace el diálogo tiene que estar en su lugar.
     requestAnimationFrame(() => setDialogo("rollo"));
@@ -86,7 +101,7 @@ export default function Inventario({ datos, recargar }) {
   useEffect(() => { recargarRef.current = recargar; });
   const abrirRollo = useCallback((id) => navigate(rutas.verRollo(id), { state: { desde } }), [navigate, desde]);
   const abrirMaterial = useCallback((id) => navigate(rutas.verMaterial(id), { state: { desde } }), [navigate, desde]);
-  const nuevoRollo = useCallback(() => { setTextilInicial(""); setDialogo("rollo"); }, []);
+  const nuevoRollo = useCallback(() => { setTextilInicial(""); setTextilCreado(null); setDialogo("rollo"); }, []);
   const nuevoMaterial = useCallback(() => setDialogo("material"), []);
   const cambiarEstado = useCallback(async (id, activo) => {
     await api.cambiar_estado_rollo(id, activo);
@@ -131,7 +146,15 @@ export default function Inventario({ datos, recargar }) {
         {d.proveedores.map((p) => <option key={p} value={p} />)}
       </datalist>
       <DialogoRollo abierto={dialogo === "rollo"} origen={masRollo} textiles={d.textiles} textilInicial={textilInicial}
+                    textilCreado={textilCreado} onTextilNuevo={(nombre) => setTextilNuevo({ nombre })}
                     onCerrar={cerrar} onGuardado={alGuardar} />
+      <DialogoTextil abierto={!!textilNuevo} nombreInicial={textilNuevo?.nombre} onCerrar={() => setTextilNuevo(null)}
+                     onHecho={async (_r, textil) => {
+                       setTextilNuevo(null);
+                       await recargar();   // la lista de textiles del campo
+                       setTextilCreado(textil);
+                       aviso(`«${textil.nombre}» agregado a Configuración › Textiles.`, "info");
+                     }} />
       <DialogoMaterial abierto={dialogo === "material"} origen={masMaterial} materiales={d.materiales} nombres={d.nombres}
                        onCerrar={cerrar} onGuardado={alGuardar} />
     </>

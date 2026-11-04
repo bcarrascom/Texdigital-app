@@ -72,67 +72,93 @@ class _ConRutaTemporalYCatalogo(unittest.TestCase):
 class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
 
     def test_ids_autogenerados_secuenciales(self):
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 50)
+        r1 = repo_inv.crear_rollo("TelaTest", 100)
+        r2 = repo_inv.crear_rollo("TelaTest", 50)
         self.assertEqual(r1["id"], "0001")
         self.assertEqual(r2["id"], "0002")
+
+    def test_id_elegido_a_mano(self):
+        # Pedido de Bruno (2026-11-04): se puede elegir el número, con o sin ceros.
+        r = repo_inv.crear_rollo("TelaTest", 100, id_="42")
+        self.assertEqual(r["id"], "0042")
+        self.assertTrue((repo_inv.carpeta_activos() / "0042.json").exists())
+        # El automático sigue al mayor.
+        self.assertEqual(repo_inv.siguiente_id(), "0043")
+
+    def test_id_elegido_no_se_repite(self):
+        repo_inv.crear_rollo("TelaTest", 100, id_="0007")
+        self.assertEqual(repo_inv.validar_id("7"), (None, "Ya existe el rollo #0007."))
+        with self.assertRaises(ValueError):
+            repo_inv.crear_rollo("TelaTest", 100, id_="7")
+
+    def test_id_de_un_rollo_decomisionado_no_se_reusa(self):
+        r = repo_inv.crear_rollo("TelaTest", 100)
+        repo_inv.decomisionar_rollo(r["id"])
+        id_, error = repo_inv.validar_id(r["id"])
+        self.assertIsNone(id_)
+        self.assertIn("decomisionado", error)
+
+    def test_id_invalido(self):
+        for texto in ("", "abc", "0", "-3", "1.5", "10000", "²"):
+            self.assertIsNone(repo_inv.validar_id(texto)[0], texto)
+        self.assertEqual(repo_inv.validar_id(" #15 "), ("0015", None))
 
     def test_metros_iniciales_siempre_igual_a_restantes(self):
         # Ya no lo ingresa el usuario (pedido de Bruno, 2026-09-03) — un
         # rollo SIEMPRE entra completo, sin excepción.
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         self.assertEqual(r["metros_iniciales"], 80.0)
         self.assertEqual(r["metros_restantes"], 80.0)
 
     def test_precio_compra_y_proveedor_quedan_guardados(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80, precio_compra=450000, proveedor="Textiles del Sur")
+        r = repo_inv.crear_rollo("TelaTest", 80, precio_compra=450000, proveedor="Textiles del Sur")
         self.assertEqual(r["precio_compra"], 450000.0)
         self.assertEqual(r["proveedor"], "Textiles del Sur")
 
     def test_precio_compra_y_proveedor_por_defecto_vacios(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         self.assertEqual(r["precio_compra"], 0.0)
         self.assertEqual(r["proveedor"], "")
 
     def test_rollo_nuevo_arranca_activo(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         self.assertEqual(r["estado"], "activo")
 
     def test_valor_explicito_se_respeta(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80, valor=9500)
+        r = repo_inv.crear_rollo("TelaTest", 80, valor=9500)
         self.assertEqual(r["valor"], 9500.0)
 
     def test_valor_por_defecto_usa_el_del_ultimo_rollo_del_mismo_textil(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 80, valor=9000)
-        repo_inv.crear_rollo("TelaTest", 1.5, 40, valor=9500)  # el más nuevo
-        r3 = repo_inv.crear_rollo("TelaTest", 1.5, 60)  # sin valor -> hereda del último
+        repo_inv.crear_rollo("TelaTest", 80, valor=9000)
+        repo_inv.crear_rollo("TelaTest", 40, valor=9500)  # el más nuevo
+        r3 = repo_inv.crear_rollo("TelaTest", 60)  # sin valor -> hereda del último
         self.assertEqual(r3["valor"], 9500.0)
 
     def test_valor_por_defecto_sin_rollo_previo_usa_catalogo_de_textiles(self):
         with mock.patch.dict("core.repositorio.TEXTILES_VALORES", {"TelaTest": 11000.0}, clear=True):
-            r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+            r = repo_inv.crear_rollo("TelaTest", 80)
             self.assertEqual(r["valor"], 11000.0)
 
     def test_valor_por_defecto_sin_rollo_previo_ni_catalogo_queda_none(self):
         with mock.patch.dict("core.repositorio.TEXTILES_VALORES", {}, clear=True):
-            r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+            r = repo_inv.crear_rollo("TelaTest", 80)
             self.assertIsNone(r["valor"])
 
-    def test_editar_rollo_actualiza_textil_ancho_precio_valor_y_proveedor(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+    def test_editar_rollo_actualiza_textil_precio_valor_y_proveedor(self):
+        r = repo_inv.crear_rollo("TelaTest", 80)
         editado = repo_inv.editar_rollo(
-            r["id"], "Backlight Test", 1.48,
+            r["id"], "Backlight Test",
             precio_compra=300000, valor=12000, proveedor="Proveedor X")
         self.assertEqual(editado["nombre_textil"], "Backlight Test")
-        self.assertEqual(editado["ancho"], 1.48)
+        self.assertEqual(repo_inv.ancho_rollo(editado), _ANCHOS["Backlight Test"])
         self.assertEqual(editado["precio_compra"], 300000.0)
         self.assertEqual(editado["valor"], 12000.0)
         self.assertEqual(editado["proveedor"], "Proveedor X")
         self.assertEqual(editado["metros_restantes"], 80.0)  # no lo toca
 
     def test_cambiar_el_valor_queda_en_el_historial_y_se_puede_deshacer(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
-        editado = repo_inv.editar_rollo(r["id"], "TelaTest", 1.5, valor=1500.0)
+        r = repo_inv.crear_rollo("TelaTest", 50.0, valor=1000.0)
+        editado = repo_inv.editar_rollo(r["id"], "TelaTest", valor=1500.0)
         entrada = editado["usos"][-1]
         self.assertEqual((entrada["tipo"], entrada["valor_anterior"], entrada["valor_nuevo"]), ("precio", 1000.0, 1500.0))
         self.assertEqual(entrada["metros_restantes_anterior"], entrada["metros_restantes_nuevo"])
@@ -140,19 +166,39 @@ class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
         self.assertEqual(restaurado["valor"], 1000.0)
 
     def test_editar_sin_cambiar_el_valor_no_deja_entrada(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
-        self.assertEqual(repo_inv.editar_rollo(r["id"], "TelaTest", 2.0, valor=1000.0)["usos"], [])
+        r = repo_inv.crear_rollo("TelaTest", 50.0, valor=1000.0)
+        self.assertEqual(repo_inv.editar_rollo(r["id"], "TelaTest", valor=1000.0)["usos"], [])
 
     def test_fijar_valor_de_todos_los_rollos_queda_en_el_historial(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 50.0, valor=1000.0)
+        r = repo_inv.crear_rollo("TelaTest", 50.0, valor=1000.0)
         self.assertEqual(repo_inv.fijar_valor_rollos("TelaTest", 1200.0), 1)
         self.assertEqual(repo_inv.obtener_rollo(r["id"])["usos"][-1]["valor_nuevo"], 1200.0)
 
     def test_editar_rollo_inexistente_da_none(self):
-        self.assertIsNone(repo_inv.editar_rollo("9999", "X", 1.0))
+        self.assertIsNone(repo_inv.editar_rollo("9999", "X"))
+
+    def test_el_ancho_es_el_del_textil(self):
+        # Pedido de Bruno (2026-11-04): no se guarda en el rollo.
+        r = repo_inv.crear_rollo("TelaTest", 80)
+        self.assertNotIn("ancho", r)
+        self.assertEqual(repo_inv.ancho_rollo(r), _ANCHOS["TelaTest"])
+        with mock.patch.dict("core.repositorio.TEXTILES_ANCHOS", {"TelaTest": 1.6}):
+            self.assertEqual(repo_inv.ancho_rollo(repo_inv.obtener_rollo(r["id"])), 1.6)
+
+    def test_un_textil_fuera_del_catalogo_usa_el_ancho_guardado(self):
+        # Los rollos de la planilla que todavía tienen el nombre de allá.
+        r = repo_inv.crear_rollo("TelaTest", 80)
+        viejo = {**r, "nombre_textil": "LONA RUSTICA", "ancho": 1.44}
+        repo_inv._escribir_rollo(repo_inv.carpeta_activos(), viejo)
+        self.assertEqual(repo_inv.ancho_rollo(repo_inv.obtener_rollo(r["id"])), 1.44)
+        self.assertIsNone(repo_inv.ancho_rollo({**viejo, "ancho": 0.0}))
+        # Al pasarlo a un textil del catálogo, el guardado sobra.
+        editado = repo_inv.editar_rollo(r["id"], "TelaTest")
+        self.assertNotIn("ancho", editado)
+        self.assertEqual(repo_inv.ancho_rollo(editado), _ANCHOS["TelaTest"])
 
     def test_crear_rollo_le_pone_fecha_de_hoy(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         self.assertEqual(r["fecha"], repo_inv._hoy_dma())
 
     def test_leer_hace_backfill_de_fecha_para_rollos_viejos(self):
@@ -186,7 +232,7 @@ class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
 class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
 
     def test_decomisionar_saca_el_rollo_de_la_lista_activa(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         self.assertTrue(repo_inv.decomisionar_rollo(r["id"]))
         self.assertIsNone(repo_inv.obtener_rollo(r["id"]))
 
@@ -194,7 +240,7 @@ class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
         self.assertFalse(repo_inv.decomisionar_rollo("9999"))
 
     def test_decomisionar_archiva_el_registro_completo_con_fecha_de_decomiso(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         repo_inv.ajustar_restante(r["id"], 40, "Se usó a mano")
         repo_inv.decomisionar_rollo(r["id"])
 
@@ -212,23 +258,23 @@ class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
         self.assertEqual(archivos[0], ruta_esperada)
 
     def test_decomisionar_no_afecta_otros_rollos(self):
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 80)
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 40)
+        r1 = repo_inv.crear_rollo("TelaTest", 80)
+        r2 = repo_inv.crear_rollo("TelaTest", 40)
         repo_inv.decomisionar_rollo(r1["id"])
         self.assertIsNotNone(repo_inv.obtener_rollo(r2["id"]))
         self.assertEqual(len(repo_inv.listar_rollos()), 1)
 
     def test_id_de_rollo_decomisionado_no_se_reusa(self):
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r1 = repo_inv.crear_rollo("TelaTest", 80)
         repo_inv.decomisionar_rollo(r1["id"])
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 40)
+        r2 = repo_inv.crear_rollo("TelaTest", 40)
         self.assertNotEqual(r2["id"], r1["id"])
 
 
 class TestAjustarRestante(_ConRutaTemporalYCatalogo):
 
     def test_ajuste_baja_queda_logueado(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_restante(r["id"], 60, "Se usaron 40m sin registrar")
         self.assertEqual(actualizado["metros_restantes"], 60.0)
         self.assertEqual(len(actualizado["usos"]), 1)
@@ -239,13 +285,13 @@ class TestAjustarRestante(_ConRutaTemporalYCatalogo):
         self.assertEqual(entrada["descripcion"], "Se usaron 40m sin registrar")
 
     def test_ajuste_que_supera_iniciales_tambien_sube_iniciales(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 50)
+        r = repo_inv.crear_rollo("TelaTest", 50)
         actualizado = repo_inv.ajustar_restante(r["id"], 80, "Encontramos más stock")
         self.assertEqual(actualizado["metros_restantes"], 80.0)
         self.assertEqual(actualizado["metros_iniciales"], 80.0)
 
     def test_ajuste_que_no_supera_iniciales_no_lo_toca(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 150)  # iniciales también queda en 150
+        r = repo_inv.crear_rollo("TelaTest", 150)  # iniciales también queda en 150
         actualizado = repo_inv.ajustar_restante(r["id"], 80, "Recuento")
         self.assertEqual(actualizado["metros_iniciales"], 150.0)
 
@@ -253,7 +299,7 @@ class TestAjustarRestante(_ConRutaTemporalYCatalogo):
         self.assertIsNone(repo_inv.ajustar_restante("9999", 10, "x"))
 
     def test_eliminar_ajuste_mas_reciente_restaura_valor_anterior(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_restante(r["id"], 60, "Ajuste 1")
         id_ajuste = actualizado["usos"][-1]["id"]
         restaurado = repo_inv.eliminar_ajuste(r["id"], id_ajuste)
@@ -261,7 +307,7 @@ class TestAjustarRestante(_ConRutaTemporalYCatalogo):
         self.assertEqual(restaurado["usos"], [])
 
     def test_eliminar_ajuste_que_no_es_el_mas_reciente_no_hace_nada(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         primero = repo_inv.ajustar_restante(r["id"], 60, "Ajuste 1")
         id_primero = primero["usos"][-1]["id"]
         repo_inv.ajustar_restante(r["id"], 40, "Ajuste 2")
@@ -307,7 +353,7 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
 
     def test_calcular_faltantes_vacio_con_stock_suficiente(self):
         # Necesita 10 + 1 de margen = 11; 100 alcanza de sobra.
-        repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        repo_inv.crear_rollo("TelaTest", 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         self.assertEqual(repo_inv.calcular_faltantes([p]), [])
 
@@ -319,7 +365,7 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
         # rollos (pedido de Bruno, 2026-09-15), "faltante" es "cuánto de lo
         # necesario quedó sin ningún rollo que lo cubra solo", no un simple
         # necesario-disponible.
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("TelaTest", 5)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         faltantes = repo_inv.calcular_faltantes([p])
         self.assertEqual(len(faltantes), 1)
@@ -339,8 +385,8 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
         # producto no se reparte entre rollos (pedido de Bruno,
         # 2026-09-15), esto SÍ es un faltante real, aunque la suma total
         # diga que "hay tela de sobra".
-        repo_inv.crear_rollo("TelaTest", 1.5, 6)
-        repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        repo_inv.crear_rollo("TelaTest", 6)
+        repo_inv.crear_rollo("TelaTest", 6)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1
         faltantes = repo_inv.calcular_faltantes([p])
         self.assertEqual(len(faltantes), 1)
@@ -354,7 +400,7 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
         # entero en la simulación (quedarían 4), el segundo (necesita 6) ya
         # no tiene ningún rollo que le alcance solo -> el faltante
         # reportado es el del segundo (6), no el primero ni la resta 11-4.
-        repo_inv.crear_rollo("TelaTest", 1.5, 15)
+        repo_inv.crear_rollo("TelaTest", 15)
         p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 11
         p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)   # necesita 6
         faltantes = repo_inv.calcular_faltantes([p1, p2])
@@ -365,7 +411,7 @@ class TestMetrosNecesariosYFaltantes(_ConRutaTemporalYCatalogo):
 class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
 
     def test_consume_de_un_solo_rollo_si_alcanza(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1 (margen)
         asignaciones = repo_inv.consumir_para_op([p], 4210, "Cliente ABC")
 
@@ -382,12 +428,12 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(asignaciones, [[{"id": r["id"], "metros": 11.0}]])
 
     def test_consumo_guarda_el_valor_por_metro_del_momento(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100, valor=8000.0)
+        r = repo_inv.crear_rollo("TelaTest", 100, valor=8000.0)
         repo_inv.consumir_para_op([_producto_estandar()], 4210, "Cliente ABC")
         self.assertEqual(repo_inv.obtener_rollo(r["id"])["usos"][0]["valor_venta"], 8000.0)
 
     def test_revertir_devuelve_los_metros_y_deja_el_consumo_marcado(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.consumir_para_op([_producto_estandar()], 4210)   # 11 m
         fechas = repo_inv.revertir_consumo_op(4210)
         rollo = repo_inv.obtener_rollo(r["id"])
@@ -398,7 +444,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertTrue(consumo["revertido"])
 
     def test_revertir_corre_las_entradas_posteriores(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.consumir_para_op([_producto_estandar()], 4210)   # 100 → 89
         repo_inv.ajustar_restante(r["id"], 80.0)                   # 89 → 80
         repo_inv.revertir_consumo_op(4210)
@@ -408,7 +454,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(rollo["metros_restantes"], 91.0)
 
     def test_revertir_no_toca_otras_ops_ni_revierte_dos_veces(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.consumir_para_op([_producto_estandar()], 4210)
         repo_inv.consumir_para_op([_producto_estandar()], 4211)
         repo_inv.revertir_consumo_op(4210)
@@ -416,7 +462,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 89.0)
 
     def test_revertir_alcanza_a_un_rollo_decomisionado(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 11)
+        r = repo_inv.crear_rollo("TelaTest", 11)
         repo_inv.consumir_para_op([_producto_estandar()], 4210)   # lo deja en 0
         repo_inv.decomisionar_rollo(r["id"])
         repo_inv.revertir_consumo_op(4210)
@@ -428,7 +474,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # consumo tiene que poder mostrar de qué OP/cliente/tema salió,
         # sin depender de ir a buscar la OP después (puede haberse movido
         # de carpeta o borrado).
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         p["tema"] = "Logo azul"
         p["obs"] = "Ojales cada 50cm"
@@ -444,7 +490,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
     def test_ajuste_no_guarda_campos_de_consumo(self):
         # numero_op/cliente/tema/obs son propios de "consumo" — un ajuste
         # manual no tiene ninguno de los dos, así que no deberían aparecer.
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_restante(r["id"], 80, "Recuento")
         entrada = actualizado["usos"][0]
         self.assertNotIn("numero_op", entrada)
@@ -460,8 +506,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # el de 7m queda directo afuera de los candidatos (no alcanza
         # solo) — el que sí alcanza solo (8m) es el elegido, intacto el
         # otro.
-        r_justo = repo_inv.crear_rollo("TelaTest", 1.5, 7)
-        r_con_margen = repo_inv.crear_rollo("TelaTest", 1.5, 8)
+        r_justo = repo_inv.crear_rollo("TelaTest", 7)
+        r_con_margen = repo_inv.crear_rollo("TelaTest", 8)
         p = _producto_estandar(ancho=1.5, alto=7.0, cantidad=1)  # necesita 7+1=8
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
@@ -473,8 +519,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
     def test_prioriza_el_rollo_con_menos_metros_restantes_no_el_mas_viejo(self):
         # r1 (0001, "más viejo") tiene MÁS tela que r2 (0002, más nuevo) —
         # el consumo tiene que ir al que tiene MENOS, sin importar el ID.
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        r1 = repo_inv.crear_rollo("TelaTest", 100)
+        r2 = repo_inv.crear_rollo("TelaTest", 6)
         p = _producto_estandar(ancho=1.5, alto=4.0, cantidad=1)  # necesita 4+1=5, r2 alcanza solo
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
@@ -489,8 +535,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # rollo distinto) — así que el rollo chico que no alcanza SOLO
         # queda afuera de los candidatos, aunque sumado al grande sí
         # cubriría los 11 que hacen falta.
-        r_chico = repo_inv.crear_rollo("TelaTest", 1.5, 3)
-        r_grande = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r_chico = repo_inv.crear_rollo("TelaTest", 3)
+        r_grande = repo_inv.crear_rollo("TelaTest", 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
@@ -505,8 +551,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # asignación (en la práctica calcular_faltantes ya debería haber
         # bloqueado la aprobación antes de llegar acá, pero esta función
         # no revienta si de todos modos pasa).
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 6)
+        r1 = repo_inv.crear_rollo("TelaTest", 6)
+        r2 = repo_inv.crear_rollo("TelaTest", 6)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
         asignaciones = repo_inv.consumir_para_op([p], 4210)
@@ -520,8 +566,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # segundo (necesita 8) ya no cabe en lo que le queda al chico (1m)
         # así que le toca el grande — DOS rollos distintos tocados en la
         # misma OP, uno por producto, ninguno partido.
-        r_chico = repo_inv.crear_rollo("TelaTest", 1.5, 6)
-        r_grande = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r_chico = repo_inv.crear_rollo("TelaTest", 6)
+        r_grande = repo_inv.crear_rollo("TelaTest", 100)
         p1 = _producto_estandar(ancho=1.5, alto=4.0, cantidad=1)  # necesita 4+1=5
         p2 = _producto_estandar(ancho=1.5, alto=7.0, cantidad=1)  # necesita 7+1=8
 
@@ -535,7 +581,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.obtener_rollo(r_grande["id"])["metros_restantes"], 92.0)
 
     def test_dos_productos_del_mismo_textil_no_pisan_el_stock_entre_si(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
         p2 = _producto_estandar(ancho=1.5, alto=5.0, cantidad=1)   # necesita 5+1=6
 
@@ -557,7 +603,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(usos[0]["metros_restantes_nuevo"], 83.0)
 
     def test_registro_combinado_une_temas_y_obs_de_los_productos_sin_repetir(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p1 = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         p1["tema"] = "Logo azul"
         p1["obs"] = "Ojales cada 50cm"
@@ -577,8 +623,8 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertIn("Cliente ABC", entrada["descripcion"])
 
     def test_productos_de_distinto_textil_no_se_agrupan(self):
-        r1 = repo_inv.crear_rollo("TelaTest", 1.5, 100)
-        r2 = repo_inv.crear_rollo("Backlight Test", 1.48, 100)
+        r1 = repo_inv.crear_rollo("TelaTest", 100)
+        r2 = repo_inv.crear_rollo("Backlight Test", 100)
         p1 = _producto_estandar(textil="TelaTest", ancho=1.5, alto=10.0, cantidad=1)   # necesita 11
         p2 = _producto_backlight(tela="Backlight Test", ancho=1.0, alto=1.0, cantidad=1)
 
@@ -588,7 +634,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(len(repo_inv.obtener_rollo(r2["id"])["usos"]), 1)
 
     def test_producto_sin_textil_da_lista_vacia_para_ese_indice(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p_vacio = _producto_estandar(textil="", ancho=1.5, alto=10.0, cantidad=1)
         p_real = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
@@ -598,7 +644,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         self.assertEqual(asignaciones[1], [{"id": r["id"], "metros": 11.0}])
 
     def test_sin_productos_no_toca_nada(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         asignaciones = repo_inv.consumir_para_op([], 4210)
         self.assertEqual(asignaciones, [])
         self.assertEqual(repo_inv.obtener_rollo(r["id"])["metros_restantes"], 100.0)
@@ -607,7 +653,7 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
         # Aunque sea el único rollo del textil y le sobre tela, un rollo
         # "inactivo" (ver cambiar_estado_rollo) queda afuera del reparto —
         # el producto se queda sin cubrir, como si no hubiera stock.
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
 
@@ -620,16 +666,16 @@ class TestConsumirParaOp(_ConRutaTemporalYCatalogo):
 class TestStockPorTextil(_ConRutaTemporalYCatalogo):
 
     def test_suma_por_textil(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 10)
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
-        repo_inv.crear_rollo("Backlight Test", 1.48, 20)
+        repo_inv.crear_rollo("TelaTest", 10)
+        repo_inv.crear_rollo("TelaTest", 5)
+        repo_inv.crear_rollo("Backlight Test", 20)
         stock = repo_inv.stock_por_textil()
         self.assertEqual(stock["TelaTest"], 15.0)
         self.assertEqual(stock["Backlight Test"], 20.0)
 
     def test_rollo_inactivo_no_cuenta_para_el_stock(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 10)
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        r = repo_inv.crear_rollo("TelaTest", 10)
+        repo_inv.crear_rollo("TelaTest", 5)
         repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         stock = repo_inv.stock_por_textil()
         self.assertEqual(stock["TelaTest"], 5.0)
@@ -638,7 +684,7 @@ class TestStockPorTextil(_ConRutaTemporalYCatalogo):
 class TestAvisosStock(_ConRutaTemporalYCatalogo):
 
     def test_rollo_activo_con_suficiente_stock_no_genera_aviso(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        repo_inv.crear_rollo("TelaTest", 30)
         self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
 
     def test_sin_ningun_rollo_del_textil_no_genera_aviso(self):
@@ -647,22 +693,22 @@ class TestAvisosStock(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
 
     def test_solo_inactivo_con_suficiente_stock_da_amarilla(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        r = repo_inv.crear_rollo("TelaTest", 30)
         repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(len(avisos), 1)
         self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "amarilla", "metros": 30.0})
 
     def test_ningun_rollo_individual_alcanza_pero_la_suma_si_da_naranja(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 15)
-        repo_inv.crear_rollo("TelaTest", 1.5, 15)
+        repo_inv.crear_rollo("TelaTest", 15)
+        repo_inv.crear_rollo("TelaTest", 15)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(len(avisos), 1)
         self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "naranja", "metros": 30.0})
 
     def test_ni_sumando_todo_alcanza_da_roja(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 10)
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
+        repo_inv.crear_rollo("TelaTest", 10)
+        repo_inv.crear_rollo("TelaTest", 5)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(len(avisos), 1)
         self.assertEqual(avisos[0], {"textil": "TelaTest", "severidad": "roja", "metros": 15.0})
@@ -670,15 +716,15 @@ class TestAvisosStock(_ConRutaTemporalYCatalogo):
     def test_sin_ningun_rollo_del_textil_es_roja_si_hay_otros_rollos(self):
         # Mismo caso que arriba, pero mezclado con un rollo de otro textil
         # sin problemas — confirma que se agrupa por textil de verdad.
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
-        repo_inv.crear_rollo("Backlight Test", 1.48, 100)
+        repo_inv.crear_rollo("TelaTest", 5)
+        repo_inv.crear_rollo("Backlight Test", 100)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(len(avisos), 1)
         self.assertEqual(avisos[0]["textil"], "TelaTest")
 
     def test_un_activo_grande_tapa_varios_chicos_del_mismo_textil(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 3)
-        repo_inv.crear_rollo("TelaTest", 1.5, 40)
+        repo_inv.crear_rollo("TelaTest", 3)
+        repo_inv.crear_rollo("TelaTest", 40)
         self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
 
     def test_activo_chico_e_inactivo_grande_da_amarilla_no_naranja(self):
@@ -686,20 +732,20 @@ class TestAvisosStock(_ConRutaTemporalYCatalogo):
         # alcanza por sí solo, el aviso tiene que ser amarilla (reactivar
         # alcanza) y no naranja (que implicaría que ningún rollo individual
         # alcanza).
-        repo_inv.crear_rollo("TelaTest", 1.5, 5)
-        r2 = repo_inv.crear_rollo("TelaTest", 1.5, 30)
+        repo_inv.crear_rollo("TelaTest", 5)
+        r2 = repo_inv.crear_rollo("TelaTest", 30)
         repo_inv.cambiar_estado_rollo(r2["id"], activo=False)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(avisos[0]["severidad"], "amarilla")
 
     def test_decomisionado_no_cuenta_para_nada(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 50)
+        r = repo_inv.crear_rollo("TelaTest", 50)
         repo_inv.decomisionar_rollo(r["id"])
         self.assertEqual(repo_inv.avisos_stock(minimo=25), [])
 
     def test_agrupa_varios_textiles_con_distinta_gravedad(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 30)              # sin aviso
-        r_amarillo = repo_inv.crear_rollo("Backlight Test", 1.48, 30)
+        repo_inv.crear_rollo("TelaTest", 30)              # sin aviso
+        r_amarillo = repo_inv.crear_rollo("Backlight Test", 30)
         repo_inv.cambiar_estado_rollo(r_amarillo["id"], activo=False)
         avisos = repo_inv.avisos_stock(minimo=25)
         self.assertEqual(len(avisos), 1)
@@ -713,7 +759,7 @@ class TestAvisosStock(_ConRutaTemporalYCatalogo):
         self.assertEqual(avisos, [{"textil": "TelaTest", "severidad": "roja", "metros": 5.0}])
 
     def test_minimo_none_usa_core_config_stock_minimo_ml(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 10)
+        repo_inv.crear_rollo("TelaTest", 10)
         with mock.patch.object(repo_inv._config, "STOCK_MINIMO_ML", 5):
             self.assertEqual(repo_inv.avisos_stock(), [])
         with mock.patch.object(repo_inv._config, "STOCK_MINIMO_ML", 20):
@@ -724,7 +770,7 @@ class TestAvisosStock(_ConRutaTemporalYCatalogo):
 class TestCambiarEstadoRollo(_ConRutaTemporalYCatalogo):
 
     def test_inactivar_y_reactivar(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         inactivado = repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         self.assertEqual(inactivado["estado"], "inactivo")
         reactivado = repo_inv.cambiar_estado_rollo(r["id"], activo=True)
@@ -737,13 +783,13 @@ class TestCambiarEstadoRollo(_ConRutaTemporalYCatalogo):
         # Estado inactivo NO lo saca de la tabla — solo del cálculo de
         # stock/consumo (ver test_rollo_inactivo_no_cuenta_para_el_stock y
         # TestConsumirParaOp.test_rollo_inactivo_no_se_puede_consumir).
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 80)
+        r = repo_inv.crear_rollo("TelaTest", 80)
         repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         ids = [x["id"] for x in repo_inv.listar_rollos()]
         self.assertIn(r["id"], ids)
 
     def test_rollo_inactivo_hace_que_calcular_faltantes_lo_ignore(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.cambiar_estado_rollo(r["id"], activo=False)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)  # necesita 10+1=11
         faltantes = repo_inv.calcular_faltantes([p])
@@ -754,7 +800,7 @@ class TestCambiarEstadoRollo(_ConRutaTemporalYCatalogo):
 class TestAjustarEstado(_ConRutaTemporalYCatalogo):
 
     def test_desactivar_cambia_estado_y_queda_logueado(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="Tela reservada")
         self.assertEqual(actualizado["estado"], "inactivo")
         self.assertEqual(len(actualizado["usos"]), 1)
@@ -768,14 +814,14 @@ class TestAjustarEstado(_ConRutaTemporalYCatalogo):
         self.assertEqual(actualizado["metros_restantes"], 100.0)
 
     def test_reactivar_cambia_estado_y_queda_logueado(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.ajustar_estado(r["id"], activo=False)
         actualizado = repo_inv.ajustar_estado(r["id"], activo=True, descripcion="Ya se puede usar")
         self.assertEqual(actualizado["estado"], "activo")
         self.assertEqual(actualizado["usos"][-1]["estado_nuevo"], "activo")
 
     def test_no_guarda_campos_de_consumo(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="x")
         entrada = actualizado["usos"][0]
         self.assertNotIn("numero_op", entrada)
@@ -784,7 +830,7 @@ class TestAjustarEstado(_ConRutaTemporalYCatalogo):
         self.assertNotIn("obs", entrada)
 
     def test_ajuste_de_cantidad_no_guarda_estado_nuevo(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_restante(r["id"], 60, "Recuento")
         self.assertNotIn("estado_nuevo", actualizado["usos"][0])
 
@@ -792,7 +838,7 @@ class TestAjustarEstado(_ConRutaTemporalYCatalogo):
         self.assertIsNone(repo_inv.ajustar_estado("9999", activo=False))
 
     def test_deshacer_activacion_mas_reciente_restaura_estado_anterior(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         actualizado = repo_inv.ajustar_estado(r["id"], activo=False, descripcion="Reservada")
         id_activacion = actualizado["usos"][-1]["id"]
 
@@ -802,7 +848,7 @@ class TestAjustarEstado(_ConRutaTemporalYCatalogo):
         self.assertEqual(restaurado["usos"], [])
 
     def test_deshacer_reactivacion_mas_reciente_vuelve_a_inactivo(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         repo_inv.ajustar_estado(r["id"], activo=False)
         reactivado = repo_inv.ajustar_estado(r["id"], activo=True)
         id_reactivacion = reactivado["usos"][-1]["id"]
@@ -894,12 +940,12 @@ class TestInventarioApagado(_ConRutaTemporalYCatalogo):
         self.assertEqual(repo_inv.calcular_faltantes([p]), [])
 
     def test_calcular_faltantes_vacio_aunque_haya_poco_stock(self):
-        repo_inv.crear_rollo("TelaTest", 1.5, 1)  # a todas luces insuficiente
+        repo_inv.crear_rollo("TelaTest", 1)  # a todas luces insuficiente
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
         self.assertEqual(repo_inv.calcular_faltantes([p]), [])
 
     def test_consumir_para_op_no_toca_ningun_rollo(self):
-        r = repo_inv.crear_rollo("TelaTest", 1.5, 100)
+        r = repo_inv.crear_rollo("TelaTest", 100)
         p = _producto_estandar(ancho=1.5, alto=10.0, cantidad=1)
 
         asignaciones = repo_inv.consumir_para_op([p], 4210, "Cliente ABC")

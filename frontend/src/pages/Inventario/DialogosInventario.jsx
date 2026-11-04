@@ -3,6 +3,7 @@ import { api } from "@/services/api";
 import { useAvisos } from "@/context/AvisosContext";
 import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import DialogoMorph from "@/components/DialogoMorph/DialogoMorph";
+import CampoTextil, { textilDe } from "./CampoTextil";
 import * as fmt from "@/utils/formato";
 
 /* Los diálogos del módulo Inventario: "Rollo nuevo" e "Ingresar material",
@@ -15,47 +16,93 @@ const recordarProveedor = (proveedor) => api.guardar_proveedor(proveedor);
 
 // ── Rollo nuevo ─────────────────────────────────────────────────────────────
 
-export function DialogoRollo({ abierto, origen, textiles, textilInicial, onCerrar, onGuardado }) {
+/* `textilCreado`: {nombre, ancho} del textil que se acaba de agregar con
+   "Textil nuevo" (el diálogo vive en la página, ver Inventario.jsx): el
+   rollo lo toma. */
+export function DialogoRollo({ abierto, origen, textiles, textilInicial, textilCreado, onTextilNuevo, onCerrar, onGuardado }) {
   return (
     <DialogoMorph abierto={abierto} origen={origen} onCerrar={onCerrar}>
-      <FormularioRollo textiles={textiles} textilInicial={textilInicial} onCerrar={onCerrar} onGuardado={onGuardado} />
+      <FormularioRollo textiles={textiles} textilInicial={textilInicial} textilCreado={textilCreado} onTextilNuevo={onTextilNuevo}
+                       onCerrar={onCerrar} onGuardado={onGuardado} />
     </DialogoMorph>
   );
 }
 
-function FormularioRollo({ textiles, textilInicial = "", onCerrar, onGuardado }) {
+/* Lo que dice el campo Textil cuando lo escrito no es un textil de Configuración. */
+export const TEXTIL_DESCONOCIDO = "No está en Configuración › Textiles: elígelo de la lista o agrégalo con «Textil nuevo».";
+
+/* El textil recién agregado pasa al formulario. */
+export function useTextilCreado(textilCreado, setF) {
+  useEffect(() => {
+    if (!textilCreado) return;
+    setF((x) => ({ ...x, textil: textilCreado.nombre }));
+  }, [textilCreado]);
+}
+
+/* Sin ancho: el de un rollo es el de su textil en Configuración (pedido de
+   Bruno, 2026-11-04, ver core.repositorio_inventario.ancho_rollo). */
+function FormularioRollo({ textiles, textilInicial = "", textilCreado, onTextilNuevo, onCerrar, onGuardado }) {
   const aviso = useAvisos();
-  const [f, setF] = useState({ textil: textilInicial, ancho: "", restantes: "", proveedor: "", compra: "", valor: "" });
+  const [f, setF] = useState({ id: "", textil: textilInicial, restantes: "", proveedor: "", compra: "", valor: "" });
   const [errores, setErrores] = useState({});
   const set = (clave, valor) => setF((x) => ({ ...x, [clave]: valor }));
+  useTextilCreado(textilCreado, setF);
+  const textil = textilDe(textiles, f.textil);
+
+  /* El número: el siguiente, ya escrito; se puede cambiar por otro (p. ej. el
+     de la etiqueta del rollo, pedido de Bruno, 2026-11-04) que no tenga ni
+     haya tenido otro rollo. Python lo revisa mientras se escribe. */
+  const [sugerido, setSugerido] = useState("");
+  const [errorId, setErrorId] = useState(null);
+  useEffect(() => {
+    api.siguiente_id_rollo().then((id) => {
+      setSugerido(id);
+      setF((x) => (x.id ? x : { ...x, id }));
+    });
+  }, []);
+  const idElegido = f.id.trim() && f.id.trim() !== sugerido ? f.id.trim() : null;
+  useEffect(() => {
+    setErrorId(null);
+    if (!idElegido) return;
+    let vigente = true;
+    const espera = setTimeout(() => api.validar_id_rollo(idElegido).then((r) => vigente && setErrorId(r?.error || null)), 250);
+    return () => { vigente = false; clearTimeout(espera); };
+  }, [idElegido]);
 
   /* Al elegir un textil se sugiere el valor (el del rollo más reciente de ese
      textil o, si no hay, el del catálogo — ver valor_sugerido_textil). Solo si
      el campo está vacío: no pisa uno que el usuario ya escribió. */
   useEffect(() => {
-    if (!f.textil || f.valor) return;
+    if (!textil || f.valor) return;
     let vigente = true;
-    api.valor_sugerido_textil(f.textil).then((v) => {
+    api.valor_sugerido_textil(textil).then((v) => {
       if (vigente && v != null) setF((x) => (x.valor ? x : { ...x, valor: fmt.clp(v) }));
     });
     return () => { vigente = false; };
-  }, [f.textil]);
+  }, [textil]);
 
   async function guardar(e) {
     e.preventDefault();
-    const ancho = parseFloat(f.ancho), restantes = parseFloat(f.restantes);
+    const restantes = parseFloat(f.restantes);
     const valor = fmt.leerClp(f.valor), proveedor = f.proveedor.trim();
     // Proveedor y valor obligatorios: sin valor no hay precio de venta con el
     // que calcular las ganancias del rollo, y su fila queda a medias en "—".
     const faltan = {
-      textil: !f.textil, ancho: !(ancho > 0), restantes: !(restantes > 0),
+      id: !f.id.trim() || !!errorId, textil: !textil, restantes: !(restantes > 0),
       proveedor: !proveedor, valor: !(valor > 0),
     };
     setErrores(faltan);
     if (Object.values(faltan).some(Boolean)) return;
     await recordarProveedor(proveedor);
-    await api.crear_rollo(f.textil, ancho, restantes, fmt.leerClp(f.compra) || 0, valor, proveedor);
-    aviso("Rollo guardado.", "info");
+    // Sin cambiar el número, se pide "el siguiente": si otra instalación tomó
+    // el sugerido mientras tanto, este rollo se lleva el que sigue.
+    const r = await api.crear_rollo(textil, restantes, fmt.leerClp(f.compra) || 0, valor, proveedor, idElegido);
+    if (r?.error) {
+      setErrorId(r.error);
+      setErrores((x) => ({ ...x, id: true }));
+      return;
+    }
+    aviso(r?.id ? `Rollo #${r.id} guardado.` : "Rollo guardado.", "info");
     onGuardado();
   }
 
@@ -63,15 +110,12 @@ function FormularioRollo({ textiles, textilInicial = "", onCerrar, onGuardado })
     <form onSubmit={guardar} onKeyDown={enterGuarda}>
       <h2 className="dlg__titulo">Rollo nuevo</h2>
       <div className="dlg-inventario__campos">
-        <Campo id="dr-textil" etiqueta="Textil" requerido invalido={errores.textil}>
-          <select className="entrada" id="dr-textil" data-autofoco value={f.textil} onChange={(e) => set("textil", e.target.value)}>
-            <option value="" disabled>Seleccionar textil…</option>
-            {textiles.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </Campo>
+        <CampoTextil id="dr-textil" textiles={textiles} valor={f.textil} onCambiar={(v) => set("textil", v)} onNuevo={onTextilNuevo}
+                     invalido={errores.textil} error={f.textil.trim() ? TEXTIL_DESCONOCIDO : undefined} autofoco />
         <div className="fila">
-          <Campo id="dr-ancho" etiqueta="Ancho de tela (m)" requerido invalido={errores.ancho}>
-            <input className="entrada" id="dr-ancho" type="number" step="0.01" min="0" value={f.ancho} onChange={(e) => set("ancho", e.target.value)} />
+          <Campo id="dr-id" etiqueta="Número" requerido invalido={errores.id || !!errorId} error={errorId || undefined}>
+            <input className="entrada" id="dr-id" type="text" inputMode="numeric" autoComplete="off" placeholder={sugerido}
+                   value={f.id} onChange={(e) => set("id", e.target.value.replace(/[^\d]/g, "").slice(0, 4))} />
           </Campo>
           <Campo id="dr-restantes" etiqueta="Metros disponibles" requerido invalido={errores.restantes}>
             <input className="entrada" id="dr-restantes" type="number" step="0.01" min="0" value={f.restantes} onChange={(e) => set("restantes", e.target.value)} />
