@@ -18,6 +18,7 @@ useActualizacion.js). El estado es uno solo para toda la app:
     recien_actualizado  la app se abrió recién actualizada (una sola vez)
 """
 
+import hashlib
 import sys
 import threading
 import urllib.error
@@ -27,6 +28,12 @@ from core.version import VERSION
 
 # Lo que tarda la pantalla en mostrar "Listo" antes de que la app se cierre.
 ESPERA_ANTES_DE_CERRAR = 2.0
+
+# Las versiones de prueba (tags con guion, p. ej. v2.2.0-rc1) no se ofrecen
+# solas: se buscan a mano en Configuración › General, con esta contraseña
+# (pedido de Bruno, 2026-11-05). Va su sha256 y no el texto, para que no
+# salga a la vista en el código.
+_CONTRASENA_BETAS = "1b0df68dfd2fa3db8b0533634c7fe9794cf9e351b91373cc1dfbeb76ab248a9e"
 
 
 def _mensaje(error: Exception) -> str:
@@ -63,18 +70,27 @@ class ApiActualizacion:
             self._recien_actualizado = False
         return estado
 
-    def buscar(self) -> dict:
-        """Empieza a buscar (si no se está buscando o instalando ya)."""
+    def buscar(self, betas: bool = False) -> dict:
+        """Empieza a buscar (si no se está buscando o instalando ya). Con
+        `betas`, también las versiones de prueba (ver buscar_betas)."""
         with self._lock:
             if self._estado["fase"] in ("no_disponible", "buscando", "descargando", "listo"):
                 return dict(self._estado)
             self._estado = {"fase": "buscando", "version": VERSION}
-        threading.Thread(target=self._buscar, daemon=True).start()
+        threading.Thread(target=self._buscar, args=(betas,), daemon=True).start()
         return self.estado()
 
-    def _buscar(self) -> None:
+    def buscar_betas(self, contrasena) -> dict:
+        """Configuración › General › Versiones de prueba: con la contraseña,
+        busca también las betas. {"ok": False, "error"} si no es la correcta
+        (y no busca nada); si es, {"ok": True, "estado"}."""
+        if hashlib.sha256(str(contrasena or "").encode("utf-8")).hexdigest() != _CONTRASENA_BETAS:
+            return {"ok": False, "error": "Esa no es la contraseña."}
+        return {"ok": True, "estado": self.buscar(betas=True)}
+
+    def _buscar(self, betas: bool = False) -> None:
         try:
-            release = actualizador.buscar_actualizacion()
+            release = actualizador.buscar_actualizacion(incluir_prerelease=betas)
         except Exception as e:
             self._poner(fase="error", error=_mensaje(e))
             return
