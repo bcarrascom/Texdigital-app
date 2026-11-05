@@ -32,6 +32,11 @@ ESPERA_ANTES_DE_CERRAR = 2.0
 def _mensaje(error: Exception) -> str:
     if isinstance(error, (urllib.error.URLError, TimeoutError, ConnectionError)):
         return "No se pudo conectar con el servidor de actualizaciones. Revisa la conexión a internet."
+    if isinstance(error, PermissionError) and sys.platform == "darwin":
+        # En el Escritorio, Documentos o Descargas, macOS pide permiso la
+        # primera vez; si se negó, se da en Ajustes del Sistema.
+        return ("macOS no dejó escribir en la carpeta de la app. Dale permiso en Ajustes del Sistema › "
+                "Privacidad y seguridad › Archivos y carpetas › Sistema de Gestion, y vuelve a intentarlo.")
     if isinstance(error, PermissionError):
         return ("No se pudo escribir en la carpeta de la app. Puede que esté en una carpeta "
                 "protegida; muévela al Escritorio o a Documentos.")
