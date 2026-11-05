@@ -77,14 +77,9 @@ class TestBuscarActualizacion(unittest.TestCase):
         self._frozen_patch = mock.patch.object(sys, "frozen", True, create=True)
         self._frozen_patch.start()
         self.addCleanup(self._frozen_patch.stop)
-        # Una versión final instalada (con "0.0.0-dev" buscaría betas, ver
-        # test_una_beta_instalada_busca_betas).
         version = mock.patch.object(act, "VERSION", "2.1.0")
         version.start()
         self.addCleanup(version.stop)
-        entorno = mock.patch.dict("os.environ", {act.VAR_ENTORNO_PRERELEASE: ""})
-        entorno.start()
-        self.addCleanup(entorno.stop)
 
     def _mock_respuesta(self, data: dict):
         cm = mock.MagicMock()
@@ -177,24 +172,21 @@ class TestBuscarActualizacion(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])):
             self.assertIsNone(act.buscar_actualizacion(incluir_prerelease=True))
 
-    def test_una_beta_instalada_busca_betas(self):
-        lista = [{"tag_name": "v2.1.0-rc4",
-                  "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "rc4"}]}]
-        with mock.patch.object(act, "VERSION", "2.1.0-rc3"), mock.patch.object(sys, "platform", "win32"),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(lista)) as m:
+    def test_una_beta_instalada_no_busca_betas_sola(self):
+        # Desde v2.1.2, las betas solo se buscan a mano y con contraseña
+        # (Configuración › General, ver ui/api_actualizacion.py).
+        data = {"tag_name": "v2.1.0",
+                "assets": [{"name": "SistemaGestion-windows.zip", "browser_download_url": "final"}]}
+        with mock.patch.object(act, "VERSION", "2.1.0-rc3"), mock.patch.object(sys, "platform", "win32"),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(data)) as m:
             release = act.buscar_actualizacion()
-        self.assertEqual(m.call_args[0][0].full_url, act.API_RELEASES)
-        self.assertEqual(release["url"], "rc4")
+        self.assertEqual(m.call_args[0][0].full_url, act.API_ULTIMO_RELEASE)
+        self.assertEqual(release["url"], "final")   # la final sí se le ofrece
 
     def test_una_version_final_no_busca_betas(self):
         data = {"tag_name": "v2.1.0", "assets": []}
         with mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta(data)) as m:
             self.assertIsNone(act.buscar_actualizacion())
         self.assertEqual(m.call_args[0][0].full_url, act.API_ULTIMO_RELEASE)
-
-    def test_la_variable_de_entorno_busca_betas_desde_una_final(self):
-        with mock.patch.dict("os.environ", {act.VAR_ENTORNO_PRERELEASE: "1"}),              mock.patch("urllib.request.urlopen", return_value=self._mock_respuesta([])) as m:
-            act.buscar_actualizacion()
-        self.assertEqual(m.call_args[0][0].full_url, act.API_RELEASES)
 
     def test_con_betas_salta_un_release_que_todavia_no_tiene_paquete(self):
         # El workflow crea el release y después sube los archivos.

@@ -84,6 +84,32 @@ class TestApiActualizacion(unittest.TestCase):
             self.api.instalar()
         aplicar.assert_not_called()
 
+    def test_la_busqueda_normal_no_incluye_betas(self):
+        with mock.patch.object(api_act.actualizador, "buscar_actualizacion", return_value=None) as buscar:
+            self.api.buscar()
+        buscar.assert_called_once_with(incluir_prerelease=False)
+
+    def test_betas_con_la_contrasena(self):
+        beta = {**RELEASE, "tag": "v2.2.0-rc1"}
+        with mock.patch.object(api_act.actualizador, "buscar_actualizacion", return_value=beta) as buscar:
+            r = self.api.buscar_betas("Texdigital-app")
+        self.assertTrue(r["ok"])
+        buscar.assert_called_once_with(incluir_prerelease=True)
+        self.assertEqual((self.api.estado()["fase"], self.api.estado()["nueva"]), ("disponible", "v2.2.0-rc1"))
+
+    def test_betas_con_otra_contrasena_no_busca(self):
+        with mock.patch.object(api_act.actualizador, "buscar_actualizacion") as buscar:
+            for mala in ("texdigital-app", "", None, "Texdigital-app "):
+                self.assertEqual(self.api.buscar_betas(mala), {"ok": False, "error": "Esa no es la contraseña."})
+        buscar.assert_not_called()
+
+    def test_betas_aunque_ya_haya_una_final_encontrada(self):
+        with mock.patch.object(api_act.actualizador, "buscar_actualizacion", return_value=RELEASE):
+            self.api.buscar()
+        with mock.patch.object(api_act.actualizador, "buscar_actualizacion", return_value=None) as buscar:
+            self.api.buscar_betas("Texdigital-app")
+        buscar.assert_called_once_with(incluir_prerelease=True)
+
     def test_recien_actualizado_se_dice_una_vez(self):
         api = api_act.ApiActualizacion(recien_actualizado=True)
         self.assertTrue(api.estado()["recien_actualizado"])

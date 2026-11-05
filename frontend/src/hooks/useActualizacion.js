@@ -37,6 +37,13 @@ export function useActualizacion({ alActualizarse } = {}) {
 
   const buscar = useCallback(async () => setEstado(await api.buscar_actualizacion()), []);
   const instalar = useCallback(async () => setEstado(await api.instalar_actualizacion()), []);
+  /* Las versiones de prueba, con contraseña (Configuración › General).
+     Devuelve {ok, error}: con la contraseña mala no busca nada. */
+  const buscarBetas = useCallback(async (contrasena) => {
+    const r = await api.buscar_versiones_prueba(contrasena);
+    if (r?.ok) setEstado(r.estado);
+    return r || { ok: false, error: "No se pudo buscar." };
+  }, []);
 
-  return { estado, buscar, instalar };
+  return { estado, buscar, instalar, buscarBetas };
 }

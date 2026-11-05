@@ -53,6 +53,12 @@ export default {
     setTimeout(() => { actualizacion = { fase: "disponible", version: "2.1.0", nueva: "v2.1.1" }; }, 1500);
     return actualizacion;
   },
+  buscar_versiones_prueba: (contrasena) => {
+    if (contrasena !== "Texdigital-app") return { ok: false, error: "Esa no es la contraseña." };
+    actualizacion = { fase: "buscando", version: "2.1.0" };
+    setTimeout(() => { actualizacion = { fase: "disponible", version: "2.1.0", nueva: "v2.2.0-rc1" }; }, 1500);
+    return { ok: true, estado: actualizacion };
+  },
   instalar_actualizacion: () => {
     actualizacion = { fase: "descargando", version: "2.1.0", nueva: "v2.1.1", progreso: 0 };
     const id = setInterval(() => {

@@ -187,6 +187,9 @@ class ApiApp:
     def buscar_actualizacion(self) -> dict:
         return self._actualizacion.buscar()
 
+    def buscar_versiones_prueba(self, contrasena) -> dict:
+        return self._actualizacion.buscar_betas(contrasena)
+
     def instalar_actualizacion(self) -> dict:
         return self._actualizacion.instalar()
 

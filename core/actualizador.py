@@ -40,12 +40,6 @@ from core.version import VERSION
 REPO_GITHUB = "bcarrascom/Texdigital-app"
 API_RELEASES = f"https://api.github.com/repos/{REPO_GITHUB}/releases"
 API_ULTIMO_RELEASE = f"{API_RELEASES}/latest"
-# Variable de entorno que activa incluir_prerelease en buscar_actualizacion()
-# — ver docstring de esa función. Nunca se activa en un uso normal (nadie la
-# define al abrir la app desde el acceso directo/ícono), solo sirve para
-# probar el updater desde una versión final contra una beta antes de
-# publicarla como "Latest". (Una beta instalada ya busca betas sola.)
-VAR_ENTORNO_PRERELEASE = "SGTD_ACTUALIZAR_PRERELEASE"
 TIMEOUT_CONSULTA = 8
 TIMEOUT_DESCARGA = 120
 TAMANO_CHUNK = 262144  # 256 KiB
@@ -110,13 +104,7 @@ def _asset_para_este_os(assets: list[dict]) -> dict | None:
     return None
 
 
-def _es_prerelease(version: str) -> bool:
-    """'2.1.0-rc3' sí, '2.1.0' no — mismo criterio que el workflow de
-    release, que publica como Pre-release todo tag con guion."""
-    return "-" in version.strip().lstrip("vV")
-
-
-def buscar_actualizacion(incluir_prerelease: bool | None = None) -> dict | None:
+def buscar_actualizacion(incluir_prerelease: bool = False) -> dict | None:
     """
     Devuelve {"tag", "url", "nombre"} del release de GitHub si hay una
     versión más nueva que la actual. Devuelve None si ya se tiene la
@@ -137,17 +125,13 @@ def buscar_actualizacion(incluir_prerelease: bool | None = None) -> dict | None:
     incluir_prerelease=True consulta /releases en cambio (trae también los
     Pre-release) y toma la versión más nueva que ya tenga paquete para este
     SO — una que todavía se está subiendo (el workflow crea el release y
-    después sube los archivos) se salta en vez de dar error. Sin decir nada
-    (None), vale True si esta instalación es una beta (para probar el
-    updater de beta en beta, ver docs del workflow) o si está
-    VAR_ENTORNO_PRERELEASE, y False en una versión final: los empleados
-    nunca reciben una beta.
+    después sube los archivos) se salta en vez de dar error. Solo lo pide
+    Configuración › General › Versiones de prueba, con contraseña (ver
+    ui/api_actualizacion.py): desde v2.1.2, ni siquiera una beta instalada
+    busca betas sola (pedido de Bruno, 2026-11-05).
     """
     if not getattr(sys, "frozen", False):
         return None
-    if incluir_prerelease is None:
-        incluir_prerelease = (os.environ.get(VAR_ENTORNO_PRERELEASE) == "1"
-                              or _es_prerelease(VERSION))
 
     url = API_RELEASES if incluir_prerelease else API_ULTIMO_RELEASE
     req = urllib.request.Request(
