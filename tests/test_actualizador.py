@@ -11,6 +11,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -286,6 +287,81 @@ class TestScriptDeReemplazoEsSeguro(unittest.TestCase):
         self.assertGreater(idx_mv_nueva, contenido.index("if [ $apartada -eq 0 ]"))
         self.assertGreater(contenido.index('rm -rf "$DESTINO"'), idx_mv_nueva)
         self.assertIn('mv "$RESPALDO" "$DESTINO"', contenido)
+
+    def test_unix_devuelve_la_vieja_si_la_nueva_no_queda_corriendo(self):
+        # Confirmado a mano (rc9 en un Mac, 2026-11-04): una nueva rota no
+        # abría y la vieja ya estaba borrada. Ahora se borra solo si la
+        # nueva sigue corriendo; si no, vuelve la vieja y se abre.
+        with mock.patch.object(sys, "platform", "darwin"):
+            contenido = self._sh()
+        idx_abre = contenido.index("--args --actualizado")
+        idx_revisa = contenido.index(f"pgrep -f '{self._instalada}/Contents/MacOS/'")
+        idx_borra = contenido.index('rm -rf "$RESPALDO"\n', idx_revisa)
+        idx_devuelve = contenido.index('mv "$RESPALDO" "$DESTINO"', idx_revisa)
+        self.assertLess(idx_abre, idx_revisa)
+        self.assertLess(idx_borra, idx_devuelve)
+        self.assertNotIn('rm -rf "$RESPALDO"', contenido[idx_abre:idx_revisa])
+        self.assertNotIn("chmod", contenido)   # ditto ya deja los permisos bien
+
+
+class TestPaqueteMac(unittest.TestCase):
+    """El .app de macOS trae symlinks; zipfile los convierte en archivos de
+    texto y la app queda rota (rc9, 2026-11-04). En macOS se extrae con ditto,
+    y antes de cerrar la app se revisa que el .app extraído esté sano."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._tmp_path = Path(self._tmp.name)
+
+    def test_en_macos_extrae_con_ditto(self):
+        destino = self._tmp_path / "App.app.nueva"
+        def ditto(cmd, **kw):
+            (destino / "App.app").mkdir(parents=True)
+            (destino / "__MACOSX").mkdir()
+            return mock.Mock(returncode=0, stderr="")
+        with mock.patch.object(sys, "platform", "darwin"), mock.patch("subprocess.run", side_effect=ditto) as run:
+            nueva = act._extraer(self._tmp_path / "SistemaGestion-macos.zip", destino)
+        self.assertEqual(run.call_args.args[0][:3], ["/usr/bin/ditto", "-x", "-k"])
+        self.assertEqual(nueva, destino / "App.app")   # __MACOSX no cuenta
+
+    def test_en_windows_sigue_con_zipfile(self):
+        paquete = self._tmp_path / "SistemaGestion-windows.zip"
+        with zipfile.ZipFile(paquete, "w") as z:
+            z.writestr("Sistema de Gestion/app.exe", b"MZ")
+        with mock.patch.object(sys, "platform", "win32"), mock.patch("subprocess.run") as run:
+            nueva = act._extraer(paquete, self._tmp_path / "ext")
+        run.assert_not_called()
+        self.assertEqual(nueva.name, "Sistema de Gestion")
+
+    def _app(self, ejecutable=b"\xcf\xfa\xed\xfe resto", symlink=True):
+        app = self._tmp_path / "App.app"
+        (app / "Contents" / "MacOS").mkdir(parents=True)
+        exe = app / "Contents" / "MacOS" / "App"
+        exe.write_bytes(ejecutable)
+        exe.chmod(0o755)
+        if symlink:
+            (app / "Contents" / "Frameworks").mkdir()
+            try:
+                (app / "Contents" / "Frameworks" / "enlace").symlink_to(exe)
+            except OSError:
+                self.skipTest("este sistema no deja crear symlinks")
+        return app
+
+    def test_un_app_sano_pasa(self):
+        act._revisar_app_mac(self._app(), "App")
+
+    def test_un_app_sin_symlinks_no_pasa(self):
+        with self.assertRaises(RuntimeError):
+            act._revisar_app_mac(self._app(symlink=False), "App")
+
+    def test_un_ejecutable_que_no_es_de_macos_no_pasa(self):
+        with self.assertRaises(RuntimeError):
+            act._revisar_app_mac(self._app(ejecutable=b"../Frameworks/App", symlink=False), "App")
+
+    def test_sin_ejecutable_no_pasa(self):
+        with self.assertRaises(RuntimeError):
+            act._revisar_app_mac(self._app(symlink=False), "Otro")
 
 
 if __name__ == "__main__":

@@ -200,16 +200,50 @@ def _descargar(url: str, destino: Path, on_progreso=None) -> None:
                     on_progreso(leidos, total)
 
 
+# Lo que macOS deja solo en una carpeta y no es parte del paquete.
+_IGNORADOS = {"__MACOSX", ".DS_Store"}
+
+
 def _extraer(archivo: Path, destino: Path) -> Path | None:
+    """En macOS, el .zip se abre con `ditto` y no con zipfile (confirmado a
+    mano, rc9 en un Mac, 2026-11-04): el .app trae symlinks (Python.framework,
+    Contents/Frameworks <-> Resources) que `zip -y` guarda como symlinks, y
+    zipfile los escribe como archivos de texto con la ruta adentro. El .app
+    queda roto y no abre nunca más, sin ningún mensaje. `ditto` (el de
+    Finder) conserva symlinks, permisos y atributos."""
     destino.mkdir(parents=True, exist_ok=True)
-    if archivo.suffix == ".zip":
+    if archivo.suffix == ".zip" and sys.platform == "darwin":
+        r = subprocess.run(["/usr/bin/ditto", "-x", "-k", str(archivo), str(destino)],
+                           capture_output=True, text=True, timeout=TIMEOUT_DESCARGA)
+        if r.returncode:
+            raise RuntimeError(f"No se pudo abrir el paquete descargado ({r.stderr.strip() or r.returncode}).")
+    elif archivo.suffix == ".zip":
         with zipfile.ZipFile(archivo) as z:
             z.extractall(destino)
     else:
         with tarfile.open(archivo) as t:
             t.extractall(destino)
-    contenido = list(destino.iterdir())
+    contenido = [c for c in destino.iterdir() if c.name not in _IGNORADOS]
     return contenido[0] if len(contenido) == 1 else None
+
+
+# Los primeros 4 bytes de un ejecutable de macOS: Mach-O de 32/64 bits, en
+# los dos órdenes de bytes, o binario universal.
+_MACH_O = {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xfe\xed\xfa\xce", b"\xca\xfe\xba\xbe"}
+
+
+def _revisar_app_mac(app: Path, exe_nombre: str) -> None:
+    """Antes de cerrar nada: que el .app extraído tenga su ejecutable como un
+    ejecutable de verdad, y sus symlinks como symlinks (ver _extraer). Si
+    no, RuntimeError: la app sigue abierta y la instalada no se toca."""
+    exe = app / "Contents" / "MacOS" / exe_nombre
+    if not (exe.is_file() and os.access(exe, os.X_OK)):
+        raise RuntimeError("El paquete descargado no trae el ejecutable de la app.")
+    with open(exe, "rb") as f:
+        if f.read(4) not in _MACH_O:
+            raise RuntimeError("El ejecutable del paquete descargado no es un programa de macOS.")
+    if not any(c.is_symlink() for c in app.rglob("*")):
+        raise RuntimeError("El paquete descargado perdió sus enlaces internos al abrirse.")
 
 
 def _carpeta_instalada() -> Path:
@@ -361,14 +395,18 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
     if sys.platform == "darwin":
         abrir = f'open "{instalada}"'
         abrir_nueva = f'open "{instalada}" --args --actualizado'
+        proceso = f"{instalada}/Contents/MacOS/"
     else:
         abrir = f'"{instalada}/{exe_nombre}" &'
         abrir_nueva = f'"{instalada}/{exe_nombre}" --actualizado &'
+        proceso = f"{instalada}/{exe_nombre}"
 
     # Mismo cuidado que _lanzar_actualizador_windows (ver ahí el porqué,
     # incluido el log persistente): la instalación vieja se APARTA con mv
     # (atómico en el mismo disco) en vez de borrarse, y vuelve a su lugar
-    # si la nueva no llega.
+    # si la nueva no llega. Además, la vieja solo se borra si la nueva sigue
+    # CORRIENDO 10 s después de abrirla: una que no arranca (rc9 en un Mac,
+    # ver _extraer) se cambia por la vieja, que vuelve a abrirse.
     log = ruta_log_actualizador()
     respaldo = _respaldo_de(instalada)
     script = tmp / "actualizar.sh"
@@ -401,10 +439,19 @@ def _lanzar_actualizador_unix(instalada: Path, nueva: Path, tmp: Path, exe_nombr
         f"    {abrir}\n"
         f'elif mv "{nueva}" "$DESTINO"; then\n'
         '    log "mv OK"\n'
-        '    chmod -R +x "$DESTINO" 2>/dev/null\n'
+        # En macOS los permisos ya vienen bien (ditto) y no se tocan.
+        + ("" if sys.platform == "darwin" else '    chmod -R +x "$DESTINO" 2>/dev/null\n') +
         f"    {abrir_nueva}\n"
-        '    log "Relanzado"\n'
-        '    rm -rf "$RESPALDO"\n'
+        "    sleep 10\n"
+        f"    if pgrep -f '{proceso}' >/dev/null 2>&1; then\n"
+        '        log "Relanzado: la version nueva esta corriendo"\n'
+        '        rm -rf "$RESPALDO"\n'
+        "    else\n"
+        '        log "La version nueva no quedo corriendo. Se devuelve la anterior."\n'
+        '        rm -rf "$DESTINO"\n'
+        '        mv "$RESPALDO" "$DESTINO"\n'
+        f"        {abrir}\n"
+        "    fi\n"
         "else\n"
         '    log "mv FALLO. Se devuelve la version anterior."\n'
         '    rm -rf "$DESTINO"\n'
@@ -434,8 +481,13 @@ def aplicar_actualizacion(release: dict, on_progreso=None) -> None:
     cruzar de disco, y si no se puede escribir ahí, falla acá, con la app
     todavía abierta, y no a mitad del reemplazo.
     """
-    tmp = Path(tempfile.mkdtemp(prefix="sgtd_update_"))
     instalada = _carpeta_instalada()
+    # Un .app abierto sin moverlo de donde se descomprimió corre desde una
+    # copia de solo lectura que arma macOS (App Translocation): no hay nada
+    # que reemplazar ahí.
+    if sys.platform == "darwin" and "/AppTranslocation/" in str(instalada):
+        raise RuntimeError("Para poder actualizarla, mueve la app a la carpeta Aplicaciones con el Finder y ábrela desde ahí.")
+    tmp = Path(tempfile.mkdtemp(prefix="sgtd_update_"))
     extraida = instalada.with_name(instalada.name + ".nueva")
     try:
         paquete = tmp / release["nombre"]
@@ -446,6 +498,8 @@ def aplicar_actualizacion(release: dict, on_progreso=None) -> None:
             raise RuntimeError("El paquete descargado no tiene la carpeta esperada.")
 
         exe_nombre = Path(sys.executable).name
+        if sys.platform == "darwin":
+            _revisar_app_mac(nueva, exe_nombre)
 
         if sys.platform == "win32":
             _lanzar_actualizador_windows(instalada, nueva, tmp, exe_nombre)
