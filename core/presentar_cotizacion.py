@@ -160,6 +160,10 @@ def generar_html(json_dict: dict) -> Path:
     # muestra es el de quien haya ganado.
     if totales["fuente_descuento"] == "textil":
         pct_mostrado = totales["descuento_textil_pct"]
+    elif totales["fuente_descuento"] == "manual":
+        # Con descuentos puestos a mano (core.precios), el % del total. El
+        # detalle por producto en el impreso queda pendiente (Bruno, 2026-11-06).
+        pct_mostrado = round(totales["descuento"] / totales["neto"] * 100, 1) if totales["neto"] else 0
     else:
         pct_mostrado = descuento_pct
     etiqueta_descuento = f"Descuento ({pct_mostrado:g}%)"

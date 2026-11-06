@@ -715,38 +715,57 @@ def descuento_textil(productos: list[dict], **kwargs) -> dict:
     return {"monto": monto, "neto": neto, "pct_visual": pct_visual}
 
 
-def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
-                      despacho: float = 0.0, instalacion: float = 0.0,
-                      **kwargs) -> dict:
-    """
-    Suma el costo de todos los productos y aplica descuento + IVA.
-    `despacho` e `instalacion` (opcionales) son montos fijos que se suman
-    directo al neto — no son productos (no tienen medidas, no se guardan
-    en la lista `productos`), son cargos aparte que hoy se cobran a mano
-    porque todavía no se generan guías de despacho ni se detalla la
-    instalación. Quedan sujetos al mismo descuento % e IVA que el resto —
-    son un ítem más de la cotización cada uno.
 
-    Descuento-textil (ver descuento_textil): se calcula siempre, pero SOLO
-    se aplica uno de los dos descuentos, el que dé más ahorro en $ — nunca
-    los dos juntos. El despacho/instalación no entran en la comparación del
-    descuento-textil (no son tela), pero si gana el % normal, sí quedan
-    descontados igual que antes (comportamiento sin cambios).
 
-    Piso mínimo (ver docstring del módulo, "Piso mínimo y descuentos" y
-    en_piso_minimo_por_producto): el % manual tampoco se aplica sobre el
-    costo_impresion de las líneas cuyo grupo de textil/tela está cobrando
-    el mínimo — se descuenta ese monto de la base antes de calcular
-    monto_normal. El despacho/instalación no se ven afectados (no son
-    tela).
+# ── Descuentos puestos a mano ────────────────────────────────────────────────
+# Pedido de Bruno (2026-11-06): el usuario puede ajustar, agregar o quitar el
+# descuento de cada producto, del despacho, de la instalación y del pedido
+# entero. Un descuento manual es {"tipo": "pct" | "monto", "valor": número}
+# (el usuario edita el % o los $; se guarda el que escribió, y el otro se
+# calcula: así, si cambia el precio, se mantiene lo que decidió):
+#   - de un producto: d["descuento_manual"]. REEMPLAZA al automático de esa
+#     línea, y el % es sobre el precio completo del producto, el mínimo
+#     incluido (decisión de Bruno: el usuario puede descontar también lo que
+#     cobra el mínimo).
+#   - de despacho e instalación: manuales["despacho"] / manuales["instalacion"],
+#     igual que un producto.
+#   - del pedido: manuales["pedido"], un descuento ADICIONAL sobre lo que queda
+#     después de los de cada línea. (Repartir un % entre todas las líneas es
+#     otra cosa: eso lo hace la pantalla, poniéndole ese manual a cada una.)
+# "Restablecer descuentos" los borra y vuelven los automáticos.
 
-    Devuelve {neto, descuento, descuento_textil_pct, fuente_descuento,
-    neto_total, iva, iva_pct, total}. `descuento_textil_pct` es el % (derivado,
-    "visual") del descuento-textil calculado para esta cotización, se
-    devuelve siempre (haya ganado o no) para poder mostrarlo en pantalla.
-    `fuente_descuento` es "normal" o "textil", según cuál se aplicó.
-    kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
-    ver ahí)."""
+def manual_valido(manual) -> dict | None:
+    """Un descuento manual tal como llega de la pantalla, limpio: {"tipo":
+    "pct" | "monto", "valor": n ≥ 0} (un % no pasa de 100), o None."""
+    if not isinstance(manual, dict) or manual.get("tipo") not in ("pct", "monto"):
+        return None
+    try:
+        valor = float(str(manual.get("valor", "")).replace(",", "."))
+    except ValueError:
+        return None
+    valor = max(0.0, valor)
+    if manual["tipo"] == "pct":
+        valor = min(valor, 100.0)
+    return {"tipo": manual["tipo"], "valor": valor}
+
+
+def monto_manual(manual: dict | None, base: float) -> float | None:
+    """Los $ de un descuento manual sobre `base` (entre 0 y `base`), o None
+    si no hay manual."""
+    if not manual:
+        return None
+    valor = float(manual.get("valor") or 0.0)
+    monto = base * valor / 100 if manual.get("tipo") == "pct" else valor
+    return max(0.0, min(monto, base)) if base > 0 else 0.0
+
+
+def hay_manuales(productos: list[dict], manuales: dict | None = None) -> bool:
+    return any(p.get("descuento_manual") for p in productos) or any((manuales or {}).values())
+
+
+def _costo_automatico(productos: list[dict], descuento_pct: float = 0.0,
+                      despacho: float = 0.0, instalacion: float = 0.0, **kwargs) -> dict:
+    """costo_cotizacion sin descuentos manuales — ver ahí."""
     # Piso mínimo de facturación por grupo de textil/tela (ver docstring
     # del módulo y ml_o_area_facturable_por_producto).
     facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
@@ -771,24 +790,234 @@ def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
         descuento = monto_normal
         fuente_descuento = "normal"
 
-    neto_total = neto - descuento
-    iva_pct = float(_reglas(kwargs.get("reglas"))["iva"])
-    iva = neto_total * iva_pct / 100
-    total = neto_total + iva
-    return {
+    return _con_iva({
         "neto":                 neto,
         "descuento":            descuento,
         "descuento_textil_pct": dtextil["pct_visual"],
         "fuente_descuento":     fuente_descuento,
-        "neto_total":           neto_total,
-        "iva":                  iva,
-        "iva_pct":              iva_pct,
-        "total":                total,
+    }, kwargs.get("reglas"))
+
+
+def _con_iva(totales: dict, reglas: dict | None) -> dict:
+    """Completa neto_total, iva, iva_pct y total a partir de neto y descuento."""
+    neto_total = totales["neto"] - totales["descuento"]
+    iva_pct = float(_reglas(reglas)["iva"])
+    iva = neto_total * iva_pct / 100
+    return {**totales, "neto_total": neto_total, "iva": iva, "iva_pct": iva_pct, "total": neto_total + iva}
+
+
+def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
+                      despacho: float = 0.0, instalacion: float = 0.0,
+                      manuales: dict | None = None, **kwargs) -> dict:
+    """
+    Suma el costo de todos los productos y aplica descuento + IVA.
+    `despacho` e `instalacion` (opcionales) son montos fijos que se suman
+    directo al neto — no son productos (no tienen medidas, no se guardan
+    en la lista `productos`), son cargos aparte que hoy se cobran a mano
+    porque todavía no se generan guías de despacho ni se detalla la
+    instalación. Quedan sujetos al mismo descuento % e IVA que el resto —
+    son un ítem más de la cotización cada uno.
+
+    Descuento-textil (ver descuento_textil): se calcula siempre, pero SOLO
+    se aplica uno de los dos descuentos, el que dé más ahorro en $ — nunca
+    los dos juntos. El despacho/instalación no entran en la comparación del
+    descuento-textil (no son tela), pero si gana el % normal, sí quedan
+    descontados igual que antes (comportamiento sin cambios).
+
+    Piso mínimo (ver docstring del módulo, "Piso mínimo y descuentos" y
+    en_piso_minimo_por_producto): el % manual tampoco se aplica sobre el
+    costo_impresion de las líneas cuyo grupo de textil/tela está cobrando
+    el mínimo — se descuenta ese monto de la base antes de calcular
+    monto_normal. El despacho/instalación no se ven afectados (no son
+    tela).
+
+    Descuentos puestos a mano (d["descuento_manual"] de cada producto y
+    `manuales`, ver "Descuentos puestos a mano" más arriba): reemplazan al
+    automático de su línea, y el del pedido se suma al final. Sin ninguno, el
+    cálculo es exactamente el de siempre.
+
+    Devuelve {neto, descuento, descuento_textil_pct, fuente_descuento,
+    neto_total, iva, iva_pct, total}. `descuento_textil_pct` es el % (derivado,
+    "visual") del descuento-textil calculado para esta cotización, se
+    devuelve siempre (haya ganado o no) para poder mostrarlo en pantalla.
+    `fuente_descuento` es "normal" o "textil", según cuál se aplicó, o
+    "manual" si hay algún descuento puesto a mano.
+    kwargs se pasan tal cual a costo_producto (catálogos fijos para tests,
+    ver ahí)."""
+    if not hay_manuales(productos, manuales):
+        return _costo_automatico(productos, descuento_pct, despacho=despacho, instalacion=instalacion, **kwargs)
+    return explicar_descuento(productos, descuento_pct, despacho=despacho, instalacion=instalacion,
+                              manuales=manuales, **kwargs)["totales"]
+
+
+def _nombre_linea(d: dict) -> str:
+    if "tela" in d:
+        return d.get("tela") or "Backlight"
+    return d.get("producto") or d.get("textil") or "Producto"
+
+
+def _linea(precio: float, automatico: dict, manual: dict | None) -> dict:
+    """Una línea con descuento (producto, despacho o instalación): el
+    automático, y el manual si hay, que lo reemplaza."""
+    monto_m = monto_manual(manual, precio)
+    if monto_m is None:
+        monto, pct, razon = automatico["monto"], automatico["pct"], automatico["razon"]
+    else:
+        monto, pct, razon = monto_m, (monto_m / precio * 100 if precio else 0.0), "manual"
+    return {"precio": precio, "monto": monto, "total": precio - monto,
+            # Un manual de $0 sigue siendo manual: el usuario QUITÓ ese descuento.
+            "pct": pct if monto else 0.0, "razon": razon if (monto or manual) else None,
+            "manual": manual or None, "automatico": automatico}
+
+
+def explicar_descuento(productos: list[dict], descuento_pct: float = 0.0,
+                       despacho: float = 0.0, instalacion: float = 0.0,
+                       manuales: dict | None = None, **kwargs) -> dict:
+    """Cómo se llegó al descuento de la cotización, para MOSTRARLO y para
+    editarlo (pedidos de Bruno, 2026-11-06: los usuarios no entendían de
+    dónde salía, y tienen que poder cambiarlo). Mismas reglas que
+    costo_cotizacion; la suma de las líneas calza al peso con el total.
+
+        aplicado     el automático que se aplicó: "contacto" | "volumen" | None
+        contacto     {"pct", "monto"}: lo que da (o dio) el % del contacto
+        volumen      {"monto", "grupos": [{"nombre", "m2", "pct", "base", "monto",
+                      "en_minimo": [nombres]}]}: lo que da (o dio) el de volumen,
+                     un grupo por textil (todo el backlight es uno solo)
+        tramo_desde  m² desde los que hay descuento por volumen (el tramo más bajo)
+        productos    una línea por producto (alineado con `productos`):
+                       {"nombre", "precio", "monto", "total", "pct", "razon",
+                        "manual", "automatico", "en_minimo", "minimo"}
+                     "precio" es antes del descuento (con el mínimo ya sumado);
+                     "monto", el descuento que se aplica; "razon", "contacto" |
+                     "volumen" | "manual" | None. "pct" del automático es su
+                     regla (el de volumen, sobre la impresión); el del manual,
+                     sobre el precio. "automatico" {"monto", "pct", "razon"} es
+                     el que tendría sin el manual. "minimo" es None, o {"pct",
+                     "monto"}: lo que sube la impresión por cobrar el mínimo
+                     (pct sobre la impresión de lo que de verdad se imprime).
+        despacho, instalacion   None si no hay, o una línea como las de arriba
+        pedido       {"manual", "base", "monto", "pct"}: el adicional del pedido,
+                     sobre "base" (lo que queda después de las líneas)
+        hay_manuales si hay algún descuento puesto a mano
+        totales      lo mismo que costo_cotizacion
+        minimo       {"ml", "m2"}: el mínimo que cobra un textil (ver docstring
+                     del módulo, "Piso mínimo y descuentos")
+    """
+    manuales = manuales or {}
+    r = _reglas(kwargs.get("reglas"))
+    tramos = r["tramos_descuento"]
+    pct_contacto = float(descuento_pct or 0.0)
+    auto = _costo_automatico(productos, pct_contacto, despacho=despacho, instalacion=instalacion, **kwargs)
+    facturables = ml_o_area_facturable_por_producto(productos, **kwargs)
+    en_minimo = en_piso_minimo_por_producto(productos, **kwargs)
+    costos = [costo_producto(p, ml_o_area_facturable=f, **kwargs) for p, f in zip(productos, facturables)]
+
+    impresion_en_minimo = sum(c["costo_impresion"] for c, m in zip(costos, en_minimo) if m)
+    monto_contacto = (auto["neto"] - impresion_en_minimo) * pct_contacto / 100
+
+    grupos: dict = {}
+    for p, c, m in zip(productos, costos, en_minimo):
+        g = grupos.setdefault(_clave_grupo_descuento_textil(p), {"m2": 0.0, "base": 0.0, "en_minimo": []})
+        g["nombre"] = "Backlight" if "tela" in p else (p.get("textil") or "Sin textil")
+        g["m2"] += _area_producto(p)
+        if m:
+            nombre = _nombre_linea(p)
+            if nombre not in g["en_minimo"]:
+                g["en_minimo"].append(nombre)
+        else:
+            g["base"] += c["costo_impresion"]
+    lista_grupos = []
+    for g in grupos.values():
+        pct = tramo_descuento_textil(g["m2"], tramos)
+        lista_grupos.append({"nombre": g["nombre"], "m2": g["m2"], "pct": pct, "base": g["base"],
+                             "monto": g["base"] * pct / 100, "en_minimo": g["en_minimo"]})
+
+    if auto["fuente_descuento"] == "textil":
+        aplicado = "volumen"
+    elif auto["descuento"] > 0:
+        aplicado = "contacto"
+    else:
+        aplicado = None
+
+    lineas = _lineas_automaticas(productos, pct_contacto, auto, en_minimo, **kwargs)
+    por_producto = []
+    for p, c, f, m, lin in zip(productos, costos, facturables, en_minimo, lineas):
+        imp, resto = c["costo_impresion"], c["total"] - c["costo_impresion"]
+        monto_auto = imp * lin["impresion"] + resto * lin["resto"]
+        pct_auto = 100 * (lin["resto"] if aplicado == "contacto" else lin["impresion"])
+        automatico = {"monto": monto_auto, "pct": pct_auto if monto_auto else 0.0,
+                      "razon": aplicado if monto_auto else None}
+        # Lo que agrega el mínimo: la impresión de lo que se cobra (f) y no
+        # se imprime (el ML/M² real), como % de la impresión real.
+        real = c["ml_o_area"] or 0.0
+        minimo = None
+        if m and f > 0 and real > 0:
+            minimo = {"pct": (f / real - 1) * 100, "monto": imp * (1 - real / f)}
+        por_producto.append({"nombre": _nombre_linea(p), **_linea(c["total"], automatico, p.get("descuento_manual")),
+                             "en_minimo": m, "minimo": minimo})
+
+    f_extras = pct_contacto / 100 if aplicado == "contacto" else 0.0
+
+    def extra(clave, precio):
+        if not precio:
+            return None
+        auto_monto = precio * f_extras
+        automatico = {"monto": auto_monto, "pct": pct_contacto if auto_monto else 0.0,
+                      "razon": "contacto" if auto_monto else None}
+        return {"nombre": "Despacho" if clave == "despacho" else "Instalación",
+                **_linea(precio, automatico, manuales.get(clave))}
+
+    lineas_extra = {"despacho": extra("despacho", despacho or 0.0),
+                    "instalacion": extra("instalacion", instalacion or 0.0)}
+
+    suma_lineas = sum(x["monto"] for x in por_producto) + sum(x["monto"] for x in lineas_extra.values() if x)
+    base_pedido = auto["neto"] - suma_lineas
+    monto_pedido = monto_manual(manuales.get("pedido"), base_pedido) or 0.0
+    pedido = {"manual": manuales.get("pedido") or None, "base": base_pedido, "monto": monto_pedido,
+              "pct": monto_pedido / base_pedido * 100 if base_pedido > 0 else 0.0}
+
+    con_manuales = hay_manuales(productos, manuales)
+    if con_manuales:
+        totales = _con_iva({"neto": auto["neto"], "descuento": suma_lineas + monto_pedido,
+                            "descuento_textil_pct": auto["descuento_textil_pct"],
+                            "fuente_descuento": "manual"}, kwargs.get("reglas"))
+    else:
+        totales = auto
+
+    return {
+        "aplicado": aplicado,
+        "contacto": {"pct": pct_contacto, "monto": monto_contacto},
+        "volumen": {"monto": sum(g["monto"] for g in lista_grupos), "grupos": lista_grupos},
+        "tramo_desde": min((float(t[0]) for t in tramos), default=None),
+        "productos": por_producto,
+        **lineas_extra,
+        "pedido": pedido,
+        "hay_manuales": con_manuales,
+        "totales": totales,
+        "minimo": {"ml": float(r["ml_minimo"]), "m2": float(r["m2_minimo"])},
     }
 
 
+def _lineas_automaticas(productos: list[dict], descuento_pct: float, auto: dict,
+                        en_minimo: list[bool], **kwargs) -> list[dict]:
+    """descuento_por_linea sin descuentos manuales — ver ahí. `auto` es lo que
+    devolvió _costo_automatico para estos mismos productos."""
+    if auto["fuente_descuento"] == "normal":
+        f = (descuento_pct or 0.0) / 100
+        return [{"impresion": 0.0 if m else f, "resto": f} for m in en_minimo]
+    tramos = _reglas(kwargs.get("reglas"))["tramos_descuento"]
+    grupos: dict = {}
+    for p in productos:
+        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append(p)
+    pct_grupo = {clave: tramo_descuento_textil(sum(_area_producto(p) for p in grupo), tramos)
+                 for clave, grupo in grupos.items()}
+    return [{"impresion": 0.0 if m else pct_grupo[_clave_grupo_descuento_textil(p)] / 100, "resto": 0.0}
+            for p, m in zip(productos, en_minimo)]
+
+
 def descuento_por_linea(productos: list[dict], descuento_pct: float = 0.0,
-                        despacho: float = 0.0, instalacion: float = 0.0, **kwargs) -> list[dict]:
+                        despacho: float = 0.0, instalacion: float = 0.0,
+                        manuales: dict | None = None, **kwargs) -> list[dict]:
     """Qué parte de cada producto se llevó el descuento de la cotización:
     [{"impresion": fracción, "resto": fracción}] (0,1 = 10 %), alineado con
     `productos` — para repartir el descuento del total entre lo que se
@@ -800,20 +1029,30 @@ def descuento_por_linea(productos: list[dict], descuento_pct: float = 0.0,
         de las líneas que cobran el piso mínimo;
       - el de volumen ("textil"): solo a la impresión, con el % del tramo de
         su grupo, y tampoco a las líneas en piso mínimo.
+    Un descuento manual de un producto es sobre todo su precio (la misma
+    fracción a la impresión y al resto), y el adicional del pedido se reparte
+    parejo sobre lo que queda de cada uno.
     "resto" es todo lo que no es la impresión (estructuras, terminaciones,
     caja, materiales)."""
     if not productos:
         return []
-    totales = costo_cotizacion(productos, descuento_pct, despacho=despacho, instalacion=instalacion, **kwargs)
-    en_minimo = en_piso_minimo_por_producto(productos, **kwargs)
-    if totales["fuente_descuento"] == "normal":
-        f = (descuento_pct or 0.0) / 100
-        return [{"impresion": 0.0 if m else f, "resto": f} for m in en_minimo]
-    tramos = _reglas(kwargs.get("reglas"))["tramos_descuento"]
-    grupos: dict = {}
-    for p in productos:
-        grupos.setdefault(_clave_grupo_descuento_textil(p), []).append(p)
-    pct_grupo = {clave: tramo_descuento_textil(sum(_area_producto(p) for p in grupo), tramos)
-                 for clave, grupo in grupos.items()}
-    return [{"impresion": 0.0 if m else pct_grupo[_clave_grupo_descuento_textil(p)] / 100, "resto": 0.0}
-            for p, m in zip(productos, en_minimo)]
+    if not hay_manuales(productos, manuales):
+        auto = _costo_automatico(productos, descuento_pct, despacho=despacho, instalacion=instalacion, **kwargs)
+        return _lineas_automaticas(productos, descuento_pct, auto,
+                                   en_piso_minimo_por_producto(productos, **kwargs), **kwargs)
+
+    e = explicar_descuento(productos, descuento_pct, despacho=despacho, instalacion=instalacion,
+                           manuales=manuales, **kwargs)
+    auto = _costo_automatico(productos, descuento_pct, despacho=despacho, instalacion=instalacion, **kwargs)
+    automaticas = _lineas_automaticas(productos, descuento_pct, auto,
+                                      en_piso_minimo_por_producto(productos, **kwargs), **kwargs)
+    f_pedido = e["pedido"]["pct"] / 100
+    resultado = []
+    for linea, automatica in zip(e["productos"], automaticas):
+        if linea["manual"]:
+            f = linea["monto"] / linea["precio"] if linea["precio"] else 0.0
+            fracciones = {"impresion": f, "resto": f}
+        else:
+            fracciones = automatica
+        resultado.append({k: v + (1 - v) * f_pedido for k, v in fracciones.items()})
+    return resultado
