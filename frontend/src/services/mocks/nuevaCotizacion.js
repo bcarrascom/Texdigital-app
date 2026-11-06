@@ -2,6 +2,8 @@
    fórmula INVENTADA: sirven para mirar la pantalla, no para cotizar. En la
    app, todo número sale de core/precios.py. */
 
+import { montoManual } from "@/components/Descuentos/Descuentos";
+
 const TEXTILES_ANCHOS = { "Poliéster satinado": 1.5, "Lona mate": 3.2, "Felpa gruesa": 1.4, "Tela backlit": 3 };
 
 const catalogos = {
@@ -101,9 +103,43 @@ export function contextoNuevaCotizacion({ editar, pendiente } = {}) {
 
 const tomados = new Set(["9014", "9015"]);
 
+/* Los descuentos del resumen, simplificados: el automático es siempre el %
+   del contacto sobre todo; el manual lo reemplaza y el del pedido va sobre
+   lo que queda (la regla de verdad está en core.precios.explicar_descuento). */
+function calcularDescuentos(estado) {
+  const pctContacto = n(estado.cliente?.descuento);
+  const linea = (nombre, precio, manual) => {
+    const auto = { monto: (precio * pctContacto) / 100, pct: pctContacto, razon: pctContacto ? "contacto" : null };
+    const m = montoManual(manual, precio);
+    return m == null
+      ? { nombre, precio, monto: auto.monto, total: precio - auto.monto, pct: auto.pct, razon: auto.razon, manual: null, automatico: auto }
+      : { nombre, precio, monto: m, total: precio - m, pct: precio ? (m / precio) * 100 : 0, razon: "manual", manual, automatico: auto };
+  };
+  const extra = estado.descuentos_extra || {};
+  const productos = estado.productos.map((p) => {
+    const c = calcular(p);
+    return c ? linea(p.producto || p.tela, c.total, p.descuento_manual) : null;
+  });
+  const despacho = estado.despacho ? linea("Despacho", estado.despacho, extra.despacho) : null;
+  const instalacion = estado.instalacion ? linea("Instalación", estado.instalacion, extra.instalacion) : null;
+  const todas = [...productos, despacho, instalacion].filter(Boolean);
+  const neto = todas.reduce((s, l) => s + l.precio, 0);
+  const lineas = todas.reduce((s, l) => s + l.monto, 0);
+  const base = neto - lineas;
+  const montoPedido = montoManual(extra.pedido, base) || 0;
+  const descuento = lineas + montoPedido, netoTotal = neto - descuento;
+  return {
+    productos, despacho, instalacion,
+    pedido: { manual: extra.pedido || null, base, monto: montoPedido, pct: base > 0 ? (montoPedido / base) * 100 : 0 },
+    hay_manuales: productos.some((l) => l?.manual) || Object.values(extra).some(Boolean),
+    totales: { neto, descuento, neto_total: netoTotal, iva_pct: 19, iva: netoTotal * 0.19, total: netoTotal * 1.19 },
+  };
+}
+
 export default {
   obtener_catalogos: () => structuredClone(catalogos),
   calcular_productos: (productos) => productos.map(calcular),
+  calcular_descuentos: calcularDescuentos,
   numero_disponible: (numero, propio) => numero === propio || !tomados.has(String(numero)),
   verificar_materiales: (productos) => (productos.some((p) => p.tipo === "backlight" && n(p.ancho) * n(p.alto) * (parseInt(p.cantidad, 10) || 0) > 5)
     ? [{ textil: "Tela backlit", faltante: 3.5, necesario: 16, disponible: 12.5 }] : []),

@@ -1,20 +1,49 @@
 import { forwardRef } from "react";
+import { textoRazon } from "@/components/Descuentos/Descuentos";
 import * as fmt from "@/utils/formato";
 import { completo } from "./producto";
 
 /* El último panel del carril: la tabla de todos los productos (clic en una
-   fila vuelve a ese producto), los totales y Guardar / Guardar y abrir. */
+   fila vuelve a ese producto), los descuentos, los totales y Guardar /
+   Guardar y abrir.
 
-const Cifra = ({ et, val, total }) => (
-  <div className={`cifra${total ? " cifra--total" : ""}`}>
+   Los descuentos (pedido de Bruno, 2026-11-06) vienen de
+   api.calcular_descuentos (`desglose`, core.precios.explicar_descuento): el
+   automático de cada línea, o el puesto a mano. Clic en el descuento de una
+   fila lo cambia (onEditarDescuento("p0"…, "despacho", "instalacion")); el
+   del pedido y Restablecer van abajo. */
+
+const Cifra = ({ et, val, total, clase = "" }) => (
+  <div className={`cifra${total ? " cifra--total" : ""} ${clase}`}>
     <span className="cifra__et">{et}</span><span className="cifra__val">{val}</span>
   </div>
 );
 
 const medida = (v) => (v ? fmt.medida(String(v).replace(",", ".")) : "—");
 
+/* La celda del descuento de una línea: el monto y debajo la razón. Se aprieta
+   para cambiarlo (sin seguir el clic de la fila, que vuelve al producto). */
+function CeldaDescuento({ linea, onEditar }) {
+  if (!linea) return <td className="num">—</td>;
+  const con = linea.monto > 0 || linea.manual;
+  return (
+    <td className="num">
+      <button type="button" className="celda-descuento" title="Cambiar el descuento"
+              onClick={(e) => { e.stopPropagation(); onEditar(); }}>
+        {con ? (
+          <>
+            <b>− {fmt.pesos(linea.monto)}</b>
+            <span>{textoRazon(linea.pct, linea.razon)}</span>
+          </>
+        ) : <span className="celda-descuento__agregar">+ Descuento</span>}
+      </button>
+    </td>
+  );
+}
+
 const Resumen = forwardRef(function Resumen(
-  { productos, despacho, instalacion, faltanMateriales, onIr, onQuitar, onAgregar, onGuardar }, ref,
+  { productos, despacho, instalacion, desglose, faltanMateriales, onIr, onQuitar, onAgregar, onGuardar,
+    onEditarDescuento, onRestablecer }, ref,
 ) {
   let cant = 0, ml = 0, m2 = 0, total = 0;
   productos.forEach((p) => {
@@ -24,8 +53,11 @@ const Resumen = forwardRef(function Resumen(
     m2 += c.m2 || 0;
     total += c.total || 0;
   });
-  const general = total + (despacho || 0) + (instalacion || 0);
   const superficie = [ml ? `${fmt.cantidad(ml)} ML` : "", m2 ? `${fmt.cantidad(m2)} M²` : ""].filter(Boolean).join(" · ");
+  const t = desglose?.totales;
+  const pedido = desglose?.pedido?.monto || 0;
+  const descuentoProductos = (desglose?.productos || []).reduce((s, l) => s + (l?.monto || 0), 0);
+  const extras = [["despacho", "Despacho", despacho], ["instalacion", "Instalación", instalacion]].filter(([, , v]) => v);
 
   return (
     <div className="tablero" ref={ref}>
@@ -33,7 +65,7 @@ const Resumen = forwardRef(function Resumen(
         <header className="resumen__cab">
           <div>
             <h1 className="hoja__titulo">Resumen</h1>
-            <p className="hoja__bajada">Clic en una fila para volver a ese producto.</p>
+            <p className="hoja__bajada">Clic en una fila para volver a ese producto; en su descuento, para cambiarlo.</p>
           </div>
           <span className="barra__sep" />
           <button className="btn btn--secundario btn--chico" type="button" onClick={onAgregar}>+ Agregar producto</button>
@@ -60,6 +92,7 @@ const Resumen = forwardRef(function Resumen(
                 <th className="num" style={{ width: "8rem" }}>Superficie</th>
                 <th className="num" style={{ width: "8rem" }}>Valor unit.</th>
                 <th className="num" style={{ width: "8rem" }}>Total</th>
+                <th className="num" style={{ width: "9rem" }}>Descuento</th>
                 <th style={{ width: "2.5rem" }} />
               </tr>
             </thead>
@@ -81,6 +114,7 @@ const Resumen = forwardRef(function Resumen(
                     </td>
                     <td className="num">{c.valor_unitario != null ? fmt.pesos(c.valor_unitario) : "—"}</td>
                     <td className="num">{c.total != null ? fmt.pesos(c.total) : "—"}</td>
+                    <CeldaDescuento linea={desglose?.productos?.[i]} onEditar={() => onEditarDescuento(`p${i}`)} />
                     <td>
                       <span className="quitar-fila" title="Quitar"
                             onClick={(e) => { e.stopPropagation(); onQuitar(i); }}>✕</span>
@@ -92,8 +126,17 @@ const Resumen = forwardRef(function Resumen(
                 <td /><td /><td>TOTAL</td><td />
                 <td className="num">{cant}</td><td /><td />
                 <td className="num">{superficie || "—"}</td>
-                <td /><td className="num">{total ? fmt.pesos(total) : "—"}</td><td />
+                <td /><td className="num">{total ? fmt.pesos(total) : "—"}</td>
+                <td className="num">{descuentoProductos ? `− ${fmt.pesos(descuentoProductos)}` : "—"}</td><td />
               </tr>
+              {extras.map(([clave, nombre, monto]) => (
+                <tr key={clave} data-extra="">
+                  <td /><td /><td>{nombre}</td><td colSpan={6} />
+                  <td className="num">{fmt.pesos(monto)}</td>
+                  <CeldaDescuento linea={desglose?.[clave]} onEditar={() => onEditarDescuento(clave)} />
+                  <td />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -101,10 +144,27 @@ const Resumen = forwardRef(function Resumen(
         <div className="resumen__pie">
           <div className="resumen__cierre">
             <div className="cifras">
-              <Cifra et="Productos" val={total ? fmt.pesos(total) : "—"} />
-              {!!despacho && <Cifra et="Despacho" val={fmt.pesos(despacho)} />}
-              {!!instalacion && <Cifra et="Instalación" val={fmt.pesos(instalacion)} />}
-              <Cifra et="Total" val={general ? fmt.pesos(general) : "—"} total />
+              <Cifra et="Subtotal" val={t ? fmt.pesos(t.neto) : "—"} />
+              {!!(t?.descuento - pedido) && (
+                <Cifra et="Descuentos" val={`− ${fmt.pesos(t.descuento - pedido)}`} clase="cifra--descuento" />
+              )}
+              {!!pedido && (
+                <Cifra et={`Adicional del pedido ${textoRazon(desglose.pedido.pct, "pedido").replace(" (pedido)", "")}`}
+                       val={`− ${fmt.pesos(pedido)}`} clase="cifra--descuento" />
+              )}
+              {!!t?.descuento && <Cifra et="Neto total" val={fmt.pesos(t.neto_total)} />}
+              {t && <Cifra et={`IVA (${fmt.cantidad(t.iva_pct)}%)`} val={fmt.pesos(t.iva)} />}
+              <Cifra et="Total" val={t ? fmt.pesos(t.total) : "—"} total />
+            </div>
+            <div className="resumen__descuentos">
+              <button className="btn btn--fantasma btn--chico" type="button" onClick={() => onEditarDescuento("pedido")}>
+                Descuento del pedido
+              </button>
+              {desglose?.hay_manuales && (
+                <button className="btn btn--fantasma btn--chico" type="button" onClick={onRestablecer}>
+                  Restablecer descuentos
+                </button>
+              )}
             </div>
           </div>
           <span className="barra__sep" />
