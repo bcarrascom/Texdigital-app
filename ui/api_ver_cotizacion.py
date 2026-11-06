@@ -18,7 +18,7 @@ from core.repositorio_cotizaciones import (
     recalcular_descuentos,
 )
 from core import lista_precios
-from core.precios import costo_producto, ml_o_area_facturable_por_producto
+from core.precios import costo_producto, explicar_descuento, manual_valido, ml_o_area_facturable_por_producto
 from core.presentar_cotizacion import generar_html
 from core.repositorio_inventario import calcular_faltantes, consumir_para_op
 from core.repositorio_materiales import (
@@ -67,6 +67,14 @@ def _producto_a_json_pantalla(p_json: dict, p_interno: dict, costo: dict) -> dic
         "m2":            costo["ml_o_area"] if es_bl else None,
         "total":         costo["total"],
     }
+
+
+def _poner_manual(destino: dict, clave: str, manual) -> None:
+    limpio = manual_valido(manual)
+    if limpio is None:
+        destino.pop(clave, None)
+    else:
+        destino[clave] = limpio
 
 
 class ApiVerCotizacion:
@@ -136,6 +144,17 @@ class ApiVerCotizacion:
         else:
             descuento_pct_mostrado = descuento_pct
 
+        # De dónde sale el descuento, total y por producto (pedido de Bruno,
+        # 2026-11-06): la pantalla lo muestra en cada ficha y en la plata, y
+        # deja cambiarlo (ver guardar_descuentos).
+        descuento = explicar_descuento(productos_internos, **lista_precios.argumentos_descuento(datos), **kwargs)
+        del descuento["totales"]
+        productos = [
+            {**_producto_a_json_pantalla(pj, pi, c), "descuento": dp}
+            for pj, pi, c, dp in zip(productos_json, productos_internos, costos, descuento["productos"])
+        ]
+        del descuento["productos"]
+
         return {
             "numero":       datos.get("Cotizacion"),
             "nombre":       datos.get("Nombre", ""),
@@ -162,14 +181,54 @@ class ApiVerCotizacion:
                 "iva":             totales["iva"],
                 "total":           totales["total"],
             },
-            "productos": [
-                _producto_a_json_pantalla(pj, pi, c)
-                for pj, pi, c in zip(productos_json, productos_internos, costos)
-            ],
+            "descuento": descuento,
+            "productos": productos,
             # None, o qué cambiaría con los precios de hoy (ver
             # core.lista_precios.cambios): la pantalla avisa y el usuario decide.
             "cambios_precios": lista_precios.cambios(datos),
         }
+
+    def guardar_descuentos(self, numero, cambios: dict) -> dict | None:
+        """Descuentos puestos a mano desde la cotización, sin entrar a editarla
+        (pedido de Bruno, 2026-11-06; ver core.precios, "Descuentos puestos a
+        mano"). `cambios` trae solo lo que cambia:
+
+            {"productos": {"<índice>": manual | None},
+             "despacho": manual | None, "instalacion": manual | None,
+             "pedido": manual | None}
+
+        manual = {"tipo": "pct" | "monto", "valor": n}; None lo quita (vuelve
+        el automático). Se guarda al tiro, y devuelve la cotización como
+        obtener_cotizacion (None si no existe)."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return None
+        cambios = cambios or {}
+        productos = datos.get("productos", [])
+        for indice, manual in (cambios.get("productos") or {}).items():
+            i = int(indice)
+            if 0 <= i < len(productos):
+                _poner_manual(productos[i], "DescuentoManual", manual)
+        for clave, clave_json in lista_precios.CLAVES_MANUALES.items():
+            if clave in cambios:
+                _poner_manual(datos, clave_json, cambios[clave])
+        recalcular_descuentos(datos, guardar=False)
+        guardar_cotizacion(datos)
+        return self.obtener_cotizacion(numero)
+
+    def restablecer_descuentos(self, numero) -> dict | None:
+        """"Restablecer descuentos": quita todos los puestos a mano y vuelven
+        los automáticos. Devuelve la cotización como obtener_cotizacion."""
+        datos = cargar_cotizacion(int(numero))
+        if datos is None:
+            return None
+        for p in datos.get("productos", []):
+            p.pop("DescuentoManual", None)
+        for clave_json in lista_precios.CLAVES_MANUALES.values():
+            datos.pop(clave_json, None)
+        recalcular_descuentos(datos, guardar=False)
+        guardar_cotizacion(datos)
+        return self.obtener_cotizacion(numero)
 
     def actualizar_precios(self, numero) -> bool:
         """"Actualizar" en el aviso de precios: la cotización pasa a los
