@@ -11,6 +11,8 @@ import TituloDeslizante from "@/components/TituloDeslizante/TituloDeslizante";
 import { Datos, VistaDetalle } from "@/components/Detalle/Detalle";
 import { DialogoAprobar, DialogoEliminar, DialogoMaterialesBloqueado } from "./DialogosCotizacion";
 import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
+import { lineaParaDialogo, PieProducto, PlataAjustes } from "./Descuentos";
+import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 import "./VerCotizacion.css";
@@ -57,7 +59,7 @@ export default function VerCotizacion() {
   const primera = useRef(null);
   if (cot && primera.current === null) primera.current = cot.numero;
 
-  // "eliminar" | "bloqueado" | "aprobar" | "precios" | null
+  // "eliminar" | "bloqueado" | "aprobar" | "precios" | "restablecer" | null
   const [dialogo, setDialogo] = useState(null);
   const [faltantes, setFaltantes] = useState([]);
   const [manuales, setManuales] = useState([]);
@@ -101,6 +103,26 @@ export default function VerCotizacion() {
     aviso(actualizarPrecios ? "Cotización actualizada a los precios de hoy." : "Se mantienen los precios de la cotización.", "info");
   }
 
+  /* Descuentos puestos a mano, sin entrar a Editar (components/Descuentos):
+     `editando` es "p0", "p1"… (un producto), "despacho", "instalacion" o
+     "pedido". Se guardan al tiro y la cotización vuelve recalculada. */
+  const [editando, setEditando] = useState(null);
+  const lineaEditando = editando && editando !== "pedido" ? lineaDeClave(cot, editando) : null;
+
+  async function guardarDescuentos(cambios) {
+    setEditando(null);
+    const nueva = await api.guardar_descuentos_cotizacion(numero, cambios);
+    if (nueva) actualizar(() => ({ ...nueva, productos: nueva.productos || [] }));
+    aviso("Descuentos guardados.", "info");
+  }
+
+  async function restablecer() {
+    setDialogo(null);
+    const nueva = await api.restablecer_descuentos_cotizacion(numero);
+    if (nueva) actualizar(() => ({ ...nueva, productos: nueva.productos || [] }));
+    aviso("Se volvió a los descuentos automáticos.", "info");
+  }
+
   const editar = () => navigate(rutas.editarCotizacion(numero));
   const titulo = tituloDe(cot, numero);
 
@@ -130,8 +152,10 @@ export default function VerCotizacion() {
                                    {c.cambios_precios && <AvisoPrecios onRevisar={() => setDialogo("precios")} />}
                                    <Hoja cot={c} />
                                  </>}
-                                 lateral={<Plata t={c.totales || {}} />}
-                                 pieFicha={(p) => <><span>Total</span><b>{p.total != null ? fmt.pesos(p.total) : "—"}</b></>} />
+                                 lateral={<PlataAjustes t={c.totales || {}} d={c.descuento} productos={c.productos}
+                                                        onEditar={setEditando}
+                                                        onRestablecer={() => setDialogo("restablecer")} />}
+                                 pieFicha={(p, i) => <PieProducto p={p} onEditar={() => setEditando(`p${i}`)} />} />
                  )} />
         )}
       </main>
@@ -145,6 +169,13 @@ export default function VerCotizacion() {
                                       onNuevoRollo={(textil) => navigate(rutas.inventario({ nuevo_textil: textil }))} />
           <DialogoPrecios abierto={dialogo === "precios"} cambios={cot.cambios_precios}
                           onCerrar={cerrarDialogo} onDecidir={decidirPrecios} />
+          <DialogoDescuentoLinea abierto={!!lineaEditando} linea={lineaEditando}
+                                 onCerrar={() => setEditando(null)}
+                                 onGuardar={(manual) => guardarDescuentos(cambioDeLinea(editando, manual))} />
+          <DialogoDescuentoPedido abierto={editando === "pedido"} lineas={lineasDelPedido(cot)}
+                                  pedido={cot.descuento?.pedido} onCerrar={() => setEditando(null)}
+                                  onGuardar={guardarDescuentos} />
+          <DialogoRestablecer abierto={dialogo === "restablecer"} onCerrar={cerrarDialogo} onConfirmar={restablecer} />
           <DialogoAprobar abierto={dialogo === "aprobar"} cot={cot} manuales={manuales}
                           onCerrar={cerrarDialogo} onEditar={editar}
                           onAprobada={() => navigate(rutas.ops(), { replace: true })} />
@@ -152,6 +183,33 @@ export default function VerCotizacion() {
       )}
     </Pagina>
   );
+}
+
+/* ── Descuentos: de la clave del diálogo a la línea y de vuelta ─────────── */
+
+function lineaDeClave(cot, clave) {
+  if (!cot) return null;
+  if (clave.startsWith("p")) {
+    const i = Number(clave.slice(1));
+    const d = cot.productos[i]?.descuento;
+    return d ? lineaParaDialogo(d, `${i + 1}. ${d.nombre}`) : null;
+  }
+  const d = cot.descuento?.[clave];
+  return d ? lineaParaDialogo(d, d.nombre) : null;
+}
+
+function cambioDeLinea(clave, manual) {
+  return clave.startsWith("p") ? { productos: { [clave.slice(1)]: manual } } : { [clave]: manual };
+}
+
+/* Todas las líneas que se pueden descontar, para "el mismo descuento en
+   todas" del diálogo del pedido. */
+function lineasDelPedido(cot) {
+  const lineas = cot.productos.map((p, i) => ({ clave: `p${i}`, precio: p.descuento?.precio ?? p.total }));
+  for (const k of ["despacho", "instalacion"]) {
+    if (cot.descuento?.[k]) lineas.push({ clave: k, precio: cot.descuento[k].precio });
+  }
+  return lineas;
 }
 
 /* ── La hoja de datos ───────────────────────────────────────────────────── */
@@ -194,28 +252,5 @@ function Hoja({ cot }) {
         ))}
       </div>
     </section>
-  );
-}
-
-/* ── El desglose de plata (panel lateral) ───────────────────────────────── */
-
-const Linea = ({ et, val, total }) => (
-  <div className={`plata__linea${total ? " plata__linea--total" : ""}`}><span>{et}</span><b>{val}</b></div>
-);
-
-function Plata({ t }) {
-  return (
-    <div className="plata">
-      <Linea et="Neto" val={fmt.pesos(t.neto || 0)} />
-      {!!t.descuento_monto && (
-        <>
-          <Linea et={`Descuento${t.descuento_pct ? ` (${t.descuento_pct}%)` : ""}`}
-                 val={"− " + fmt.pesos(t.descuento_monto)} />
-          <Linea et="Neto total" val={fmt.pesos(t.neto_total || 0)} />
-        </>
-      )}
-      <Linea et={`IVA (${t.iva_pct ?? 19}%)`} val={fmt.pesos(t.iva || 0)} />
-      <Linea et="Total" val={fmt.pesos(t.total || 0)} total />
-    </div>
   );
 }

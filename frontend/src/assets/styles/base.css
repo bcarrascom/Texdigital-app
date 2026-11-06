@@ -84,6 +84,10 @@
   --c-alerta:      #C6650E;  --c-alerta-suave:#FCEADA;
   --c-error:       #C0392B;  --c-error-suave: #FBEAE8;
   --c-foco:        #2F7FD6;
+  /* Lo que baja y lo que sube un precio (descuentos y cobros mínimos de una
+     cotización): oscuros, para que se lean en texto chico. */
+  --c-descuento:    #9E1F1F;
+  --c-cobro-minimo: #1A6B40;
 
   /* ── Tipografía ────────────────────────────────────────────────────────── */
   --f-ui: "Segoe UI Variable Display", "Segoe UI", -apple-system,

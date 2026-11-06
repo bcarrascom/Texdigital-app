@@ -1,0 +1,1053 @@
+[
+ {
+  "numero": 1000,
+  "nombre": "Merchandising aniversario",
+  "empresa": "Café Las Rosas",
+  "rut": "76.482.913-1",
+  "razon_social": "Café Las Rosas SpA",
+  "contacto": "Valentina Soto",
+  "email": "vsoto@cafelasrosas.cl",
+  "condicion": "Transferencia al contado",
+  "fecha": "06/11/2026",
+  "descripcion": "Prueba: sin descuento",
+  "totales": {
+   "impresion": 125850.0,
+   "estructuras": null,
+   "terminaciones": 142000.0,
+   "despacho": null,
+   "instalacion": null,
+   "neto": 267850.0,
+   "descuento_pct": 0.0,
+   "descuento_monto": 0.0,
+   "fuente_descuento": "normal",
+   "neto_total": 267850.0,
+   "iva_pct": 19.0,
+   "iva": 50891.5,
+   "total": 318741.5
+  },
+  "descuento": {
+   "aplicado": null,
+   "contacto": {
+    "pct": 0.0,
+    "monto": 0.0
+   },
+   "volumen": {
+    "monto": 0.0,
+    "grupos": [
+     {
+      "nombre": "Lino 100%",
+      "m2": 2.12,
+      "pct": 0.0,
+      "base": 0.0,
+      "monto": 0.0,
+      "en_minimo": [
+       "Funda Cojín 40x40 cms"
+      ]
+     },
+     {
+      "nombre": "Gabardina antiflu",
+      "m2": 8.41,
+      "pct": 0.0,
+      "base": 69600.0,
+      "monto": 0.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Lona cruda algodón",
+      "m2": 2.69,
+      "pct": 0.0,
+      "base": 26250.0,
+      "monto": 0.0,
+      "en_minimo": []
+     }
+    ]
+   },
+   "tramo_desde": 10.0,
+   "despacho": null,
+   "instalacion": null,
+   "pedido": {
+    "manual": null,
+    "base": 267850.0,
+    "monto": 0.0,
+    "pct": 0.0
+   },
+   "hay_manuales": false,
+   "minimo": {
+    "ml": 2.0,
+    "m2": 2.0
+   }
+  },
+  "productos": [
+   {
+    "tipo": "estandar",
+    "producto": "Funda Cojín 40x40 cms",
+    "textil": "Lino 100%",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Fundas"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Logo café",
+    "obs": "",
+    "ancho": 0.42,
+    "alto": 0.42,
+    "cantidad": 12,
+    "ml": 1.68,
+    "m2": null,
+    "total": 78000.0,
+    "descuento": {
+     "nombre": "Funda Cojín 40x40 cms",
+     "precio": 78000.0,
+     "monto": 0.0,
+     "total": 78000.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": true,
+     "minimo": {
+      "pct": 19.05,
+      "monto": 4800.0
+     }
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Mantel 150x150",
+    "textil": "Gabardina antiflu",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Basta"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Mantel terraza",
+    "obs": "",
+    "ancho": 1.45,
+    "alto": 1.45,
+    "cantidad": 4,
+    "ml": 5.8,
+    "m2": null,
+    "total": 83600.0,
+    "descuento": {
+     "nombre": "Mantel 150x150",
+     "precio": 83600.0,
+     "monto": 0.0,
+     "total": 83600.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Totebag 30x40",
+    "textil": "Lona cruda algodón",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Totebag"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Bolsa clientes",
+    "obs": "",
+    "ancho": 0.32,
+    "alto": 0.42,
+    "cantidad": 20,
+    "ml": 2.1,
+    "m2": null,
+    "total": 106250.0,
+    "descuento": {
+     "nombre": "Totebag 30x40",
+     "precio": 106250.0,
+     "monto": 0.0,
+     "total": 106250.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   }
+  ],
+  "cambios_precios": null
+ },
+ {
+  "numero": 1001,
+  "nombre": "Banderas feria",
+  "empresa": "Empresa Ejemplo",
+  "rut": "12.345.678-9",
+  "razon_social": "Ejemplo S.A.",
+  "contacto": "Contacto Ejemplo",
+  "email": "contacto.ejemplo@gmail.com",
+  "condicion": "condicion_ejemplo",
+  "fecha": "06/11/2026",
+  "descripcion": "Prueba: gana el descuento del contacto",
+  "totales": {
+   "impresion": 212000.0,
+   "estructuras": 66000.0,
+   "terminaciones": 59500.0,
+   "despacho": 15000,
+   "instalacion": 40000,
+   "neto": 392500.0,
+   "descuento_pct": 10.0,
+   "descuento_monto": 36750.0,
+   "fuente_descuento": "normal",
+   "neto_total": 355750.0,
+   "iva_pct": 19.0,
+   "iva": 67592.5,
+   "total": 423342.5
+  },
+  "descuento": {
+   "aplicado": "contacto",
+   "contacto": {
+    "pct": 10.0,
+    "monto": 36750.0
+   },
+   "volumen": {
+    "monto": 8250.0,
+    "grupos": [
+     {
+      "nombre": "Bistretch",
+      "m2": 15.0,
+      "pct": 5.0,
+      "base": 165000.0,
+      "monto": 8250.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Seda sintética",
+      "m2": 0.75,
+      "pct": 0.0,
+      "base": 0.0,
+      "monto": 0.0,
+      "en_minimo": [
+       "Pañuelo 50x50 cms"
+      ]
+     },
+     {
+      "nombre": "Satin delgado",
+      "m2": 2.8,
+      "pct": 0.0,
+      "base": 22000.0,
+      "monto": 0.0,
+      "en_minimo": []
+     }
+    ]
+   },
+   "tramo_desde": 10.0,
+   "despacho": {
+    "nombre": "Despacho",
+    "precio": 15000,
+    "monto": 1500.0,
+    "total": 13500.0,
+    "pct": 10.0,
+    "razon": "contacto",
+    "manual": null,
+    "automatico": {
+     "monto": 1500.0,
+     "pct": 10.0,
+     "razon": "contacto"
+    }
+   },
+   "instalacion": {
+    "nombre": "Instalación",
+    "precio": 40000,
+    "monto": 4000.0,
+    "total": 36000.0,
+    "pct": 10.0,
+    "razon": "contacto",
+    "manual": null,
+    "automatico": {
+     "monto": 4000.0,
+     "pct": 10.0,
+     "razon": "contacto"
+    }
+   },
+   "pedido": {
+    "manual": null,
+    "base": 355750.0,
+    "monto": 0.0,
+    "pct": 0.0
+   },
+   "hay_manuales": false,
+   "minimo": {
+    "ml": 2.0,
+    "m2": 2.0
+   }
+  },
+  "productos": [
+   {
+    "tipo": "estandar",
+    "producto": "Bandera 1,5x1",
+    "textil": "Bistretch",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Basta"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Bandera marca",
+    "obs": "",
+    "ancho": 1.0,
+    "alto": 1.5,
+    "cantidad": 10,
+    "ml": 15.0,
+    "m2": null,
+    "total": 200000.0,
+    "descuento": {
+     "nombre": "Bandera 1,5x1",
+     "precio": 200000.0,
+     "monto": 20000.0,
+     "total": 180000.0,
+     "pct": 10.0,
+     "razon": "contacto",
+     "manual": null,
+     "automatico": {
+      "monto": 20000.0,
+      "pct": 10.0,
+      "razon": "contacto"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Pañuelo 50x50 cms",
+    "textil": "Seda sintética",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Basta"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Pañuelo staff",
+    "obs": "",
+    "ancho": 0.5,
+    "alto": 0.5,
+    "cantidad": 3,
+    "ml": 0.75,
+    "m2": null,
+    "total": 35500.0,
+    "descuento": {
+     "nombre": "Pañuelo 50x50 cms",
+     "precio": 35500.0,
+     "monto": 1050.0,
+     "total": 34450.0,
+     "pct": 10.0,
+     "razon": "contacto",
+     "manual": null,
+     "automatico": {
+      "monto": 1050.0,
+      "pct": 10.0,
+      "razon": "contacto"
+     },
+     "en_minimo": true,
+     "minimo": {
+      "pct": 166.67,
+      "monto": 15625.0
+     }
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Vela 70x200",
+    "textil": "Satin delgado",
+    "impresion": "Cara única",
+    "estructuras": [
+     "Asta fibra de vidrio vela 2 mts",
+     "Base suelo plástico para rellenar"
+    ],
+    "terminaciones": [
+     "Vela"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Vela entrada",
+    "obs": "",
+    "ancho": 0.7,
+    "alto": 2.0,
+    "cantidad": 2,
+    "ml": 2.0,
+    "m2": null,
+    "total": 102000.0,
+    "descuento": {
+     "nombre": "Vela 70x200",
+     "precio": 102000.0,
+     "monto": 10200.0,
+     "total": 91800.0,
+     "pct": 10.0,
+     "razon": "contacto",
+     "manual": null,
+     "automatico": {
+      "monto": 10200.0,
+      "pct": 10.0,
+      "razon": "contacto"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   }
+  ],
+  "cambios_precios": null
+ },
+ {
+  "numero": 1002,
+  "nombre": "Lienzos fachada",
+  "empresa": "Productora Andes",
+  "rut": "77.215.840-8",
+  "razon_social": "Productora Andes Limitada",
+  "contacto": "Ignacio Fuentes",
+  "email": "ifuentes@productoraandes.cl",
+  "condicion": "30 días",
+  "fecha": "06/11/2026",
+  "descripcion": "Prueba: gana el descuento por volumen sobre el del contacto",
+  "totales": {
+   "impresion": 400500.0,
+   "estructuras": null,
+   "terminaciones": 168500.0,
+   "despacho": null,
+   "instalacion": null,
+   "neto": 569000.0,
+   "descuento_pct": 5.1,
+   "descuento_monto": 28800.0,
+   "fuente_descuento": "textil",
+   "neto_total": 540200.0,
+   "iva_pct": 19.0,
+   "iva": 102638.0,
+   "total": 642838.0
+  },
+  "descuento": {
+   "aplicado": "volumen",
+   "contacto": {
+    "pct": 3.0,
+    "monto": 17070.0
+   },
+   "volumen": {
+    "monto": 28800.0,
+    "grupos": [
+     {
+      "nombre": "Lona impermeable",
+      "m2": 33.6,
+      "pct": 10.0,
+      "base": 288000.0,
+      "monto": 28800.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Jersey",
+      "m2": 4.2,
+      "pct": 0.0,
+      "base": 31500.0,
+      "monto": 0.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Gabardina antiflu",
+      "m2": 9.45,
+      "pct": 0.0,
+      "base": 81000.0,
+      "monto": 0.0,
+      "en_minimo": []
+     }
+    ]
+   },
+   "tramo_desde": 10.0,
+   "despacho": null,
+   "instalacion": null,
+   "pedido": {
+    "manual": null,
+    "base": 540200.0,
+    "monto": 0.0,
+    "pct": 0.0
+   },
+   "hay_manuales": false,
+   "minimo": {
+    "ml": 2.0,
+    "m2": 2.0
+   }
+  },
+  "productos": [
+   {
+    "tipo": "estandar",
+    "producto": "Lienzo simple (hasta 150 cms de ancho)",
+    "textil": "Lona impermeable",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Ojetillos"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Lienzo fachada",
+    "obs": "",
+    "ancho": 1.4,
+    "alto": 3.0,
+    "cantidad": 8,
+    "ml": 24.0,
+    "m2": null,
+    "total": 404000.0,
+    "descuento": {
+     "nombre": "Lienzo simple (hasta 150 cms de ancho)",
+     "precio": 404000.0,
+     "monto": 28800.0,
+     "total": 375200.0,
+     "pct": 10.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 28800.0,
+      "pct": 10.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Estampado (solo impresión, sin confección)",
+    "textil": "Jersey",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [],
+    "tela": "",
+    "caja": "",
+    "tema": "Muestras",
+    "obs": "",
+    "ancho": 1.4,
+    "alto": 1.0,
+    "cantidad": 3,
+    "ml": 3.0,
+    "m2": null,
+    "total": 31500.0,
+    "descuento": {
+     "nombre": "Estampado (solo impresión, sin confección)",
+     "precio": 31500.0,
+     "monto": 0.0,
+     "total": 31500.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Pechera adulto",
+    "textil": "Gabardina antiflu",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Basta"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Pechera equipo",
+    "obs": "",
+    "ancho": 0.7,
+    "alto": 0.9,
+    "cantidad": 15,
+    "ml": 6.75,
+    "m2": null,
+    "total": 133500.0,
+    "descuento": {
+     "nombre": "Pechera adulto",
+     "precio": 133500.0,
+     "monto": 0.0,
+     "total": 133500.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   }
+  ],
+  "cambios_precios": null
+ },
+ {
+  "numero": 1003,
+  "nombre": "Stand congreso",
+  "empresa": "Eventos del Pacífico",
+  "rut": "76.990.321-6",
+  "razon_social": "Eventos del Pacífico S.A.",
+  "contacto": "Carla Muñoz",
+  "email": "cmunoz@eventospacifico.cl",
+  "condicion": "50% anticipo, 50% contra entrega",
+  "fecha": "06/11/2026",
+  "descripcion": "Prueba: descuento por volumen con tramos distintos por textil",
+  "totales": {
+   "impresion": 1276575.0,
+   "estructuras": 2208000.0,
+   "terminaciones": 445500.0,
+   "despacho": null,
+   "instalacion": null,
+   "neto": 3930075.0,
+   "descuento_pct": 5.0,
+   "descuento_monto": 195436.75,
+   "fuente_descuento": "textil",
+   "neto_total": 3734638.25,
+   "iva_pct": 19.0,
+   "iva": 709581.27,
+   "total": 4444219.52
+  },
+  "descuento": {
+   "aplicado": "volumen",
+   "contacto": {
+    "pct": 0.0,
+    "monto": 0.0
+   },
+   "volumen": {
+    "monto": 195436.75,
+    "grupos": [
+     {
+      "nombre": "Popelina panel",
+      "m2": 62.93,
+      "pct": 20.0,
+      "base": 756240.0,
+      "monto": 151248.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Satin delgado",
+      "m2": 26.4,
+      "pct": 10.0,
+      "base": 387200.0,
+      "monto": 38720.0,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Seda sintética",
+      "m2": 12.25,
+      "pct": 5.0,
+      "base": 109375.0,
+      "monto": 5468.75,
+      "en_minimo": []
+     },
+     {
+      "nombre": "Crea sábana algodón",
+      "m2": 2.25,
+      "pct": 0.0,
+      "base": 23760.0,
+      "monto": 0.0,
+      "en_minimo": []
+     }
+    ]
+   },
+   "tramo_desde": 10.0,
+   "despacho": null,
+   "instalacion": null,
+   "pedido": {
+    "manual": null,
+    "base": 3734638.25,
+    "monto": 0.0,
+    "pct": 0.0
+   },
+   "hay_manuales": false,
+   "minimo": {
+    "ml": 2.0,
+    "m2": 2.0
+   }
+  },
+  "productos": [
+   {
+    "tipo": "estandar",
+    "producto": "Textil panel araña 3 cuerpos (228x230 cms)",
+    "textil": "Popelina panel",
+    "impresion": "Tiro y retiro",
+    "estructuras": [
+     "Estructura panel araña 3 cuerpos"
+    ],
+    "terminaciones": [
+     "Panel araña"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Muro fondo",
+    "obs": "",
+    "ancho": 2.28,
+    "alto": 2.3,
+    "cantidad": 6,
+    "ml": 27.6,
+    "m2": null,
+    "total": 2658240.0,
+    "descuento": {
+     "nombre": "Textil panel araña 3 cuerpos (228x230 cms)",
+     "precio": 2658240.0,
+     "monto": 151248.0,
+     "total": 2506992.0,
+     "pct": 20.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 151248.0,
+      "pct": 20.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Vela 75x220",
+    "textil": "Satin delgado",
+    "impresion": "Tiro y retiro",
+    "estructuras": [
+     "Asta fibra de vidrio vela 2 mts",
+     "Base suelo plástico para rellenar"
+    ],
+    "terminaciones": [
+     "Vela"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Velas acceso",
+    "obs": "",
+    "ancho": 0.75,
+    "alto": 2.2,
+    "cantidad": 8,
+    "ml": 35.2,
+    "m2": null,
+    "total": 1027200.0,
+    "descuento": {
+     "nombre": "Vela 75x220",
+     "precio": 1027200.0,
+     "monto": 38720.0,
+     "total": 988480.0,
+     "pct": 10.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 38720.0,
+      "pct": 10.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Pañuelo 70x70 cms",
+    "textil": "Seda sintética",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Basta"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Pañuelo asistentes",
+    "obs": "",
+    "ancho": 0.7,
+    "alto": 0.7,
+    "cantidad": 25,
+    "ml": 8.75,
+    "m2": null,
+    "total": 196875.0,
+    "descuento": {
+     "nombre": "Pañuelo 70x70 cms",
+     "precio": 196875.0,
+     "monto": 5468.75,
+     "total": 191406.25,
+     "pct": 5.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 5468.75,
+      "pct": 5.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Funda Almohada 50x70 cms",
+    "textil": "Crea sábana algodón",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [
+     "Fundas"
+    ],
+    "tela": "",
+    "caja": "",
+    "tema": "Cojines lounge",
+    "obs": "",
+    "ancho": 0.52,
+    "alto": 0.72,
+    "cantidad": 6,
+    "ml": 2.16,
+    "m2": null,
+    "total": 47760.0,
+    "descuento": {
+     "nombre": "Funda Almohada 50x70 cms",
+     "precio": 47760.0,
+     "monto": 0.0,
+     "total": 47760.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   }
+  ],
+  "cambios_precios": null
+ },
+ {
+  "numero": 1004,
+  "nombre": "Vitrinas tienda",
+  "empresa": "Galería Norte",
+  "rut": "78.104.552-7",
+  "razon_social": "Inmobiliaria Galería Norte SpA",
+  "contacto": "Rodrigo Pérez",
+  "email": "rperez@galerianorte.cl",
+  "condicion": "30 días",
+  "fecha": "06/11/2026",
+  "descripcion": "Prueba: descuento por volumen en backlight",
+  "totales": {
+   "impresion": 1449500.0,
+   "estructuras": null,
+   "terminaciones": null,
+   "despacho": null,
+   "instalacion": null,
+   "neto": 2676524.0,
+   "descuento_pct": 9.9,
+   "descuento_monto": 265500.0,
+   "fuente_descuento": "textil",
+   "neto_total": 2411024.0,
+   "iva_pct": 19.0,
+   "iva": 458094.56,
+   "total": 2869118.56
+  },
+  "descuento": {
+   "aplicado": "volumen",
+   "contacto": {
+    "pct": 5.0,
+    "monto": 130726.2
+   },
+   "volumen": {
+    "monto": 265500.0,
+    "grupos": [
+     {
+      "nombre": "Backlight",
+      "m2": 53.0,
+      "pct": 20.0,
+      "base": 1327500.0,
+      "monto": 265500.0,
+      "en_minimo": [
+       "Pearl 310"
+      ]
+     },
+     {
+      "nombre": "Mesh",
+      "m2": 4.0,
+      "pct": 0.0,
+      "base": 60000.0,
+      "monto": 0.0,
+      "en_minimo": []
+     }
+    ]
+   },
+   "tramo_desde": 10.0,
+   "despacho": null,
+   "instalacion": null,
+   "pedido": {
+    "manual": null,
+    "base": 2411024.0,
+    "monto": 0.0,
+    "pct": 0.0
+   },
+   "hay_manuales": false,
+   "minimo": {
+    "ml": 2.0,
+    "m2": 2.0
+   }
+  },
+  "productos": [
+   {
+    "tipo": "backlight",
+    "producto": "",
+    "textil": "",
+    "impresion": "",
+    "estructuras": [],
+    "terminaciones": [],
+    "tela": "Pearl 155",
+    "caja": "PERFIL 80 MM",
+    "tema": "Vitrina principal",
+    "obs": "",
+    "ancho": 1.5,
+    "alto": 2.5,
+    "cantidad": 6,
+    "ml": null,
+    "m2": 22.5,
+    "total": 1744524.0,
+    "descuento": {
+     "nombre": "Pearl 155",
+     "precio": 1744524.0,
+     "monto": 103500.0,
+     "total": 1641024.0,
+     "pct": 20.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 103500.0,
+      "pct": 20.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "backlight",
+    "producto": "",
+    "textil": "",
+    "impresion": "",
+    "estructuras": [],
+    "terminaciones": [],
+    "tela": "Popelina 155",
+    "caja": "Sin caja",
+    "tema": "Repuestos de tela",
+    "obs": "",
+    "ancho": 1.5,
+    "alto": 2.0,
+    "cantidad": 10,
+    "ml": null,
+    "m2": 30.0,
+    "total": 810000.0,
+    "descuento": {
+     "nombre": "Popelina 155",
+     "precio": 810000.0,
+     "monto": 162000.0,
+     "total": 648000.0,
+     "pct": 20.0,
+     "razon": "volumen",
+     "manual": null,
+     "automatico": {
+      "monto": 162000.0,
+      "pct": 20.0,
+      "razon": "volumen"
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   },
+   {
+    "tipo": "backlight",
+    "producto": "",
+    "textil": "",
+    "impresion": "",
+    "estructuras": [],
+    "terminaciones": [],
+    "tela": "Pearl 310",
+    "caja": "Sin caja",
+    "tema": "Muestra",
+    "obs": "",
+    "ancho": 0.5,
+    "alto": 0.5,
+    "cantidad": 2,
+    "ml": null,
+    "m2": 0.5,
+    "total": 62000.0,
+    "descuento": {
+     "nombre": "Pearl 310",
+     "precio": 62000.0,
+     "monto": 0.0,
+     "total": 62000.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": true,
+     "minimo": {
+      "pct": 300.0,
+      "monto": 46500.0
+     }
+    }
+   },
+   {
+    "tipo": "estandar",
+    "producto": "Estampado (solo impresión, sin confección)",
+    "textil": "Mesh",
+    "impresion": "Cara única",
+    "estructuras": [],
+    "terminaciones": [],
+    "tela": "",
+    "caja": "",
+    "tema": "Malla vitrina",
+    "obs": "",
+    "ancho": 1.0,
+    "alto": 2.0,
+    "cantidad": 2,
+    "ml": 2.0,
+    "m2": null,
+    "total": 60000.0,
+    "descuento": {
+     "nombre": "Estampado (solo impresión, sin confección)",
+     "precio": 60000.0,
+     "monto": 0.0,
+     "total": 60000.0,
+     "pct": 0.0,
+     "razon": null,
+     "manual": null,
+     "automatico": {
+      "monto": 0.0,
+      "pct": 0.0,
+      "razon": null
+     },
+     "en_minimo": false,
+     "minimo": null
+    }
+   }
+  ],
+  "cambios_precios": null
+ }
+]

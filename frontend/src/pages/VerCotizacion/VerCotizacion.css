@@ -19,6 +19,81 @@
   .plata__linea--total b { font-size: var(--t-lg); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
   .plata__nota { font-size: var(--t-xs); color: var(--c-texto-tenue); }
 
+  /* ── Descuentos y cobros mínimos (Descuentos.jsx) ────────────────────────
+     Lo que baja el precio en rojo oscuro y lo que sube en verde oscuro; el
+     resto, en la tinta de siempre. */
+  .ajuste--descuento { --c-ajuste: var(--c-descuento); }
+  .ajuste--minimo    { --c-ajuste: var(--c-cobro-minimo); }
+
+  .plata__grupo { display: grid; }
+  /* Abrir y cerrar el detalle animando el alto: una fila de grilla que va de
+     0fr a 1fr (con el contenido recortado adentro) más un fundido. */
+  .plata__desplegable {
+    display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows var(--m-media) var(--ease-salida),
+                opacity var(--m-media) var(--ease-salida);
+  }
+  .plata__desplegable[data-abierto] { grid-template-rows: 1fr; opacity: 1; }
+  .plata__desplegable-in { display: grid; gap: var(--e-1); min-height: 0; overflow: hidden; }
+  .plata__desplegable-in > :first-child { margin-top: var(--e-1); }
+  .plata__grupo > .plata__linea,
+  .plata__grupo > .plata__linea b { color: var(--c-ajuste); font-weight: var(--peso-medio); }
+  .plata__abrir {
+    width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
+    font-family: inherit; font-size: var(--t-sm);
+  }
+  .plata__abrir:hover > span { text-decoration: underline; text-underline-offset: 2px; }
+  .plata__abrir:focus-visible { outline: 2px solid var(--c-foco); outline-offset: 2px; border-radius: var(--r-sm); }
+  /* ▼ cerrado; abierto gira y queda ▲. */
+  .plata__flecha {
+    display: inline-block; font-size: .6rem; vertical-align: .1em;
+    transition: transform var(--m-media) var(--ease-salida);
+  }
+  .plata__abrir[aria-expanded="true"] .plata__flecha { transform: rotate(180deg); }
+  .plata__item {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--e-2);
+    padding-left: var(--e-3); font-size: var(--t-xs); color: var(--c-texto-suave);
+  }
+  .plata__item-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plata__item b { font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+                   font-weight: var(--peso-normal); white-space: nowrap; color: var(--c-ajuste); }
+  .plata__item-razon { grid-column: 1 / -1; color: var(--c-ajuste); }
+  .plata__linea--neto { padding-top: var(--e-1); border-top: 1px solid var(--c-borde); }
+
+  /* Lo que se aprieta para cambiar un descuento: botones sin aspecto de
+     botón, que se marcan al pasar el mouse. */
+  .plata__item--editable, .pie-editable {
+    width: 100%; border: 0; background: none; font-family: inherit; text-align: left; cursor: pointer;
+    border-radius: var(--r-sm);
+  }
+  .plata__item--editable { padding-block: .1rem; font-size: var(--t-xs); }
+  .plata__item--editable:hover, .pie-editable:hover { background: var(--c-superficie-2); }
+  .plata__item--editable:focus-visible, .pie-editable:focus-visible, .pie-agregar:focus-visible {
+    outline: 2px solid var(--c-foco); outline-offset: 1px;
+  }
+  .plata__item--editable[data-sin] .plata__item-razon { color: var(--c-texto-tenue); }
+  .plata__acciones { display: flex; flex-wrap: wrap; gap: var(--e-2); margin-top: var(--e-2); }
+  .plata__acciones .btn { flex: 1 1 auto; }
+
+  /* El pie de cada ficha: precio, sus ajustes y el total. */
+  .ficha-prod__pie { flex-direction: column; align-items: stretch; gap: .2rem; }
+  .pie-linea { display: flex; align-items: baseline; gap: var(--e-2); color: var(--c-texto-suave); }
+  .ficha-prod__pie .pie-linea b {
+    margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums;
+    font-weight: var(--peso-normal); color: var(--c-texto);
+  }
+  .pie-linea.ajuste--descuento, .pie-linea.ajuste--minimo { font-size: var(--t-xs); color: var(--c-ajuste); }
+  .ficha-prod__pie .pie-linea.ajuste--descuento b,
+  .ficha-prod__pie .pie-linea.ajuste--minimo b { color: var(--c-ajuste); }
+  .pie-editable { padding: 0; }
+  .pie-agregar {
+    align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;
+    font-family: inherit; font-size: var(--t-xs); color: var(--c-texto-tenue);
+  }
+  .pie-agregar:hover { color: var(--c-descuento); text-decoration: underline; }
+  .pie-linea--total { color: var(--c-texto); }
+  .ficha-prod__pie .pie-linea--total b { color: var(--c-tema-tinta); font-weight: var(--peso-fuerte); }
+
   /* ── La hoja de datos: número, nombre y empresa apilados ─────────────────── */
   .hoja__cab { display: grid; gap: var(--e-1); }
 
