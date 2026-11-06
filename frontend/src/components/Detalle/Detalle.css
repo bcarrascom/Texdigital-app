@@ -23,7 +23,9 @@
   
   /* ── La tarjeta lateral: acompaña el scroll ─────────────────────────────── */
   .lateral {
-    position: sticky; top: 0;
+    /* --lateral-top: negativo si la tarjeta no cabe en la ventana (ver
+       useLateralSinScroll en Detalle.jsx). */
+    position: sticky; top: var(--lateral-top, 0px);
     display: grid; gap: var(--e-4);
     padding: var(--e-4);
     background: var(--c-superficie);
@@ -117,6 +119,13 @@
     font-weight: var(--peso-medio); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  /* Bajo el nombre: el textil y el tema, en texto (no píldoras). */
+  .ficha-prod__titulos { display: grid; gap: .1rem; min-width: 0; }
+  .ficha-prod__textil, .ficha-prod__tema {
+    font-size: var(--t-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ficha-prod__textil { color: var(--c-texto-suave); }
+  .ficha-prod__tema { color: var(--c-texto-tenue); }
   .ficha-prod__linea {
     display: flex; align-items: baseline; gap: var(--e-2);
     font-size: var(--t-sm); color: var(--c-texto-suave);

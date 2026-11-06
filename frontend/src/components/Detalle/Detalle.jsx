@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { useCarrusel } from "@/hooks/useCarrusel";
 import Etiqueta from "@/components/Etiqueta/Etiqueta";
 import VisorProducto from "@/components/VisorProducto/VisorProducto";
@@ -16,7 +17,7 @@ import "./Detalle.css";
      hoja       la hoja de datos de arriba a la izquierda
      lateral    lo que va en el panel derecho debajo del visor (la plata en
                 la cotización, la logística en la OP)
-     pieFicha   (producto) → pie de cada ficha (opcional: la OP no lleva)
+     pieFicha   (producto, índice) → pie de cada ficha (opcional: la OP no lleva)
      aparecer   las fichas aparecen en escalón (solo la primera que se abre;
                 las que llegan de costado con ←/→ entran ya armadas)
 
@@ -24,6 +25,8 @@ import "./Detalle.css";
    foco) lo congela en ese producto. */
 export function VistaDetalle({ productos, hoja, lateral, pieFicha, aparecer = true }) {
   const carrusel = useCarrusel(productos.length);
+  const refLateral = useRef(null);
+  useLateralSinScroll(refLateral);
   return (
     <div className="vista" data-sin-aparecer={aparecer ? undefined : ""}>
       <div className="vista__izq">
@@ -32,7 +35,7 @@ export function VistaDetalle({ productos, hoja, lateral, pieFicha, aparecer = tr
           <h2 className="seccion-titulo">Productos · {productos.length}</h2>
           <div className="productos">
             {productos.map((p, i) => (
-              <FichaProducto key={i} p={p} i={i} mirando={i === carrusel.indice} pie={pieFicha?.(p)}
+              <FichaProducto key={i} p={p} i={i} mirando={i === carrusel.indice} pie={pieFicha?.(p, i)}
                              onMirar={() => carrusel.mirar(i)} onSoltar={carrusel.soltar} />
             ))}
           </div>
@@ -40,13 +43,40 @@ export function VistaDetalle({ productos, hoja, lateral, pieFicha, aparecer = tr
       </div>
 
       <aside className="vista__der">
-        <div className="lateral">
+        <div className="lateral" ref={refLateral}>
           <VisorProducto producto={productos[carrusel.indice]} indice={carrusel.indice} total={productos.length} />
           {lateral}
         </div>
       </aside>
     </div>
   );
+}
+
+/* La tarjeta lateral nunca scrollea por dentro (pedido de Bruno, 2026-11-06).
+   Si cabe en la ventana, se pega arriba (top 0). Si es más alta —con los
+   desgloses de la plata abiertos—, se pega con un top negativo de lo que
+   sobra: baja con la página hasta que se ve su final, y ahí se queda. Así,
+   scrolleando la página se llega a los dos extremos. Se vuelve a medir cada
+   vez que la tarjeta o la ventana cambian de alto. */
+function useLateralSinScroll(ref) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const scroller = el?.closest(".contenido");
+    if (!el || !scroller) return undefined;
+    const medir = () => {
+      // La vista va con `zoom`: lo medido sale escalado, el `top` se escribe sin escalar.
+      const zoom = parseFloat(getComputedStyle(el.closest(".vista") || el).zoom) || 1;
+      const cs = getComputedStyle(scroller);
+      const visible = scroller.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      const sobra = el.getBoundingClientRect().height - visible;
+      el.style.setProperty("--lateral-top", sobra > 0 ? `${-sobra / zoom}px` : "0px");
+    };
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    ro.observe(scroller);
+    medir();
+    return () => ro.disconnect();
+  }, [ref]);
 }
 
 /* La grilla de datos de la hoja (etiqueta chica arriba, valor abajo). Los
@@ -81,11 +111,14 @@ export function Dato({ etiqueta, mono, ancho, children }) {
    (ver _producto_a_json_pantalla en ui/api_ver_cotizacion.py y api_ver_op.py). */
 function FichaProducto({ p, i, mirando, pie, onMirar, onSoltar }) {
   const bl = p.tipo === "backlight";
+  /* El textil y el tema van como texto bajo el nombre, no como píldoras
+     (pedido de Bruno, 2026-11-06): son lo que identifica al producto. En
+     backlight el nombre ya es la tela. */
+  const textil = bl ? "" : p.textil || p.tela;
   const etiquetas = [
-    p.tema && "Tema: " + p.tema,
     ...(bl
       ? [p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja"]
-      : [p.textil || p.tela, p.impresion, ...(p.estructuras || []), ...(p.terminaciones || [])]),
+      : [p.impresion, ...(p.estructuras || []), ...(p.terminaciones || [])]),
     p.obs && "Obs: " + p.obs,
   ].filter(Boolean);
 
@@ -94,7 +127,11 @@ function FichaProducto({ p, i, mirando, pie, onMirar, onSoltar }) {
              onMouseEnter={onMirar} onMouseLeave={onSoltar} onFocus={onMirar} onBlur={onSoltar}>
       <div className="ficha-prod__cab">
         <span className="ficha-prod__n">{i + 1}.</span>
-        <span className="ficha-prod__nombre">{bl ? p.tela || "Backlight" : p.producto || "—"}</span>
+        <div className="ficha-prod__titulos">
+          <span className="ficha-prod__nombre">{bl ? p.tela || "Backlight" : p.producto || "—"}</span>
+          {textil && <span className="ficha-prod__textil">{textil}</span>}
+          {p.tema && <span className="ficha-prod__tema">Tema: {p.tema}</span>}
+        </div>
       </div>
       <span className="ficha-prod__tipo">
         <Etiqueta tipo={bl ? "neutra" : "tema"}>{bl ? "Backlight" : "Estándar"}</Etiqueta>
