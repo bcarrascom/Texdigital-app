@@ -280,7 +280,16 @@ def eliminar_excel(numero: int) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def mapear_producto(d: dict) -> dict:
-    """Convierte un dict interno de producto al esquema JSON de cotización/OP."""
+    """Convierte un dict interno de producto al esquema JSON de cotización/OP.
+    El descuento puesto a mano (ver core.precios, "Descuentos puestos a
+    mano") va solo si hay."""
+    json_p = _mapear_producto(d)
+    if d.get("descuento_manual"):
+        json_p["DescuentoManual"] = dict(d["descuento_manual"])
+    return json_p
+
+
+def _mapear_producto(d: dict) -> dict:
     if "tela" in d:
         return {
             "Tela":     d.get("tela", ""),
@@ -329,6 +338,13 @@ def _migrar_lista(d: dict, clave_lista: str, clave_vieja: str, placeholder: str)
 def producto_desde_json(d: dict) -> dict:
     """Inversa de `mapear_producto`: convierte un producto en esquema JSON
     de vuelta al esquema interno que usan las pantallas de edición."""
+    interno = _producto_desde_json(d)
+    if d.get("DescuentoManual"):
+        interno["descuento_manual"] = dict(d["DescuentoManual"])
+    return interno
+
+
+def _producto_desde_json(d: dict) -> dict:
     if "Caja" in d:
         return {
             "tela":      d.get("Tela", ""),

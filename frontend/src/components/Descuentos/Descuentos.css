@@ -1,0 +1,19 @@
+/* Diálogos de descuentos (Descuentos.jsx). */
+
+.dlg-descuento { width: min(92vw, 30rem); max-width: min(92vw, 30rem); }
+
+.desc-campos { display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--e-3); margin-top: var(--e-3); }
+.desc-campo { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--e-2); }
+.desc-campo > span { font-size: var(--t-sm); font-weight: var(--peso-fuerte); color: var(--c-texto-suave); }
+.desc-campo .entrada { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+/* El que escribió el usuario (el que se guarda) en tinta; el calculado, suave. */
+.desc-campo .entrada:not([data-escrito]) { color: var(--c-texto-suave); }
+
+.desc-error { margin-top: var(--e-2); font-size: var(--t-xs); color: var(--c-error); }
+.desc-auto { margin-top: var(--e-3); font-size: var(--t-xs); color: var(--c-texto-tenue); }
+
+.desc-seccion { display: grid; gap: var(--e-1); margin-top: var(--e-4); }
+.desc-seccion + .desc-seccion { padding-top: var(--e-4); border-top: 1px solid var(--c-borde); }
+.desc-seccion__titulo { font-size: var(--t-sm); font-weight: var(--peso-fuerte); }
+
+.dlg-descuento .desc-volver { margin-right: auto; }

@@ -17,6 +17,9 @@ export function productoVacio(tipo = "estandar") {
     terminaciones_caja: CAJA_TERMINADA,
     ancho: "", alto: "", cantidad: "1", tema: "", obs: "", forzar: false,
     calc: null,
+    // Descuento puesto a mano en el resumen ({tipo, valor}, ver
+    // components/Descuentos): viaja con el producto.
+    descuento_manual: null,
   };
 }
 
@@ -42,7 +45,8 @@ export function normalizar(p, cat) {
 export function esVacio(p, cat) {
   const limpio = normalizar(productoVacio(p.tipo), cat);
   return Object.keys(limpio).every((clave) =>
-    clave === "tipo" || clave === "calc" || JSON.stringify(p[clave]) === JSON.stringify(limpio[clave]));
+    // `?? null`: un borrador de antes no trae descuento_manual, y eso no es tocarlo.
+    clave === "tipo" || clave === "calc" || JSON.stringify(p[clave] ?? null) === JSON.stringify(limpio[clave] ?? null));
 }
 
 /* Completo = su panel dejaría avanzar. El textil/tela NO es obligatorio por

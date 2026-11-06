@@ -227,6 +227,12 @@ class ApiApp:
     def mantener_precios_cotizacion(self, numero) -> bool:
         return self._ver_cotizacion.mantener_precios(numero)
 
+    def guardar_descuentos_cotizacion(self, numero, cambios) -> dict | None:
+        return self._ver_cotizacion.guardar_descuentos(numero, cambios)
+
+    def restablecer_descuentos_cotizacion(self, numero) -> dict | None:
+        return self._ver_cotizacion.restablecer_descuentos(numero)
+
     def eliminar_cotizacion(self, numero) -> None:
         self._ver_cotizacion.eliminar_cotizacion(numero)
 
@@ -286,6 +292,9 @@ class ApiApp:
 
     def calcular_productos(self, productos: list) -> list[dict | None]:
         return self._cotizacion.calcular_productos(productos)
+
+    def calcular_descuentos(self, estado: dict) -> dict:
+        return self._cotizacion.calcular_descuentos(estado)
 
     def guardar_progreso(self, estado: dict) -> dict:
         return self._cotizacion.guardar_progreso(estado)

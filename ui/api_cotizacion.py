@@ -34,7 +34,7 @@ from core.calculo_cajas import calcular_caja
 from core.orden import alfabetico
 from core import catalogo, corte_backlight, lista_precios, precios_textiles
 from core.precios import (
-    costo_producto, costo_cotizacion, ml_o_area_facturable_por_producto,
+    costo_producto, costo_cotizacion, explicar_descuento, manual_valido, ml_o_area_facturable_por_producto,
 )
 from core.repositorio_materiales import (
     estructuras_legado_valores_efectivos, kwargs_precios,
@@ -134,7 +134,23 @@ def _producto_a_interno(p: dict) -> dict:
     """Convierte un producto del frontend (p) al esquema interno que usan
     core.precios.costo_producto / core.repositorio_cotizaciones.
     mapear_producto — el mismo que ya usan ui/cotizacion.py y
-    ui/cotizador_backlight.py."""
+    ui/cotizador_backlight.py. El descuento puesto a mano (ver core.precios,
+    "Descuentos puestos a mano") viaja con el producto: así lo sigue si se
+    reordena o se quita otro."""
+    interno = _producto_a_interno_base(p)
+    manual = manual_valido(p.get("descuento_manual"))
+    if manual:
+        interno["descuento_manual"] = manual
+    return interno
+
+
+def _manuales_extra(estado: dict) -> dict:
+    """Los descuentos a mano del despacho, la instalación y el pedido."""
+    extra = estado.get("descuentos_extra") or {}
+    return {k: manual_valido(extra.get(k)) for k in ("despacho", "instalacion", "pedido")}
+
+
+def _producto_a_interno_base(p: dict) -> dict:
     ancho = _num(p.get("ancho"))
     alto = _num(p.get("alto"))
     cantidad = _ent(p.get("cantidad"), 1)
@@ -197,7 +213,7 @@ def _interno_a_frontend(interno: dict) -> dict:
         "tela": "", "perfil": SIN_CAJA, "luces_1": "M12", "luces_2": "sin luces",
         "terminaciones_caja": "CAJA TERMINADA",
         "ancho": "", "alto": "", "cantidad": "1", "tema": "", "obs": "",
-        "forzar": False, "calc": None,
+        "forzar": False, "calc": None, "descuento_manual": interno.get("descuento_manual"),
     }
     ancho = interno.get("ancho", 0.0)
     alto = interno.get("alto", 0.0)
@@ -320,6 +336,7 @@ class ApiCotizacion:
                 "descripcion": datos.get("Descripcion", ""),
             },
             "productos": [_interno_a_frontend(producto_desde_json(p)) for p in productos_json],
+            "descuentos_extra": lista_precios.manuales_de(datos),
             "actual": 0,
         }
 
@@ -512,6 +529,27 @@ class ApiCotizacion:
             "precio_textil": precio_textil,
         }
 
+    def calcular_descuentos(self, estado: dict) -> dict:
+        """Los descuentos del resumen, en vivo (pedido de Bruno, 2026-11-06):
+        core.precios.explicar_descuento con el % del contacto, despacho,
+        instalación y los puestos a mano. Los productos sin medidas quedan
+        fuera; "productos" sigue alineado con estado["productos"] (None en
+        los que no se pueden calcular)."""
+        productos = estado.get("productos") or []
+        indices = [i for i, p in enumerate(productos) if _calculable(p)]
+        internos = [_producto_a_interno(productos[i]) for i in indices]
+        cliente = estado.get("cliente") or {}
+        explicado = explicar_descuento(
+            internos, _num(cliente.get("descuento"), 0.0),
+            despacho=_num(estado.get("despacho"), 0.0), instalacion=_num(estado.get("instalacion"), 0.0),
+            manuales=_manuales_extra(estado), **kwargs_precios(),
+        )
+        por_indice: list = [None] * len(productos)
+        for i, linea in zip(indices, explicado["productos"]):
+            por_indice[i] = linea
+        explicado["productos"] = por_indice
+        return explicado
+
     def numero_disponible(self, numero, propio=None) -> bool:
         """Chequeo en vivo del campo N° de cotización (nueva-cotizacion.html
         — gatea el botón "bajar a productos", ver revisarDatos()): False si
@@ -561,9 +599,10 @@ class ApiCotizacion:
         despacho = estado.get("despacho")
         instalacion = estado.get("instalacion")
         descuento_pct = _num(cliente.get("descuento"), 0.0)
+        manuales = _manuales_extra(estado)
         totales = costo_cotizacion(productos_internos, descuento_pct,
                                     despacho=despacho or 0.0, instalacion=instalacion or 0.0,
-                                    **kwargs_precios())
+                                    manuales=manuales, **kwargs_precios())
 
         fecha = _iso_a_dma(cliente.get("fecha", "")) or datetime.now().strftime("%d/%m/%Y")
         json_dict = {
@@ -592,6 +631,9 @@ class ApiCotizacion:
             json_dict["Despacho"] = despacho
         if instalacion is not None:
             json_dict["Instalacion"] = instalacion
+        for clave, clave_json in lista_precios.CLAVES_MANUALES.items():
+            if manuales[clave]:
+                json_dict[clave_json] = manuales[clave]
 
         _guardar_cotizacion_repo(json_dict)
 

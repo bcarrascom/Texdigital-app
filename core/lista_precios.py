@@ -196,11 +196,30 @@ def internos_congelados(datos: dict) -> tuple[list[dict], dict]:
     return internos, kwargs_congelados(lista)
 
 
+# Descuentos puestos a mano que no son de un producto (los de cada producto
+# van en el producto, ver core.repositorio_cotizaciones.mapear_producto, y
+# core.precios, "Descuentos puestos a mano").
+CLAVES_MANUALES = {"despacho": "DescuentoDespacho", "instalacion": "DescuentoInstalacion",
+                   "pedido": "DescuentoPedido"}
+
+
+def manuales_de(datos: dict) -> dict:
+    return {k: datos.get(clave) or None for k, clave in CLAVES_MANUALES.items()}
+
+
+def argumentos_descuento(datos: dict) -> dict:
+    """El % del contacto, despacho, instalación y manuales de la cotización,
+    como los piden costo_cotizacion, explicar_descuento y descuento_por_linea."""
+    return {"descuento_pct": datos.get("Descuento", 0.0) or 0.0,
+            "despacho": datos.get("Despacho") or 0.0,
+            "instalacion": datos.get("Instalacion") or 0.0,
+            "manuales": manuales_de(datos)}
+
+
 def totales(datos: dict, internos: list[dict], kwargs: dict) -> dict:
-    """costo_cotizacion con el descuento, despacho e instalación de la cotización."""
-    return costo_cotizacion(internos, datos.get("Descuento", 0.0) or 0.0,
-                            despacho=datos.get("Despacho") or 0.0,
-                            instalacion=datos.get("Instalacion") or 0.0, **kwargs)
+    """costo_cotizacion con el descuento, despacho, instalación y descuentos
+    puestos a mano de la cotización."""
+    return costo_cotizacion(internos, **argumentos_descuento(datos), **kwargs)
 
 
 def _por_producto(internos: list[dict], kwargs: dict) -> list[float]:
@@ -238,8 +257,7 @@ def cobros_por_producto(datos: dict) -> list[dict]:
     core.precios.descuento_por_linea)."""
     internos, kwargs = internos_congelados(datos)
     t = totales(datos, internos, kwargs)
-    lineas = descuento_por_linea(internos, datos.get("Descuento", 0.0) or 0.0, despacho=datos.get("Despacho") or 0.0,
-                                 instalacion=datos.get("Instalacion") or 0.0, **kwargs)
+    lineas = descuento_por_linea(internos, **argumentos_descuento(datos), **kwargs)
     facturables = ml_o_area_facturable_por_producto(internos, **kwargs)
     cobros = []
     for d, f, desc in zip(internos, facturables, lineas):

@@ -12,6 +12,7 @@ import ZonaDatos from "./ZonaDatos";
 import Mapa from "./Mapa";
 import PanelProducto from "./PanelProducto";
 import Resumen from "./Resumen";
+import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import { DialogoMateriales, DialogoQuitar } from "./DialogosNuevaCotizacion";
 import { completo, esVacio, firma, normalizar, productoVacio } from "./producto";
 import * as fmt from "@/utils/formato";
@@ -76,7 +77,8 @@ export default function NuevaCotizacion({ modo = "nueva" }) {
         if (!cliente.fecha && ctx?.fecha_iso) cliente.fecha = ctx.fecha_iso;
         setInicio({
           cat,
-          estado: { id: base.id ?? null, nombre_trabajo: base.nombre_trabajo || "", cliente, productos },
+          estado: { id: base.id ?? null, nombre_trabajo: base.nombre_trabajo || "", cliente, productos,
+                    descuentos_extra: base.descuentos_extra || {} },
           extras: { despacho: extraDe(base.despacho), instalacion: extraDe(base.instalacion) },
           numeroEditando: ctx?.numero_editando || null,
         });
@@ -151,6 +153,63 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
     api.verificar_materiales(estado.productos).then((f) => vigente && setFaltanMateriales((f || []).length > 0));
     return () => { vigente = false; };
   }, [enResumen, firmaActual]);
+
+  /* Los descuentos del resumen (automáticos y puestos a mano, ver
+     components/Descuentos): Python los calcula con las mismas reglas que al
+     guardar, cada vez que cambia algo que los mueve estando en el resumen. */
+  const [desglose, setDesglose] = useState(null);
+  const firmaDescuentos = JSON.stringify([firmaActual, estado.cliente.descuento, estado.descuentos_extra,
+                                          extras.despacho, extras.instalacion]);
+  useEffect(() => {
+    if (!enResumen) return;
+    let vigente = true;
+    const t = setTimeout(async () => {
+      const d = await api.calcular_descuentos(paraPython());
+      if (vigente) setDesglose(d || null);
+    }, RETARDO_CALCULO_MS);
+    return () => { vigente = false; clearTimeout(t); };
+  }, [enResumen, firmaDescuentos]);
+
+  // "p0"…, "despacho", "instalacion" o "pedido": qué diálogo de descuento está abierto.
+  const [editandoDescuento, setEditandoDescuento] = useState(null);
+  const [restableciendo, setRestableciendo] = useState(false);
+
+  /* Los cambios llegan como los manda components/Descuentos ({productos: {i:
+     manual}, despacho, instalacion, pedido}); null = vuelve el automático. */
+  function aplicarDescuentos(cambios) {
+    setEditandoDescuento(null);
+    setEstado((e) => {
+      const productos = e.productos.map((p, i) =>
+        String(i) in (cambios.productos || {}) ? { ...p, descuento_manual: cambios.productos[i] || null } : p);
+      const extra = { ...e.descuentos_extra };
+      for (const k of ["despacho", "instalacion", "pedido"]) if (k in cambios) extra[k] = cambios[k] || null;
+      return { ...e, productos, descuentos_extra: extra };
+    });
+  }
+
+  function restablecerDescuentos() {
+    setRestableciendo(false);
+    setEstado((e) => ({ ...e, descuentos_extra: {},
+                        productos: e.productos.map((p) => ({ ...p, descuento_manual: null })) }));
+    aviso("Se volvió a los descuentos automáticos.", "info");
+  }
+
+  const lineaDescuento = (() => {
+    if (!editandoDescuento || editandoDescuento === "pedido" || !desglose) return null;
+    if (editandoDescuento.startsWith("p")) {
+      const i = Number(editandoDescuento.slice(1));
+      const l = desglose.productos?.[i];
+      const p = estado.productos[i];
+      return l && { titulo: `${i + 1}. ${(p.tipo === "backlight" ? p.tela : p.producto) || l.nombre}`,
+                    precio: l.precio, monto: l.monto, manual: l.manual, automatico: l.automatico };
+    }
+    const l = desglose[editandoDescuento];
+    return l && { titulo: l.nombre, precio: l.precio, monto: l.monto, manual: l.manual, automatico: l.automatico };
+  })();
+  const lineasPedido = desglose ? [
+    ...(desglose.productos || []).map((l, i) => l && { clave: `p${i}`, precio: l.precio }).filter(Boolean),
+    ...["despacho", "instalacion"].filter((k) => desglose[k]).map((k) => ({ clave: k, precio: desglose[k].precio })),
+  ] : [];
 
   // ── N° de cotización: disponibilidad en vivo ─────────────────────────────
 
@@ -435,8 +494,10 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
                   ref={(el) => { paneles.current[productos.length] = el; paneles.current.length = productos.length + 1; }}
                   productos={productos}
                   despacho={montoDe(extras.despacho)} instalacion={montoDe(extras.instalacion)}
+                  desglose={desglose}
                   faltanMateriales={faltanMateriales}
                   onIr={irA} onQuitar={pedirQuitar} onAgregar={agregarProducto} onGuardar={guardarCotizacion}
+                  onEditarDescuento={setEditandoDescuento} onRestablecer={() => setRestableciendo(true)}
                 />
               </div>
             </div>
@@ -454,6 +515,13 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
 
       <DialogoQuitar indice={quitando} onCerrar={() => setQuitando(null)} onConfirmar={quitarProducto} />
       <DialogoMateriales faltantes={faltantesDialogo} onDecidir={alDecidir} onNuevoRollo={nuevoRollo} />
+      <DialogoDescuentoLinea abierto={!!lineaDescuento} linea={lineaDescuento} onCerrar={() => setEditandoDescuento(null)}
+                             onGuardar={(manual) => aplicarDescuentos(editandoDescuento.startsWith("p")
+                               ? { productos: { [editandoDescuento.slice(1)]: manual } } : { [editandoDescuento]: manual })} />
+      <DialogoDescuentoPedido abierto={editandoDescuento === "pedido" && !!desglose} lineas={lineasPedido}
+                              pedido={desglose?.pedido} onCerrar={() => setEditandoDescuento(null)}
+                              onGuardar={aplicarDescuentos} />
+      <DialogoRestablecer abierto={restableciendo} onCerrar={() => setRestableciendo(false)} onConfirmar={restablecerDescuentos} />
     </Pagina>
   );
 }

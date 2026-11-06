@@ -299,6 +299,23 @@
   .cifra__val { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .cifra--total { padding-top: var(--e-2); border-top: 1px solid var(--c-borde);
                   font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-tema-tinta); }
+  .cifra--descuento, .cifra--descuento .cifra__et { color: var(--c-descuento); }
+
+  /* Descuentos del resumen (Resumen.jsx): la celda se aprieta para cambiarlo. */
+  .celda-descuento {
+    display: inline-grid; justify-items: end; gap: .05rem;
+    padding: .1rem .3rem; margin: -.1rem -.3rem;
+    border: 0; border-radius: var(--r-sm); background: none; cursor: pointer;
+    font-family: inherit; text-align: right; color: var(--c-descuento);
+  }
+  .celda-descuento b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: var(--peso-normal); }
+  .celda-descuento > span { font-size: var(--t-xs); font-family: var(--f-ui); }
+  .celda-descuento:hover { background: var(--c-superficie-2); }
+  .celda-descuento:focus-visible { outline: 2px solid var(--c-foco); outline-offset: 1px; }
+  .celda-descuento__agregar { color: var(--c-texto-tenue); }
+  .tabla tr[data-extra] td { color: var(--c-texto-suave); }
+  .resumen__descuentos { display: flex; flex-wrap: wrap; gap: var(--e-2); margin-top: var(--e-3); }
+  .resumen__descuentos .btn { flex: 1 1 auto; }
 
   /* ── Resumen ─────────────────────────────────────────────────────────────── */
   .resumen {

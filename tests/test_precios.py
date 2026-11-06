@@ -21,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.precios import (
     calcular_ml, cantidad_efectiva, costo_producto, costo_cotizacion,
     descuento_textil, tramo_descuento_textil, ml_o_area_facturable_por_producto,
-    en_piso_minimo_por_producto,
+    en_piso_minimo_por_producto, explicar_descuento, descuento_por_linea, manual_valido,
+    _costo_automatico,
 )
 
 TEXTILES_ANCHOS = {"TelaTest": 1.2, "Popelina Test": 1.53}
@@ -632,6 +633,122 @@ class TestDescuentosNoAplicanSobrePisoMinimo(unittest.TestCase):
         self.assertAlmostEqual(totales["neto"], 40000.0)
         self.assertEqual(totales["fuente_descuento"], "normal")
         self.assertAlmostEqual(totales["descuento"], 2000.0)
+
+
+class TestExplicarDescuento(unittest.TestCase):
+    """El descuento explicado para la pantalla (core.precios.explicar_descuento):
+    lo de cada producto, más despacho e instalación, suma el descuento total."""
+
+    KW = dict(textiles_anchos=TEXTILES_ANCHOS, modelo="aditivo", estructuras_valores={},
+              terminaciones_valores=TERMINACIONES_VALORES)
+
+    def _suma(self, e):
+        extras = [e[k]["monto"] for k in ("despacho", "instalacion") if e[k]]
+        return sum(p["monto"] for p in e["productos"]) + sum(extras) + e["pedido"]["monto"]
+
+    def test_gana_el_contacto_con_un_textil_en_minimo(self):
+        valores = {"TelaTest": 10000.0, "Popelina Test": 1000.0}
+        en_minimo = _producto(alto=0.5, ancho=1.2, cantidad=1, terminaciones=["Basta"])
+        grande = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)
+        prods = [en_minimo, grande]
+        e = explicar_descuento(prods, 10, despacho=5000, textiles_valores=valores, **self.KW)
+        t = costo_cotizacion(prods, 10, despacho=5000, textiles_valores=valores, **self.KW)
+        self.assertEqual(e["aplicado"], "contacto")
+        self.assertAlmostEqual(self._suma(e), t["descuento"])
+        self.assertAlmostEqual(e["despacho"]["monto"], 500.0)
+        # El de minimo: solo su terminacion lleva el 10 %, no la impresion.
+        self.assertTrue(e["productos"][0]["en_minimo"])
+        self.assertAlmostEqual(e["productos"][0]["monto"], 114.0)
+        # Cobra 2 ML con 0,5 reales: +300 % de la impresion, $15.000 de $20.000.
+        self.assertAlmostEqual(e["productos"][0]["minimo"]["pct"], 300.0)
+        self.assertAlmostEqual(e["productos"][0]["minimo"]["monto"], 15000.0)
+        self.assertIsNone(e["productos"][1]["minimo"])
+        # El de volumen se informa igual (Popelina 22,95 m2 -> 10 % de 15000).
+        self.assertAlmostEqual(e["volumen"]["monto"], 1500.0)
+        self.assertEqual([(g["nombre"], g["en_minimo"]) for g in e["volumen"]["grupos"]],
+                         [("TelaTest", ["TelaTest"]), ("Popelina Test", [])])
+
+    def test_gana_el_volumen_por_textil(self):
+        valores = {"TelaTest": 1000.0, "Popelina Test": 1000.0}
+        grande = _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3, terminaciones=["Basta"])
+        chico = _producto(alto=3, ancho=1.2, cantidad=1)
+        prods = [grande, chico]
+        e = explicar_descuento(prods, 0, textiles_valores=valores, **self.KW)
+        t = costo_cotizacion(prods, 0, textiles_valores=valores, **self.KW)
+        self.assertEqual(e["aplicado"], "volumen")
+        self.assertAlmostEqual(self._suma(e), t["descuento"])
+        self.assertEqual([(g["nombre"], g["pct"]) for g in e["volumen"]["grupos"]],
+                         [("Popelina Test", 10.0), ("TelaTest", 0.0)])
+        # Solo la impresion: 15 ML x 1000 x 10 %, no la terminacion.
+        self.assertAlmostEqual(e["productos"][0]["monto"], 1500.0)
+        self.assertEqual(e["productos"][0]["razon"], "volumen")
+        self.assertEqual(e["productos"][1]["monto"], 0.0)
+        self.assertIsNone(e["despacho"])   # sin despacho, no hay línea
+
+    def _gana_contacto(self):
+        """TelaTest en minimo + Popelina grande, 10 % del contacto y despacho."""
+        valores = {"TelaTest": 10000.0, "Popelina Test": 1000.0}
+        prods = [_producto(alto=0.5, ancho=1.2, cantidad=1, terminaciones=["Basta"]),
+                 _producto(textil="Popelina Test", alto=5, ancho=1.53, cantidad=3)]
+        return prods, dict(despacho=5000, textiles_valores=valores, **self.KW)
+
+    def test_sin_manuales_es_el_calculo_de_siempre(self):
+        prods, kw = self._gana_contacto()
+        self.assertEqual(costo_cotizacion(prods, 10, **kw), _costo_automatico(prods, 10, **kw))
+
+    def test_manual_de_un_producto_reemplaza_al_automatico(self):
+        prods, kw = self._gana_contacto()
+        prods[1]["descuento_manual"] = {"tipo": "pct", "valor": 50}
+        e = explicar_descuento(prods, 10, **kw)
+        t = costo_cotizacion(prods, 10, **kw)
+        # Popelina: 15 ML x 1000 = 15000, la mitad. El otro y el despacho siguen con el 10 %.
+        self.assertAlmostEqual(e["productos"][1]["monto"], 7500.0)
+        self.assertEqual(e["productos"][1]["razon"], "manual")
+        self.assertAlmostEqual(e["productos"][0]["monto"], 114.0)
+        self.assertAlmostEqual(e["despacho"]["monto"], 500.0)
+        self.assertEqual(t["fuente_descuento"], "manual")
+        self.assertAlmostEqual(t["descuento"], 7500 + 114 + 500)
+        self.assertAlmostEqual(t["total"], (t["neto"] - t["descuento"]) * 1.19)
+
+    def test_un_manual_puede_descontar_el_minimo_y_no_pasa_del_precio(self):
+        prods, kw = self._gana_contacto()
+        prods[0]["descuento_manual"] = {"tipo": "monto", "valor": 999999}
+        e = explicar_descuento(prods, 10, **kw)
+        # Todo el precio del que cobra el minimo (impresion 20000 + Basta 1140), nada mas.
+        self.assertAlmostEqual(e["productos"][0]["monto"], 21140.0)
+        self.assertAlmostEqual(e["productos"][0]["total"], 0.0)
+
+    def test_manual_en_cero_quita_el_descuento(self):
+        prods, kw = self._gana_contacto()
+        e = explicar_descuento(prods, 10, manuales={"despacho": {"tipo": "pct", "valor": 0}}, **kw)
+        self.assertEqual(e["despacho"]["monto"], 0.0)
+        self.assertEqual(e["despacho"]["razon"], "manual")
+
+    def test_adicional_del_pedido_sobre_lo_que_queda(self):
+        prods, kw = self._gana_contacto()
+        sin = costo_cotizacion(prods, 10, **kw)
+        man = {"pedido": {"tipo": "pct", "valor": 10}}
+        con = costo_cotizacion(prods, 10, manuales=man, **kw)
+        queda = sin["neto"] - sin["descuento"]
+        self.assertAlmostEqual(con["descuento"], sin["descuento"] + queda * 0.10)
+        # Reparto por linea (reportes): la fraccion de cada uno sube parejo.
+        lineas = descuento_por_linea(prods, 10, manuales=man, **kw)
+        self.assertAlmostEqual(lineas[1]["impresion"], 0.10 + 0.90 * 0.10)
+        self.assertAlmostEqual(lineas[0]["impresion"], 0.10)   # minimo: solo el adicional
+
+    def test_manual_valido(self):
+        self.assertEqual(manual_valido({"tipo": "pct", "valor": "12,5"}), {"tipo": "pct", "valor": 12.5})
+        self.assertEqual(manual_valido({"tipo": "pct", "valor": 150}), {"tipo": "pct", "valor": 100.0})
+        self.assertEqual(manual_valido({"tipo": "monto", "valor": -5}), {"tipo": "monto", "valor": 0.0})
+        self.assertIsNone(manual_valido({"tipo": "otro", "valor": 1}))
+        self.assertIsNone(manual_valido(None))
+
+    def test_sin_descuento(self):
+        valores = {"TelaTest": 1000.0}
+        e = explicar_descuento([_producto(alto=3, ancho=1.2)], 0, textiles_valores=valores, **self.KW)
+        self.assertIsNone(e["aplicado"])
+        self.assertEqual(e["tramo_desde"], 10.0)
+        self.assertEqual(self._suma(e), 0.0)
 
 
 if __name__ == "__main__":
