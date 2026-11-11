@@ -5,6 +5,10 @@ Solo en DropboxDev: se niega a correr si la app no está en modo desarrollo.
 
     py herramientas/datos_de_prueba.py                 crea lo que falte
     py herramientas/datos_de_prueba.py --cotizaciones  y además dos cotizaciones nuevas
+    py herramientas/datos_de_prueba.py --borradores 5  y además 5 borradores completos, sin
+                                                       guardar como cotización (para apretar
+                                                       "Guardar cotización" a mano); sin el
+                                                       número, uno
 
 Se puede volver a correr: lo que ya existe no se repite (las cotizaciones sí:
 cada vez, dos más). Lo que crea está anotado en CLAUDE.md ("Material de prueba")."""
@@ -110,18 +114,73 @@ COTIZACIONES = [
      ]},
 ]
 
+# Borradores completos, distintos entre sí (se usan en orden y vuelven a
+# empezar si se piden más).
+BORRADORES = [
+    {"nombre": "Prueba correos 1", "descripcion": "Prueba: dos productos, uno con estructura",
+     "despacho": 10000,
+     "productos": [
+         est(PRODUCTO, 1.0, 1.5, 4, estructuras=[ESTRUCTURA], terminaciones=[TERMINACION], tema="Con estructura"),
+         est(PRODUCTO, 0.8, 0.8, 6, terminaciones=[TERMINACION], tema="Sin estructura"),
+     ]},
+    {"nombre": "Prueba correos 2", "descripcion": "Prueba: un solo producto, sin extras",
+     "productos": [
+         est(PRODUCTO, 1.2, 2.0, 2, tema="Simple"),
+     ]},
+    {"nombre": "Prueba correos 3", "descripcion": "Prueba: tiro y retiro, despacho e instalación",
+     "despacho": 15000, "instalacion": 40000,
+     "productos": [
+         est(PRODUCTO, 1.5, 1.0, 3, estructuras=[ESTRUCTURA], tiro_retiro=True, tema="Tiro y retiro"),
+         est(PRODUCTO, 0.5, 0.5, 20, terminaciones=[TERMINACION], tema="Muchas chicas"),
+     ]},
+    {"nombre": "Prueba correos 4", "descripcion": "Prueba: tres productos con estructura y terminación",
+     "productos": [
+         est(PRODUCTO, 1.0, 2.0, 5, estructuras=[ESTRUCTURA], terminaciones=[TERMINACION], tema="Grande"),
+         est(PRODUCTO, 0.7, 1.0, 8, estructuras=[ESTRUCTURA], tema="Mediana"),
+         est(PRODUCTO, 0.4, 0.4, 12, terminaciones=[TERMINACION], tema="Chica"),
+     ]},
+    {"nombre": "Prueba correos 5", "descripcion": "Prueba: pedido grande con despacho",
+     "despacho": 25000,
+     "productos": [
+         est(PRODUCTO, 1.5, 3.0, 10, estructuras=[ESTRUCTURA], terminaciones=[TERMINACION], tema="Fachada"),
+     ]},
+]
+
+
+def estado_cotizacion(c, numero):
+    """Lo que manda el cotizador al guardar (o al "Guardar progreso")."""
+    cli = next(x for x in repo.cargar_clientes() if x["empresa"] == CLIENTE)
+    cont = next(x for x in repo.cargar_contactos() if x["contacto"] == CONTACTO)
+    return {
+        "id": None, "nombre_trabajo": c["nombre"],
+        "despacho": c.get("despacho"), "instalacion": c.get("instalacion"),
+        "cliente": {"empresa": cli["empresa"], "rut": cli["rut"], "razon_social": cli["razon_social"],
+                    "contacto": cont["contacto"], "email": cont["email"],
+                    "descuento": cont.get("descuento") or "0", "condicion": cont["condicion"],
+                    "fecha": date.today().isoformat(), "numero": str(numero), "descripcion": c["descripcion"]},
+        "productos": c["productos"], "actual": 0,
+    }
+
+
 if "--cotizaciones" in sys.argv:
-    cli = next(c for c in repo.cargar_clientes() if c["empresa"] == CLIENTE)
-    cont = next(c for c in repo.cargar_contactos() if c["contacto"] == CONTACTO)
     for c in COTIZACIONES:
         numero = siguiente_numero()
-        estado = {
-            "id": None, "nombre_trabajo": c["nombre"],
-            "despacho": c.get("despacho"), "instalacion": c.get("instalacion"),
-            "cliente": {"empresa": cli["empresa"], "rut": cli["rut"], "razon_social": cli["razon_social"],
-                        "contacto": cont["contacto"], "email": cont["email"],
-                        "descuento": cont.get("descuento") or "0", "condicion": cont["condicion"],
-                        "fecha": date.today().isoformat(), "numero": str(numero), "descripcion": c["descripcion"]},
-            "productos": c["productos"], "actual": 0,
-        }
-        print(f"  cotización {numero}:", ApiCotizacion().guardar_cotizacion(estado))
+        print(f"  cotización {numero}:", ApiCotizacion().guardar_cotizacion(estado_cotizacion(c, numero)))
+
+if "--borradores" in sys.argv:
+    # Como "Guardar progreso": quedan en Cotizaciones/Pendientes con todo
+    # lleno. Un borrador no reserva su N°, así que cada uno toma el siguiente
+    # que no esté usado por una cotización ni por otro borrador.
+    from core.repositorio_cotizaciones import numero_en_uso
+    from core.repositorio_pendientes import listar_pendientes
+
+    i = sys.argv.index("--borradores")
+    cuantos = int(sys.argv[i + 1]) if i + 1 < len(sys.argv) and sys.argv[i + 1].isdigit() else 1
+    usados = {str((b.get("cliente") or {}).get("numero", "")) for b in listar_pendientes()}
+    numero = siguiente_numero()
+    for k in range(cuantos):
+        while str(numero) in usados or numero_en_uso(numero):
+            numero += 1
+        usados.add(str(numero))
+        r = ApiCotizacion().guardar_progreso(estado_cotizacion(BORRADORES[k % len(BORRADORES)], numero))
+        print(f"  borrador {r['id']} (N° {numero}): {BORRADORES[k % len(BORRADORES)]['nombre']}")

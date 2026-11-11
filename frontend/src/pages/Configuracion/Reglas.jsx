@@ -123,14 +123,12 @@ export default function Reglas() {
         <FilaRegla etiqueta="IVA" error={errores.iva}>{campo("iva", "%", "IVA en %")}</FilaRegla>
       </Grupo>
 
-      <Grupo titulo="Mínimo que se cobra"
-             pie="Si todos los productos de un mismo textil suman menos que esto, se cobra el mínimo. En Backlight se suman todos juntos.">
+      <Grupo titulo="Mínimo que se cobra">
         <FilaRegla etiqueta="Textiles" error={errores.ml_minimo}>{campo("ml_minimo", "ML", "Mínimo de textiles en metros lineales")}</FilaRegla>
         <FilaRegla etiqueta="Backlight" error={errores.m2_minimo}>{campo("m2_minimo", "m²", "Mínimo de Backlight en metros cuadrados")}</FilaRegla>
       </Grupo>
 
-      <Grupo titulo="Descuento por volumen"
-             pie="Se descuenta del costo de impresión cuando los m² impresos de un textil llegan a un tramo (en Backlight, de todos juntos). Si el descuento del cliente sale mayor, se usa ese: nunca los dos.">
+      <Grupo titulo="Descuento por volumen">
         {actual.tramos.length ? actual.tramos.map((t, i) => (
           <FilaRegla key={i} etiqueta={`Tramo ${i + 1}`} error={errores[`tramo:${i}`]}>
             <span className="regla-texto">desde</span>

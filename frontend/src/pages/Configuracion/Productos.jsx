@@ -48,8 +48,7 @@ function MaterialesBacklight() {
   const { datos } = useDatos(() => api.obtener_materiales_backlight(), []);
   if (!datos) return null;
   return (
-    <Grupo titulo="Backlight"
-           pie="No son productos del cotizador: «Backlight» es todo backlight, y «Backlight + Caja», los que llevan caja. Sus materiales se asocian en la ficha de cada material (Inventario › Materiales › Editar).">
+    <Grupo titulo="Backlight">
       {datos.map((b) => (
         <Fila key={b.nombre} etiqueta={b.nombre} detalle={b.materiales.length ? nombresMateriales(b.materiales) : "Sin materiales asociados"} />
       ))}
@@ -67,8 +66,7 @@ function FormularioProducto({ item, onCerrar, onHecho }) {
     <form onSubmit={confirmar} onKeyDown={enterGuarda} noValidate>
       <h2 className="dlg__titulo">{item ? "Renombrar producto" : "Agregar producto"}</h2>
       <div className="dlg-catalogo__campos">
-        <Campo id="prod-nombre" etiqueta="Nombre" requerido invalido={!!errores.nombre} error={errores.nombre}
-               ayuda="Así aparece en el cotizador y en la cotización.">
+        <Campo id="prod-nombre" etiqueta="Nombre" requerido invalido={!!errores.nombre} error={errores.nombre}>
           <input className="entrada" id="prod-nombre" type="text" autoComplete="off" data-autofoco
                  value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </Campo>

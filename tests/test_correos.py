@@ -91,6 +91,17 @@ class TestAjustes(_Base):
                                              "cotizaciones.asunto", "areas.ops:1", "areas.inventario:0"})
         self.assertFalse((self.base / "Conf" / "correos.json").exists())
 
+    def test_aviso_de_cotizacion_nueva_aparte_del_correo_al_cliente(self):
+        a = correos.cargar()
+        self.assertEqual(a["cotizaciones_nuevas"]["para"], [])
+        self.assertIn("{numero}", a["cotizaciones_nuevas"]["asunto"])
+        r = correos.guardar({"cotizaciones_nuevas": {"asunto": " ", "para": [{"correo": "x@y.cl"}, {"correo": "X@y.cl"}]}})
+        self.assertEqual(set(r["errores"]), {"cotizaciones_nuevas.asunto", "cotizaciones_nuevas.para:1"})
+        self.assertEqual(correos.guardar({"cotizaciones_nuevas": {"para": [{"correo": " ventas@texdigital.cl "}]}}), {"ok": True})
+        a = correos.cargar()
+        self.assertEqual(a["cotizaciones_nuevas"]["para"], [{"correo": "ventas@texdigital.cl", "nombre": ""}])
+        self.assertEqual(a["cotizaciones"]["asunto"], correos.POR_DEFECTO["cotizaciones"]["asunto"])   # el del cliente no cambia
+
     def test_sin_modo_de_prueba_no_hace_falta_la_direccion(self):
         self.assertEqual(correos.guardar({"prueba": {"activo": False, "direccion": ""}}), {"ok": True})
 
@@ -234,6 +245,33 @@ class TestEnviarCotizacion(_Base):
             self.assertEqual(api_correos.estado_envio(self.guardada), "con_cambios")
             # Un envío simulado (de antes del 2026-11-10) no salió: no cuenta.
             self.assertEqual(api_correos.estado_envio({"Correos": [{"simulado": True, "huella": "x"}]}), "sin_enviar")
+
+    def test_aviso_de_cotizacion_nueva(self):
+        correos.guardar({"cotizaciones_nuevas": {"para": [{"correo": "ventas@texdigital.cl", "nombre": "Ventas"}]}})
+        r = self.api.enviar_aviso_cotizacion_nueva(1004, ["ventas@texdigital.cl", "jefe@texdigital.cl"])
+        self.assertTrue(r["ok"] and r["prueba"])
+        [(msg, para)] = self.enviados
+        self.assertEqual(para, ["brosky.spam@gmail.com"])
+        self.assertIn("Nueva cotización 1004 - Galería Norte", msg["Subject"])
+        self.assertEqual(self.guardada["AvisoCreacion"]["para"], ["ventas@texdigital.cl", "jefe@texdigital.cl"])
+        # Es otro correo que el del cliente: no cuenta como envío al cliente.
+        self.assertNotIn("Correos", self.guardada)
+        self.assertTrue(list((self.base / "SGTD" / "Correos").rglob("* Cotización nueva 1004.eml")))
+
+    def test_aviso_sin_destinatarios_o_con_uno_malo(self):
+        self.assertEqual(self.api.enviar_aviso_cotizacion_nueva(1004, []), {"ok": False, "error": "Falta a quién enviarlo."})
+        self.assertFalse(self.api.enviar_aviso_cotizacion_nueva(1004, ["malo"])["ok"])
+        self.assertFalse(self.enviados)
+
+    def test_lo_que_ve_el_resumen_del_cotizador(self):
+        correos.guardar({"cotizaciones_nuevas": {"para": [{"correo": "ventas@texdigital.cl", "nombre": "Ventas"}]},
+                         "cotizaciones": {"copia": [{"correo": "jefe@texdigital.cl", "nombre": "Jefe"},
+                                                    {"correo": "VENTAS@texdigital.cl", "nombre": ""}]},
+                         "areas": {"ops": [{"correo": "produccion@texdigital.cl", "nombre": "Producción"}]}})
+        r = self.api.correo_al_crear()
+        self.assertEqual([f["correo"] for f in r["inscritos"]], ["ventas@texdigital.cl"])
+        # Para sumar a alguien: los demás guardados en la app, sin los inscritos ni repetidos.
+        self.assertEqual([f["correo"] for f in r["guardados"]], ["jefe@texdigital.cl", "produccion@texdigital.cl"])
 
     def test_preparar_rellena_la_plantilla(self):
         p = self.api.preparar_correo_cotizacion(1004)

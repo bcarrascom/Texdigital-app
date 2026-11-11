@@ -50,6 +50,20 @@ def _documento(numero):
     return datos, doc, generar_html(doc)
 
 
+def _enviar_con_pdf(ajustes, datos, ruta_html, *, para, copia, asunto, mensaje, nombre_eml):
+    """Arma el PDF del documento, lo envía y deja la copia .eml en la
+    carpeta Correos. Devuelve (a quién salió de verdad, ruta del .eml).
+    Levanta PdfNoDisponible o correos.ErrorEnvio si no sale."""
+    with tempfile.TemporaryDirectory(prefix="SistemaGestion_correo_") as tmp:
+        pdf = html_a_pdf(ruta_html, Path(tmp) / "cotizacion.pdf")
+        msg, reales = correos.armar_mensaje(
+            ajustes=ajustes, para=para, copia=copia, asunto=asunto, mensaje=mensaje,
+            adjunto=pdf, nombre_adjunto=correos.nombre_adjunto(datos),
+        )
+    correos.enviar(msg, reales, ajustes)
+    return reales, correos.guardar_eml(msg, nombre_eml)
+
+
 def resumen_envio(registro: dict | None) -> dict | None:
     """Lo que la pantalla muestra de un envío anotado en la cotización."""
     if not registro:
@@ -91,7 +105,9 @@ class ApiCorreos:
         return {
             "ajustes": correos.cargar(),
             "por_defecto": {"asunto": correos.POR_DEFECTO["cotizaciones"]["asunto"],
-                            "mensaje": correos.POR_DEFECTO["cotizaciones"]["mensaje"]},
+                            "mensaje": correos.POR_DEFECTO["cotizaciones"]["mensaje"],
+                            "nuevas": {"asunto": correos.POR_DEFECTO["cotizaciones_nuevas"]["asunto"],
+                                       "mensaje": correos.POR_DEFECTO["cotizaciones_nuevas"]["mensaje"]}},
             "variables": [{"clave": k, "texto": v} for k, v in correos.VARIABLES_COTIZACION.items()],
             "solo_lectura": correos.solo_lectura(),
             "contrasena_guardada": bool(correos.contrasena()),
@@ -208,21 +224,11 @@ class ApiCorreos:
             return {"ok": False, "error": "La cotización ya no existe."}
         guardados, _, ruta_html = r
         ajustes = correos.cargar()
-        with tempfile.TemporaryDirectory(prefix="SistemaGestion_correo_") as tmp:
-            try:
-                pdf = html_a_pdf(ruta_html, Path(tmp) / "cotizacion.pdf")
-            except PdfNoDisponible as e:
-                return {"ok": False, "error": str(e)}
-            msg, reales = correos.armar_mensaje(
-                ajustes=ajustes, para=para, copia=copia, asunto=asunto, mensaje=mensaje,
-                adjunto=pdf, nombre_adjunto=correos.nombre_adjunto(guardados),
-            )
         try:
-            correos.enviar(msg, reales, ajustes)
-        except correos.ErrorEnvio as e:
+            reales, archivo = _enviar_con_pdf(ajustes, guardados, ruta_html, para=para, copia=copia, asunto=asunto,
+                                              mensaje=mensaje, nombre_eml=f"Cotización {guardados.get('Cotizacion')}")
+        except (PdfNoDisponible, correos.ErrorEnvio) as e:
             return {"ok": False, "error": str(e)}
-        # La copia de lo que salió, en la carpeta Correos.
-        archivo = correos.guardar_eml(msg, f"Cotización {guardados.get('Cotizacion')}")
 
         registro = {
             "fecha": datetime.now().isoformat(timespec="seconds"),
@@ -235,3 +241,55 @@ class ApiCorreos:
         guardar_cotizacion(guardados)
         return {"ok": True, "prueba": registro["prueba"], "a": reales, "archivo": str(archivo),
                 "ultimo": resumen_envio(registro)}
+
+    # ── Aviso de cotización nueva (a la gente de Texdigital) ─────────────
+    # Bruno (2026-11-11): al crear una cotización, los inscritos en
+    # "Cotizaciones nuevas" (Configuración › Correos) reciben el PDF, con su
+    # propio asunto y mensaje. Es otro correo que el del cliente. En el
+    # Resumen del cotizador se ve la lista: cada correo se puede sacar, y se
+    # puede sumar otro de los guardados en la app (o uno escrito), solo esa vez.
+
+    def correo_al_crear(self) -> dict:
+        """Lo que el bloque del Resumen necesita: la lista de inscritos, los
+        demás correos guardados en la app (para sumar uno), el modo de prueba
+        y si hay contraseña en este computador."""
+        ajustes = correos.cargar()
+        inscritos = ajustes["cotizaciones_nuevas"]["para"]
+        ya = {f["correo"].lower() for f in inscritos}
+        return {
+            "inscritos": inscritos,
+            "guardados": [f for f in correos.correos_guardados(ajustes) if f["correo"].lower() not in ya],
+            "prueba": ajustes["prueba"],
+            "contrasena_guardada": bool(correos.contrasena(ajustes["cuenta"]["remitente"])),
+        }
+
+    def enviar_aviso_cotizacion_nueva(self, numero, para) -> dict:
+        """Manda el aviso de la cotización recién creada, con el asunto y el
+        mensaje de Configuración y el PDF. {"ok": True, "prueba", "a": [...]}
+        o {"ok": False, "error"}. Queda anotado en la cotización, en
+        "AvisoCreacion" (no en "Correos": esos son los envíos al cliente)."""
+        para = _lista(para)
+        if not para:
+            return {"ok": False, "error": "Falta a quién enviarlo."}
+        malos = [c for c in para if not correo_valido(c)]
+        if malos:
+            return {"ok": False, "error": f"«{malos[0]}» no es un correo válido."}
+        r = _documento(numero)
+        if r is None:
+            return {"ok": False, "error": "La cotización ya no existe."}
+        guardados, doc, ruta_html = r
+        ajustes = correos.cargar()
+        plantilla, valores = ajustes["cotizaciones_nuevas"], correos.valores_cotizacion(doc)
+        try:
+            reales, archivo = _enviar_con_pdf(
+                ajustes, guardados, ruta_html, para=para, copia=[],
+                asunto=correos.rellenar(plantilla["asunto"], valores),
+                mensaje=correos.rellenar(plantilla["mensaje"], valores),
+                nombre_eml=f"Cotización nueva {guardados.get('Cotizacion')}")
+        except (PdfNoDisponible, correos.ErrorEnvio) as e:
+            return {"ok": False, "error": str(e)}
+        prueba = bool(ajustes["prueba"].get("activo"))
+        guardados["AvisoCreacion"] = {"fecha": datetime.now().isoformat(timespec="seconds"),
+                                      "para": para, "prueba": prueba, "archivo": archivo.name}
+        guardar_cotizacion(guardados)
+        return {"ok": True, "prueba": prueba, "a": reales}

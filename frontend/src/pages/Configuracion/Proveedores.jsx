@@ -68,8 +68,7 @@ export default function Proveedores() {
       </Grupo>
 
       {proveedores.length > 0 && <BuscadorLista valor={buscar} onCambiar={setBuscar} que="proveedor" />}
-      <Grupo titulo={proveedores.length ? tituloLista(buscar, visibles.length, proveedores.length, "proveedor", "proveedores") : null}
-             pie="Los rollos y materiales que ya tienen un proveedor no cambian al renombrarlo o eliminarlo acá: guardan una copia del nombre, no un enlace a esta lista.">
+      <Grupo titulo={proveedores.length ? tituloLista(buscar, visibles.length, proveedores.length, "proveedor", "proveedores") : null}>
         {visibles.length ? visibles.map((p) => p === editando
           ? <FilaEditando key={p} nombre={p} onGuardar={(n) => renombrar(p, n)} onCancelar={() => setEditando(null)} />
           : (

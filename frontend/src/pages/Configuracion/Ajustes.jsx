@@ -27,7 +27,6 @@ export function Encabezado({ categoria }) {
     <header className="ajustes-encabezado">
       <IconoCategoria Icono={categoria.Icono} color={categoria.color} grande />
       <h1 className="ajustes-encabezado__titulo">{categoria.titulo}</h1>
-      <p className="ajustes-encabezado__desc">{categoria.desc}</p>
     </header>
   );
 }

@@ -28,9 +28,11 @@ import { correoValido } from "@/utils/formato";
      · arriba, lo global del correo de la app: la cuenta (sistema@texdigital.cl)
        y su contraseña, el correo de prueba y la carpeta, y el modo de prueba;
      · abajo, lo de cada parte del programa, con el menú flotante
-       (components/NavFlotante): Cotizaciones (asunto y mensaje al cliente,
-       con copia, los correos de clientes y contactos) y OPs (a quién le
-       llegan; todavía no se envían). La sección elegida va en la URL
+       (components/NavFlotante): Cotizaciones y OPs (a quién le llegan;
+       todavía no se envían). Cotizaciones tiene dos correos distintos (Bruno,
+       2026-11-11), cada uno con su lista, asunto y mensaje:
+         · el aviso de cotización nueva, a la gente de Texdigital, al crearla;
+         · el correo al cliente ("Enviar correo"), con su copia a Texdigital. La sección elegida va en la URL
        (?seccion=ops), para que un botón de otro módulo pueda abrirla.
    Se edita entera y se guarda con la barra de abajo, como las Reglas: los
    cambios de las dos secciones van juntos.
@@ -58,6 +60,8 @@ const aBorrador = (a) => ({
   pruebaActivo: !!a.prueba.activo, pruebaDireccion: a.prueba.direccion || "",
   asunto: a.cotizaciones.asunto, mensaje: a.cotizaciones.mensaje,
   copia: a.cotizaciones.copia.map((f) => ({ ...f })),
+  nuevasAsunto: a.cotizaciones_nuevas.asunto, nuevasMensaje: a.cotizaciones_nuevas.mensaje,
+  nuevasPara: a.cotizaciones_nuevas.para.map((f) => ({ ...f })),
   areas: Object.fromEntries(AREAS.map(({ clave }) => [clave, (a.areas[clave] || []).map((f) => ({ ...f }))])),
 });
 
@@ -65,6 +69,7 @@ const desdeBorrador = (b) => ({
   cuenta: { remitente: b.remitente.trim(), nombre: b.nombre.trim(), servidor: b.servidor.trim(), puerto: b.puerto.trim() },
   prueba: { activo: b.pruebaActivo, direccion: b.pruebaDireccion.trim() },
   cotizaciones: { asunto: b.asunto, mensaje: b.mensaje, copia: b.copia },
+  cotizaciones_nuevas: { asunto: b.nuevasAsunto, mensaje: b.nuevasMensaje, para: b.nuevasPara },
   areas: b.areas,
 });
 
@@ -79,6 +84,8 @@ function validar(b) {
   if (b.pruebaActivo && !correoValido(b.pruebaDireccion)) e["prueba.direccion"] = "El correo no es válido.";
   if (!b.asunto.trim()) e["cotizaciones.asunto"] = "Falta el asunto.";
   if (!b.mensaje.trim()) e["cotizaciones.mensaje"] = "Falta el mensaje.";
+  if (!b.nuevasAsunto.trim()) e["cotizaciones_nuevas.asunto"] = "Falta el asunto.";
+  if (!b.nuevasMensaje.trim()) e["cotizaciones_nuevas.mensaje"] = "Falta el mensaje.";
   const lista = (filas, clave) => {
     const vistos = new Set();
     filas.forEach((f, i) => {
@@ -89,6 +96,7 @@ function validar(b) {
     });
   };
   lista(b.copia, "cotizaciones.copia");
+  lista(b.nuevasPara, "cotizaciones_nuevas.para");
   AREAS.forEach(({ clave }) => lista(b.areas[clave], `areas.${clave}`));
   return e;
 }
@@ -103,9 +111,14 @@ function describirCambios(o, a) {
   campo("Puerto", o.puerto, a.puerto);
   if (o.pruebaActivo !== a.pruebaActivo) c.push(`Modo de prueba: ${a.pruebaActivo ? "encendido" : "apagado"}`);
   campo("Dirección de prueba", o.pruebaDireccion, a.pruebaDireccion);
-  campo("Asunto de la cotización", o.asunto, a.asunto);
-  if (o.mensaje !== a.mensaje) c.push("Mensaje de la cotización");
-  if (JSON.stringify(o.copia) !== JSON.stringify(a.copia)) c.push(`Con copia: ${correosTexto(o.copia)} → ${correosTexto(a.copia)}`);
+  if (JSON.stringify(o.nuevasPara) !== JSON.stringify(a.nuevasPara)) {
+    c.push(`Reciben las cotizaciones nuevas: ${correosTexto(o.nuevasPara)} → ${correosTexto(a.nuevasPara)}`);
+  }
+  campo("Asunto del aviso de cotización nueva", o.nuevasAsunto, a.nuevasAsunto);
+  if (o.nuevasMensaje !== a.nuevasMensaje) c.push("Mensaje del aviso de cotización nueva");
+  campo("Asunto del correo al cliente", o.asunto, a.asunto);
+  if (o.mensaje !== a.mensaje) c.push("Mensaje del correo al cliente");
+  if (JSON.stringify(o.copia) !== JSON.stringify(a.copia)) c.push(`Copia del correo al cliente: ${correosTexto(o.copia)} → ${correosTexto(a.copia)}`);
   AREAS.forEach(({ clave, titulo }) => {
     if (JSON.stringify(o.areas[clave]) !== JSON.stringify(a.areas[clave])) {
       c.push(`${titulo}: ${correosTexto(o.areas[clave])} → ${correosTexto(a.areas[clave])}`);
@@ -126,8 +139,7 @@ export default function Correos() {
   const [guardando, setGuardando] = useState(false);
   const [pidiendo, setPidiendo] = useState(false);   // el diálogo de la contraseña
   const [probando, setProbando] = useState(false);
-  const mensajeRef = useRef(null);
-  const ultimoCampo = useRef("mensaje");   // adónde va una variable al tocarla
+  const ultimoCampo = useRef({ nuevasMensaje: "nuevasMensaje", mensaje: "mensaje" });   // por plantilla, adónde va una variable
 
   const original = useMemo(() => (datos ? aBorrador(datos.ajustes) : null), [datos]);
   const actual = borrador || original;
@@ -145,7 +157,6 @@ export default function Correos() {
   const soloLectura = datos.solo_lectura;
   const hayCambios = JSON.stringify(actual) !== JSON.stringify(original);
   const cambiar = (cambio) => setBorrador({ ...actual, ...cambio });
-  const enFabrica = actual.asunto === datos.por_defecto.asunto && actual.mensaje === datos.por_defecto.mensaje;
 
   async function guardar() {
     if (cantidadErrores || guardando) return false;
@@ -165,12 +176,13 @@ export default function Correos() {
     }
   }
 
-  /* Tocar una variable la escribe donde estaba el cursor (en el asunto o en
-     el mensaje, el último que se usó). */
-  function insertarVariable(clave) {
+  /* Tocar una variable la escribe donde estaba el cursor, en el asunto o el
+     mensaje de esa plantilla (el último de los dos que se usó). `plantilla`
+     es el campo del mensaje: "mensaje" (al cliente) o "nuevasMensaje". */
+  function insertarVariable(plantilla, clave) {
     const texto = `{${clave}}`;
-    const campo = ultimoCampo.current === "asunto" ? document.getElementById("correo-asunto") : mensajeRef.current;
-    const nombre = ultimoCampo.current === "asunto" ? "asunto" : "mensaje";
+    const nombre = ultimoCampo.current[plantilla];
+    const campo = document.getElementById(`correo-${nombre}`);
     const valor = actual[nombre];
     const ini = campo?.selectionStart ?? valor.length;
     const fin = campo?.selectionEnd ?? valor.length;
@@ -216,8 +228,7 @@ export default function Correos() {
         </p>
       )}
 
-      <Grupo titulo="Cuenta de la app"
-             pie="Desde esta casilla salen los correos, y a ella llegan las respuestas de los clientes.">
+      <Grupo titulo="Cuenta de la app">
         <FilaCampo id="correo-remitente" etiqueta="Correo" error={errores["cuenta.remitente"]}>
           <input className="entrada" id="correo-remitente" type="email" autoComplete="off" disabled={soloLectura}
                  value={actual.remitente} onChange={(e) => cambiar({ remitente: e.target.value })} />
@@ -244,12 +255,8 @@ export default function Correos() {
           {conClave && <button className="btn btn--fantasma btn--chico" type="button" onClick={olvidar}>Olvidar</button>}
         </Fila>
       </Grupo>
-      <p className="correos-pie-cuenta">
-        La contraseña no se guarda en la Dropbox: hay que escribirla una vez en cada computador que envíe correos.
-        Cambiar el correo de la app pide escribirla de nuevo.
-      </p>
 
-      <Grupo pie="Cada correo que sale deja una copia (.eml, se abre con Outlook o con Correo de Windows) en la carpeta Correos de la Dropbox.">
+      <Grupo>
         <Fila icono={IconoCorreo} color="#0A84FF" etiqueta={probando ? "Enviando…" : "Enviar un correo de prueba"}
               detalle={actual.pruebaActivo ? `a ${actual.pruebaDireccion || "la dirección de prueba"}` : `a ${actual.remitente}`}
               onClick={conClave && !hayCambios ? correoDePrueba
@@ -257,9 +264,7 @@ export default function Correos() {
         <Fila icono={IconoCarpeta} color="#8E8E93" etiqueta="Abrir la carpeta de correos" onClick={() => api.abrir_carpeta_correos()} />
       </Grupo>
 
-      <Grupo titulo="Modo de prueba"
-             pie={"Encendido, todos los correos van a la dirección de prueba y no a los clientes: el asunto empieza con [Prueba] y el mensaje dice a quién iba."
-                  + (datos.prueba_forzada ? " En la versión de desarrollo está siempre encendido." : "")}>
+      <Grupo titulo="Modo de prueba">
         <Fila etiqueta="Modo de prueba">
           <Segmento etiqueta="Modo de prueba" opciones={PRUEBA} valor={actual.pruebaActivo} deshabilitado={soloLectura || datos.prueba_forzada}
                     onCambiar={(v) => cambiar({ pruebaActivo: v })} />
@@ -281,12 +286,11 @@ export default function Correos() {
         <motion.div key={seccion} className="correos-areas__contenido"
                     initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={FUNDIDO}>
           {seccion === "cotizaciones" ? (
-            <SeccionCotizaciones actual={actual} datos={datos} errores={errores} soloLectura={soloLectura} enFabrica={enFabrica}
-                                 cambiar={cambiar} mensajeRef={mensajeRef} ultimoCampo={ultimoCampo}
+            <SeccionCotizaciones actual={actual} datos={datos} errores={errores} soloLectura={soloLectura}
+                                 cambiar={cambiar} ultimoCampo={ultimoCampo}
                                  insertarVariable={insertarVariable} irAClientes={irAClientes} />
           ) : (
             <ListaCorreos titulo="Reciben las OPs" ejemplo="produccion@texdigital.cl"
-                          pie="Recibirán el PDF de cada OP el día que se crea (al aprobar una cotización). Todavía no se envían: quedan anotados para cuando se conecte."
                           filas={actual.areas.ops} clave="areas.ops" errores={errores} soloLectura={soloLectura}
                           onCambiar={(filas) => cambiar({ areas: { ...actual.areas, ops: filas } })} />
           )}
@@ -307,53 +311,76 @@ export default function Correos() {
 /* A qué sección de abajo pertenece un error de validar() (los de la cuenta y
    el modo de prueba son de arriba: no marcan ninguna). */
 const enSeccion = (clave, seccion) =>
-  seccion === "cotizaciones" ? clave.startsWith("cotizaciones.") : clave.startsWith(`areas.${seccion}`);
+  seccion === "cotizaciones" ? clave.startsWith("cotizaciones") : clave.startsWith(`areas.${seccion}`);
 
-/* Cotizaciones: el correo con que se le manda una cotización al cliente. */
-function SeccionCotizaciones({ actual, datos, errores, soloLectura, enFabrica, cambiar, mensajeRef, ultimoCampo,
-                               insertarVariable, irAClientes }) {
+/* Cotizaciones: dos correos distintos (Bruno, 2026-11-11), cada uno con su
+   lista, su asunto y su mensaje.
+     · Al crearla: el aviso a la gente de Texdigital, con el PDF. En el
+       Resumen del cotizador se ve a quién va y se puede cambiar esa vez.
+     · Al enviarla al cliente: el mensaje del botón "Enviar correo", y quienes
+       reciben una copia de ese mismo correo para revisarlo. */
+function SeccionCotizaciones({ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable, irAClientes }) {
   const cc = datos.con_correo;
   return (
     <>
-      <Grupo titulo="Mensaje al cliente"
-             pie="Se envía con el botón «Enviar correo» de cada cotización, al correo del contacto o del cliente, con el PDF adjunto. Antes de enviarlo se puede cambiar.">
-        <FilaCampo id="correo-asunto" etiqueta="Asunto" error={errores["cotizaciones.asunto"]}>
-          <input className="entrada" id="correo-asunto" type="text" autoComplete="off" disabled={soloLectura}
-                 value={actual.asunto} onFocus={() => { ultimoCampo.current = "asunto"; }}
-                 onChange={(e) => cambiar({ asunto: e.target.value })} />
-        </FilaCampo>
-        <FilaCampo id="correo-mensaje" etiqueta="Mensaje" error={errores["cotizaciones.mensaje"]}>
-          <textarea ref={mensajeRef} className="entrada correo-mensaje" id="correo-mensaje" rows={9} disabled={soloLectura}
-                    value={actual.mensaje} onFocus={() => { ultimoCampo.current = "mensaje"; }}
-                    onChange={(e) => cambiar({ mensaje: e.target.value })} />
-        </FilaCampo>
-        <div className="fila-ajuste fila-correo">
-          <span className="fila-correo__etiqueta">Se reemplazan al enviar (tócalas para escribirlas)</span>
-          <div className="correo-variables">
-            {datos.variables.map((v) => (
-              <button key={v.clave} type="button" className="correo-variable" title={v.texto} disabled={soloLectura}
-                      onMouseDown={(e) => e.preventDefault()} onClick={() => insertarVariable(v.clave)}>
-                <code>{`{${v.clave}}`}</code><span>{v.texto}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        {!enFabrica && !soloLectura && (
-          <Fila etiqueta="Volver al asunto y mensaje que traía la app"
-                onClick={() => cambiar({ asunto: datos.por_defecto.asunto, mensaje: datos.por_defecto.mensaje })} />
-        )}
-      </Grupo>
+      <h3 className="correos-subtitulo">Al crear una cotización</h3>
+      <ListaCorreos titulo="Reciben las cotizaciones nuevas" ejemplo="ventas@texdigital.cl"
+                    filas={actual.nuevasPara} clave="cotizaciones_nuevas.para" errores={errores} soloLectura={soloLectura}
+                    onCambiar={(nuevasPara) => cambiar({ nuevasPara })} />
+      <Plantilla titulo="Mensaje del aviso" prefijo="nuevas" seccion="cotizaciones_nuevas"
+                 porDefecto={datos.por_defecto.nuevas} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
 
-      <ListaCorreos titulo="Con copia a" pie="Reciben una copia de cada cotización que se envía (p. ej. ventas@texdigital.cl). Opcional."
-                    ejemplo="ventas@texdigital.cl" filas={actual.copia} clave="cotizaciones.copia" errores={errores}
+      <h3 className="correos-subtitulo">Al enviarla al cliente</h3>
+      <Plantilla titulo="Mensaje al cliente" prefijo="" seccion="cotizaciones"
+                 porDefecto={datos.por_defecto} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
+      <ListaCorreos titulo="Reciben una copia" ejemplo="ventas@texdigital.cl"
+                    filas={actual.copia} clave="cotizaciones.copia" errores={errores}
                     soloLectura={soloLectura} onCambiar={(copia) => cambiar({ copia })} />
-
-      <Grupo titulo="Clientes y contactos" pie="El correo de cada cliente y contacto se guarda en Clientes y contactos.">
+      <Grupo titulo="Clientes y contactos">
         <Fila icono={IconoClientes} color="#30B0C7" etiqueta="Correos de clientes y contactos"
               detalle={`${cc.clientes} de ${cc.clientes_total} clientes · ${cc.contactos} de ${cc.contactos_total} contactos`}
               onClick={irAClientes} />
       </Grupo>
     </>
+  );
+}
+
+/* Asunto y mensaje de un correo, con sus variables y "Volver al que traía la
+   app". `prefijo`: "" (al cliente: asunto, mensaje) o "nuevas" (nuevasAsunto…). */
+function Plantilla({ titulo, pie, prefijo, seccion, porDefecto, actual, datos, errores, soloLectura, cambiar, ultimoCampo,
+                     insertarVariable }) {
+  const kAsunto = prefijo ? `${prefijo}Asunto` : "asunto";
+  const kMensaje = prefijo ? `${prefijo}Mensaje` : "mensaje";
+  const enFabrica = actual[kAsunto] === porDefecto.asunto && actual[kMensaje] === porDefecto.mensaje;
+  const usar = (campo) => () => { ultimoCampo.current[kMensaje] = campo; };
+  return (
+    <Grupo titulo={titulo} pie={pie}>
+      <FilaCampo id={`correo-${kAsunto}`} etiqueta="Asunto" error={errores[`${seccion}.asunto`]}>
+        <input className="entrada" id={`correo-${kAsunto}`} type="text" autoComplete="off" disabled={soloLectura}
+               value={actual[kAsunto]} onFocus={usar(kAsunto)}
+               onChange={(e) => cambiar({ [kAsunto]: e.target.value })} />
+      </FilaCampo>
+      <FilaCampo id={`correo-${kMensaje}`} etiqueta="Mensaje" error={errores[`${seccion}.mensaje`]}>
+        <textarea className="entrada correo-mensaje" id={`correo-${kMensaje}`} rows={prefijo ? 6 : 9} disabled={soloLectura}
+                  value={actual[kMensaje]} onFocus={usar(kMensaje)}
+                  onChange={(e) => cambiar({ [kMensaje]: e.target.value })} />
+      </FilaCampo>
+      <div className="fila-ajuste fila-correo">
+        <span className="fila-correo__etiqueta">Variables</span>
+        <div className="correo-variables">
+          {datos.variables.map((v) => (
+            <button key={v.clave} type="button" className="correo-variable" title={v.texto} disabled={soloLectura}
+                    onMouseDown={(e) => e.preventDefault()} onClick={() => insertarVariable(kMensaje, v.clave)}>
+              <code>{`{${v.clave}}`}</code><span>{v.texto}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {!enFabrica && !soloLectura && (
+        <Fila etiqueta="Volver al asunto y mensaje que traía la app"
+              onClick={() => cambiar({ [kAsunto]: porDefecto.asunto, [kMensaje]: porDefecto.mensaje })} />
+      )}
+    </Grupo>
   );
 }
 

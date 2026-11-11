@@ -4,12 +4,17 @@
 const POR_DEFECTO = {
   asunto: "Cotización {numero} - {cliente}",
   mensaje: "Hola {contacto}:\n\nTe enviamos la cotización N° {numero}, por un total de {total} (IVA incluido). Va adjunta en PDF.\n\nPara aprobarla o pedirnos cambios, basta con responder este correo.\n\nSaludos,\nTexdigital",
+  nuevas: {
+    asunto: "Nueva cotización {numero} - {cliente}",
+    mensaje: "Se creó la cotización N° {numero} de {cliente} ({trabajo}), por un total de {total} (IVA incluido).\n\nVa adjunta en PDF.\n\nCorreo automático del Sistema de Gestión.",
+  },
 };
 
 let ajustes = {
   cuenta: { remitente: "sistema@texdigital.cl", nombre: "Texdigital", servidor: "mail.texdigital.cl", puerto: 465 },
   prueba: { activo: true, direccion: "brosky.spam@gmail.com" },
-  cotizaciones: { ...POR_DEFECTO, copia: [] },
+  cotizaciones: { asunto: POR_DEFECTO.asunto, mensaje: POR_DEFECTO.mensaje, copia: [{ correo: "jefe@texdigital.cl", nombre: "Jefe de ventas" }] },
+  cotizaciones_nuevas: { ...POR_DEFECTO.nuevas, para: [{ correo: "ventas@texdigital.cl", nombre: "Ventas" }] },
   areas: { ops: [{ correo: "produccion@texdigital.cl", nombre: "Producción" }], inventario: [], despachos: [] },
 };
 
@@ -46,6 +51,15 @@ export default {
     adjunto: `${numero} • Toldo terraza Café del Puerto.pdf`,
     ultimo: envios[numero] || null, envios: envios[numero] ? 1 : 0, sin_cambios: !!envios[numero],
     remitente: "Texdigital <sistema@texdigital.cl>", prueba: ajustes.prueba, prueba_forzada: true, contrasena_guardada: true,
+  }),
+  correo_al_crear: () => {
+    const inscritos = ajustes.cotizaciones_nuevas.para;
+    const guardados = [...ajustes.cotizaciones.copia, ...ajustes.areas.ops]
+      .filter((f) => !inscritos.some((i) => i.correo === f.correo));
+    return { inscritos, guardados, prueba: ajustes.prueba, contrasena_guardada: true };
+  },
+  enviar_aviso_cotizacion_nueva: (numero, para) => ({
+    ok: true, prueba: ajustes.prueba.activo, a: ajustes.prueba.activo ? [ajustes.prueba.direccion] : para,
   }),
   ver_pdf_cotizacion: () => ({ ok: true }),
   enviar_correo_cotizacion(numero, d) {

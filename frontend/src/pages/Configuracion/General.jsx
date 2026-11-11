@@ -51,7 +51,7 @@ export default function General() {
               detalle={typeof detalle === "function" ? detalle(estado) : detalle} onClick={buscar} />
         <Fila icono={IconoPrueba} color="#8E8E93" etiqueta="Versiones de prueba" onClick={() => setPidiendo(true)} />
       </Grupo>
-      <Grupo pie="También con Ctrl + y Ctrl −, desde cualquier pantalla. Se guarda en esta computadora.">
+      <Grupo>
         <Fila icono={IconoTexto} color="#5E6AD2" etiqueta="Tamaño del texto"><ControlTexto /></Fila>
       </Grupo>
       <Grupo>

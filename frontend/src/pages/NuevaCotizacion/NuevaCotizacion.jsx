@@ -12,6 +12,7 @@ import ZonaDatos from "./ZonaDatos";
 import Mapa from "./Mapa";
 import PanelProducto from "./PanelProducto";
 import Resumen from "./Resumen";
+import { destinatariosAviso, enviarAvisoCreacion } from "./AvisoAlCrear";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import { DialogoMateriales, DialogoQuitar } from "./DialogosNuevaCotizacion";
 import { completo, esVacio, firma, normalizar, productoVacio } from "./producto";
@@ -169,6 +170,19 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
     }, RETARDO_CALCULO_MS);
     return () => { vigente = false; clearTimeout(t); };
   }, [enResumen, firmaDescuentos]);
+
+  /* Aviso de cotización nueva a la gente de Texdigital (ver AvisoAlCrear):
+     solo al crearla, no al editarla. Lo que se saca o suma vale solo esta vez. */
+  const creando = !numeroEditando;
+  const [avisoCrear, setAvisoCrear] = useState({ quitados: [], agregados: [] });
+  const [opcionesAviso, setOpcionesAviso] = useState(null);
+  useEffect(() => {
+    if (!creando) return;
+    let vigente = true;
+    api.correo_al_crear().then((r) => vigente && setOpcionesAviso(r || null));
+    return () => { vigente = false; };
+  }, [creando]);
+  const cambiarAviso = (cambios) => setAvisoCrear((c) => ({ ...c, ...cambios }));
 
   // "p0"…, "despacho", "instalacion" o "pedido": qué diálogo de descuento está abierto.
   const [editandoDescuento, setEditandoDescuento] = useState(null);
@@ -404,12 +418,17 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
       abrir = decision === "guardar-abrir";
     }
 
+    // A quién va el aviso, decidido antes de guardar (lo que muestra el resumen).
+    const avisarA = creando ? destinatariosAviso(opcionesAviso, avisoCrear) : [];
+
     guardando.current = true;
     const r = (await api.guardar_cotizacion(paraPython(), !!abrir)) || {};
     guardando.current = false;
     if (r.error) { aviso(r.error, "error", 8000); return; }
-    aviso(`Cotización ${fmt.numero(r.numero ?? numero)} guardada.`, "info");
+    const guardada = r.numero ?? numero;
+    aviso(`Cotización ${fmt.numero(guardada)} guardada.`, "info");
     irAlListado();
+    if (avisarA.length) enviarAvisoCreacion(guardada, avisarA, aviso);
   }
 
   /* "+ Nuevo rollo" desde el diálogo de materiales: se guarda el progreso y
@@ -498,6 +517,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
                   faltanMateriales={faltanMateriales}
                   onIr={irA} onQuitar={pedirQuitar} onAgregar={agregarProducto} onGuardar={guardarCotizacion}
                   onEditarDescuento={setEditandoDescuento} onRestablecer={() => setRestableciendo(true)}
+                  avisoCrear={creando ? avisoCrear : null} opcionesAviso={opcionesAviso} onAvisoCrear={cambiarAviso}
                 />
               </div>
             </div>
