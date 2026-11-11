@@ -125,7 +125,9 @@ def _escribir_json(ruta, datos: list) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Gestión de clientes.json — lista de {empresa, rut, razon_social}
+# Gestión de clientes.json — lista de {empresa, rut, razon_social, email}
+# (el correo se agregó el 2026-11-09 para enviarle las cotizaciones: los
+# guardados antes no lo tienen, y se leen igual)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def formatear_rut(rut_raw: str) -> str:
@@ -191,6 +193,16 @@ def guardar_cliente(empresa: str, rut: str, razon_social: str) -> bool | str:
 # cotizaciones y OPs ya hechas guardan una COPIA de los datos del cliente,
 # así que cambiarlo o borrarlo acá no las toca.
 
+def correo_valido(correo: str) -> bool:
+    """Si parece una dirección de correo: algo@dominio.algo, sin espacios.
+    No revisa que exista (eso lo sabe solo el servidor del destinatario)."""
+    correo = (correo or "").strip()
+    if not correo or " " in correo or correo.count("@") != 1:
+        return False
+    usuario, dominio = correo.split("@")
+    return bool(usuario) and "." in dominio and not dominio.startswith(".") and not dominio.endswith(".")
+
+
 def rut_valido(rut: str) -> bool:
     """Si el dígito verificador del RUT calza (módulo 11)."""
     chars = "".join(c for c in (rut or "").upper() if c.isdigit() or c == "K")
@@ -210,7 +222,7 @@ def _validar_cliente(datos: dict, actual: str | None = None) -> tuple[dict, dict
     """(cliente normalizado, errores por campo). `actual`: la empresa que se
     está editando (no choca consigo misma)."""
     cliente = {"empresa": _texto(datos.get("empresa")), "rut": formatear_rut(datos.get("rut") or ""),
-               "razon_social": _texto(datos.get("razon_social"))}
+               "razon_social": _texto(datos.get("razon_social")), "email": _texto(datos.get("email"))}
     otros = [c for c in cargar_clientes() if actual is None or c.get("empresa", "").lower() != actual.lower()]
     errores = {}
     if not cliente["empresa"]:
@@ -224,6 +236,8 @@ def _validar_cliente(datos: dict, actual: str | None = None) -> tuple[dict, dict
             dueno = next((c for c in otros if formatear_rut(c.get("rut", "")) == cliente["rut"]), None)
             if dueno:
                 errores["rut"] = f"Ese RUT ya es de «{dueno.get('empresa', '')}»."
+    if cliente["email"] and not correo_valido(cliente["email"]):
+        errores["email"] = "El correo no es válido."
     return cliente, errores
 
 
@@ -331,8 +345,7 @@ def _validar_contacto(datos: dict, actual: str | None = None) -> tuple[dict, dic
         errores["contacto"] = "Falta el nombre."
     elif any(c.get("contacto", "").lower() == contacto["contacto"].lower() for c in otros):
         errores["contacto"] = "Ya hay un contacto con ese nombre."
-    if contacto["email"] and (contacto["email"].count("@") != 1 or "." not in contacto["email"].split("@")[1]
-                              or " " in contacto["email"]):
+    if contacto["email"] and not correo_valido(contacto["email"]):
         errores["email"] = "El correo no es válido."
     try:
         pct = float(contacto["descuento"])

@@ -56,7 +56,7 @@ let reglas = structuredClone(REGLAS_DEFECTO);
 const sinValor = (v) => !(v > 0);
 
 let clientes = [
-  { empresa: "Café del Puerto", rut: "76.086.428-5", razon_social: "Café del Puerto SpA", direcciones: 2 },
+  { empresa: "Café del Puerto", rut: "76.086.428-5", razon_social: "Café del Puerto SpA", email: "compras@cafedelpuerto.cl", direcciones: 2 },
   { empresa: "Librería Norte", rut: "11.111.111-1", razon_social: "", direcciones: 0 },
   { empresa: "Sin RUT Ltda.", rut: "", razon_social: "", direcciones: 0 },
 ];

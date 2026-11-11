@@ -98,3 +98,12 @@ export function fechaDMAaTime(fechaDMA) {
   if (!d || !m || !a) return 0;
   return new Date(a, m - 1, d).getTime();
 }
+
+/* Si parece un correo (algo@dominio.algo, sin espacios): misma regla que
+   core.repositorio.correo_valido. */
+export function correoValido(c) {
+  const t = String(c ?? "").trim();
+  if (!t || /\s/.test(t) || t.split("@").length !== 2) return false;
+  const [usuario, dominio] = t.split("@");
+  return !!usuario && dominio.includes(".") && !dominio.startsWith(".") && !dominio.endsWith(".");
+}
