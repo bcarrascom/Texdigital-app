@@ -13,6 +13,7 @@ import { DialogoAprobar, DialogoEliminar, DialogoMaterialesBloqueado } from "./D
 import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
 import { lineaParaDialogo, PieProducto, PlataAjustes } from "./Descuentos";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
+import DialogoEnviarCorreo from "./EnviarCorreo";
 import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 import "./VerCotizacion.css";
@@ -59,7 +60,7 @@ export default function VerCotizacion() {
   const primera = useRef(null);
   if (cot && primera.current === null) primera.current = cot.numero;
 
-  // "eliminar" | "bloqueado" | "aprobar" | "precios" | "restablecer" | null
+  // "eliminar" | "bloqueado" | "aprobar" | "precios" | "restablecer" | "correo" | null
   const [dialogo, setDialogo] = useState(null);
   const [faltantes, setFaltantes] = useState([]);
   const [manuales, setManuales] = useState([]);
@@ -123,6 +124,13 @@ export default function VerCotizacion() {
     aviso("Se volvió a los descuentos automáticos.", "info");
   }
 
+  /* El correo salió (ver ui/api_correos.py): la hoja muestra el último envío. */
+  function correoEnviado(r) {
+    setDialogo(null);
+    actualizar((c) => ({ ...c, ultimo_correo: r.ultimo }));
+    aviso(`${r.prueba ? "Correo de prueba enviado" : "Correo enviado"} a ${r.a.join(", ")}.`, "info", 6000);
+  }
+
   const editar = () => navigate(rutas.editarCotizacion(numero));
   const titulo = tituloDe(cot, numero);
 
@@ -135,6 +143,7 @@ export default function VerCotizacion() {
             <button className="cab-btn" onClick={() => setDialogo("eliminar")}>Eliminar</button>
             <button className="cab-btn" onClick={editar}>Editar</button>
             <button className="cab-btn" onClick={() => api.imprimir_cotizacion(numero)}>Imprimir</button>
+            <button className="cab-btn" onClick={() => setDialogo("correo")}>Enviar correo</button>
             <button className="btn btn--primario btn--chico" onClick={intentarAprobar}>Aprobar →</button>
           </>
         )}
@@ -176,6 +185,7 @@ export default function VerCotizacion() {
                                   pedido={cot.descuento?.pedido} onCerrar={() => setEditando(null)}
                                   onGuardar={guardarDescuentos} />
           <DialogoRestablecer abierto={dialogo === "restablecer"} onCerrar={cerrarDialogo} onConfirmar={restablecer} />
+          <DialogoEnviarCorreo abierto={dialogo === "correo"} numero={cot.numero} onCerrar={cerrarDialogo} onEnviado={correoEnviado} />
           <DialogoAprobar abierto={dialogo === "aprobar"} cot={cot} manuales={manuales}
                           onCerrar={cerrarDialogo} onEditar={editar}
                           onAprobada={() => navigate(rutas.ops(), { replace: true })} />
@@ -214,6 +224,10 @@ function lineasDelPedido(cot) {
 
 /* ── La hoja de datos ───────────────────────────────────────────────────── */
 
+/* "09/11/2026 10:32 a cliente@x.cl (prueba)" — vacío si nunca se envió. */
+const textoCorreo = (c) =>
+  c ? `${c.fecha} a ${c.para.join(", ")}${c.simulado ? " (no salió)" : c.prueba ? " (prueba)" : ""}` : "";
+
 function Hoja({ cot }) {
   const t = cot.totales || {};
   /* Despacho e instalación solo aparecen si la cotización los lleva: un "$0"
@@ -241,6 +255,7 @@ function Hoja({ cot }) {
         ["Email", cot.email],
         ["Condición de pago", cot.condicion],
         ["Fecha", cot.fecha, { mono: true }],
+        ["Último correo", textoCorreo(cot.ultimo_correo)],
         ["Descripción", cot.descripcion, { ancho: true }],
       ]} />
       <div className="conceptos">

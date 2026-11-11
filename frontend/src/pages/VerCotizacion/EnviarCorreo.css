@@ -1,0 +1,63 @@
+/* El panel de "Enviar correo" de una cotización (EnviarCorreo.jsx). */
+
+dialog.dlg-correo {
+  width: min(92vw, 36rem); max-width: min(92vw, 36rem);
+  max-height: 92vh; overflow-y: auto;
+
+  .dlg-correo__cargando { min-height: 12rem; display: grid; place-items: center; }
+  .dlg-correo__nota { margin-top: var(--e-4); }
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  /* Los datos del cliente: una tarjeta, para reconocerlo de un vistazo. */
+  .dlg-correo__cliente {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--e-3) var(--e-4);
+    margin: var(--e-4) 0 0; padding: var(--e-4);
+    background: var(--c-superficie-2); border: 1px solid var(--c-borde); border-radius: var(--r-lg);
+  }
+  .dlg-correo__dato { display: grid; gap: .1rem; min-width: 0; }
+  .dlg-correo__dato--ancho { grid-column: 1 / -1; }
+  .dlg-correo__dato dt { font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  .dlg-correo__dato dd { margin: 0; font-size: var(--t-sm); overflow-wrap: anywhere; }
+  .dlg-correo__dato--ancho dd { font-size: var(--t-lg); font-weight: var(--peso-fuerte); }
+
+  .dlg-correo__para { margin-top: var(--e-4); gap: var(--e-2); }
+  .dlg-correo__opcion { display: flex; width: 100%; }
+  .dlg-correo__opcion-texto { display: grid; gap: .1rem; min-width: 0; }
+  .dlg-correo__correo { font-size: var(--t-md); font-weight: var(--peso-fuerte); overflow-wrap: anywhere; }
+  .dlg-correo__origen { font-size: var(--t-xs); color: var(--c-texto-suave); }
+  .dlg-correo__para .entrada { min-height: 2.6rem; }
+
+  .dlg-correo__pregunta { margin-top: var(--e-4); font-size: var(--t-sm); color: var(--c-texto); overflow-wrap: anywhere; }
+
+  /* Paso 2 */
+  .dlg-correo__campos { display: grid; gap: var(--e-3); margin-top: var(--e-4); }
+  .dlg-correo__campos .entrada { min-height: 2.6rem; font-size: var(--t-sm); }
+  .dlg-correo__fila { display: flex; gap: var(--e-3); align-items: baseline; font-size: var(--t-sm); }
+  .dlg-correo__et { flex: 0 0 3rem; color: var(--c-texto-tenue); }
+  .dlg-correo__val { min-width: 0; overflow-wrap: anywhere; }
+  .dlg-correo__cambiar {
+    padding: 0; margin-left: var(--e-1); color: var(--c-tema-fuerte); font-size: var(--t-xs);
+    text-decoration: underline; cursor: pointer;
+  }
+  .dlg-correo__mensaje { min-height: 11rem; resize: vertical; line-height: 1.5; font-family: inherit; }
+  .dlg-correo__adjunto {
+    display: flex; align-items: center; gap: var(--e-2);
+    padding: var(--e-2) var(--e-3);
+    border: 1px dashed var(--c-borde-fuerte); border-radius: var(--r-md);
+    font-size: var(--t-sm);
+  }
+  .dlg-correo__adjunto svg { width: 1.05rem; height: 1.05rem; flex: none; color: var(--c-texto-suave); }
+  .dlg-correo__adjunto-nombre { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+  .dlg-correo__recordatorio {
+    display: flex; align-items: center; gap: var(--e-2); margin-top: var(--e-4);
+    font-size: var(--t-sm); color: var(--c-aviso);
+  }
+  .dlg-correo__recordatorio svg { width: 1rem; height: 1rem; flex: none; }
+  .dlg-correo__modo {
+    margin-top: var(--e-3); padding: var(--e-2) var(--e-3);
+    background: var(--c-superficie-2); border-radius: var(--r-md);
+    font-size: var(--t-xs); color: var(--c-texto-suave);
+  }
+  .dlg-correo__error { margin-top: var(--e-3); font-size: var(--t-sm); color: var(--c-error); }
+}
