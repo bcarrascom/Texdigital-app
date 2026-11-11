@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { motion } from "motion/react";
 import { api } from "@/services/api";
 import { rutas } from "@/router/rutas";
 import { useDatos } from "@/hooks/useDatos";
@@ -8,7 +9,10 @@ import Cargando from "@/components/Cargando/Cargando";
 import Campo from "@/components/Campo/Campo";
 import Dialogo from "@/components/Dialogo/Dialogo";
 import Segmento from "@/components/Segmento/Segmento";
+import NavFlotante from "@/components/NavFlotante/NavFlotante";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
+import IconoCotizaciones from "@/assets/svg/file-text.svg?react";
+import IconoOps from "@/assets/svg/clipboard-list.svg?react";
 import IconoCarpeta from "@/assets/svg/folder-open.svg?react";
 import IconoClientes from "@/assets/svg/users.svg?react";
 import IconoCorreo from "@/assets/svg/mail.svg?react";
@@ -20,28 +24,32 @@ import { useCambiosPendientes } from "./cambiosPendientes";
 import { correoValido } from "@/utils/formato";
 
 /* Configuración › Correos (pedido de Bruno, 2026-11-09; ver core/correos.py
-   y CLAUDE.md, "Correos automáticos"):
-     · la cuenta de la app (sistema@texdigital.cl), desde la que salen;
-     · el modo de prueba: todo va a una dirección de prueba, no al cliente;
-     · la cotización al cliente: asunto y mensaje, y a quién va con copia;
-     · los correos de cada área (OPs, Inventario, Despachos), que por ahora
-       solo quedan anotados.
-   Se edita entera y se guarda con la barra de abajo, como las Reglas.
+   y CLAUDE.md, "Correos automáticos"). Dos partes (orden de Bruno, 2026-11-11):
+     · arriba, lo global del correo de la app: la cuenta (sistema@texdigital.cl)
+       y su contraseña, el correo de prueba y la carpeta, y el modo de prueba;
+     · abajo, lo de cada parte del programa, con el menú flotante
+       (components/NavFlotante): Cotizaciones (asunto y mensaje al cliente,
+       con copia, los correos de clientes y contactos) y OPs (a quién le
+       llegan; todavía no se envían). La sección elegida va en la URL
+       (?seccion=ops), para que un botón de otro módulo pueda abrirla.
+   Se edita entera y se guarda con la barra de abajo, como las Reglas: los
+   cambios de las dos secciones van juntos.
 
    La contraseña de la casilla NO es un ajuste de la Dropbox: se guarda en
    este computador (Administrador de credenciales / Llavero), con su propio
    diálogo, y se prueba contra el servidor antes de guardarla. Cada correo que
    sale deja una copia .eml en la carpeta Correos. */
 
-const AREAS = [
-  { clave: "ops", titulo: "OPs", ejemplo: "produccion@texdigital.cl",
-    pie: "Recibirán el PDF de cada OP el día que se crea (al aprobar una cotización)." },
-  { clave: "inventario", titulo: "Inventario", ejemplo: "bodega@texdigital.cl",
-    pie: "Recibirán los ingresos, decomisiones, consumos y avisos de stock." },
-  { clave: "despachos", titulo: "Despachos", ejemplo: "despachos@texdigital.cl",
-    pie: "Recibirán cada guía de despacho." },
+/* Las listas de correos de cada área que esta página muestra. Inventario y
+   Despachos siguen en correos.json (core.correos.AREAS) pero no se muestran
+   todavía; guardar no las toca. */
+const AREAS = [{ clave: "ops", titulo: "OPs" }];
+
+const SECCIONES = [
+  { clave: "cotizaciones", etiqueta: "Cotizaciones", Icono: IconoCotizaciones },
+  { clave: "ops", etiqueta: "OPs", Icono: IconoOps },
 ];
-const TODAVIA_NO = "Todavía no se envían: quedan anotados para cuando se conecte.";
+const FUNDIDO = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 
 const PRUEBA = [{ valor: true, etiqueta: "Encendido" }, { valor: false, etiqueta: "Apagado" }];
 
@@ -110,6 +118,9 @@ export default function Correos() {
   const aviso = useAvisos();
   const navigate = useNavigate();
   const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const seccion = SECCIONES.some((s) => s.clave === params.get("seccion")) ? params.get("seccion") : SECCIONES[0].clave;
+  const elegirSeccion = (clave) => setParams({ seccion: clave }, { replace: true, state: location.state });
   const { datos, cargando, recargar } = useDatos(() => api.obtener_ajustes_correos(), []);
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
@@ -174,7 +185,6 @@ export default function Correos() {
     navigate(rutas.configuracion("clientes"), { replace: true, state: location.state });
   }
 
-  const cc = datos.con_correo;
   const conClave = datos.contrasena_guardada;
 
   async function correoDePrueba() {
@@ -207,7 +217,7 @@ export default function Correos() {
       )}
 
       <Grupo titulo="Cuenta de la app"
-             pie="Desde esta casilla salen los correos, y a ella llegan las respuestas de los clientes. La contraseña se pedirá cuando se conecte el envío.">
+             pie="Desde esta casilla salen los correos, y a ella llegan las respuestas de los clientes.">
         <FilaCampo id="correo-remitente" etiqueta="Correo" error={errores["cuenta.remitente"]}>
           <input className="entrada" id="correo-remitente" type="email" autoComplete="off" disabled={soloLectura}
                  value={actual.remitente} onChange={(e) => cambiar({ remitente: e.target.value })} />
@@ -262,7 +272,50 @@ export default function Correos() {
         )}
       </Grupo>
 
-      <Grupo titulo="Cotizaciones · a clientes"
+      <section className="correos-areas" aria-label="Correos de cada parte del programa">
+        <h2 className="correos-areas__titulo">Cada parte del programa</h2>
+        <div className="correos-areas__nav">
+          <NavFlotante etiqueta="Secciones de Correos" valor={seccion} onCambiar={elegirSeccion}
+                       items={SECCIONES.map((s) => ({ ...s, aviso: Object.keys(errores).some((k) => enSeccion(k, s.clave)) }))} />
+        </div>
+        <motion.div key={seccion} className="correos-areas__contenido"
+                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={FUNDIDO}>
+          {seccion === "cotizaciones" ? (
+            <SeccionCotizaciones actual={actual} datos={datos} errores={errores} soloLectura={soloLectura} enFabrica={enFabrica}
+                                 cambiar={cambiar} mensajeRef={mensajeRef} ultimoCampo={ultimoCampo}
+                                 insertarVariable={insertarVariable} irAClientes={irAClientes} />
+          ) : (
+            <ListaCorreos titulo="Reciben las OPs" ejemplo="produccion@texdigital.cl"
+                          pie="Recibirán el PDF de cada OP el día que se crea (al aprobar una cotización). Todavía no se envían: quedan anotados para cuando se conecte."
+                          filas={actual.areas.ops} clave="areas.ops" errores={errores} soloLectura={soloLectura}
+                          onCambiar={(filas) => cambiar({ areas: { ...actual.areas, ops: filas } })} />
+          )}
+        </motion.div>
+      </section>
+
+      <BarraGuardar visible={hayCambios} guardando={guardando} onDescartar={() => setBorrador(null)} onGuardar={guardar}
+                    error={textoError} />
+
+      <Dialogo abierto={pidiendo} onCerrar={() => setPidiendo(false)} className="dlg--desenfoque dlg-catalogo">
+        <FormularioContrasena correo={original.remitente} onCerrar={() => setPidiendo(false)}
+                              onHecho={async () => { setPidiendo(false); await recargar(); aviso("Contraseña guardada en este computador.", "info"); }} />
+      </Dialogo>
+    </>
+  );
+}
+
+/* A qué sección de abajo pertenece un error de validar() (los de la cuenta y
+   el modo de prueba son de arriba: no marcan ninguna). */
+const enSeccion = (clave, seccion) =>
+  seccion === "cotizaciones" ? clave.startsWith("cotizaciones.") : clave.startsWith(`areas.${seccion}`);
+
+/* Cotizaciones: el correo con que se le manda una cotización al cliente. */
+function SeccionCotizaciones({ actual, datos, errores, soloLectura, enFabrica, cambiar, mensajeRef, ultimoCampo,
+                               insertarVariable, irAClientes }) {
+  const cc = datos.con_correo;
+  return (
+    <>
+      <Grupo titulo="Mensaje al cliente"
              pie="Se envía con el botón «Enviar correo» de cada cotización, al correo del contacto o del cliente, con el PDF adjunto. Antes de enviarlo se puede cambiar.">
         <FilaCampo id="correo-asunto" etiqueta="Asunto" error={errores["cotizaciones.asunto"]}>
           <input className="entrada" id="correo-asunto" type="text" autoComplete="off" disabled={soloLectura}
@@ -291,29 +344,15 @@ export default function Correos() {
         )}
       </Grupo>
 
-      <ListaCorreos titulo="Cotizaciones · con copia a" pie="Reciben una copia de cada cotización que se envía (p. ej. ventas@texdigital.cl). Opcional."
+      <ListaCorreos titulo="Con copia a" pie="Reciben una copia de cada cotización que se envía (p. ej. ventas@texdigital.cl). Opcional."
                     ejemplo="ventas@texdigital.cl" filas={actual.copia} clave="cotizaciones.copia" errores={errores}
                     soloLectura={soloLectura} onCambiar={(copia) => cambiar({ copia })} />
 
-      <Grupo titulo="Clientes y contactos">
+      <Grupo titulo="Clientes y contactos" pie="El correo de cada cliente y contacto se guarda en Clientes y contactos.">
         <Fila icono={IconoClientes} color="#30B0C7" etiqueta="Correos de clientes y contactos"
               detalle={`${cc.clientes} de ${cc.clientes_total} clientes · ${cc.contactos} de ${cc.contactos_total} contactos`}
               onClick={irAClientes} />
       </Grupo>
-
-      {AREAS.map((a) => (
-        <ListaCorreos key={a.clave} titulo={a.titulo} pie={`${a.pie} ${TODAVIA_NO}`} ejemplo={a.ejemplo}
-                      filas={actual.areas[a.clave]} clave={`areas.${a.clave}`} errores={errores} soloLectura={soloLectura}
-                      onCambiar={(filas) => cambiar({ areas: { ...actual.areas, [a.clave]: filas } })} />
-      ))}
-
-      <BarraGuardar visible={hayCambios} guardando={guardando} onDescartar={() => setBorrador(null)} onGuardar={guardar}
-                    error={textoError} />
-
-      <Dialogo abierto={pidiendo} onCerrar={() => setPidiendo(false)} className="dlg--desenfoque dlg-catalogo">
-        <FormularioContrasena correo={original.remitente} onCerrar={() => setPidiendo(false)}
-                              onHecho={async () => { setPidiendo(false); await recargar(); aviso("Contraseña guardada en este computador.", "info"); }} />
-      </Dialogo>
     </>
   );
 }

@@ -70,7 +70,7 @@ export const CATEGORIAS = [
   },
   {
     clave: "correos", titulo: "Correos", Icono: IconoCorreos, color: "#0A84FF", Contenido: Correos,
-    desc: "La cuenta desde la que la app envía correos, el mensaje con que se manda una cotización al cliente y los correos de cada área.",
+    desc: "La cuenta desde la que la app envía correos y, para cada parte del programa, qué se envía y a quién.",
     palabras: "correo correos email mail enviar envio cotizacion cliente asunto mensaje plantilla prueba produccion ops inventario despachos sistema@texdigital.cl",
   },
   {
