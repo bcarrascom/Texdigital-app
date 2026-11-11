@@ -44,6 +44,7 @@ from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 from ui.api_inventario import ApiInventario
 from ui.api_configuracion import ApiConfiguracion
+from ui.api_correos import ApiCorreos
 from ui.api_actualizacion import ApiActualizacion
 
 
@@ -85,6 +86,7 @@ class ApiApp:
         self._gestionar_direcciones = ApiGestionarDirecciones()
         self._inventario = ApiInventario()
         self._configuracion = ApiConfiguracion()
+        self._correos = ApiCorreos()
         # Busca una versión nueva al abrir, en segundo plano; el menú la
         # ofrece si hay. "--actualizado": la abrió el script de
         # core.actualizador recién terminado el reemplazo.
@@ -423,6 +425,35 @@ class ApiApp:
 
     def eliminar_contacto(self, nombre) -> dict:
         return self._configuracion.eliminar_contacto(nombre)
+
+    # ── Correos (Configuración › Correos y "Enviar correo" de una cotización) ─
+
+    def obtener_ajustes_correos(self) -> dict:
+        return self._correos.obtener_ajustes_correos()
+
+    def guardar_ajustes_correos(self, datos) -> dict:
+        return self._correos.guardar_ajustes_correos(datos)
+
+    def abrir_carpeta_correos(self) -> None:
+        self._correos.abrir_carpeta_correos()
+
+    def guardar_contrasena_correo(self, clave) -> dict:
+        return self._correos.guardar_contrasena_correo(clave)
+
+    def olvidar_contrasena_correo(self) -> None:
+        self._correos.olvidar_contrasena_correo()
+
+    def enviar_correo_de_prueba(self) -> dict:
+        return self._correos.enviar_correo_de_prueba()
+
+    def preparar_correo_cotizacion(self, numero) -> dict | None:
+        return self._correos.preparar_correo_cotizacion(numero)
+
+    def ver_pdf_cotizacion(self, numero) -> dict:
+        return self._correos.ver_pdf_cotizacion(numero)
+
+    def enviar_correo_cotizacion(self, numero, datos) -> dict:
+        return self._correos.enviar_correo_cotizacion(numero, datos)
 
     # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
 

@@ -27,6 +27,7 @@ from core.repositorio_materiales import (
 )
 from core.reportes_inventario import actualizar_reportes
 from ui.dialogo_aprobar import promover_a_op
+from ui.api_correos import resumen_envio
 
 
 def _iso_a_dma(iso: str) -> str:
@@ -186,6 +187,8 @@ class ApiVerCotizacion:
             # None, o qué cambiaría con los precios de hoy (ver
             # core.lista_precios.cambios): la pantalla avisa y el usuario decide.
             "cambios_precios": lista_precios.cambios(datos),
+            # El último correo con que se le mandó al cliente (ver ui/api_correos.py).
+            "ultimo_correo": resumen_envio((datos.get("Correos") or [None])[-1]),
         }
 
     def guardar_descuentos(self, numero, cambios: dict) -> dict | None:
