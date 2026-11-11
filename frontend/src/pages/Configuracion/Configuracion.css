@@ -155,6 +155,35 @@
   .regla-campo__sufijo { min-width: 1.6rem; }
   .fila-regla[data-invalido] .regla-campo__entrada { border-color: var(--c-error); }
 
+  /* ── Correos ────────────────────────────────────────────────────────── */
+  .correos-ok { width: 1.1rem; height: 1.1rem; color: #2E9D5B; }
+  .correos-pie-cuenta { margin-top: calc(-1 * var(--e-3)); padding-inline: var(--e-2); font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  /* Un campo a todo el ancho de la fila: la etiqueta arriba. */
+  .fila-correo { flex-direction: column; align-items: stretch; gap: var(--e-1); padding-block: var(--e-3); }
+  .fila-correo__etiqueta { font-size: var(--t-xs); font-weight: var(--peso-medio); color: var(--c-texto-suave); }
+  .fila-correo .entrada { min-height: 2.4rem; padding-block: var(--e-1); font-size: var(--t-sm); }
+  .fila-correo[data-invalido] > .entrada,
+  .fila-correo__campo[data-invalido] .entrada { border-color: var(--c-error); }
+  .fila-correo--doble { flex-direction: row; align-items: flex-start; gap: var(--e-3); }
+  .fila-correo__campo { display: grid; gap: var(--e-1); flex: 1 1 0; min-width: 0; }
+  .fila-correo__campo:last-child { flex: 0 0 6.5rem; }
+  .correo-mensaje { min-height: 12rem; resize: vertical; line-height: 1.5; font-family: inherit; }
+  .correo-variables { display: flex; flex-wrap: wrap; gap: var(--e-1); }
+  .correo-variable {
+    display: inline-flex; align-items: baseline; gap: var(--e-1);
+    padding: .2rem var(--e-2); border-radius: var(--r-full);
+    border: 1px solid var(--c-borde-fuerte); background: var(--c-superficie-2);
+    font-size: var(--t-xs); color: var(--c-texto-suave); cursor: pointer;
+    transition: border-color var(--m-rapida) var(--ease-salida), background var(--m-rapida) var(--ease-salida);
+  }
+  .correo-variable code { font-family: var(--f-mono); color: var(--c-texto); }
+  .correo-variable:hover:not(:disabled) { border-color: var(--c-tema-fuerte); background: var(--c-tema-relleno); }
+  .correo-variable:disabled { opacity: .5; cursor: not-allowed; }
+  .fila-correo__entradas { display: flex; align-items: center; gap: var(--e-2); }
+  .fila-correo__correo { flex: 3 1 0; min-width: 0; }
+  .fila-correo__nombre { flex: 2 1 0; min-width: 0; }
+  .fila-correo--lista[data-invalido] .fila-correo__correo { border-color: var(--c-error); }
+
   /* Guardar / Descartar: pegada abajo del contenido mientras haya cambios. */
   .barra-guardar {
     position: sticky; bottom: 0; z-index: 2;
