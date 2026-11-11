@@ -455,6 +455,12 @@ class ApiApp:
     def enviar_correo_cotizacion(self, numero, datos) -> dict:
         return self._correos.enviar_correo_cotizacion(numero, datos)
 
+    def correo_al_crear(self) -> dict:
+        return self._correos.correo_al_crear()
+
+    def enviar_aviso_cotizacion_nueva(self, numero, para) -> dict:
+        return self._correos.enviar_aviso_cotizacion_nueva(numero, para)
+
     # ── Configuración › Estructuras, Terminaciones, Cajas y Reglas ───────────
 
     def obtener_precios_componentes(self, tipo) -> dict:

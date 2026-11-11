@@ -167,7 +167,12 @@
   }
   .correos-areas__nav { position: sticky; top: var(--e-2); z-index: 3; }
   .correos-areas__contenido { display: grid; gap: var(--e-5); }
-  .correos-pie-cuenta { margin-top: calc(-1 * var(--e-3)); padding-inline: var(--e-2); font-size: var(--t-xs); color: var(--c-texto-tenue); }
+  /* "Al crear una cotización" / "Al enviarla al cliente": dos correos
+     distintos dentro de la sección Cotizaciones. */
+  .correos-subtitulo {
+    margin: var(--e-2) 0 calc(-1 * var(--e-2)); padding-inline: var(--e-2);
+    font-size: var(--t-md); font-weight: var(--peso-fuerte); color: var(--c-texto);
+  }
   /* Un campo a todo el ancho de la fila: la etiqueta arriba. */
   .fila-correo { flex-direction: column; align-items: stretch; gap: var(--e-1); padding-block: var(--e-3); }
   .fila-correo__etiqueta { font-size: var(--t-xs); font-weight: var(--peso-medio); color: var(--c-texto-suave); }

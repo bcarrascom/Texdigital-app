@@ -3,10 +3,15 @@ core/correos.py
 Los correos que manda la app (pedido de Bruno, 2026-11-09; el plan entero
 está en CLAUDE.md, "Correos automáticos").
 
-Lo primero es la cotización al cliente: el botón "Enviar correo" de Ver
-cotización le manda el PDF con un asunto y un mensaje, y el cliente responde
-a ese correo para aprobarla o pedir cambios. Las demás áreas (OPs,
-Inventario, Despachos) por ahora solo guardan su lista de correos.
+Las cotizaciones tienen dos correos distintos (Bruno, 2026-11-11), cada uno
+con su asunto, su mensaje y su lista:
+  · al cliente: el botón "Enviar correo" de Ver cotización le manda el PDF, y
+    el cliente responde a ese correo para aprobarla o pedir cambios. Los de
+    "copia" (gente de Texdigital) reciben ese mismo correo, para revisarlo.
+  · aviso de cotización nueva: al crear una cotización, la gente de Texdigital
+    inscrita en "cotizaciones_nuevas" recibe el PDF. En el Resumen del
+    cotizador se puede sacar a alguien o sumar otro correo solo esa vez.
+Las demás áreas (OPs, Inventario, Despachos) por ahora solo guardan su lista.
 
 Sale por SMTP desde la casilla de la app (sistema@texdigital.cl, en el
 hosting de HostingPlus: mail.texdigital.cl, 465 con SSL o 587 con STARTTLS).
@@ -30,6 +35,7 @@ core.ajustes_globales):
      "cuenta": {"remitente", "nombre", "servidor", "puerto"},
      "prueba": {"activo", "direccion"},
      "cotizaciones": {"asunto", "mensaje", "copia": [{"correo", "nombre"}]},
+     "cotizaciones_nuevas": {"asunto", "mensaje", "para": [{"correo", "nombre"}]},
      "areas": {"ops" | "inventario" | "despachos": [{"correo", "nombre"}]}}
 
 Cada envío queda anotado en la cotización, en "Correos" (una lista):
@@ -69,6 +75,7 @@ SERVICIO_CREDENCIAL = "SistemaGestion-correo"
 ESPERA_SMTP_S = 30
 
 AREAS = ("ops", "inventario", "despachos")
+SECCIONES = ("cuenta", "prueba", "cotizaciones", "cotizaciones_nuevas")
 
 VARIABLES_COTIZACION = {
     "numero":   "El N° de la cotización",
@@ -91,6 +98,14 @@ POR_DEFECTO = {
                     "Para aprobarla o pedirnos cambios, basta con responder este correo.\n\n"
                     "Saludos,\nTexdigital"),
         "copia": [],
+    },
+    "cotizaciones_nuevas": {
+        "asunto": "Nueva cotización {numero} - {cliente}",
+        "mensaje": ("Se creó la cotización N° {numero} de {cliente} ({trabajo}), "
+                    "por un total de {total} (IVA incluido).\n\n"
+                    "Va adjunta en PDF.\n\n"
+                    "Correo automático del Sistema de Gestión."),
+        "para": [],
     },
     "areas": {a: [] for a in AREAS},
 }
@@ -118,10 +133,11 @@ def cargar() -> dict:
     """Los ajustes, con los valores de fábrica en lo que falte."""
     guardado = ajustes_globales.leer(NOMBRE)
     a = {k: (dict(v) if isinstance(v, dict) else v) for k, v in POR_DEFECTO.items()}
-    for seccion in ("cuenta", "prueba", "cotizaciones"):
+    for seccion in SECCIONES:
         if isinstance(guardado.get(seccion), dict):
             a[seccion] = {**POR_DEFECTO[seccion], **guardado[seccion]}
     a["cotizaciones"]["copia"] = _lista_correos(a["cotizaciones"].get("copia"))
+    a["cotizaciones_nuevas"]["para"] = _lista_correos(a["cotizaciones_nuevas"].get("para"))
     areas = guardado.get("areas") if isinstance(guardado.get("areas"), dict) else {}
     a["areas"] = {k: _lista_correos(areas.get(k)) for k in AREAS}
     if prueba_forzada():
@@ -163,11 +179,13 @@ def validar(a: dict) -> dict:
         e["cuenta.puerto"] = "Un número entre 1 y 65535."
     if prueba.get("activo") and not correo_valido(prueba.get("direccion")):
         e["prueba.direccion"] = "El correo no es válido."
-    if not str(cot.get("asunto") or "").strip():
-        e["cotizaciones.asunto"] = "Falta el asunto."
-    if not str(cot.get("mensaje") or "").strip():
-        e["cotizaciones.mensaje"] = "Falta el mensaje."
+    for seccion in ("cotizaciones", "cotizaciones_nuevas"):
+        if not str(a[seccion].get("asunto") or "").strip():
+            e[f"{seccion}.asunto"] = "Falta el asunto."
+        if not str(a[seccion].get("mensaje") or "").strip():
+            e[f"{seccion}.mensaje"] = "Falta el mensaje."
     _validar_lista(cot["copia"], "cotizaciones.copia", e)
+    _validar_lista(a["cotizaciones_nuevas"]["para"], "cotizaciones_nuevas.para", e)
     for area in AREAS:
         _validar_lista(a["areas"][area], f"areas.{area}", e)
     return e
@@ -177,15 +195,17 @@ def guardar(datos: dict) -> dict:
     """{"ok": True} o {"ok": False, "errores": {campo: mensaje}}."""
     d = datos or {}
     a = cargar()
-    for seccion in ("cuenta", "prueba", "cotizaciones"):
+    for seccion in SECCIONES:
         if isinstance(d.get(seccion), dict):
             a[seccion] = {**a[seccion], **d[seccion]}
     a["cuenta"] = {k: (" ".join(str(v).split()) if isinstance(v, str) else v) for k, v in a["cuenta"].items()}
     a["prueba"]["activo"] = bool(a["prueba"].get("activo"))
     a["prueba"]["direccion"] = str(a["prueba"].get("direccion") or "").strip()
-    a["cotizaciones"]["asunto"] = " ".join(str(a["cotizaciones"].get("asunto") or "").split())
-    a["cotizaciones"]["mensaje"] = str(a["cotizaciones"].get("mensaje") or "").strip()
+    for seccion in ("cotizaciones", "cotizaciones_nuevas"):
+        a[seccion]["asunto"] = " ".join(str(a[seccion].get("asunto") or "").split())
+        a[seccion]["mensaje"] = str(a[seccion].get("mensaje") or "").strip()
     a["cotizaciones"]["copia"] = _lista_correos(a["cotizaciones"].get("copia"))
+    a["cotizaciones_nuevas"]["para"] = _lista_correos(a["cotizaciones_nuevas"].get("para"))
     if isinstance(d.get("areas"), dict):
         a["areas"] = {k: _lista_correos(d["areas"].get(k, a["areas"][k])) for k in AREAS}
     errores = validar(a)
@@ -197,6 +217,21 @@ def guardar(datos: dict) -> dict:
     except ajustes_globales.AjusteMasNuevo:
         return {"ok": False, "errores": {"general": "Estos ajustes los guardó una versión más nueva de la app."}}
     return {"ok": True}
+
+
+def correos_guardados(a: dict | None = None) -> list[dict]:
+    """[{"correo", "nombre"}]: todos los correos de Texdigital inscritos en
+    alguna lista (cotizaciones nuevas, copia de las cotizaciones, áreas), sin
+    repetir. Es de donde se elige al sumar a alguien solo una vez."""
+    a = a or cargar()
+    vistos, lista = set(), []
+    for filas in (a["cotizaciones_nuevas"]["para"], a["cotizaciones"]["copia"], *a["areas"].values()):
+        for f in filas:
+            clave = f["correo"].lower()
+            if correo_valido(clave) and clave not in vistos:
+                vistos.add(clave)
+                lista.append(dict(f))
+    return lista
 
 
 # ── Carpeta de los correos guardados ───────────────────────────────────────
