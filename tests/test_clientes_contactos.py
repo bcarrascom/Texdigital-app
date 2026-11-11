@@ -50,7 +50,7 @@ class TestClientes(_Base):
     def test_crear_formatea_y_valida(self):
         self.assertEqual(repo.crear_cliente({"empresa": "  Café   del Puerto ", "rut": "760864285", "razon_social": "CDP SpA"}),
                          {"ok": True})
-        self.assertEqual(repo.cargar_clientes(), [{"empresa": "Café del Puerto", "rut": RUT, "razon_social": "CDP SpA"}])
+        self.assertEqual(repo.cargar_clientes(), [{"empresa": "Café del Puerto", "rut": RUT, "razon_social": "CDP SpA", "email": ""}])
 
     def test_lo_que_no_se_deja_crear(self):
         repo.crear_cliente({"empresa": "Café del Puerto", "rut": RUT})

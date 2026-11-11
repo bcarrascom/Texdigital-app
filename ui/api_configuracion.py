@@ -156,13 +156,14 @@ class ApiConfiguracion:
     # ── Clientes y contactos ─────────────────────────────────────────────
 
     def obtener_clientes(self) -> list[dict]:
-        """[{"empresa", "rut", "razon_social", "direcciones": n}] por nombre
+        """[{"empresa", "rut", "razon_social", "email", "direcciones": n}] por nombre
         (core.repositorio.cargar_clientes ya los da en orden alfabético)."""
         direcciones: dict[str, int] = {}
         for d in _repo.cargar_direcciones():
             rut = _repo.formatear_rut(d.get("rut", ""))
             direcciones[rut] = direcciones.get(rut, 0) + 1
         clientes = [{"empresa": c.get("empresa", ""), "rut": c.get("rut", ""), "razon_social": c.get("razon_social", ""),
+                     "email": c.get("email", ""),
                      "direcciones": direcciones.get(_repo.formatear_rut(c.get("rut", "")), 0) if c.get("rut") else 0}
                     for c in _repo.cargar_clientes()]
         return clientes

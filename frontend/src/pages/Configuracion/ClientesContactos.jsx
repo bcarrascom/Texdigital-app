@@ -43,14 +43,16 @@ const MENSAJES_CLIENTE = {
 function Clientes() {
   return (
     <ListaGestion cargar={() => api.obtener_clientes()} clave="empresa" singular="cliente" plural="clientes"
-                  texto={(c) => `${c.empresa} ${c.rut} ${c.razon_social}`}
-                  sub={(c) => [c.rut, c.razon_social, c.direcciones && fmt.plural(c.direcciones, "dirección", "direcciones")].filter(Boolean).join(" · ")}
+                  texto={(c) => `${c.empresa} ${c.rut} ${c.razon_social} ${c.email}`}
+                  sub={(c) => [c.rut, c.razon_social, c.email, c.direcciones && fmt.plural(c.direcciones, "dirección", "direcciones")].filter(Boolean).join(" · ")}
                   Formulario={FormularioCliente} Eliminar={EliminarCliente} mensajes={MENSAJES_CLIENTE} />
   );
 }
 
 function FormularioCliente({ item, onCerrar, onHecho }) {
-  const [f, setF] = useState({ empresa: item?.empresa ?? "", rut: item?.rut ?? "", razon_social: item?.razon_social ?? "" });
+  const [f, setF] = useState({
+    empresa: item?.empresa ?? "", rut: item?.rut ?? "", razon_social: item?.razon_social ?? "", email: item?.email ?? "",
+  });
   const set = (clave, valor) => setF((x) => ({ ...x, [clave]: valor }));
   const { errores, enviando, confirmar } = useEnvio(
     () => (item ? api.editar_cliente(item.empresa, f) : api.crear_cliente(f)), onHecho);
@@ -73,10 +75,15 @@ function FormularioCliente({ item, onCerrar, onHecho }) {
           <input className="entrada" id="cli-razon" type="text" autoComplete="off"
                  value={f.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
         </Campo>
+        <Campo id="cli-email" etiqueta="Correo" invalido={!!errores.email}
+               ayuda="Adonde se le envían las cotizaciones si el contacto de la cotización no tiene correo.">
+          <input className="entrada" id="cli-email" type="email" autoComplete="off" placeholder="contacto@empresa.cl"
+                 value={f.email} onChange={(e) => set("email", e.target.value)} />
+        </Campo>
       </div>
       {cambiaLigado && <Nota>Sus {fmt.plural(item.direcciones, "dirección guardada pasa", "direcciones guardadas pasan")} a los datos nuevos. {NO_CAMBIAN}</Nota>}
       {item && !cambiaLigado && <p className="campo__ayuda dlg-catalogo__nota">{NO_CAMBIAN}</p>}
-      <ErrorGeneral texto={errores.general || errores.rut} />
+      <ErrorGeneral texto={errores.general || errores.rut || errores.email} />
       <Acciones onCerrar={onCerrar} enviando={enviando} texto={item ? "Guardar" : "Agregar"} />
     </form>
   );

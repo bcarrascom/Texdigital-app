@@ -635,6 +635,12 @@ class ApiCotizacion:
             if manuales[clave]:
                 json_dict[clave_json] = manuales[clave]
 
+        # Editar una cotización la arma de nuevo desde la pantalla: los correos
+        # con que ya se le mandó al cliente (ver ui/api_correos.py) siguen.
+        previa = cargar_cotizacion(numero)
+        if previa and previa.get("Correos"):
+            json_dict["Correos"] = previa["Correos"]
+
         _guardar_cotizacion_repo(json_dict)
 
         if estado.get("id"):
