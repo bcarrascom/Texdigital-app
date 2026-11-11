@@ -44,15 +44,15 @@ export function ErrorGeneral({ texto }) {
    que se escribió (`nombreInicial`). onHecho(r, {nombre}) recibe el nombre
    que quedó guardado, para que el rollo lo tome. El ancho de la tela es el
    de sus rollos (ver core.repositorio_inventario.ancho_rollo). */
-export function DialogoTextil({ abierto, textil, nombreInicial = "", modoCobro, onCerrar, onHecho }) {
+export function DialogoTextil({ abierto, textil, nombreInicial = "", onCerrar, onHecho }) {
   return (
     <Dialogo abierto={abierto} onCerrar={onCerrar} className="dlg--desenfoque dlg-catalogo">
-      <FormularioTextil textil={textil} nombreInicial={nombreInicial} modoCobro={modoCobro} onCerrar={onCerrar} onHecho={onHecho} />
+      <FormularioTextil textil={textil} nombreInicial={nombreInicial} onCerrar={onCerrar} onHecho={onHecho} />
     </Dialogo>
   );
 }
 
-function FormularioTextil({ textil, nombreInicial, modoCobro, onCerrar, onHecho }) {
+function FormularioTextil({ textil, nombreInicial, onCerrar, onHecho }) {
   const nuevo = !textil;
   const [f, setF] = useState({
     nombre: textil?.nombre ?? nombreInicial, ancho: anchoTexto(textil?.ancho), backlight: !!textil?.backlight, valor: "",
@@ -67,7 +67,6 @@ function FormularioTextil({ textil, nombreInicial, modoCobro, onCerrar, onHecho 
   );
   const renombra = !nuevo && f.nombre.trim() && f.nombre.trim() !== textil.nombre;
   const rollos = textil?.rollos?.rollos || 0;
-  const porRollo = modoCobro === "rollo";
 
   return (
     <form onSubmit={confirmar} onKeyDown={enterGuarda} noValidate>
@@ -77,20 +76,17 @@ function FormularioTextil({ textil, nombreInicial, modoCobro, onCerrar, onHecho 
           <input className="entrada" id="cat-nombre" type="text" autoComplete="off" data-autofoco
                  value={f.nombre} onChange={(e) => set("nombre", e.target.value)} />
         </Campo>
-        <Campo id="cat-ancho" etiqueta="Ancho de la tela (m)" requerido invalido={!!errores.ancho} error={errores.ancho}
-               ayuda="El de todos sus rollos: con él se calculan los metros lineales y el ancho máximo de impresión. Un textil que viene en dos anchos son dos textiles (p. ej. «Mesh mate 160» y «Mesh mate 180»).">
+        <Campo id="cat-ancho" etiqueta="Ancho de la tela (m)" requerido invalido={!!errores.ancho} error={errores.ancho}>
           <input className="entrada entrada--num" id="cat-ancho" type="text" inputMode="decimal" autoComplete="off"
                  placeholder="1,48" value={f.ancho} onChange={(e) => set("ancho", e.target.value.replace(/[^\d,.]/g, ""))} />
         </Campo>
         <div className="campo">
           <span className="campo__etiqueta">Sirve para Backlight</span>
           <Segmento etiqueta="Sirve para Backlight" opciones={SI_NO} valor={f.backlight} onCambiar={(v) => set("backlight", v)} />
-          <span className="campo__ayuda">Aparece en la lista de telas de Backlight del cotizador (tiene que ser translúcida).</span>
         </div>
         {nuevo && (
           <Campo id="cat-valor" etiqueta="Valor por metro" requerido
-                 invalido={!!errores.valor} error={errores.valor}
-                 ayuda={porRollo ? "Por metro lineal (en Backlight, por m²). Se cobra cuando ningún rollo alcanza para el producto." : "Por metro lineal; en Backlight, por m²."}>
+                 invalido={!!errores.valor} error={errores.valor}>
             <input className="entrada entrada--num" id="cat-valor" type="text" inputMode="numeric" autoComplete="off"
                    placeholder="$0" value={f.valor} onChange={(e) => set("valor", fmt.clp(e.target.value))} />
           </Campo>
@@ -138,17 +134,13 @@ function FormularioComponente({ tipo, singular, onCerrar, onHecho }) {
     <form onSubmit={confirmar} onKeyDown={enterGuarda} noValidate>
       <h2 className="dlg__titulo">Agregar {singular}</h2>
       <div className="dlg-catalogo__campos">
-        <Campo id="cat-nombre" etiqueta="Nombre" requerido invalido={!!errores.nombre} error={errores.nombre}
-               ayuda="Así aparece en el cotizador y en la cotización.">
+        <Campo id="cat-nombre" etiqueta="Nombre" requerido invalido={!!errores.nombre} error={errores.nombre}>
           <input className="entrada" id="cat-nombre" type="text" autoComplete="off" data-autofoco
                  value={f.nombre} onChange={(e) => set("nombre", e.target.value)} />
         </Campo>
         <div className="campo" data-invalido={errores.unidad ? "" : undefined}>
           <span className="campo__etiqueta">Se cobra</span>
           <Segmento etiqueta="Cómo se cobra" opciones={UNIDADES} valor={f.unidad} onCambiar={(v) => set("unidad", v)} />
-          <span className="campo__ayuda">
-            {f.unidad === "ML" ? "Por cada metro lineal impreso: solo se puede usar en productos con textil." : "Por cada unidad del producto."}
-          </span>
         </div>
         <Campo id="cat-valor" etiqueta="Valor" requerido invalido={!!errores.valor} error={errores.valor}>
           <input className="entrada entrada--num" id="cat-valor" type="text" inputMode="numeric" autoComplete="off"

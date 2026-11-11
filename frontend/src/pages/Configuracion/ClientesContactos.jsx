@@ -62,8 +62,7 @@ function FormularioCliente({ item, onCerrar, onHecho }) {
     <form onSubmit={confirmar} onKeyDown={enterGuarda} noValidate>
       <h2 className="dlg__titulo">{item ? "Editar cliente" : "Agregar cliente"}</h2>
       <div className="dlg-catalogo__campos">
-        <Campo id="cli-empresa" etiqueta="Empresa" requerido invalido={!!errores.empresa} error={errores.empresa}
-               ayuda="El nombre con que se busca en el cotizador.">
+        <Campo id="cli-empresa" etiqueta="Empresa" requerido invalido={!!errores.empresa} error={errores.empresa}>
           <input className="entrada" id="cli-empresa" type="text" autoComplete="off" data-autofoco
                  value={f.empresa} onChange={(e) => set("empresa", e.target.value)} />
         </Campo>
@@ -75,14 +74,12 @@ function FormularioCliente({ item, onCerrar, onHecho }) {
           <input className="entrada" id="cli-razon" type="text" autoComplete="off"
                  value={f.razon_social} onChange={(e) => set("razon_social", e.target.value)} />
         </Campo>
-        <Campo id="cli-email" etiqueta="Correo" invalido={!!errores.email}
-               ayuda="Adonde se le envían las cotizaciones si el contacto de la cotización no tiene correo.">
+        <Campo id="cli-email" etiqueta="Correo" invalido={!!errores.email}>
           <input className="entrada" id="cli-email" type="email" autoComplete="off" placeholder="contacto@empresa.cl"
                  value={f.email} onChange={(e) => set("email", e.target.value)} />
         </Campo>
       </div>
       {cambiaLigado && <Nota>Sus {fmt.plural(item.direcciones, "dirección guardada pasa", "direcciones guardadas pasan")} a los datos nuevos. {NO_CAMBIAN}</Nota>}
-      {item && !cambiaLigado && <p className="campo__ayuda dlg-catalogo__nota">{NO_CAMBIAN}</p>}
       <ErrorGeneral texto={errores.general || errores.rut || errores.email} />
       <Acciones onCerrar={onCerrar} enviando={enviando} texto={item ? "Guardar" : "Agregar"} />
     </form>
@@ -137,8 +134,7 @@ function FormularioContacto({ item, onCerrar, onHecho }) {
           <input className="entrada" id="con-email" type="email" autoComplete="off"
                  value={f.email} onChange={(e) => set("email", e.target.value)} />
         </Campo>
-        <Campo id="con-descuento" etiqueta="Descuento (%)" invalido={!!errores.descuento}
-               ayuda="El que el cotizador propone al elegir este contacto. Vacío, sin descuento.">
+        <Campo id="con-descuento" etiqueta="Descuento (%)" invalido={!!errores.descuento}>
           <input className="entrada entrada--num" id="con-descuento" type="text" inputMode="decimal" autoComplete="off" placeholder="0"
                  value={f.descuento} onChange={(e) => set("descuento", e.target.value.replace(/[^\d,.]/g, ""))} />
         </Campo>
@@ -147,7 +143,6 @@ function FormularioContacto({ item, onCerrar, onHecho }) {
                  value={f.condicion} onChange={(e) => set("condicion", e.target.value)} />
         </Campo>
       </div>
-      {item && <p className="campo__ayuda dlg-catalogo__nota">{NO_CAMBIAN}</p>}
       <ErrorGeneral texto={errores.general || errores.email || errores.descuento} />
       <Acciones onCerrar={onCerrar} enviando={enviando} texto={item ? "Guardar" : "Agregar"} />
     </form>

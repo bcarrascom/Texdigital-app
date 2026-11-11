@@ -39,13 +39,11 @@ export function textoMateriales(materiales) {
   }
   return {
     sub: `Se cobra por sus materiales de Inventario: ${nombres}`,
-    ayuda: "Este valor solo se usa si a uno de sus materiales le falta con qué cobrarlo.",
   };
 }
 
 export function Estructuras() {
-  return <ListaPrecios tipo="estructuras" singular="estructura" plural="estructuras" ninguna="Ninguna estructura"
-                       pie="Para que una estructura se cobre por lo que gasta de un material de Inventario, asócialo en la ficha del material (Inventario › Materiales › Editar). Que se llamen igual no los conecta." />;
+  return <ListaPrecios tipo="estructuras" singular="estructura" plural="estructuras" ninguna="Ninguna estructura" />;
 }
 
 export function Terminaciones() {

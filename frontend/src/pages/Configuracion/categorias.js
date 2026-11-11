@@ -23,7 +23,9 @@ import { Estructuras, Terminaciones } from "./ListaPrecios";
 
      clave      la de la URL: /configuracion/<clave>
      titulo     en la barra lateral y en el encabezado
-     desc       debajo del título, en el encabezado
+     desc       qué hay en la categoría: no se muestra (la interfaz no lleva
+                textos explicativos, ver CLAUDE.md), pero el buscador de la
+                barra lateral la usa
      palabras   lo que además encuentra el buscador de la barra lateral
      Icono      dibujo de Lucide (assets/svg), en blanco sobre `color`
      Contenido  lo que va debajo del encabezado */

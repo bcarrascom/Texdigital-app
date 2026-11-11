@@ -42,12 +42,6 @@ const COBROS = [
   { valor: "rollo", etiqueta: "Rollo", titulo: "El valor de venta del rollo del que sale la tela" },
 ];
 
-const PIE_MODO = {
-  fijo: "Todos los textiles se cobran por el valor por metro que tienen acá.",
-  rollo: "Todos los textiles se cobran por el valor de venta del rollo del que sale la tela: el mismo que Inventario usaría al aprobar.",
-  por_textil: "Cada textil se cobra como diga su propio switch.",
-};
-
 
 /* Misma regla que core.precios_textiles.validar: {nombre: mensaje}. */
 function validar(modo, textiles) {
@@ -145,9 +139,7 @@ export default function Textiles() {
     <>
       <NotaSoloLectura visible={soloLectura} />
 
-      <Grupo titulo="Cómo se cobran"
-             pie={datos.inventario ? PIE_MODO[actual.modo]
-               : "Con el módulo Inventario apagado no hay rollos: los textiles solo se pueden cobrar por valor fijo."}>
+      <Grupo titulo="Cómo se cobran">
         <Fila etiqueta="Cobrar los textiles">
           <Segmento etiqueta="Cómo se cobran los textiles" opciones={MODOS} valor={actual.modo}
                     deshabilitado={soloLectura || !datos.inventario} onCambiar={(modo) => cambiar({ modo })} />
@@ -156,9 +148,7 @@ export default function Textiles() {
 
       <BuscadorLista valor={buscar} onCambiar={setBuscar} que="textil" />
 
-      <Grupo titulo={tituloLista(buscar, visibles.length, actual.textiles.length, "textil", "textiles")}
-             pie={actual.modo === "fijo" ? "El valor es por metro lineal; en Backlight, por metro cuadrado."
-               : "Por metro lineal (en Backlight, por metro cuadrado). En los que se cobran por rollo, este valor se cobra cuando ningún rollo alcanza para el producto (el cotizador lo avisa)."}>
+      <Grupo titulo={tituloLista(buscar, visibles.length, actual.textiles.length, "textil", "textiles")}>
         {visibles.map((t) => (
           <FilaTextil key={t.nombre} textil={t} resumen={resumen[t.nombre]} modo={actual.modo}
                       error={errores[t.nombre]} soloLectura={soloLectura} inventario={datos.inventario}
@@ -194,7 +184,7 @@ export default function Textiles() {
                        aviso(`${nombre} quitado.`, "info");
                      }} />
 
-      <DialogoTextil abierto={!!editando} textil={editando === "nuevo" ? null : editando} modoCobro={actual.modo}
+      <DialogoTextil abierto={!!editando} textil={editando === "nuevo" ? null : editando}
                      onCerrar={() => setEditando(null)}
                      onHecho={async (r) => {
                        const antes = editando === "nuevo" ? null : editando.nombre;

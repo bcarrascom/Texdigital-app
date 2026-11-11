@@ -26,13 +26,12 @@ function textoPerfil(materiales) {
   return {
     sub: `Más sus materiales de Inventario: ${nombresMateriales(materiales)}`,
     nota: incompleto ? `Sus materiales no se cobran: a «${incompleto.nombre}» le falta ${FALTA[incompleto.falta]}.` : null,
-    ayuda: incompleto ? null : "Se suman a este precio. Para cobrar solo los materiales, pon el perfil en $0.",
   };
 }
 
 const MARGENES = [
-  { clave: "caja_terminada", nombre: "Caja terminada", sub: "Cuando se midió la caja terminada, o la caja es nuestra." },
-  { clave: "area_visual", nombre: "Área visual", sub: "Cuando se midió el área visual: hay que envolver más perfil." },
+  { clave: "caja_terminada", nombre: "Caja terminada" },
+  { clave: "area_visual", nombre: "Área visual" },
 ];
 
 /* "1,5" → 1.5; vacío o ilegible → null. */
@@ -52,8 +51,7 @@ const SECCIONES = [
   { clave: "fp", titulo: "Fuentes de poder · por unidad", nombre: (k) => `${k} W` },
   { clave: "perfiles", titulo: "Perfiles · por metro lineal de caja" },
   { clave: "traseras", titulo: "Traseras · por m² de caja" },
-  { clave: "armado", titulo: "Armado · por metro lineal de caja", nombre: (k) => ARMADO[k] || k,
-    pie: "La tarifa se elige por los metros lineales que tiene la caja, y se cobra por cada uno." },
+  { clave: "armado", titulo: "Armado · por metro lineal de caja", nombre: (k) => ARMADO[k] || k, },
 ];
 
 const aBorrador = (cajas) => ({
@@ -152,8 +150,7 @@ export default function Cajas() {
     <>
       <NotaSoloLectura visible={soloLectura} />
 
-      <Grupo titulo="Corte de la tela"
-             pie="Se le suma a cada medida del backlight para cortar la tela. Lo usan la OP impresa y el panel de producción, y no cambia el precio.">
+      <Grupo titulo="Corte de la tela">
         {MARGENES.map((m) => (
           <div key={m.clave} className="fila-ajuste fila-regla" data-invalido={errores[`margen:${m.clave}`] ? "" : undefined}>
             <span className="fila-textil__info">
@@ -173,10 +170,7 @@ export default function Cajas() {
       </Grupo>
 
       {SECCIONES.map((s) => (
-        <Grupo key={s.clave} titulo={s.titulo}
-               pie={s.clave === "perfiles"
-                 ? "Por metro lineal de caja. Para cobrar además lo que gasta de un material de Inventario, asócialo al perfil en la ficha del material; para cobrar solo los materiales, deja el perfil en $0."
-                 : s.pie}>
+        <Grupo key={s.clave} titulo={s.titulo}>
           {Object.entries(actual[s.clave]).map(([k, v]) => {
             const m = s.clave === "perfiles" ? textoPerfil(datos.materiales_perfiles?.[k]) : {};
             return (
