@@ -110,8 +110,24 @@ function cotizacion(numero) {
   };
 }
 
+/* Si el cliente la tiene (ui/api_correos.estado_envio): 9014 cambió desde el
+   último envío, 9013 está al día y el resto nunca se envió. */
+const ENVIADAS = {
+  9014: { estado: "con_cambios", fecha: "05/11/2026 16:40" },
+  9013: { estado: "al_dia", fecha: "10/11/2026 11:02" },
+};
+function conCorreo(cot) {
+  const e = ENVIADAS[cot.numero];
+  return {
+    ...cot,
+    estado_correo: e?.estado || "sin_enviar",
+    ultimo_correo: e ? { fecha: e.fecha, para: [cot.email || "cliente@ejemplo.cl"], copia: [],
+                         asunto: `Cotización ${cot.numero} - ${cot.empresa}`, prueba: true, simulado: false } : null,
+  };
+}
+
 export default {
-  obtener_cotizacion: (numero) => cotizacion(Number(numero)),
+  obtener_cotizacion: (numero) => conCorreo(cotizacion(Number(numero))),
 
   cotizacion_adyacente(numero, direccion) {
     const i = NUMEROS.indexOf(Number(numero));

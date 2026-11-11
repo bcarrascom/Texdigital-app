@@ -225,6 +225,16 @@ class TestEnviarCotizacion(_Base):
         self.html.write_text("<html>cotización editada</html>", encoding="utf-8")
         self.assertFalse(self.api.preparar_correo_cotizacion(1004)["sin_cambios"])
 
+    def test_estado_del_envio_para_ver_cotizacion(self):
+        with mock.patch.object(api_correos, "generar_html", lambda datos: self.html):
+            self.assertEqual(api_correos.estado_envio(self.guardada), "sin_enviar")
+            self._enviar()
+            self.assertEqual(api_correos.estado_envio(self.guardada), "al_dia")
+            self.html.write_text("<html>cotización editada</html>", encoding="utf-8")
+            self.assertEqual(api_correos.estado_envio(self.guardada), "con_cambios")
+            # Un envío simulado (de antes del 2026-11-10) no salió: no cuenta.
+            self.assertEqual(api_correos.estado_envio({"Correos": [{"simulado": True, "huella": "x"}]}), "sin_enviar")
+
     def test_preparar_rellena_la_plantilla(self):
         p = self.api.preparar_correo_cotizacion(1004)
         self.assertEqual(p["asunto"], "Cotización 1004 - Galería Norte")

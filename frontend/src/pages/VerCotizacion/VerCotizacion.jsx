@@ -14,6 +14,9 @@ import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
 import { lineaParaDialogo, PieProducto, PlataAjustes } from "./Descuentos";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import DialogoEnviarCorreo from "./EnviarCorreo";
+import IconoCorreo from "@/assets/svg/mail.svg?react";
+import IconoAviso from "@/assets/svg/circle-alert.svg?react";
+import IconoListo from "@/assets/svg/check.svg?react";
 import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 import "./VerCotizacion.css";
@@ -127,7 +130,7 @@ export default function VerCotizacion() {
   /* El correo salió (ver ui/api_correos.py): la hoja muestra el último envío. */
   function correoEnviado(r) {
     setDialogo(null);
-    actualizar((c) => ({ ...c, ultimo_correo: r.ultimo }));
+    actualizar((c) => ({ ...c, ultimo_correo: r.ultimo, estado_correo: "al_dia" }));
     aviso(`${r.prueba ? "Correo de prueba enviado" : "Correo enviado"} a ${r.a.join(", ")}.`, "info", 6000);
   }
 
@@ -159,7 +162,7 @@ export default function VerCotizacion() {
                    <VistaDetalle productos={c.productos} aparecer={c.numero === primera.current}
                                  hoja={<>
                                    {c.cambios_precios && <AvisoPrecios onRevisar={() => setDialogo("precios")} />}
-                                   <Hoja cot={c} />
+                                   <Hoja cot={c} onCorreo={() => setDialogo("correo")} />
                                  </>}
                                  lateral={<PlataAjustes t={c.totales || {}} d={c.descuento} productos={c.productos}
                                                         onEditar={setEditando}
@@ -228,7 +231,31 @@ function lineasDelPedido(cot) {
 const textoCorreo = (c) =>
   c ? `${c.fecha} a ${c.para.join(", ")}${c.simulado ? " (no salió)" : c.prueba ? " (prueba)" : ""}` : "";
 
-function Hoja({ cot }) {
+/* Si el cliente tiene la cotización tal como está (ui/api_correos.estado_envio;
+   pedido de Bruno, 2026-11-11): arriba a la derecha de la hoja, y abre
+   "Enviar correo". Los dos avisos en ámbar; al día, en verde. */
+const ESTADOS_CORREO = {
+  sin_enviar:  { tipo: "aviso", Icono: IconoCorreo, texto: "Sin enviar al cliente",
+                 ayuda: "Esta cotización todavía no se le ha enviado al cliente. Clic para enviarla." },
+  con_cambios: { tipo: "aviso", Icono: IconoAviso, texto: "Cambió desde el último envío",
+                 ayuda: "El cliente tiene una versión anterior: la cotización cambió después del último correo. Clic para enviarla de nuevo." },
+  al_dia:      { tipo: "ok", Icono: IconoListo, texto: "Enviada al cliente",
+                 ayuda: "El último correo lleva la cotización tal como está ahora." },
+};
+
+function EstadoCorreo({ cot, onCorreo }) {
+  const e = ESTADOS_CORREO[cot.estado_correo];
+  if (!e) return null;
+  const texto = e === ESTADOS_CORREO.al_dia && cot.ultimo_correo?.prueba ? "Enviada (prueba)" : e.texto;
+  return (
+    <button type="button" className={`etiqueta etiqueta--${e.tipo} estado-correo`} title={e.ayuda} onClick={onCorreo}>
+      <e.Icono className="estado-correo__icono" aria-hidden="true" />
+      {texto}
+    </button>
+  );
+}
+
+function Hoja({ cot, onCorreo }) {
   const t = cot.totales || {};
   /* Despacho e instalación solo aparecen si la cotización los lleva: un "$0"
      es ruido, no información. */
@@ -243,9 +270,12 @@ function Hoja({ cot }) {
   return (
     <section className="hoja">
       <div className="hoja__cab">
-        <span className="hoja__num">{fmt.numero(cot.numero)}</span>
-        <span className="hoja__nombre">{cot.nombre}</span>
-        <span className="hoja__meta">{[cot.empresa, cot.fecha].filter(Boolean).join(" · ")}</span>
+        <div className="hoja__cab-izq">
+          <span className="hoja__num">{fmt.numero(cot.numero)}</span>
+          <span className="hoja__nombre">{cot.nombre}</span>
+          <span className="hoja__meta">{[cot.empresa, cot.fecha].filter(Boolean).join(" · ")}</span>
+        </div>
+        <EstadoCorreo cot={cot} onCorreo={onCorreo} />
       </div>
       <Datos lista={[
         ["Empresa", cot.empresa],

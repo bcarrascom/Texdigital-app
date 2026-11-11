@@ -65,6 +65,23 @@ def resumen_envio(registro: dict | None) -> dict | None:
             "simulado": bool(registro.get("simulado"))}
 
 
+def estado_envio(datos: dict) -> str:
+    """Si el cliente tiene la cotización tal como está hoy (pedido de Bruno,
+    2026-11-11; Ver cotización lo muestra arriba de la hoja):
+
+        "sin_enviar"   nunca se le envió
+        "con_cambios"  se le envió, pero el documento cambió desde entonces
+        "al_dia"       el último envío es este mismo documento
+
+    `datos` con los montos al día (recalcular_descuentos), como se imprime:
+    la huella es la del HTML, la misma que anota enviar_correo_cotizacion.
+    Los envíos simulados (de antes del 2026-11-10) no salieron: no cuentan."""
+    envios = [e for e in (datos.get("Correos") or []) if isinstance(e, dict) and not e.get("simulado")]
+    if not envios:
+        return "sin_enviar"
+    return "al_dia" if envios[-1].get("huella") == correos.huella(generar_html(datos)) else "con_cambios"
+
+
 class ApiCorreos:
 
     # ── Configuración › Correos ──────────────────────────────────────────
