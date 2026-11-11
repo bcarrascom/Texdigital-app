@@ -157,6 +157,16 @@
 
   /* ── Correos ────────────────────────────────────────────────────────── */
   .correos-ok { width: 1.1rem; height: 1.1rem; color: #2E9D5B; }
+  /* Lo de cada parte del programa, bajo el menú flotante. El menú queda
+     pegado arriba mientras se baja por su sección. */
+  .correos-areas { display: grid; gap: var(--e-4); margin-top: var(--e-4); }
+  .correos-areas__titulo {
+    padding-inline: var(--e-2); text-align: center;
+    font-size: var(--t-xs); font-weight: var(--peso-fuerte); color: var(--c-texto-tenue);
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .correos-areas__nav { position: sticky; top: var(--e-2); z-index: 3; }
+  .correos-areas__contenido { display: grid; gap: var(--e-5); }
   .correos-pie-cuenta { margin-top: calc(-1 * var(--e-3)); padding-inline: var(--e-2); font-size: var(--t-xs); color: var(--c-texto-tenue); }
   /* Un campo a todo el ancho de la fila: la etiqueta arriba. */
   .fila-correo { flex-direction: column; align-items: stretch; gap: var(--e-1); padding-block: var(--e-3); }

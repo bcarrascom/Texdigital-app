@@ -95,7 +95,19 @@
   .ficha-prod__pie .pie-linea--total b { color: var(--c-tema-tinta); font-weight: var(--peso-fuerte); }
 
   /* ── La hoja de datos: número, nombre y empresa apilados ─────────────────── */
-  .hoja__cab { display: grid; gap: var(--e-1); }
+  .hoja__cab { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--e-4); }
+  .hoja__cab-izq { display: grid; gap: var(--e-1); min-width: 0; }
+
+  /* Si el cliente tiene la cotización tal como está (EstadoCorreo): una
+     .etiqueta de base.css que además abre "Enviar correo". */
+  .estado-correo {
+    border: 0; font-family: inherit; cursor: pointer; white-space: nowrap;
+    padding: .2rem var(--e-3);
+    transition: filter var(--m-rapida) var(--ease-salida);
+  }
+  .estado-correo:hover { filter: brightness(.96); text-decoration: underline; }
+  .estado-correo:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 2px; }
+  .estado-correo__icono { width: .9rem; height: .9rem; flex: none; }
 
   /* Los montos por concepto, en una fila. Etiqueta arriba, cifra abajo. */
   .conceptos {

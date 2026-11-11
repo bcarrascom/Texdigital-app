@@ -1,0 +1,43 @@
+/* El menú de secciones (NavFlotante.jsx), con el aspecto del switch
+   segmentado de la app (.segmento, en base.css). */
+
+.nav-flotante {
+  position: relative;
+  display: flex; gap: 2px;
+  width: fit-content; max-width: 100%; margin-inline: auto;
+  padding: 3px;
+  background: var(--c-superficie-2);
+  border: 1.5px solid var(--c-borde-fuerte);
+  border-radius: var(--r-full);
+  /* Una sombra suave: queda pegado arriba sobre el contenido al bajar. */
+  box-shadow: var(--s-2);
+}
+
+/* La píldora: una sola pieza que se desliza a la sección elegida. */
+.nav-flotante__pildora {
+  position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0;
+  border-radius: var(--r-full);
+  background: var(--c-tema-fuerte);
+  pointer-events: none;
+}
+.nav-flotante__pildora[data-animar] {
+  transition: transform var(--m-media) var(--ease-salida), width var(--m-media) var(--ease-salida);
+}
+
+.nav-flotante__item {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: var(--e-2);
+  padding: .35rem var(--e-4); border: 0; border-radius: var(--r-full); background: none;
+  font: inherit; font-size: var(--t-sm); font-weight: var(--peso-medio);
+  color: var(--c-texto-suave); cursor: pointer; white-space: nowrap;
+  transition: color var(--m-media) var(--ease-salida);
+}
+.nav-flotante__item:hover { color: var(--c-texto); }
+.nav-flotante__item[aria-selected="true"] { color: var(--c-texto-inv); }
+.nav-flotante__item:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 2px; }
+
+.nav-flotante__icono { width: 1rem; height: 1rem; flex: none; }
+.nav-flotante__punto {
+  width: .45rem; height: .45rem; flex: none; border-radius: var(--r-full);
+  background: var(--c-error);
+}
