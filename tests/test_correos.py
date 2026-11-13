@@ -60,6 +60,7 @@ class TestAjustes(_Base):
 
     def test_de_fabrica(self):
         a = correos.cargar()
+        self.assertFalse(a["cotizaciones"]["al_cliente"])   # hasta que Bruno los habilite
         self.assertEqual(a["cuenta"]["remitente"], "sistema@texdigital.cl")
         self.assertEqual(a["prueba"], {"activo": True, "direccion": "brosky.spam@gmail.com"})
         self.assertEqual(a["areas"], {"ops": [], "inventario": [], "despachos": []})
@@ -101,6 +102,18 @@ class TestAjustes(_Base):
         a = correos.cargar()
         self.assertEqual(a["cotizaciones_nuevas"]["para"], [{"correo": "ventas@texdigital.cl", "nombre": ""}])
         self.assertEqual(a["cotizaciones"]["asunto"], correos.POR_DEFECTO["cotizaciones"]["asunto"])   # el del cliente no cambia
+
+    def test_switches_de_los_correos_automaticos(self):
+        self.assertTrue(correos.automatico_activo("cotizaciones"))
+        correos.guardar({"automaticos": {"cotizaciones": False}})
+        self.assertFalse(correos.automatico_activo("cotizaciones"))
+        self.assertTrue(correos.automatico_activo("ops"))
+        # El general apaga todo, y al volver a encenderlo cada parte sigue como estaba.
+        correos.guardar({"automaticos": {"activo": False, "cotizaciones": True}})
+        self.assertFalse(correos.automatico_activo("cotizaciones"))
+        self.assertFalse(correos.automatico_activo("ops"))
+        correos.guardar({"automaticos": {"activo": True}})
+        self.assertTrue(correos.automatico_activo("cotizaciones") and correos.automatico_activo("ops"))
 
     def test_sin_modo_de_prueba_no_hace_falta_la_direccion(self):
         self.assertEqual(correos.guardar({"prueba": {"activo": False, "direccion": ""}}), {"ok": True})
@@ -173,6 +186,7 @@ class TestEnviarCotizacion(_Base):
 
     def setUp(self):
         super().setUp()
+        correos.guardar({"cotizaciones": {"al_cliente": True}})
         self.guardada = dict(COTIZACION)
         self.html = self.base / "1004.html"
         self.html.write_text("<html>cotización</html>", encoding="utf-8")
@@ -258,6 +272,14 @@ class TestEnviarCotizacion(_Base):
         self.assertNotIn("Correos", self.guardada)
         self.assertTrue(list((self.base / "SGTD" / "Correos").rglob("* Cotización nueva 1004.eml")))
 
+    def test_aviso_apagado_no_sale(self):
+        correos.guardar({"automaticos": {"activo": False}})
+        self.assertFalse(self.api.correo_al_crear()["activo"])
+        r = self.api.enviar_aviso_cotizacion_nueva(1004, ["ventas@texdigital.cl"])
+        self.assertTrue(r["apagado"])
+        self.assertFalse(self.enviados)
+        self.assertNotIn("AvisoCreacion", self.guardada)
+
     def test_aviso_sin_destinatarios_o_con_uno_malo(self):
         self.assertEqual(self.api.enviar_aviso_cotizacion_nueva(1004, []), {"ok": False, "error": "Falta a quién enviarlo."})
         self.assertFalse(self.api.enviar_aviso_cotizacion_nueva(1004, ["malo"])["ok"])
@@ -279,6 +301,14 @@ class TestEnviarCotizacion(_Base):
         self.assertIn("Hola Rodrigo Pérez:", p["mensaje"])
         self.assertIn("$2.861.979", p["mensaje"])
         self.assertEqual(p["sugeridos"][0]["correo"], "rperez@galerianorte.cl")
+
+    def test_con_los_correos_a_clientes_desactivados_no_sale(self):
+        correos.guardar({"cotizaciones": {"al_cliente": False}})
+        r = self._enviar()
+        self.assertFalse(r["ok"])
+        self.assertIn("desactivados", r["error"])
+        self.assertFalse(self.enviados)
+        self.assertNotIn("Correos", self.guardada)
 
     def test_lo_que_no_se_deja_enviar(self):
         r = self._enviar(para=[], asunto="", mensaje=" ")
@@ -346,6 +376,25 @@ class TestSmtp(_Base):
         self.assertEqual((smtp.servidor, smtp.puerto), ("mail.texdigital.cl", 465))
         self.assertEqual(smtp.enviados, [("sistema@texdigital.cl", ["brosky.spam@gmail.com"],
                                           "Correo de prueba del Sistema de Gestión")])
+
+    def test_cada_correo_que_sale_avisa_para_la_animacion(self):
+        salieron = []
+        aviso = lambda: salieron.append(1)
+        correos.al_enviar(aviso)
+        self.addCleanup(correos._al_enviar.remove, aviso)
+        with self.assertRaises(correos.ErrorEnvio):   # sin contraseña no sale: no avisa
+            correos.enviar(*correos.mensaje_de_prueba())
+        self.assertEqual(salieron, [])
+        self.almacen[("SistemaGestion-correo", "sistema@texdigital.cl")] = "buena"
+        correos.enviar(*correos.mensaje_de_prueba())
+        self.assertEqual(salieron, [1])
+        # Una animación que falla no hace fallar el envío.
+        def rota():
+            raise RuntimeError("sin ventana")
+        correos.al_enviar(rota)
+        self.addCleanup(correos._al_enviar.remove, rota)
+        correos.enviar(*correos.mensaje_de_prueba())
+        self.assertEqual(salieron, [1, 1])
 
     def test_sin_conexion(self):
         correos.guardar_contrasena("buena")

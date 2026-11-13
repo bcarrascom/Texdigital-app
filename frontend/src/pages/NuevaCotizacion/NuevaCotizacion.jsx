@@ -419,7 +419,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
     }
 
     // A quién va el aviso, decidido antes de guardar (lo que muestra el resumen).
-    const avisarA = creando ? destinatariosAviso(opcionesAviso, avisoCrear) : [];
+    const avisarA = creando && opcionesAviso?.activo ? destinatariosAviso(opcionesAviso, avisoCrear) : [];
 
     guardando.current = true;
     const r = (await api.guardar_cotizacion(paraPython(), !!abrir)) || {};

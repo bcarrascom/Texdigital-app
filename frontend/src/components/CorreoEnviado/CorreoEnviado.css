@@ -1,0 +1,27 @@
+/* "Correo enviado" (CorreoEnviado.jsx): el rectángulo abajo a la derecha
+   (un 25 % más grande que el primero, pedido de Bruno, 2026-11-12),
+   con su borde derecho más allá del borde de la ventana. La entrada, el
+   cierre del sobre y la salida los anima motion. */
+
+.correo-enviado {
+  --sobresale: 2.2rem;   /* cuánto queda fuera de la ventana */
+  position: fixed; right: calc(-1 * var(--sobresale)); bottom: var(--e-5); z-index: 210;
+  display: flex; align-items: center;
+  width: calc(6.25rem + var(--sobresale)); height: 4.7rem;
+  padding-left: 1.625rem;
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-3);
+  pointer-events: none;
+  transform: translateX(110%);   /* motion la trae */
+}
+
+.correo-enviado__mover { display: grid; place-items: center; color: var(--c-texto); }
+.correo-enviado__sobre { width: 3rem; height: 3rem; display: block; overflow: visible; }
+
+/* Para los lectores de pantalla. */
+.correo-enviado__texto {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}

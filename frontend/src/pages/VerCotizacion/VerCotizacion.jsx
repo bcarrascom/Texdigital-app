@@ -14,6 +14,7 @@ import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
 import { lineaParaDialogo, PieProducto, PlataAjustes } from "./Descuentos";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import DialogoEnviarCorreo from "./EnviarCorreo";
+import { trasCorreoEnviado } from "@/components/CorreoEnviado/CorreoEnviado";
 import IconoCorreo from "@/assets/svg/mail.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoListo from "@/assets/svg/check.svg?react";
@@ -127,10 +128,12 @@ export default function VerCotizacion() {
     aviso("Se volvió a los descuentos automáticos.", "info");
   }
 
-  /* El correo salió (ver ui/api_correos.py): la hoja muestra el último envío. */
-  function correoEnviado(r) {
+  /* El correo salió (ver ui/api_correos.py): la hoja muestra el último envío,
+     el sobre se cierra y se va (components/CorreoEnviado) y después el aviso. */
+  async function correoEnviado(r) {
     setDialogo(null);
     actualizar((c) => ({ ...c, ultimo_correo: r.ultimo, estado_correo: "al_dia" }));
+    await trasCorreoEnviado();
     aviso(`${r.prueba ? "Correo de prueba enviado" : "Correo enviado"} a ${r.a.join(", ")}.`, "info", 6000);
   }
 
@@ -146,7 +149,7 @@ export default function VerCotizacion() {
             <button className="cab-btn" onClick={() => setDialogo("eliminar")}>Eliminar</button>
             <button className="cab-btn" onClick={editar}>Editar</button>
             <button className="cab-btn" onClick={() => api.imprimir_cotizacion(numero)}>Imprimir</button>
-            <button className="cab-btn" onClick={() => setDialogo("correo")}>Enviar correo</button>
+            {cot.correo_al_cliente && <button className="cab-btn" onClick={() => setDialogo("correo")}>Enviar correo</button>}
             <button className="btn btn--primario btn--chico" onClick={intentarAprobar}>Aprobar →</button>
           </>
         )}
@@ -244,6 +247,7 @@ const ESTADOS_CORREO = {
 };
 
 function EstadoCorreo({ cot, onCorreo }) {
+  if (!cot.correo_al_cliente) return null;   // los correos a clientes, desactivados
   const e = ESTADOS_CORREO[cot.estado_correo];
   if (!e) return null;
   const texto = e === ESTADOS_CORREO.al_dia && cot.ultimo_correo?.prueba ? "Enviada (prueba)" : e.texto;

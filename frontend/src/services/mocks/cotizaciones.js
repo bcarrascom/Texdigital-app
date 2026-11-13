@@ -5,6 +5,7 @@
 
 import ejemplos from "./cotizacionesDescuentos.json";
 import { montoManual } from "@/components/Descuentos/Descuentos";
+import { correoAlCliente } from "./correos";
 
 /* Qué devuelve lista_precios.cambios() para la 9015, hasta que se decide. */
 let cambios9015 = {
@@ -120,6 +121,7 @@ function conCorreo(cot) {
   const e = ENVIADAS[cot.numero];
   return {
     ...cot,
+    correo_al_cliente: correoAlCliente(),
     estado_correo: e?.estado || "sin_enviar",
     ultimo_correo: e ? { fecha: e.fecha, para: [cot.email || "cliente@ejemplo.cl"], copia: [],
                          asunto: `Cotización ${cot.numero} - ${cot.empresa}`, prueba: true, simulado: false } : null,

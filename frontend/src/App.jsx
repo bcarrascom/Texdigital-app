@@ -4,6 +4,7 @@ import { AvisosProvider } from "@/context/AvisosContext";
 import { AppProvider } from "@/context/AppContext";
 import { ExpansionProvider } from "@/context/ExpansionContext";
 import RutasAnimadas from "@/router/RutasAnimadas";
+import CapaCorreoEnviado from "@/components/CorreoEnviado/CorreoEnviado";
 
 /* HashRouter (#/despachos/42) y no BrowserRouter: el servidor interno de
    pywebview solo sirve archivos, no sabe devolver index.html para una ruta
@@ -20,6 +21,7 @@ export default function App() {
             <ExpansionProvider>
               <RutasAnimadas />
             </ExpansionProvider>
+            <CapaCorreoEnviado />
           </AppProvider>
         </AvisosProvider>
       </HashRouter>
