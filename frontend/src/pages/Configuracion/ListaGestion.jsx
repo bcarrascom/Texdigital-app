@@ -8,6 +8,7 @@ import IconoEditar from "@/assets/svg/pencil.svg?react";
 import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 import IconoMas from "@/assets/svg/plus.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
+import Segmento from "@/components/Segmento/Segmento";
 import * as fmt from "@/utils/formato";
 import { Fila, Grupo } from "./Ajustes";
 
@@ -23,7 +24,10 @@ import { Fila, Grupo } from "./Ajustes";
                      Formulario={...} Eliminar={...}  ← los diálogos: {item, onCerrar, onHecho}
                      mensajes={{ editado: (r) => "…", eliminado: (r) => "…" }} />
 
-   `onHecho(r)` recibe lo que devolvió Python, para armar el mensaje. */
+   `onHecho(r)` recibe lo que devolvió Python, para armar el mensaje.
+
+   `filtros` (opcional): un switch arriba de la lista, con cuántos calzan en
+   cada opción ([{valor, etiqueta, cumple(x)}]; sin `cumple`, todos). */
 
 /* Sin tildes ni mayúsculas, como el buscador de la barra lateral. */
 export const normalizar = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -59,15 +63,20 @@ export const tituloLista = (buscar, visibles, total, singular, plural) =>
 
 const capital = (s) => s[0].toUpperCase() + s.slice(1);
 
-export default function ListaGestion({ cargar, clave, singular, plural, texto, sub, Formulario, Eliminar, mensajes = {} }) {
+export default function ListaGestion({ cargar, clave, singular, plural, texto, sub, Formulario, Eliminar, mensajes = {},
+                                       filtros = null, filtroInicial = null }) {
   const aviso = useAvisos();
   const { datos, cargando, recargar } = useDatos(cargar, []);
   const [buscar, setBuscar] = useState("");
+  const [filtro, setFiltro] = useState(filtroInicial || filtros?.[0]?.valor);
   const [dialogo, setDialogo] = useState(null);   // { tipo: "nuevo" | "editar" | "eliminar", item }
   if (cargando) return <Cargando />;
 
   const items = datos || [];
-  const visibles = filtrar(items, buscar, texto);
+  const elegido = filtros?.find((f) => f.valor === filtro);
+  const filtrados = elegido?.cumple ? items.filter(elegido.cumple) : items;
+  const visibles = filtrar(filtrados, buscar, texto);
+  const filtrando = buscar.trim() || filtrados.length !== items.length;
   const cerrar = () => setDialogo(null);
   const hecho = async (mensaje) => { cerrar(); await recargar(); aviso(mensaje, "info"); };
   const editado = mensajes.editado || (() => `${capital(singular)} actualizado.`);
@@ -76,8 +85,16 @@ export default function ListaGestion({ cargar, clave, singular, plural, texto, s
   return (
     <>
       <BuscadorLista valor={buscar} onCambiar={setBuscar} que={singular} />
+      {filtros && (
+        <div className="ajustes-pestanas">
+          <Segmento etiqueta={`Filtrar ${plural}`} valor={filtro} onCambiar={setFiltro} bloque
+                    opciones={filtros.map((f) => ({
+                      valor: f.valor, etiqueta: `${f.etiqueta} (${f.cumple ? items.filter(f.cumple).length : items.length})`,
+                    }))} />
+        </div>
+      )}
 
-      <Grupo titulo={tituloLista(buscar, visibles.length, items.length, singular, plural)}>
+      <Grupo titulo={filtrando ? `${visibles.length} de ${items.length}` : fmt.plural(items.length, singular, plural)}>
         <Fila etiqueta={`Agregar ${singular}`} icono={IconoMas} color="#2E9D5B" onClick={() => setDialogo({ tipo: "nuevo" })} />
         {visibles.map((x) => (
           <div key={x[clave]} className="fila-ajuste fila-ajuste--acciones fila-gestion">
@@ -94,7 +111,8 @@ export default function ListaGestion({ cargar, clave, singular, plural, texto, s
           </div>
         ))}
         {!visibles.length && (
-          <p className="ajustes-vacio">{buscar.trim() ? `Ningún ${singular} coincide con “${buscar.trim()}”.` : `Todavía no hay ${plural}.`}</p>
+          <p className="ajustes-vacio">{buscar.trim() ? `Ningún ${singular} coincide con “${buscar.trim()}”.`
+            : filtrados.length !== items.length ? `Ningún ${singular}.` : `Todavía no hay ${plural}.`}</p>
         )}
       </Grupo>
 
