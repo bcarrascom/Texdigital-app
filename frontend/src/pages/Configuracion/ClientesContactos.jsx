@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { api } from "@/services/api";
 import Campo, { enterGuarda } from "@/components/Campo/Campo";
 import Segmento from "@/components/Segmento/Segmento";
 import * as fmt from "@/utils/formato";
+import { correoValido } from "@/utils/formato";
 import { ErrorGeneral, useEnvio } from "./DialogosCatalogo";
 import ListaGestion, { Acciones, Nota } from "./ListaGestion";
 
@@ -19,14 +21,25 @@ const LISTAS = [{ valor: "clientes", etiqueta: "Clientes" }, { valor: "contactos
 
 const NO_CAMBIAN = "Las cotizaciones y OPs ya hechas conservan los datos con que se hicieron.";
 
+/* Filtro por correo (Bruno, 2026-11-11): cuántos y cuáles tienen y no
+   tienen. Configuración › Correos abre esta página ya filtrada
+   (?lista=contactos&correo=sin). */
+const FILTROS_CORREO = [
+  { valor: "todos", etiqueta: "Todos" },
+  { valor: "con", etiqueta: "Con correo", cumple: (x) => correoValido(x.email) },
+  { valor: "sin", etiqueta: "Sin correo", cumple: (x) => !correoValido(x.email) },
+];
+
 export default function ClientesContactos() {
-  const [lista, setLista] = useState("clientes");
+  const [params] = useSearchParams();
+  const [lista, setLista] = useState(params.get("lista") === "contactos" ? "contactos" : "clientes");
+  const inicial = FILTROS_CORREO.some((f) => f.valor === params.get("correo")) ? params.get("correo") : "todos";
   return (
     <>
       <div className="ajustes-pestanas">
         <Segmento etiqueta="Qué lista ver" opciones={LISTAS} valor={lista} onCambiar={setLista} bloque />
       </div>
-      {lista === "clientes" ? <Clientes /> : <Contactos />}
+      {lista === "clientes" ? <Clientes filtro={inicial} /> : <Contactos filtro={inicial} />}
     </>
   );
 }
@@ -40,9 +53,10 @@ const MENSAJES_CLIENTE = {
 
 // ── Clientes ───────────────────────────────────────────────────────────────
 
-function Clientes() {
+function Clientes({ filtro }) {
   return (
     <ListaGestion cargar={() => api.obtener_clientes()} clave="empresa" singular="cliente" plural="clientes"
+                  filtros={FILTROS_CORREO} filtroInicial={filtro}
                   texto={(c) => `${c.empresa} ${c.rut} ${c.razon_social} ${c.email}`}
                   sub={(c) => [c.rut, c.razon_social, c.email, c.direcciones && fmt.plural(c.direcciones, "dirección", "direcciones")].filter(Boolean).join(" · ")}
                   Formulario={FormularioCliente} Eliminar={EliminarCliente} mensajes={MENSAJES_CLIENTE} />
@@ -103,9 +117,10 @@ function EliminarCliente({ item, onCerrar, onHecho }) {
 
 const descuentoTexto = (d) => (d && Number(d) ? `${String(d).replace(".", ",")} % de descuento` : null);
 
-function Contactos() {
+function Contactos({ filtro }) {
   return (
     <ListaGestion cargar={() => api.obtener_contactos()} clave="contacto" singular="contacto" plural="contactos"
+                  filtros={FILTROS_CORREO} filtroInicial={filtro}
                   texto={(c) => `${c.contacto} ${c.email} ${c.condicion}`}
                   sub={(c) => [c.email, descuentoTexto(c.descuento), c.condicion].filter(Boolean).join(" · ")}
                   Formulario={FormularioContacto} Eliminar={EliminarContacto} />

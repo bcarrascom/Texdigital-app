@@ -10,6 +10,7 @@ import Campo from "@/components/Campo/Campo";
 import Dialogo from "@/components/Dialogo/Dialogo";
 import Segmento from "@/components/Segmento/Segmento";
 import NavFlotante from "@/components/NavFlotante/NavFlotante";
+import { trasCorreoEnviado } from "@/components/CorreoEnviado/CorreoEnviado";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoCotizaciones from "@/assets/svg/file-text.svg?react";
 import IconoOps from "@/assets/svg/clipboard-list.svg?react";
@@ -34,6 +35,9 @@ import { correoValido } from "@/utils/formato";
          · el aviso de cotización nueva, a la gente de Texdigital, al crearla;
          · el correo al cliente ("Enviar correo"), con su copia a Texdigital. La sección elegida va en la URL
        (?seccion=ops), para que un botón de otro módulo pueda abrirla.
+   Los correos automáticos (el aviso de cotización nueva, y las OPs cuando
+   se conecten) se apagan con el switch general de arriba y con el de cada
+   sección (Bruno, 2026-11-11). Los que se mandan a mano no dependen de ellos.
    Se edita entera y se guarda con la barra de abajo, como las Reglas: los
    cambios de las dos secciones van juntos.
 
@@ -54,22 +58,26 @@ const SECCIONES = [
 const FUNDIDO = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 
 const PRUEBA = [{ valor: true, etiqueta: "Encendido" }, { valor: false, etiqueta: "Apagado" }];
+const ENCENDIDOS = [{ valor: true, etiqueta: "Encendidos" }, { valor: false, etiqueta: "Apagados" }];
+const ACTIVADOS = [{ valor: true, etiqueta: "Activados" }, { valor: false, etiqueta: "Desactivados" }];
 
 const aBorrador = (a) => ({
   remitente: a.cuenta.remitente, nombre: a.cuenta.nombre, servidor: a.cuenta.servidor, puerto: String(a.cuenta.puerto ?? ""),
   pruebaActivo: !!a.prueba.activo, pruebaDireccion: a.prueba.direccion || "",
-  asunto: a.cotizaciones.asunto, mensaje: a.cotizaciones.mensaje,
+  alCliente: !!a.cotizaciones.al_cliente, asunto: a.cotizaciones.asunto, mensaje: a.cotizaciones.mensaje,
   copia: a.cotizaciones.copia.map((f) => ({ ...f })),
   nuevasAsunto: a.cotizaciones_nuevas.asunto, nuevasMensaje: a.cotizaciones_nuevas.mensaje,
   nuevasPara: a.cotizaciones_nuevas.para.map((f) => ({ ...f })),
+  autoActivo: !!a.automaticos.activo, autoCotizaciones: !!a.automaticos.cotizaciones, autoOps: !!a.automaticos.ops,
   areas: Object.fromEntries(AREAS.map(({ clave }) => [clave, (a.areas[clave] || []).map((f) => ({ ...f }))])),
 });
 
 const desdeBorrador = (b) => ({
   cuenta: { remitente: b.remitente.trim(), nombre: b.nombre.trim(), servidor: b.servidor.trim(), puerto: b.puerto.trim() },
   prueba: { activo: b.pruebaActivo, direccion: b.pruebaDireccion.trim() },
-  cotizaciones: { asunto: b.asunto, mensaje: b.mensaje, copia: b.copia },
+  cotizaciones: { al_cliente: b.alCliente, asunto: b.asunto, mensaje: b.mensaje, copia: b.copia },
   cotizaciones_nuevas: { asunto: b.nuevasAsunto, mensaje: b.nuevasMensaje, para: b.nuevasPara },
+  automaticos: { activo: b.autoActivo, cotizaciones: b.autoCotizaciones, ops: b.autoOps },
   areas: b.areas,
 });
 
@@ -110,12 +118,17 @@ function describirCambios(o, a) {
   campo("Servidor", o.servidor, a.servidor);
   campo("Puerto", o.puerto, a.puerto);
   if (o.pruebaActivo !== a.pruebaActivo) c.push(`Modo de prueba: ${a.pruebaActivo ? "encendido" : "apagado"}`);
+  const auto = (et, x, y) => { if (x !== y) c.push(`${et}: ${y ? "encendidos" : "apagados"}`); };
+  auto("Correos automáticos", o.autoActivo, a.autoActivo);
+  auto("Correos automáticos de cotizaciones", o.autoCotizaciones, a.autoCotizaciones);
+  auto("Correos automáticos de OPs", o.autoOps, a.autoOps);
   campo("Dirección de prueba", o.pruebaDireccion, a.pruebaDireccion);
   if (JSON.stringify(o.nuevasPara) !== JSON.stringify(a.nuevasPara)) {
     c.push(`Reciben las cotizaciones nuevas: ${correosTexto(o.nuevasPara)} → ${correosTexto(a.nuevasPara)}`);
   }
   campo("Asunto del aviso de cotización nueva", o.nuevasAsunto, a.nuevasAsunto);
   if (o.nuevasMensaje !== a.nuevasMensaje) c.push("Mensaje del aviso de cotización nueva");
+  if (o.alCliente !== a.alCliente) c.push(`Correos a clientes: ${a.alCliente ? "activados" : "desactivados"}`);
   campo("Asunto del correo al cliente", o.asunto, a.asunto);
   if (o.mensaje !== a.mensaje) c.push("Mensaje del correo al cliente");
   if (JSON.stringify(o.copia) !== JSON.stringify(a.copia)) c.push(`Copia del correo al cliente: ${correosTexto(o.copia)} → ${correosTexto(a.copia)}`);
@@ -192,9 +205,9 @@ export default function Correos() {
 
   /* Ir a Clientes y contactos: con cambios sin guardar, primero hay que
      guardarlos o descartarlos (la página no puede preguntar por su cuenta). */
-  function irAClientes() {
+  function irAClientes(lista, correo) {
     if (hayCambios) { aviso("Guarda o descarta los cambios antes de salir de Correos.", "error"); return; }
-    navigate(rutas.configuracion("clientes"), { replace: true, state: location.state });
+    navigate(`${rutas.configuracion("clientes")}?lista=${lista}&correo=${correo}`, { replace: true, state: location.state });
   }
 
   const conClave = datos.contrasena_guardada;
@@ -204,7 +217,11 @@ export default function Correos() {
     setProbando(true);
     try {
       const r = await api.enviar_correo_de_prueba();
-      if (r?.ok) aviso(`Correo de prueba enviado a ${r.a.join(", ")}. Revisa que haya llegado (o el spam).`, "info", 6000);
+      if (r?.ok) {
+        setProbando(false);
+        await trasCorreoEnviado();
+        aviso(`Correo de prueba enviado a ${r.a.join(", ")}. Revisa que haya llegado (o el spam).`, "info", 6000);
+      }
       else aviso(r?.error || "No se pudo enviar.", "error", 8000);
     } finally {
       setProbando(false);
@@ -264,6 +281,13 @@ export default function Correos() {
         <Fila icono={IconoCarpeta} color="#8E8E93" etiqueta="Abrir la carpeta de correos" onClick={() => api.abrir_carpeta_correos()} />
       </Grupo>
 
+      <Grupo titulo="Correos automáticos">
+        <Fila etiqueta="Correos automáticos">
+          <Segmento etiqueta="Correos automáticos" opciones={ENCENDIDOS} valor={actual.autoActivo} deshabilitado={soloLectura}
+                    onCambiar={(v) => cambiar({ autoActivo: v })} />
+        </Fila>
+      </Grupo>
+
       <Grupo titulo="Modo de prueba">
         <Fila etiqueta="Modo de prueba">
           <Segmento etiqueta="Modo de prueba" opciones={PRUEBA} valor={actual.pruebaActivo} deshabilitado={soloLectura || datos.prueba_forzada}
@@ -290,9 +314,13 @@ export default function Correos() {
                                  cambiar={cambiar} ultimoCampo={ultimoCampo}
                                  insertarVariable={insertarVariable} irAClientes={irAClientes} />
           ) : (
+            <>
+            <SwitchSeccion etiqueta="Correos automáticos de OPs" valor={actual.autoOps} general={actual.autoActivo}
+                           soloLectura={soloLectura} onCambiar={(v) => cambiar({ autoOps: v })} />
             <ListaCorreos titulo="Reciben las OPs" ejemplo="produccion@texdigital.cl"
                           filas={actual.areas.ops} clave="areas.ops" errores={errores} soloLectura={soloLectura}
                           onCambiar={(filas) => cambiar({ areas: { ...actual.areas, ops: filas } })} />
+            </>
           )}
         </motion.div>
       </section>
@@ -323,6 +351,8 @@ function SeccionCotizaciones({ actual, datos, errores, soloLectura, cambiar, ult
   const cc = datos.con_correo;
   return (
     <>
+      <SwitchSeccion etiqueta="Correos automáticos de cotizaciones" valor={actual.autoCotizaciones} general={actual.autoActivo}
+                     soloLectura={soloLectura} onCambiar={(v) => cambiar({ autoCotizaciones: v })} />
       <h3 className="correos-subtitulo">Al crear una cotización</h3>
       <ListaCorreos titulo="Reciben las cotizaciones nuevas" ejemplo="ventas@texdigital.cl"
                     filas={actual.nuevasPara} clave="cotizaciones_nuevas.para" errores={errores} soloLectura={soloLectura}
@@ -331,15 +361,22 @@ function SeccionCotizaciones({ actual, datos, errores, soloLectura, cambiar, ult
                  porDefecto={datos.por_defecto.nuevas} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
 
       <h3 className="correos-subtitulo">Al enviarla al cliente</h3>
+      <Grupo>
+        <Fila etiqueta="Correos a clientes">
+          <Segmento etiqueta="Correos a clientes" opciones={ACTIVADOS} valor={actual.alCliente} deshabilitado={soloLectura}
+                    onCambiar={(v) => cambiar({ alCliente: v })} />
+        </Fila>
+      </Grupo>
       <Plantilla titulo="Mensaje al cliente" prefijo="" seccion="cotizaciones"
                  porDefecto={datos.por_defecto} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
       <ListaCorreos titulo="Reciben una copia" ejemplo="ventas@texdigital.cl"
                     filas={actual.copia} clave="cotizaciones.copia" errores={errores}
                     soloLectura={soloLectura} onCambiar={(copia) => cambiar({ copia })} />
       <Grupo titulo="Clientes y contactos">
-        <Fila icono={IconoClientes} color="#30B0C7" etiqueta="Correos de clientes y contactos"
-              detalle={`${cc.clientes} de ${cc.clientes_total} clientes · ${cc.contactos} de ${cc.contactos_total} contactos`}
-              onClick={irAClientes} />
+        <Fila icono={IconoClientes} color="#30B0C7" etiqueta="Clientes sin correo"
+              detalle={`${cc.clientes_total - cc.clientes} de ${cc.clientes_total}`} onClick={() => irAClientes("clientes", "sin")} />
+        <Fila icono={IconoClientes} color="#30B0C7" etiqueta="Contactos sin correo"
+              detalle={`${cc.contactos_total - cc.contactos} de ${cc.contactos_total}`} onClick={() => irAClientes("contactos", "sin")} />
       </Grupo>
     </>
   );
@@ -380,6 +417,19 @@ function Plantilla({ titulo, pie, prefijo, seccion, porDefecto, actual, datos, e
         <Fila etiqueta="Volver al asunto y mensaje que traía la app"
               onClick={() => cambiar({ [kAsunto]: porDefecto.asunto, [kMensaje]: porDefecto.mensaje })} />
       )}
+    </Grupo>
+  );
+}
+
+/* El switch de los correos automáticos de una sección. Con el general
+   apagado, queda apagado y sin poder cambiarse (guarda lo que tenía). */
+function SwitchSeccion({ etiqueta, valor, general, soloLectura, onCambiar }) {
+  return (
+    <Grupo>
+      <Fila etiqueta={etiqueta} detalle={general ? null : "Apagados en general"}>
+        <Segmento etiqueta={etiqueta} opciones={ENCENDIDOS} valor={general && valor} deshabilitado={soloLectura || !general}
+                  onCambiar={onCambiar} />
+      </Fila>
     </Grupo>
   );
 }

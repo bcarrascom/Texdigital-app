@@ -29,6 +29,7 @@ from datetime import datetime
 from core import config as _config
 from core.config import MODULOS_HABILITADOS
 from core import catalogo as _catalogo
+from core import correos
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
 from core.rutas import DOCS as _DOCS, FRONTEND
@@ -119,6 +120,9 @@ class ApiApp:
             height=860,
         )
         self._ventana.events.closing += self._al_cerrar_nativo
+        # Cada correo que sale, salga de donde salga, muestra la animación
+        # "Correo enviado" (ver core.correos.al_enviar y components/CorreoEnviado).
+        correos.al_enviar(self._correo_enviado)
         return self._ventana
 
     def _al_cerrar_nativo(self):
@@ -174,6 +178,10 @@ class ApiApp:
         con document.title."""
         if self._ventana is not None:
             self._ventana.set_title(titulo or "TexDigital")
+
+    def _correo_enviado(self) -> None:
+        if self._ventana is not None:
+            self._ventana.run_js("window.TD && TD.correoEnviado && TD.correoEnviado()")
 
     def _aviso(self, texto: str, tipo: str = "aviso", ms: int = 5000) -> None:
         if self._ventana is None:

@@ -18,3 +18,20 @@
   .muestrario__fila { display: grid; grid-template-columns: 12rem 1fr; align-items: center; gap: var(--e-3); }
   .muestrario__titulo { font-size: var(--t-sm); color: var(--c-texto-suave); }
 }
+
+.pag-indice-desarrollo {
+  .muestra-correo__acciones { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e-3); }
+  .muestra-correo__rango { display: flex; align-items: center; gap: var(--e-3); }
+  .muestra-correo__rango input { flex: 1; accent-color: var(--c-tema-fuerte); }
+  .muestra-correo__ms {
+    width: 5.5rem; text-align: right; font-family: var(--f-mono); font-size: var(--t-sm);
+    color: var(--c-texto-suave);
+  }
+  .muestra-correo__ms[data-cambiado] { color: var(--c-tema-fuerte); font-weight: var(--peso-fuerte); }
+  .muestra-correo__codigo { font-family: var(--f-mono); font-size: var(--t-sm); }
+  .muestra-correo__grande {
+    display: grid; place-items: center; padding: var(--e-4);
+    background: var(--c-superficie); border: 1.5px solid var(--c-borde); border-radius: var(--r-lg);
+  }
+  .muestra-correo__sobre { width: 9rem; height: 9rem; color: var(--c-texto); overflow: visible; }
+}

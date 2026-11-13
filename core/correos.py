@@ -13,6 +13,11 @@ con su asunto, su mensaje y su lista:
     cotizador se puede sacar a alguien o sumar otro correo solo esa vez.
 Las demás áreas (OPs, Inventario, Despachos) por ahora solo guardan su lista.
 
+Los correos automáticos (los que salen solos, como el aviso de cotización
+nueva) se apagan con un switch general y uno por sección (Bruno, 2026-11-11;
+ver automatico_activo). Los que se mandan a mano (el correo al cliente, el
+correo de prueba) no dependen de esos switches.
+
 Sale por SMTP desde la casilla de la app (sistema@texdigital.cl, en el
 hosting de HostingPlus: mail.texdigital.cl, 465 con SSL o 587 con STARTTLS).
 La contraseña NO va en la Dropbox ni en el código: se guarda en cada
@@ -34,9 +39,10 @@ core.ajustes_globales):
     {"version": 1,
      "cuenta": {"remitente", "nombre", "servidor", "puerto"},
      "prueba": {"activo", "direccion"},
-     "cotizaciones": {"asunto", "mensaje", "copia": [{"correo", "nombre"}]},
+     "cotizaciones": {"al_cliente": bool, "asunto", "mensaje", "copia": [{"correo", "nombre"}]},
      "cotizaciones_nuevas": {"asunto", "mensaje", "para": [{"correo", "nombre"}]},
-     "areas": {"ops" | "inventario" | "despachos": [{"correo", "nombre"}]}}
+     "areas": {"ops" | "inventario" | "despachos": [{"correo", "nombre"}]},
+     "automaticos": {"activo", "cotizaciones", "ops", "inventario", "despachos"}}   (bool)
 
 Cada envío queda anotado en la cotización, en "Correos" (una lista):
 
@@ -75,7 +81,9 @@ SERVICIO_CREDENCIAL = "SistemaGestion-correo"
 ESPERA_SMTP_S = 30
 
 AREAS = ("ops", "inventario", "despachos")
-SECCIONES = ("cuenta", "prueba", "cotizaciones", "cotizaciones_nuevas")
+SECCIONES = ("cuenta", "prueba", "cotizaciones", "cotizaciones_nuevas", "automaticos")
+# Las partes del programa que mandan correos automáticos, cada una con su switch.
+PARTES_AUTOMATICAS = ("cotizaciones",) + AREAS
 
 VARIABLES_COTIZACION = {
     "numero":   "El N° de la cotización",
@@ -91,6 +99,9 @@ POR_DEFECTO = {
                "servidor": "mail.texdigital.cl", "puerto": 465},
     "prueba": {"activo": True, "direccion": "brosky.spam@gmail.com"},
     "cotizaciones": {
+        # El correo al cliente ("Enviar correo"), apagado hasta que Bruno lo
+        # habilite: primero se prueban los avisos a Texdigital (2026-11-12).
+        "al_cliente": False,
         "asunto": "Cotización {numero} - {cliente}",
         "mensaje": ("Hola {contacto}:\n\n"
                     "Te enviamos la cotización N° {numero}, por un total de {total} (IVA incluido). "
@@ -108,6 +119,7 @@ POR_DEFECTO = {
         "para": [],
     },
     "areas": {a: [] for a in AREAS},
+    "automaticos": {"activo": True, **{p: True for p in ("cotizaciones", "ops", "inventario", "despachos")}},
 }
 
 
@@ -140,9 +152,23 @@ def cargar() -> dict:
     a["cotizaciones_nuevas"]["para"] = _lista_correos(a["cotizaciones_nuevas"].get("para"))
     areas = guardado.get("areas") if isinstance(guardado.get("areas"), dict) else {}
     a["areas"] = {k: _lista_correos(areas.get(k)) for k in AREAS}
+    a["cotizaciones"]["al_cliente"] = bool(a["cotizaciones"].get("al_cliente"))
+    a["automaticos"] = {k: bool(v) for k, v in a["automaticos"].items()}
     if prueba_forzada():
         a["prueba"]["activo"] = True
     return a
+
+
+def al_cliente_activo(a: dict | None = None) -> bool:
+    """Si se le pueden enviar cotizaciones al cliente ("Enviar correo")."""
+    return bool((a or cargar())["cotizaciones"].get("al_cliente"))
+
+
+def automatico_activo(parte: str, a: dict | None = None) -> bool:
+    """Si los correos automáticos de esta parte del programa ("cotizaciones",
+    "ops"…) están encendidos: el switch general y el de la parte."""
+    auto = (a or cargar())["automaticos"]
+    return bool(auto.get("activo")) and bool(auto.get(parte, True))
 
 
 def solo_lectura() -> bool:
@@ -200,11 +226,13 @@ def guardar(datos: dict) -> dict:
             a[seccion] = {**a[seccion], **d[seccion]}
     a["cuenta"] = {k: (" ".join(str(v).split()) if isinstance(v, str) else v) for k, v in a["cuenta"].items()}
     a["prueba"]["activo"] = bool(a["prueba"].get("activo"))
+    a["automaticos"] = {k: bool(v) for k, v in a["automaticos"].items() if k == "activo" or k in PARTES_AUTOMATICAS}
     a["prueba"]["direccion"] = str(a["prueba"].get("direccion") or "").strip()
     for seccion in ("cotizaciones", "cotizaciones_nuevas"):
         a[seccion]["asunto"] = " ".join(str(a[seccion].get("asunto") or "").split())
         a[seccion]["mensaje"] = str(a[seccion].get("mensaje") or "").strip()
     a["cotizaciones"]["copia"] = _lista_correos(a["cotizaciones"].get("copia"))
+    a["cotizaciones"]["al_cliente"] = bool(a["cotizaciones"].get("al_cliente"))
     a["cotizaciones_nuevas"]["para"] = _lista_correos(a["cotizaciones_nuevas"].get("para"))
     if isinstance(d.get("areas"), dict):
         a["areas"] = {k: _lista_correos(d["areas"].get(k, a["areas"][k])) for k in AREAS}
@@ -421,9 +449,21 @@ def olvidar_contrasena() -> None:
     credenciales.borrar(SERVICIO_CREDENCIAL, cargar()["cuenta"]["remitente"].lower())
 
 
+# Quién se entera cada vez que sale un correo (ver al_enviar). La ventana de
+# la app se anota para mostrar la animación "Correo enviado": así sale con
+# CADA correo, venga de donde venga (Bruno, 2026-11-12).
+_al_enviar = []
+
+
+def al_enviar(funcion) -> None:
+    """Anota `funcion()`, que se llama después de cada correo que sale."""
+    if funcion not in _al_enviar:
+        _al_enviar.append(funcion)
+
+
 def enviar(msg: EmailMessage, destinatarios: list[str], ajustes: dict | None = None) -> None:
     """Manda `msg` a `destinatarios` (los de verdad, ver armar_mensaje).
-    Lanza ErrorEnvio si no sale."""
+    Lanza ErrorEnvio si no sale. Si sale, avisa a los de al_enviar."""
     ajustes = ajustes or cargar()
     cuenta = ajustes["cuenta"]
     clave = contrasena(cuenta["remitente"])
@@ -441,6 +481,11 @@ def enviar(msg: EmailMessage, destinatarios: list[str], ajustes: dict | None = N
         try:
             smtp.quit()
         except (smtplib.SMTPException, OSError):
+            pass
+    for funcion in list(_al_enviar):
+        try:
+            funcion()
+        except Exception:   # la animación nunca puede hacer fallar un envío
             pass
     if rechazados:
         raise ErrorEnvio(f"Salió, pero el servidor rechazó {', '.join(rechazados)}.")

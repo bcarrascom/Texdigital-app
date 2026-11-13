@@ -229,8 +229,8 @@ export default function Menu() {
           )}
           <ControlTexto />
           <button className="cab-btn cab-btn--icono" title="Manual de uso" onClick={() => api.abrir_manual()}>?</button>
-          {import.meta.env.DEV && (
-            <Link className="cab-btn" to={rutas.desarrollo()} title="Pantallas migradas (solo en desarrollo)">dev</Link>
+          {(import.meta.env.DEV || String(contexto.version || "").endsWith("-dev")) && (
+            <Link className="cab-btn" to={rutas.desarrollo()} title="Página de desarrollo (no aparece en una versión publicada)">dev</Link>
           )}
         </footer>
       </div>

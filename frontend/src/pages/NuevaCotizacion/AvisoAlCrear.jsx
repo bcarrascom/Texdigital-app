@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "@/services/api";
 import * as fmt from "@/utils/formato";
+import { trasCorreoEnviado } from "@/components/CorreoEnviado/CorreoEnviado";
 
 /* Aviso de cotización nueva, en el pie del Resumen (Bruno, 2026-11-11): al
    crear una cotización, la gente de Texdigital inscrita en Configuración ›
@@ -26,7 +27,7 @@ export default function AvisoAlCrear({ opciones, aviso, onCambiar }) {
   const [agregando, setAgregando] = useState(false);
   const [nuevo, setNuevo] = useState("");
   const [malo, setMalo] = useState(false);
-  if (!opciones) return null;
+  if (!opciones?.activo) return null;   // los correos automáticos de cotizaciones, apagados
   const para = destinatariosAviso(opciones, aviso);
   const inscritos = opciones.inscritos.map((f) => f.correo);
   const todos = [...opciones.inscritos, ...opciones.guardados];
@@ -100,6 +101,7 @@ export default function AvisoAlCrear({ opciones, aviso, onCambiar }) {
 export async function enviarAvisoCreacion(numero, para, avisar) {
   const n = fmt.numero(numero);
   const r = (await api.enviar_aviso_cotizacion_nueva(numero, para)) || {};
+  if (r.ok) await trasCorreoEnviado();
   if (r.ok) avisar(`Aviso de la cotización ${n} enviado a ${r.a.join(", ")}${r.prueba ? " (prueba)" : ""}.`, "info", 6000);
   else avisar(`No se pudo enviar el aviso de la cotización ${n}: ${r.error || "error desconocido"} La cotización quedó guardada.`, "error", 10000);
 }

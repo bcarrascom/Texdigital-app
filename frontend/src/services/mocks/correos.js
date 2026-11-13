@@ -13,12 +13,18 @@ const POR_DEFECTO = {
 let ajustes = {
   cuenta: { remitente: "sistema@texdigital.cl", nombre: "Texdigital", servidor: "mail.texdigital.cl", puerto: 465 },
   prueba: { activo: true, direccion: "brosky.spam@gmail.com" },
-  cotizaciones: { asunto: POR_DEFECTO.asunto, mensaje: POR_DEFECTO.mensaje, copia: [{ correo: "jefe@texdigital.cl", nombre: "Jefe de ventas" }] },
+  cotizaciones: { al_cliente: true, asunto: POR_DEFECTO.asunto, mensaje: POR_DEFECTO.mensaje, copia: [{ correo: "jefe@texdigital.cl", nombre: "Jefe de ventas" }] },
   cotizaciones_nuevas: { ...POR_DEFECTO.nuevas, para: [{ correo: "ventas@texdigital.cl", nombre: "Ventas" }] },
   areas: { ops: [{ correo: "produccion@texdigital.cl", nombre: "Producción" }], inventario: [], despachos: [] },
+  automaticos: { activo: true, cotizaciones: true, ops: true, inventario: true, despachos: true },
 };
 
 const envios = {};   // numero → último envío
+
+/* Como core.correos.enviar: cada correo que "sale" pide la animación. */
+const salio = () => window.TD?.correoEnviado?.();
+
+export const correoAlCliente = () => !!ajustes.cotizaciones.al_cliente;
 
 export default {
   obtener_ajustes_correos: () => ({
@@ -37,7 +43,7 @@ export default {
   abrir_carpeta_correos: () => undefined,
   guardar_contrasena_correo: (clave) => (clave === "mala" ? { ok: false, error: "El servidor no aceptó la contraseña." } : { ok: true }),
   olvidar_contrasena_correo: () => undefined,
-  enviar_correo_de_prueba: () => ({ ok: true, a: [ajustes.prueba.direccion] }),
+  enviar_correo_de_prueba: () => (salio(), { ok: true, a: [ajustes.prueba.direccion] }),
   preparar_correo_cotizacion: (numero) => ({
     numero, empresa: "Café del Puerto", rut: "76.086.428-5", razon_social: "Café del Puerto SpA",
     contacto: "Ana Pérez", trabajo: "Toldo terraza", total: "$1.234.567",
@@ -56,13 +62,15 @@ export default {
     const inscritos = ajustes.cotizaciones_nuevas.para;
     const guardados = [...ajustes.cotizaciones.copia, ...ajustes.areas.ops]
       .filter((f) => !inscritos.some((i) => i.correo === f.correo));
-    return { inscritos, guardados, prueba: ajustes.prueba, contrasena_guardada: true };
+    const activo = ajustes.automaticos.activo && ajustes.automaticos.cotizaciones;
+    return { activo, inscritos, guardados, prueba: ajustes.prueba, contrasena_guardada: true };
   },
-  enviar_aviso_cotizacion_nueva: (numero, para) => ({
+  enviar_aviso_cotizacion_nueva: (numero, para) => (salio(), {
     ok: true, prueba: ajustes.prueba.activo, a: ajustes.prueba.activo ? [ajustes.prueba.direccion] : para,
   }),
   ver_pdf_cotizacion: () => ({ ok: true }),
   enviar_correo_cotizacion(numero, d) {
+    salio();
     const ahora = new Date();
     const fecha = `${ahora.toLocaleDateString("es-CL")} ${ahora.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}`;
     envios[numero] = { fecha, para: d.para, copia: d.copia, asunto: d.asunto, prueba: ajustes.prueba.activo, simulado: false };

@@ -202,6 +202,8 @@ class ApiCorreos:
         {"ok": True, "prueba", "a": [a quién salió], "archivo", "ultimo"} o
         {"ok": False, "errores": {campo: mensaje}} / {"ok": False, "error": ...}.
         Si no sale, no se anota nada en la cotización."""
+        if not correos.al_cliente_activo():
+            return {"ok": False, "error": "Los correos a clientes están desactivados (Configuración › Correos)."}
         d = datos or {}
         para, copia = _lista(d.get("para")), _lista(d.get("copia"))
         asunto = " ".join(str(d.get("asunto") or "").split())
@@ -257,6 +259,8 @@ class ApiCorreos:
         inscritos = ajustes["cotizaciones_nuevas"]["para"]
         ya = {f["correo"].lower() for f in inscritos}
         return {
+            # Con los correos automáticos de cotizaciones apagados, el Resumen no muestra el aviso.
+            "activo": correos.automatico_activo("cotizaciones", ajustes),
             "inscritos": inscritos,
             "guardados": [f for f in correos.correos_guardados(ajustes) if f["correo"].lower() not in ya],
             "prueba": ajustes["prueba"],
@@ -268,6 +272,8 @@ class ApiCorreos:
         mensaje de Configuración y el PDF. {"ok": True, "prueba", "a": [...]}
         o {"ok": False, "error"}. Queda anotado en la cotización, en
         "AvisoCreacion" (no en "Correos": esos son los envíos al cliente)."""
+        if not correos.automatico_activo("cotizaciones"):
+            return {"ok": False, "apagado": True, "error": "Los correos automáticos de cotizaciones están apagados."}
         para = _lista(para)
         if not para:
             return {"ok": False, "error": "Falta a quién enviarlo."}
