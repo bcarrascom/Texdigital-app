@@ -1,0 +1,12 @@
+/* Lo de la app sobre el SquishSwitch (components/Interruptor). */
+
+/* El original no muestra el foco del teclado. */
+.interruptor .squish-switch:focus-visible .squish-switch__track {
+  outline: 3px solid var(--c-foco);
+  outline-offset: 2px;
+}
+
+/* El pulgar blanco sobre el gris claro necesita un poco de sombra. */
+.interruptor .squish-switch__thumb {
+  box-shadow: 0 1px 2px rgba(22, 22, 26, .25), 0 0 0 .5px rgba(22, 22, 26, .06);
+}

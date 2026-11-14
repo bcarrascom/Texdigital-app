@@ -8,7 +8,7 @@ import { useAvisos } from "@/context/AvisosContext";
 import Cargando from "@/components/Cargando/Cargando";
 import Campo from "@/components/Campo/Campo";
 import Dialogo from "@/components/Dialogo/Dialogo";
-import Segmento from "@/components/Segmento/Segmento";
+import Interruptor from "@/components/Interruptor/Interruptor";
 import NavFlotante from "@/components/NavFlotante/NavFlotante";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoCotizaciones from "@/assets/svg/file-text.svg?react";
@@ -57,8 +57,6 @@ const SECCIONES = [
 ];
 const FUNDIDO = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 
-const ENCENDIDOS = [{ valor: true, etiqueta: "Encendidos" }, { valor: false, etiqueta: "Apagados" }];
-const ACTIVADOS = [{ valor: true, etiqueta: "Activados" }, { valor: false, etiqueta: "Desactivados" }];
 
 const aBorrador = (a) => ({
   remitente: a.cuenta.remitente, nombre: a.cuenta.nombre, servidor: a.cuenta.servidor, puerto: String(a.cuenta.puerto ?? ""),
@@ -281,8 +279,8 @@ export default function Correos() {
 
       <Grupo titulo="Correos automáticos">
         <Fila etiqueta="Correos automáticos">
-          <Segmento etiqueta="Correos automáticos" opciones={ENCENDIDOS} valor={actual.autoActivo} deshabilitado={soloLectura}
-                    onCambiar={(v) => cambiar({ autoActivo: v })} />
+          <Interruptor etiqueta="Correos automáticos" valor={actual.autoActivo} deshabilitado={soloLectura}
+                       onCambiar={(v) => cambiar({ autoActivo: v })} />
         </Fila>
       </Grupo>
 
@@ -358,8 +356,8 @@ function SeccionCotizaciones({ actual, datos, errores, soloLectura, cambiar, ult
       <h3 className="correos-subtitulo">Al enviarla al cliente</h3>
       <Grupo>
         <Fila etiqueta="Correos a clientes">
-          <Segmento etiqueta="Correos a clientes" opciones={ACTIVADOS} valor={actual.alCliente} deshabilitado={soloLectura}
-                    onCambiar={(v) => cambiar({ alCliente: v })} />
+          <Interruptor etiqueta="Correos a clientes" valor={actual.alCliente} deshabilitado={soloLectura}
+                       onCambiar={(v) => cambiar({ alCliente: v })} />
         </Fila>
       </Grupo>
       <Plantilla titulo="Mensaje al cliente" prefijo="" seccion="cotizaciones"
@@ -422,8 +420,8 @@ function SwitchSeccion({ etiqueta, valor, general, soloLectura, onCambiar }) {
   return (
     <Grupo>
       <Fila etiqueta={etiqueta} detalle={general ? null : "Apagados en general"}>
-        <Segmento etiqueta={etiqueta} opciones={ENCENDIDOS} valor={general && valor} deshabilitado={soloLectura || !general}
-                  onCambiar={onCambiar} />
+        <Interruptor etiqueta={etiqueta} valor={general && valor} deshabilitado={soloLectura || !general}
+                     onCambiar={onCambiar} />
       </Fila>
     </Grupo>
   );
