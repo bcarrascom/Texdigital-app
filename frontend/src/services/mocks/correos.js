@@ -33,7 +33,12 @@ const envios = {};   // numero → último envío
 
 /* Como la bandeja (core/bandeja.py): el correo "sale" un momento después. */
 export function simularEnvio(para, asunto) {
-  setTimeout(() => salio(ajustes.prueba.activo ? [ajustes.prueba.direccion] : para, asunto), 600);
+  // Como core.correos.enviar: empieza (el indicador), sale y termina.
+  setTimeout(() => window.TD?.correoEnviando?.(), 100);
+  setTimeout(() => {
+    salio(ajustes.prueba.activo ? [ajustes.prueba.direccion] : para, asunto);
+    window.TD?.correoTermino?.();
+  }, 2200);
 }
 
 /* Como core.correos.enviar: cada correo que "sale" pide la animación. */

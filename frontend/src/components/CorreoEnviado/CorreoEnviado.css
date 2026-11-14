@@ -19,6 +19,24 @@
   transform: translateX(110%);   /* motion la trae */
 }
 
+/* "Enviando correo": más chico que el rectángulo del sobre y centrado en
+   su misma altura, con el mismo borde que sale de la ventana. */
+.correo-enviando {
+  --sobresale: 2.2rem;
+  position: fixed; inset: auto; margin: 0; overflow: visible;
+  right: calc(-1 * var(--sobresale)); bottom: calc(var(--e-5) + (4.7rem - 3rem) / 2); z-index: 210;
+  display: flex; align-items: center;
+  width: calc(3.5rem + var(--sobresale)); height: 3rem;
+  padding: 0 0 0 1.05rem;
+  background: var(--c-superficie);
+  border: 1.5px solid var(--c-borde);
+  border-radius: var(--r-lg);
+  box-shadow: var(--s-3);
+  color: var(--c-texto-suave);
+  pointer-events: none;
+  transform-origin: 30% 50%;
+}
+
 .correo-enviado__mover { display: grid; place-items: center; color: var(--c-texto); }
 .correo-enviado__sobre { width: 3rem; height: 3rem; display: block; overflow: visible; }
 

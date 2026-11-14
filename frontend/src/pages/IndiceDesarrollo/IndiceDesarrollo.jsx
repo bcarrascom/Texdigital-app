@@ -138,6 +138,11 @@ function MuestraCorreoEnviado() {
           <button className="btn btn--primario btn--chico" type="button"
                   onClick={() => animarCorreoEnviado({ tiempos, velocidad })}>Reproducir</button>
           <Segmento etiqueta="Velocidad" opciones={VELOCIDADES} valor={velocidad} onCambiar={setVelocidad} />
+          <button className="btn btn--secundario btn--chico" type="button" title="El indicador de envío 2 s y después la animación"
+                  onClick={() => {
+                    window.TD?.correoEnviando?.();
+                    setTimeout(() => { window.TD?.correoEnviado?.("Enviado a prueba@texdigital.cl: Envío simulado"); window.TD?.correoTermino?.(); }, 2000);
+                  }}>Simular un envío</button>
           <span className="muestrario__titulo">{(total / velocidad / 1000).toFixed(2).replace(".", ",")} s</span>
         </div>
       </div>
