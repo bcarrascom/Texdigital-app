@@ -12,7 +12,8 @@ import ZonaDatos from "./ZonaDatos";
 import Mapa from "./Mapa";
 import PanelProducto from "./PanelProducto";
 import Resumen from "./Resumen";
-import { destinatariosAviso, enviarAvisoCreacion } from "./AvisoAlCrear";
+import { enviarAvisoCreacion } from "./AvisoAlCrear";
+import { useDestinatarios } from "@/components/ListaDestinatarios/ListaDestinatarios";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import { DialogoMateriales, DialogoQuitar } from "./DialogosNuevaCotizacion";
 import { completo, esVacio, firma, normalizar, productoVacio } from "./producto";
@@ -171,18 +172,11 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
     return () => { vigente = false; clearTimeout(t); };
   }, [enResumen, firmaDescuentos]);
 
-  /* Aviso de cotización nueva a la gente de Texdigital (ver AvisoAlCrear):
-     solo al crearla, no al editarla. Lo que se saca o suma vale solo esta vez. */
+  /* Aviso de cotización nueva a la gente de Texdigital (ver AvisoAlCrear y
+     components/ListaDestinatarios): solo al crearla, no al editarla. Lo que
+     se saca o suma vale solo esta vez. */
   const creando = !numeroEditando;
-  const [avisoCrear, setAvisoCrear] = useState({ quitados: [], agregados: [] });
-  const [opcionesAviso, setOpcionesAviso] = useState(null);
-  useEffect(() => {
-    if (!creando) return;
-    let vigente = true;
-    api.correo_al_crear().then((r) => vigente && setOpcionesAviso(r || null));
-    return () => { vigente = false; };
-  }, [creando]);
-  const cambiarAviso = (cambios) => setAvisoCrear((c) => ({ ...c, ...cambios }));
+  const avisoCrear = useDestinatarios("cotizaciones", { cargar: creando });
 
   // "p0"…, "despacho", "instalacion" o "pedido": qué diálogo de descuento está abierto.
   const [editandoDescuento, setEditandoDescuento] = useState(null);
@@ -419,7 +413,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
     }
 
     // A quién va el aviso, decidido antes de guardar (lo que muestra el resumen).
-    const avisarA = creando && opcionesAviso?.activo ? destinatariosAviso(opcionesAviso, avisoCrear) : [];
+    const avisarA = creando ? avisoCrear.para : [];
 
     guardando.current = true;
     const r = (await api.guardar_cotizacion(paraPython(), !!abrir)) || {};
@@ -517,7 +511,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
                   faltanMateriales={faltanMateriales}
                   onIr={irA} onQuitar={pedirQuitar} onAgregar={agregarProducto} onGuardar={guardarCotizacion}
                   onEditarDescuento={setEditandoDescuento} onRestablecer={() => setRestableciendo(true)}
-                  avisoCrear={creando ? avisoCrear : null} opcionesAviso={opcionesAviso} onAvisoCrear={cambiarAviso}
+                  avisoCrear={creando ? avisoCrear : null}
                 />
               </div>
             </div>

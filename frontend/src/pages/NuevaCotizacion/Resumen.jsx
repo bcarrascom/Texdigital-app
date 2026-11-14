@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import { textoRazon } from "@/components/Descuentos/Descuentos";
 import * as fmt from "@/utils/formato";
 import { completo } from "./producto";
-import AvisoAlCrear from "./AvisoAlCrear";
+import ListaDestinatarios from "@/components/ListaDestinatarios/ListaDestinatarios";
 
 /* El último panel del carril: la tabla de todos los productos (clic en una
    fila vuelve a ese producto), los descuentos, los totales y Guardar /
@@ -13,7 +13,7 @@ import AvisoAlCrear from "./AvisoAlCrear";
    automático de cada línea, o el puesto a mano. Clic en el descuento de una
    fila lo cambia (onEditarDescuento("p0"…, "despacho", "instalacion")); el
    del pedido y Restablecer van abajo. Junto a Guardar, al crear una
-   cotización, el aviso a la gente de Texdigital (AvisoAlCrear). */
+   cotización, a quién va el aviso a la gente de Texdigital (ListaDestinatarios). */
 
 const Cifra = ({ et, val, total, clase = "" }) => (
   <div className={`cifra${total ? " cifra--total" : ""} ${clase}`}>
@@ -45,7 +45,7 @@ function CeldaDescuento({ linea, onEditar }) {
 
 const Resumen = forwardRef(function Resumen(
   { productos, despacho, instalacion, desglose, faltanMateriales, onIr, onQuitar, onAgregar, onGuardar,
-    onEditarDescuento, onRestablecer, avisoCrear, opcionesAviso, onAvisoCrear }, ref,
+    onEditarDescuento, onRestablecer, avisoCrear }, ref,
 ) {
   let cant = 0, ml = 0, m2 = 0, total = 0;
   productos.forEach((p) => {
@@ -171,7 +171,7 @@ const Resumen = forwardRef(function Resumen(
           </div>
           <span className="barra__sep" />
           <div className="resumen__guardar">
-            {avisoCrear && <AvisoAlCrear opciones={opcionesAviso} aviso={avisoCrear} onCambiar={onAvisoCrear} />}
+            {avisoCrear && <ListaDestinatarios titulo="Aviso de cotización nueva a" alinear="fin" {...avisoCrear} />}
             <div className="resumen__acciones">
               <button className="btn btn--secundario btn--chico" type="button" onClick={() => onGuardar(false)}>Guardar</button>
               <button className="btn btn--primario btn--chico" type="button" onClick={() => onGuardar(true)}>

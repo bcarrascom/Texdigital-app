@@ -81,3 +81,14 @@
     .materiales__grupo { padding-inline: 0; border-left: none; }
   }
 }
+
+.pag-ver-op {
+  /* Correos de la OP: la lista de a quién va en los diálogos, y el aviso
+     de un correo pendiente o con error bajo el nombre. */
+  .dlg-op__correo { margin-top: var(--e-4); }
+  .estado-aviso-op {
+    justify-self: start; margin-top: var(--e-1);
+    border: 0; font-family: inherit; cursor: pointer; padding: .2rem var(--e-3);
+  }
+  .estado-aviso-op:focus-visible { outline: 3px solid var(--c-foco); outline-offset: 2px; }
+}

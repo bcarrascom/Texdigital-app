@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { api } from "@/services/api";
 import { useFichaPaginada } from "@/hooks/useFichaPaginada";
@@ -10,6 +10,8 @@ import Dialogo from "@/components/Dialogo/Dialogo";
 import Pista from "@/components/Pista/Pista";
 import TituloDeslizante from "@/components/TituloDeslizante/TituloDeslizante";
 import { Dato, Datos, VistaDetalle } from "@/components/Detalle/Detalle";
+import ListaDestinatarios, { useDestinatarios } from "@/components/ListaDestinatarios/ListaDestinatarios";
+import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 import "./VerOp.css";
 
@@ -24,7 +26,13 @@ import "./VerOp.css";
 
    ←/→ pasan a la OP vecina entre TODAS las OPs (activas, completadas e
    historial), con el mismo slide que las cotizaciones. Recotizar y Completar
-   solo existen para una OP activa. */
+   solo existen para una OP activa.
+
+   Correos (Bruno, 2026-11-11/13): la OP se envía sola a "Reciben las OPs" al
+   aprobarla, y recotizarla les avisa; los dos diálogos muestran a quién.
+   La hoja dice si el correo de la OP salió, está pendiente o falló, y "Enviar
+   por correo" la manda de nuevo a quien se elija. Cuando la bandeja envía
+   algo, Python avisa (td:bandeja) y la OP se vuelve a leer. */
 
 const SLIDE = { duration: 0.35, ease: [0.65, 0, 0.35, 1] };
 
@@ -46,13 +54,21 @@ export default function VerOp() {
   const primera = useRef(null);
   if (op && primera.current === null) primera.current = op.numero;
 
-  const [dialogo, setDialogo] = useState(null);   // "recotizar" | "completar" | null
+  const [dialogo, setDialogo] = useState(null);   // "recotizar" | "completar" | "correo" | null
   const activa = op?.estado === "activa";
 
-  /* Recotizar: vuelve a Cotizaciones para editarla y aprobarla de nuevo. */
-  async function recotizar() {
+  // El estado del correo cambia en segundo plano (la bandeja): se relee.
+  useEffect(() => {
+    const releer = () => api.obtener_op(numero).then((o) => o && actualizar((v) => ({ ...v, aviso_op: o.aviso_op })));
+    window.addEventListener("td:bandeja", releer);
+    return () => window.removeEventListener("td:bandeja", releer);
+  }, [numero, actualizar]);
+
+  /* Recotizar: vuelve a Cotizaciones para editarla y aprobarla de nuevo, y
+     avisa a quienes se dejó en la lista. */
+  async function recotizar(para) {
     setDialogo(null);
-    if (await api.recotizar_op(numero)) navigate(rutas.cotizaciones(), { replace: true });
+    if (await api.recotizar_op(numero, para)) navigate(rutas.cotizaciones(), { replace: true });
     // Si no se pudo, Python ya mostró el aviso.
   }
 
@@ -83,6 +99,7 @@ export default function VerOp() {
           <>
             {activa && <button className="cab-btn" onClick={() => setDialogo("recotizar")}>Recotizar</button>}
             <button className="cab-btn" onClick={() => api.imprimir_op(numero)}>Imprimir</button>
+            <button className="cab-btn" onClick={() => setDialogo("correo")}>Enviar por correo</button>
             {activa && <button className="btn btn--primario btn--chico" onClick={() => setDialogo("completar")}>Completar OP</button>}
           </>
         )}
@@ -96,22 +113,22 @@ export default function VerOp() {
                  onTerminar={alTerminarSlide}
                  render={(o) => (
                    <VistaDetalle productos={o.productos} aparecer={o.numero === primera.current}
-                                 hoja={<Hoja op={o} onOpInser={cambiarOpInser} />}
+                                 hoja={<Hoja op={o} onOpInser={cambiarOpInser} onCorreo={() => setDialogo("correo")} />}
                                  lateral={<Logistica op={o} />} />
                  )} />
         )}
       </main>
 
-      <Dialogo abierto={dialogo === "recotizar"} onCerrar={() => setDialogo(null)} onConfirmar={recotizar} className="dlg--desenfoque">
-        <h2 className="dlg__titulo">¿Recotizar esta OP?</h2>
-        <p className="dlg__texto">
-          Vuelve a la carpeta de Cotizaciones para editarla y aprobarla de nuevo —
-          esta orden de producción deja de estar activa.
-        </p>
-        <div className="dlg__acciones">
-          <button className="btn btn--fantasma btn--chico" type="button" onClick={() => setDialogo(null)}>Cancelar</button>
-          <button className="btn btn--primario btn--chico" type="button" onClick={recotizar}>Recotizar</button>
-        </div>
+      <Dialogo abierto={dialogo === "recotizar"} onCerrar={() => setDialogo(null)} className="dlg--desenfoque">
+        {/* Montado solo mientras está abierto: cada vez, la lista desde cero. */}
+        {dialogo === "recotizar" && <FormularioRecotizar onCerrar={() => setDialogo(null)} onRecotizar={recotizar} />}
+      </Dialogo>
+
+      <Dialogo abierto={dialogo === "correo"} onCerrar={() => setDialogo(null)} className="dlg--desenfoque">
+        {dialogo === "correo" && op && (
+          <FormularioCorreoOp op={op} onCerrar={() => setDialogo(null)}
+                              onEnviado={(aviso) => { setDialogo(null); actualizar((o) => ({ ...o, aviso_op: aviso })); }} />
+        )}
       </Dialogo>
 
       <Dialogo abierto={dialogo === "completar"} onCerrar={() => setDialogo(null)} onConfirmar={completar} className="dlg--desenfoque">
@@ -131,7 +148,80 @@ export default function VerOp() {
 
 /* ── La hoja de datos ───────────────────────────────────────────────────── */
 
-function Hoja({ op, onOpInser }) {
+/* ── Correos de la OP ────────────────────────────────────────────────────── */
+
+function FormularioRecotizar({ onCerrar, onRecotizar }) {
+  const aviso = useDestinatarios("ops");
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onRecotizar(aviso.para); }}>
+      <h2 className="dlg__titulo">¿Recotizar esta OP?</h2>
+      <p className="dlg__texto">
+        Vuelve a la carpeta de Cotizaciones para editarla y aprobarla de nuevo —
+        esta orden de producción deja de estar activa.
+      </p>
+      <div className="dlg-op__correo">
+        <ListaDestinatarios titulo="Se le enviará un correo a" {...aviso} />
+      </div>
+      <div className="dlg__acciones">
+        <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
+        <button className="btn btn--primario btn--chico" type="submit">Recotizar</button>
+      </div>
+    </form>
+  );
+}
+
+/* "Enviar por correo": la OP con su PDF, a mano (no depende de los switches). */
+function FormularioCorreoOp({ op, onCerrar, onEnviado }) {
+  const avisar = useAvisos();
+  const aviso = useDestinatarios("ops", { manual: true });
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar() {
+    if (!aviso.para.length || enviando) return;
+    setEnviando(true);
+    const r = (await api.reenviar_op(op.numero, aviso.para)) || {};
+    setEnviando(false);
+    if (!r.ok) { avisar(r.error || "No se pudo preparar el correo.", "error", 8000); return; }
+    onEnviado({ estado: "pendiente", para: r.para, fecha: "", tipo: "op_nueva" });
+  }
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); enviar(); }}>
+      <h2 className="dlg__titulo">Enviar la OP {fmt.numero(op.numero)} por correo</h2>
+      <div className="dlg-op__correo">
+        <ListaDestinatarios titulo="Se enviará a" vacio="Agrega a quién enviarla." {...aviso} />
+      </div>
+      <div className="dlg__acciones">
+        <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
+        <button className="btn btn--primario btn--chico" type="submit" disabled={!aviso.para.length || enviando}>
+          {enviando ? "Preparando…" : "Enviar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* El correo de la OP a producción: salió, pendiente o con error. */
+const textoAvisoOp = (a) => {
+  if (!a) return "";
+  const prueba = a.prueba ? " (prueba)" : "";
+  if (a.estado === "enviado") return `${a.fecha} a ${a.para.join(", ")}${prueba}`;
+  if (a.estado === "error") return `No ha salido: ${(a.error || "error").replace(/\.$/, "")}. Se reintenta solo.`;
+  return `Pendiente de envío a ${a.para.join(", ")}`;
+};
+
+function EstadoAvisoOp({ aviso, onCorreo }) {
+  if (!aviso || aviso.estado === "enviado") return null;
+  const error = aviso.estado === "error";
+  return (
+    <button type="button" className={`etiqueta etiqueta--${error ? "error" : "aviso"} estado-aviso-op`}
+            title={error ? aviso.error : "Se está enviando desde este computador."} onClick={onCorreo}>
+      {error ? "Correo de la OP sin enviar" : "Correo de la OP pendiente"}
+    </button>
+  );
+}
+
+function Hoja({ op, onOpInser, onCorreo }) {
   return (
     <section className="hoja">
       <div className="hoja__cab">
@@ -139,6 +229,7 @@ function Hoja({ op, onOpInser }) {
           <span className="hoja__num">{fmt.numero(op.numero)}</span>
           <span className="hoja__nombre">{op.nombre}</span>
           <span className="hoja__meta">{op.empresa}</span>
+          <EstadoAvisoOp aviso={op.aviso_op} onCorreo={onCorreo} />
         </div>
         <Entrega fecha={op.fecha_entrega} activa={op.estado === "activa"} />
       </div>
@@ -148,6 +239,7 @@ function Hoja({ op, onOpInser }) {
         ["Contacto", op.contacto],
         ["Email", op.email],
         ["Fecha de ingreso", op.fecha_ingreso, { mono: true }],
+        ["Correo a producción", textoAvisoOp(op.aviso_op)],
         ["Descripción", op.descripcion, { ancho: true }],
       ]}>
         {/* Solo para OPs con al menos un producto backlight. */}
