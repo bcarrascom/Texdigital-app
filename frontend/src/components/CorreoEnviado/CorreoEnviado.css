@@ -5,7 +5,9 @@
 
 .correo-enviado {
   --sobresale: 2.2rem;   /* cuánto queda fuera de la ventana */
-  position: fixed; right: calc(-1 * var(--sobresale)); bottom: var(--e-5); z-index: 210;
+  /* Es un popover (la capa de los diálogos): inset y margin anulan los del navegador. */
+  position: fixed; inset: auto; margin: 0; overflow: visible;
+  right: calc(-1 * var(--sobresale)); bottom: var(--e-5); z-index: 210;
   display: flex; align-items: center;
   width: calc(6.25rem + var(--sobresale)); height: 4.7rem;
   padding-left: 1.625rem;

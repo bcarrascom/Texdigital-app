@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, cubicBezier, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { alFrente } from "@/utils/capaSuperior";
 import "./CorreoEnviado.css";
 
 /* "Correo enviado" (idea de Bruno, 2026-11-12): un rectángulo chico aparece
@@ -11,11 +12,10 @@ import "./CorreoEnviado.css";
 
    Está atada al envío: Python la pide cada vez que sale un correo
    (core.correos.enviar → ApiApp._correo_enviado → window.TD.correoEnviado),
-   venga de donde venga. Ninguna pantalla la llama por su cuenta: la que
-   envió, si quiere mostrar su aviso de texto después, espera a que termine:
-
-       const r = await api.enviar_…();
-       if (r.ok) { await trasCorreoEnviado(); aviso("Correo enviado a …"); }
+   venga de donde venga: "Enviar correo", el correo de prueba o la bandeja de
+   los automáticos, que envía en segundo plano. Python le pasa el texto del
+   aviso ("Enviado a …: asunto") y la capa lo muestra al terminar la
+   animación. Ninguna pantalla la llama ni muestra su propio "enviado".
 
    La capa (<CapaCorreoEnviado />) se monta una vez, en App. Si se piden
    varias seguidas, van una detrás de otra. Con "reducir movimiento" del
@@ -35,15 +35,6 @@ let reproducir = null;   // lo pone la capa montada
    velocidad: 0.25 = cuatro veces más lento }. */
 export function animarCorreoEnviado(opciones = {}) {
   return reproducir ? reproducir(opciones) : Promise.resolve();
-}
-
-/* Resuelve cuando no queda ninguna animación por mostrar. Espera un poco
-   antes de mirar: el pedido de Python puede llegar justo después de la
-   respuesta del envío. */
-let enCurso = Promise.resolve();
-export async function trasCorreoEnviado() {
-  await new Promise((r) => setTimeout(r, 120));
-  await enCurso;
 }
 
 // ── El sobre, cuadro a cuadro ──────────────────────────────────────────────
@@ -176,17 +167,20 @@ export default function CapaCorreoEnviado() {
         ocupada.current = true;
         setTurno({ id: Date.now(), resolver, opciones });
       });
-      enCurso = enCurso.then(() => p);   // trasCorreoEnviado espera también a esta
       return p;
     };
     window.TD = window.TD || {};
-    window.TD.correoEnviado = () => { animarCorreoEnviado(); };
+    // Python: la animación y después el aviso de texto.
+    window.TD.correoEnviado = (texto) => {
+      animarCorreoEnviado().then(() => { if (texto) window.TD?.aviso?.(texto, "info", 6000); });
+    };
     return () => { reproducir = null; delete window.TD.correoEnviado; };
   }, [reducido]);
 
   useEffect(() => {
     if (!turno || mostrado.current === turno.id) return;
     mostrado.current = turno.id;
+    alFrente(caja.current);   // sobre un diálogo abierto, si lo hay
     const t = { ...TIEMPOS, ...turno.opciones?.tiempos };
     const lento = 1 / (turno.opciones?.velocidad || 1);
     const en = (clave) => ({ duration: (t[clave] * lento) / 1000, ease: EASE[clave] });
@@ -209,7 +203,7 @@ export default function CapaCorreoEnviado() {
 
   if (!turno) return null;
   return (
-    <div key={turno.id} ref={caja} className="correo-enviado" role="status">
+    <div key={turno.id} ref={caja} className="correo-enviado" role="status" popover="manual">
       <span className="correo-enviado__texto">Correo enviado</span>
       <div ref={sobre} className="correo-enviado__mover">
         <Sobre cuadro={cuadro} />

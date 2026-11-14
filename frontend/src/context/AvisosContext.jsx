@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { alFrente } from "@/utils/capaSuperior";
 
 /* Avisos flotantes (esquina inferior derecha).
 
@@ -7,13 +8,18 @@ import { AnimatePresence, motion } from "motion/react";
        aviso("Guía 123 generada.");                 // tipo "info", 3,5 s
        aviso("No se pudo guardar.", "error", 8000);
 
-   Python también los dispara (ApiApp._aviso → window.TD.aviso). */
+   Python también los dispara (ApiApp._aviso → window.TD.aviso).
+
+   La pila va en la capa superior (popover), para que un diálogo abierto no
+   la tape: cada aviso nuevo la vuelve a poner al frente. */
 
 const AvisosContext = createContext(null);
 
 export function AvisosProvider({ children }) {
   const [avisos, setAvisos] = useState([]);
   const siguienteId = useRef(0);
+  const pila = useRef(null);
+  const cuantos = useRef(0);
 
   const aviso = useCallback((texto, tipo = "info", ms = 3500) => {
     const id = siguienteId.current++;
@@ -26,10 +32,16 @@ export function AvisosProvider({ children }) {
     window.TD.aviso = aviso;
   }, [aviso]);
 
+  // Al montar, y cada vez que llega uno (no cuando se va).
+  useEffect(() => {
+    if (!cuantos.current || avisos.length > cuantos.current) alFrente(pila.current);
+    cuantos.current = avisos.length;
+  }, [avisos.length]);
+
   return (
     <AvisosContext.Provider value={aviso}>
       {children}
-      <div className="pila-avisos">
+      <div ref={pila} className="pila-avisos" popover="manual">
         <AnimatePresence>
           {avisos.map((a) => (
             <motion.div
