@@ -239,6 +239,45 @@
   }
   .dlg-salir__nota { margin-top: var(--e-3); }
 }
+/* Historial de correos (HistorialCorreos.jsx): una fila por correo, con la
+   operación, a quién y si fue de prueba. Clic abre el .eml. */
+.dlg-historial-correos {
+  width: min(92vw, 40rem); max-width: min(92vw, 40rem);
+  .historial-correos__mes {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--e-2);
+    margin-top: var(--e-3); font-size: var(--t-sm); font-weight: var(--peso-medio);
+  }
+  .historial-correos__lista {
+    display: grid; margin: var(--e-2) 0 0; padding: 0; list-style: none;
+    max-height: min(55vh, 28rem); overflow-y: auto;
+    border: 1px solid var(--c-borde); border-radius: var(--r-lg);
+  }
+  .historial-correos__lista li + li { border-top: 1px solid var(--c-borde); }
+  .historial-correos__fila {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px var(--e-3); width: 100%;
+    padding: var(--e-2) var(--e-3); border: 0; background: none; cursor: pointer;
+    font: inherit; text-align: left; color: var(--c-texto);
+  }
+  .historial-correos__fila:hover { background: var(--c-superficie-2); }
+  .historial-correos__fila:focus-visible { outline: 2px solid var(--c-foco); outline-offset: -2px; }
+  .historial-correos__asunto {
+    font-size: var(--t-sm); font-weight: var(--peso-medio);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .historial-correos__fecha { font-size: var(--t-xs); color: var(--c-texto-suave); font-variant-numeric: tabular-nums; }
+  .historial-correos__detalle {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: var(--e-2); min-width: 0;
+    font-size: var(--t-xs); color: var(--c-texto-suave);
+  }
+  .historial-correos__operacion {
+    flex: none; padding: 0 var(--e-2); border-radius: var(--r-full);
+    background: var(--c-tema-relleno); color: var(--c-tema-tinta);
+  }
+  .historial-correos__para { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .historial-correos__prueba { flex: none; color: var(--c-aviso); }
+  .historial-correos__acciones { justify-content: space-between; }
+}
+
 /* Sin .pag-configuracion delante: también se abre desde Inventario. */
 .dlg-catalogo {
   width: min(92vw, 30rem);
