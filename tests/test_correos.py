@@ -42,6 +42,7 @@ class _Base(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.base = Path(tmp.name)
         self.almacen = {}
+        self.modo_prueba = True
         falso = mock.Mock(
             leer=lambda servicio, cuenta: self.almacen.get((servicio, cuenta)),
             guardar=lambda servicio, cuenta, clave: self.almacen.__setitem__((servicio, cuenta), clave),
@@ -51,7 +52,9 @@ class _Base(unittest.TestCase):
         for objetivo, valor in ((ajustes_globales, ("_CONF_DIR", self.base / "Conf")),
                                 (correos, ("_detectar_dropbox", lambda: self.base)),
                                 (correos, ("credenciales", falso)),
-                                (correos, ("prueba_forzada", lambda: False)),
+                                # Como la versión de desarrollo: modo de prueba encendido.
+                                # Un test lo apaga con self.modo_prueba = False (una publicada).
+                                (correos, ("prueba_forzada", lambda: self.modo_prueba)),
                                 (repo, ("CLIENTES_PATH", self.base / "clientes.json")),
                                 (repo, ("CONTACTOS_PATH", self.base / "contactos.json")),
                                 (bandeja, ("DATOS", self.base / "local")),
@@ -425,11 +428,17 @@ class TestSmtp(_Base):
 
 class TestDesarrollo(_Base):
 
-    def test_la_version_de_desarrollo_siempre_esta_en_modo_de_prueba(self):
+    def test_el_modo_de_prueba_lo_decide_la_version(self):
+        # Desarrollo: siempre encendido, aunque se haya guardado apagado.
         correos.guardar({"prueba": {"activo": False}})
+        self.assertTrue(correos.cargar()["prueba"]["activo"])
+        # Publicada: siempre apagado, aunque correos.json diga encendido.
+        self.modo_prueba = False
+        correos.guardar({"prueba": {"activo": True, "direccion": "brosky.spam@gmail.com"}})
         self.assertFalse(correos.cargar()["prueba"]["activo"])
-        with mock.patch.object(correos, "prueba_forzada", lambda: True):
-            self.assertTrue(correos.cargar()["prueba"]["activo"])
+        msg, reales = correos.armar_mensaje(ajustes=correos.cargar(), para=["produccion@texdigital.cl"], copia=[],
+                                            asunto="OP 1", mensaje="Hola")
+        self.assertEqual((reales, msg["Subject"]), (["produccion@texdigital.cl"], "OP 1"))
 
 
 if __name__ == "__main__":

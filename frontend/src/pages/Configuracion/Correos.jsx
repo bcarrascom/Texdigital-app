@@ -16,7 +16,6 @@ import IconoOps from "@/assets/svg/clipboard-list.svg?react";
 import IconoCarpeta from "@/assets/svg/folder-open.svg?react";
 import IconoHistorial from "@/assets/svg/history.svg?react";
 import IconoClientes from "@/assets/svg/users.svg?react";
-import IconoCorreo from "@/assets/svg/mail.svg?react";
 import IconoCheck from "@/assets/svg/check.svg?react";
 import IconoEliminar from "@/assets/svg/trash-2.svg?react";
 import IconoMas from "@/assets/svg/plus.svg?react";
@@ -58,13 +57,12 @@ const SECCIONES = [
 ];
 const FUNDIDO = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
 
-const PRUEBA = [{ valor: true, etiqueta: "Encendido" }, { valor: false, etiqueta: "Apagado" }];
 const ENCENDIDOS = [{ valor: true, etiqueta: "Encendidos" }, { valor: false, etiqueta: "Apagados" }];
 const ACTIVADOS = [{ valor: true, etiqueta: "Activados" }, { valor: false, etiqueta: "Desactivados" }];
 
 const aBorrador = (a) => ({
   remitente: a.cuenta.remitente, nombre: a.cuenta.nombre, servidor: a.cuenta.servidor, puerto: String(a.cuenta.puerto ?? ""),
-  pruebaActivo: !!a.prueba.activo, pruebaDireccion: a.prueba.direccion || "",
+
   alCliente: !!a.cotizaciones.al_cliente, asunto: a.cotizaciones.asunto, mensaje: a.cotizaciones.mensaje,
   copia: a.cotizaciones.copia.map((f) => ({ ...f })),
   nuevasAsunto: a.cotizaciones_nuevas.asunto, nuevasMensaje: a.cotizaciones_nuevas.mensaje,
@@ -77,7 +75,7 @@ const aBorrador = (a) => ({
 
 const desdeBorrador = (b) => ({
   cuenta: { remitente: b.remitente.trim(), nombre: b.nombre.trim(), servidor: b.servidor.trim(), puerto: b.puerto.trim() },
-  prueba: { activo: b.pruebaActivo, direccion: b.pruebaDireccion.trim() },
+
   cotizaciones: { al_cliente: b.alCliente, asunto: b.asunto, mensaje: b.mensaje, copia: b.copia },
   cotizaciones_nuevas: { asunto: b.nuevasAsunto, mensaje: b.nuevasMensaje, para: b.nuevasPara },
   ops: { asunto: b.opsAsunto, mensaje: b.opsMensaje },
@@ -94,7 +92,7 @@ function validar(b) {
   if (!b.servidor.trim()) e["cuenta.servidor"] = "Falta el servidor.";
   const puerto = Number(b.puerto);
   if (!(Number.isInteger(puerto) && puerto > 0 && puerto < 65536)) e["cuenta.puerto"] = "Un número entre 1 y 65535.";
-  if (b.pruebaActivo && !correoValido(b.pruebaDireccion)) e["prueba.direccion"] = "El correo no es válido.";
+
   if (!b.asunto.trim()) e["cotizaciones.asunto"] = "Falta el asunto.";
   if (!b.mensaje.trim()) e["cotizaciones.mensaje"] = "Falta el mensaje.";
   if (!b.nuevasAsunto.trim()) e["cotizaciones_nuevas.asunto"] = "Falta el asunto.";
@@ -126,12 +124,12 @@ function describirCambios(o, a) {
   campo("Nombre que se ve", o.nombre, a.nombre);
   campo("Servidor", o.servidor, a.servidor);
   campo("Puerto", o.puerto, a.puerto);
-  if (o.pruebaActivo !== a.pruebaActivo) c.push(`Modo de prueba: ${a.pruebaActivo ? "encendido" : "apagado"}`);
+
   const auto = (et, x, y) => { if (x !== y) c.push(`${et}: ${y ? "encendidos" : "apagados"}`); };
   auto("Correos automáticos", o.autoActivo, a.autoActivo);
   auto("Correos automáticos de cotizaciones", o.autoCotizaciones, a.autoCotizaciones);
   auto("Correos automáticos de OPs", o.autoOps, a.autoOps);
-  campo("Dirección de prueba", o.pruebaDireccion, a.pruebaDireccion);
+
   if (JSON.stringify(o.nuevasPara) !== JSON.stringify(a.nuevasPara)) {
     c.push(`Reciben las cotizaciones nuevas: ${correosTexto(o.nuevasPara)} → ${correosTexto(a.nuevasPara)}`);
   }
@@ -165,7 +163,6 @@ export default function Correos() {
   const [guardando, setGuardando] = useState(false);
   const [pidiendo, setPidiendo] = useState(false);   // el diálogo de la contraseña
   const [viendoHistorial, setViendoHistorial] = useState(false);
-  const [probando, setProbando] = useState(false);
   // Por plantilla, adónde va una variable (el último campo que se tocó de los dos).
   const ultimoCampo = useRef({ nuevasMensaje: "nuevasMensaje", mensaje: "mensaje", opsMensaje: "opsMensaje", recMensaje: "recMensaje" });
 
@@ -227,17 +224,6 @@ export default function Correos() {
 
   const conClave = datos.contrasena_guardada;
 
-  async function correoDePrueba() {
-    if (probando) return;
-    setProbando(true);
-    try {
-      const r = await api.enviar_correo_de_prueba();
-      // Si salió, la animación y el aviso "Enviado a …" los muestra components/CorreoEnviado.
-      if (!r?.ok) aviso(r?.error || "No se pudo enviar.", "error", 8000);
-    } finally {
-      setProbando(false);
-    }
-  }
 
   async function olvidar() {
     await api.olvidar_contrasena_correo();
@@ -285,10 +271,6 @@ export default function Correos() {
       </Grupo>
 
       <Grupo>
-        <Fila icono={IconoCorreo} color="#0A84FF" etiqueta={probando ? "Enviando…" : "Enviar un correo de prueba"}
-              detalle={actual.pruebaActivo ? `a ${actual.pruebaDireccion || "la dirección de prueba"}` : `a ${actual.remitente}`}
-              onClick={conClave && !hayCambios ? correoDePrueba
-                : () => aviso(hayCambios ? "Guarda los cambios antes de probar." : "Primero escribe la contraseña.", "error")} />
         <Fila icono={IconoHistorial} color="#5E6AD2" etiqueta="Historial de correos" onClick={() => setViendoHistorial(true)} />
         <Fila icono={IconoCarpeta} color="#8E8E93" etiqueta="Abrir la carpeta de correos" onClick={() => api.abrir_carpeta_correos()} />
         {datos.pendientes > 0 && (
@@ -302,19 +284,6 @@ export default function Correos() {
           <Segmento etiqueta="Correos automáticos" opciones={ENCENDIDOS} valor={actual.autoActivo} deshabilitado={soloLectura}
                     onCambiar={(v) => cambiar({ autoActivo: v })} />
         </Fila>
-      </Grupo>
-
-      <Grupo titulo="Modo de prueba">
-        <Fila etiqueta="Modo de prueba">
-          <Segmento etiqueta="Modo de prueba" opciones={PRUEBA} valor={actual.pruebaActivo} deshabilitado={soloLectura || datos.prueba_forzada}
-                    onCambiar={(v) => cambiar({ pruebaActivo: v })} />
-        </Fila>
-        {actual.pruebaActivo && (
-          <FilaCampo id="correo-prueba" etiqueta="Dirección de prueba" error={errores["prueba.direccion"]}>
-            <input className="entrada" id="correo-prueba" type="email" autoComplete="off" disabled={soloLectura}
-                   value={actual.pruebaDireccion} onChange={(e) => cambiar({ pruebaDireccion: e.target.value })} />
-          </FilaCampo>
-        )}
       </Grupo>
 
       <section className="correos-areas" aria-label="Correos de cada parte del programa">
