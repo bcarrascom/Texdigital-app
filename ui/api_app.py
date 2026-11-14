@@ -124,6 +124,7 @@ class ApiApp:
         # "Correo enviado" y después su aviso (ver core.correos.al_enviar y
         # components/CorreoEnviado).
         correos.al_enviar(self._correo_enviado)
+        correos.al_enviando(self._enviando_correo)
         # La bandeja de los correos automáticos (core/bandeja.py): anota en la
         # OP o cotización cómo va cada uno, avisa si uno no pudo salir, y
         # arranca el hilo que los envía (lo que quedó de antes sale ya).
@@ -192,6 +193,14 @@ class ApiApp:
         asunto = str(msg.get("Subject", "")).removeprefix("[Prueba] ")
         texto = f"Enviado a {', '.join(destinatarios)}: {asunto}"
         self._ventana.run_js(f"window.TD && TD.correoEnviado && TD.correoEnviado({json.dumps(texto)})")
+
+    def _enviando_correo(self, activo) -> None:
+        """El indicador "Enviando correo" de la esquina (CorreoEnviado.jsx):
+        uno más mientras se conecta y envía, uno menos al terminar."""
+        if self._ventana is None:
+            return
+        funcion = "correoEnviando" if activo else "correoTermino"
+        self._ventana.run_js(f"window.TD && TD.{funcion} && TD.{funcion}()")
 
     def _aviso_bandeja(self, item, estado) -> None:
         """La bandeja cambió: la ventana se entera (td:bandeja; Ver OP relee

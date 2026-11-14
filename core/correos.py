@@ -611,6 +611,25 @@ def olvidar_contrasena() -> None:
 # la app se anota para mostrar la animación "Correo enviado": así sale con
 # CADA correo, venga de donde venga (Bruno, 2026-11-12).
 _al_enviar = []
+# Y quién se entera de que un envío empieza y termina (salga o no): la
+# ventana muestra mientras tanto el indicador "Enviando correo" (2026-11-14).
+_al_enviando = []
+
+
+def al_enviando(funcion) -> None:
+    """Anota `funcion(activo)`: True cuando un envío empieza a conectarse con
+    el servidor, False cuando termina (salga o no). Si sale, al_enviar se
+    llama antes que el False."""
+    if funcion not in _al_enviando:
+        _al_enviando.append(funcion)
+
+
+def _avisar_enviando(activo: bool) -> None:
+    for funcion in list(_al_enviando):
+        try:
+            funcion(activo)
+        except Exception:   # el indicador nunca puede hacer fallar un envío
+            pass
 
 
 def al_enviar(funcion) -> None:
@@ -629,23 +648,27 @@ def enviar(msg: EmailMessage, destinatarios: list[str], ajustes: dict | None = N
     if not clave:
         raise ErrorEnvio("Falta la contraseña del correo de la app en este computador: "
                          "escríbela en Configuración › Correos.")
-    smtp = _conectar(cuenta, clave)
+    _avisar_enviando(True)
     try:
-        rechazados = smtp.send_message(msg, from_addr=cuenta["remitente"], to_addrs=destinatarios)
-    except smtplib.SMTPRecipientsRefused as e:
-        raise ErrorEnvio(f"El servidor rechazó {', '.join(e.recipients)}: revisa el correo.") from e
-    except (smtplib.SMTPException, OSError) as e:
-        raise ErrorEnvio("El servidor cortó el envío. Prueba de nuevo en un rato.") from e
+        smtp = _conectar(cuenta, clave)
+        try:
+            rechazados = smtp.send_message(msg, from_addr=cuenta["remitente"], to_addrs=destinatarios)
+        except smtplib.SMTPRecipientsRefused as e:
+            raise ErrorEnvio(f"El servidor rechazó {', '.join(e.recipients)}: revisa el correo.") from e
+        except (smtplib.SMTPException, OSError) as e:
+            raise ErrorEnvio("El servidor cortó el envío. Prueba de nuevo en un rato.") from e
+        finally:
+            try:
+                smtp.quit()
+            except (smtplib.SMTPException, OSError):
+                pass
+        for funcion in list(_al_enviar):
+            try:
+                funcion(msg, destinatarios)
+            except Exception:   # la animación nunca puede hacer fallar un envío
+                pass
     finally:
-        try:
-            smtp.quit()
-        except (smtplib.SMTPException, OSError):
-            pass
-    for funcion in list(_al_enviar):
-        try:
-            funcion(msg, destinatarios)
-        except Exception:   # la animación nunca puede hacer fallar un envío
-            pass
+        _avisar_enviando(False)
     if rechazados:
         raise ErrorEnvio(f"Salió, pero el servidor rechazó {', '.join(rechazados)}.")
 

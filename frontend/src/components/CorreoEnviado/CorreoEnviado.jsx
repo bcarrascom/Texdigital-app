@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { animate, cubicBezier, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { AnimatePresence, animate, cubicBezier, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { alFrente } from "@/utils/capaSuperior";
+import Girador from "@/components/Girador/Girador";
 import "./CorreoEnviado.css";
 
 /* "Correo enviado" (idea de Bruno, 2026-11-12): un rectángulo chico aparece
@@ -20,6 +21,13 @@ import "./CorreoEnviado.css";
    La capa (<CapaCorreoEnviado />) se monta una vez, en App. Si se piden
    varias seguidas, van una detrás de otra. Con "reducir movimiento" del
    sistema, no se muestra y resuelve al tiro.
+
+   Mientras un correo se está enviando (Python se conecta con el servidor),
+   en el mismo lugar se ve un indicador chico que gira ("Enviando correo",
+   Bruno, 2026-11-14): Python avisa cuando empieza y cuando termina cada envío
+   (core.correos.al_enviando → TD.correoEnviando / TD.correoTermino). Aparece
+   solo si el envío tarda más de MOSTRAR_TRAS ms, y se va con un fundido justo
+   antes de que entre el rectángulo del sobre; si el envío falla, se va solo.
 
    Para verla y ajustarla: la página de desarrollo (botón "dev" del pie del
    menú) la reproduce con otros tiempos y más lento, y muestra el sobre
@@ -149,6 +157,11 @@ const EASE = {
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// El indicador "Enviando correo": cuánto espera para aparecer (un envío
+// rápido no lo muestra) y cuánto dura su salida, antes de que entre el sobre.
+const MOSTRAR_TRAS = 250;
+const SALIDA_INDICADOR = 160;
+
 export default function CapaCorreoEnviado() {
   const reducido = useReducedMotion();
   const cola = useRef([]);            // los que esperan su turno: [resolver]
@@ -159,13 +172,26 @@ export default function CapaCorreoEnviado() {
   const sobre = useRef(null);
   const cuadro = useMotionValue(CUADROS);
 
+  // Cuántos envíos están en curso, y si ya pasó MOSTRAR_TRAS desde que empezó.
+  const [enviando, setEnviando] = useState(0);
+  const [tarda, setTarda] = useState(false);
+  useEffect(() => {
+    if (!enviando) { setTarda(false); return undefined; }
+    const t = setTimeout(() => setTarda(true), MOSTRAR_TRAS);
+    return () => clearTimeout(t);
+  }, [enviando > 0]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const indicador = enviando > 0 && tarda && !turno;
+  const indicadorVisible = useRef(false);
+  indicadorVisible.current = indicador;
+
   useEffect(() => {
     reproducir = (opciones) => {
       if (reducido) return Promise.resolve();
       const p = new Promise((resolver) => {
         if (ocupada.current) { cola.current.push({ resolver, opciones }); return; }
         ocupada.current = true;
-        setTurno({ id: Date.now(), resolver, opciones });
+        // Si se ve el indicador, el sobre espera a que termine de irse.
+        setTurno({ id: Date.now(), resolver, opciones, tras: indicadorVisible.current });
       });
       return p;
     };
@@ -174,7 +200,12 @@ export default function CapaCorreoEnviado() {
     window.TD.correoEnviado = (texto) => {
       animarCorreoEnviado().then(() => { if (texto) window.TD?.aviso?.(texto, "info", 6000); });
     };
-    return () => { reproducir = null; delete window.TD.correoEnviado; };
+    window.TD.correoEnviando = () => setEnviando((n) => n + 1);
+    window.TD.correoTermino = () => setEnviando((n) => Math.max(0, n - 1));
+    return () => {
+      reproducir = null;
+      delete window.TD.correoEnviado; delete window.TD.correoEnviando; delete window.TD.correoTermino;
+    };
   }, [reducido]);
 
   useEffect(() => {
@@ -187,6 +218,7 @@ export default function CapaCorreoEnviado() {
     (async () => {
       try {
         cuadro.set(CUADROS);
+        if (turno.tras) await esperar(SALIDA_INDICADOR);
         await animate(caja.current, { x: ["110%", "0%"] }, en("entra"));
         await animate(cuadro, 0, en("cierra"));
         await esperar(t.pausa * lento);
@@ -201,13 +233,28 @@ export default function CapaCorreoEnviado() {
     })();
   }, [turno, cuadro]);
 
-  if (!turno) return null;
   return (
-    <div key={turno.id} ref={caja} className="correo-enviado" role="status" popover="manual">
-      <span className="correo-enviado__texto">Correo enviado</span>
-      <div ref={sobre} className="correo-enviado__mover">
-        <Sobre cuadro={cuadro} />
-      </div>
-    </div>
+    <>
+      <AnimatePresence>
+        {indicador && (
+          <motion.div key="enviando" ref={alFrente} className="correo-enviando" role="status" popover="manual"
+                      title="Enviando correo…"
+                      initial={{ x: "110%", opacity: 0 }}
+                      animate={{ x: "0%", opacity: 1, transition: { duration: 0.22, ease: EASE.entra } }}
+                      exit={{ opacity: 0, scale: 0.85, transition: { duration: SALIDA_INDICADOR / 1000, ease: "easeIn" } }}>
+            <span className="correo-enviado__texto">Enviando correo…</span>
+            <Girador size={18} borderWidth={2} duration={0.8} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {turno && (
+        <div key={turno.id} ref={caja} className="correo-enviado" role="status" popover="manual">
+          <span className="correo-enviado__texto">Correo enviado</span>
+          <div ref={sobre} className="correo-enviado__mover">
+            <Sobre cuadro={cuadro} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

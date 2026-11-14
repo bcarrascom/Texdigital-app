@@ -572,3 +572,31 @@ class TestHistorial(_Base):
             self.assertTrue(api_correos.ApiCorreos().enviar_correo_de_prueba()["ok"])
         [c] = api_correos.ApiCorreos().historial_correos()["correos"]
         self.assertEqual(c["operacion"], "prueba")
+
+
+class TestIndicadorEnvio(_Base):
+    """core.correos.al_enviando: empieza y termina cada envío, salga o no."""
+
+    def setUp(self):
+        super().setUp()
+        self.almacen[(correos.SERVICIO_CREDENCIAL, "sistema@texdigital.cl")] = "x"
+        self.eventos = []
+        p = mock.patch.object(correos, "_al_enviando", [lambda activo: self.eventos.append(activo)])
+        p.start()
+        self.addCleanup(p.stop)
+        p = mock.patch.object(correos, "_al_enviar", [lambda msg, para: self.eventos.append("salio")])
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_si_sale_avisa_antes_de_terminar(self):
+        smtp = mock.Mock(send_message=lambda *a, **k: {})
+        with mock.patch.object(correos, "_conectar", lambda cuenta, clave: smtp):
+            correos.enviar(*correos.mensaje_de_prueba())
+        self.assertEqual(self.eventos, [True, "salio", False])
+
+    def test_si_falla_igual_termina(self):
+        def falla(cuenta, clave):
+            raise correos.ErrorEnvio("Sin conexión.")
+        with mock.patch.object(correos, "_conectar", falla), self.assertRaises(correos.ErrorEnvio):
+            correos.enviar(*correos.mensaje_de_prueba())
+        self.assertEqual(self.eventos, [True, False])
