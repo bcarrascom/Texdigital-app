@@ -12,6 +12,7 @@ import IconoTexto from "@/assets/svg/a-large-small.svg?react";
 import IconoManual from "@/assets/svg/book-open.svg?react";
 import IconoPrueba from "@/assets/svg/flask-conical.svg?react";
 import { Fila, Grupo } from "./Ajustes";
+import { MANUAL_VISIBLE } from "@/utils/manual";
 
 /* Lo que dice la fila de actualizaciones según cómo va la búsqueda. */
 const DETALLE = {
@@ -54,9 +55,11 @@ export default function General() {
       <Grupo>
         <Fila icono={IconoTexto} color="#5E6AD2" etiqueta="Tamaño del texto"><ControlTexto /></Fila>
       </Grupo>
-      <Grupo>
-        <Fila icono={IconoManual} color="#E8772E" etiqueta="Manual de uso" onClick={() => api.abrir_manual()} />
-      </Grupo>
+      {MANUAL_VISIBLE && (
+        <Grupo>
+          <Fila icono={IconoManual} color="#E8772E" etiqueta="Manual de uso" onClick={() => api.abrir_manual()} />
+        </Grupo>
+      )}
       <DialogoActualizacion abierto={dialogo} {...actualizacion} onCerrar={() => setDialogo(false)} />
       <Dialogo abierto={pidiendo} onCerrar={() => setPidiendo(false)} className="dlg--desenfoque dlg-catalogo">
         <FormularioContrasena buscarBetas={actualizacion.buscarBetas} onCerrar={() => setPidiendo(false)}
