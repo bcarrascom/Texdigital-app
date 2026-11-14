@@ -27,11 +27,14 @@ este computador, no se envía nada. Cada correo que sale deja además una
 copia .eml en la carpeta Correos (Dropbox/SGTD/Correos/AAAA/MM; con --dev,
 en DropboxDev), que se abre con Outlook o con el Correo de Windows.
 
-Modo de prueba (encendido de fábrica): el correo no va a los destinatarios
-de verdad sino a la dirección de prueba (brosky.spam@gmail.com), con
-"[Prueba]" en el asunto y a quién iba al principio del mensaje. En la
-versión de desarrollo (desde el código, con DropboxDev) está siempre
-encendido: sus cotizaciones de prueba tienen correos de clientes inventados.
+Modo de prueba: el correo no va a los destinatarios de verdad sino a la
+dirección de prueba (brosky.spam@gmail.com), con "[Prueba]" en el asunto y
+a quién iba al principio del mensaje. Solo existe en la versión de
+desarrollo (desde el código, con DropboxDev), donde está siempre encendido:
+sus cotizaciones de prueba tienen correos de clientes inventados. En una
+versión publicada está siempre apagado, aunque correos.json diga otra cosa
+(Bruno, 2026-11-14: lo de prueba queda fuera de la vista de los usuarios).
+La dirección de prueba se cambia en la página de desarrollo.
 
 Los ajustes van en Dropbox/SGTD/Conf/correos.json (globales, ver
 core.ajustes_globales):
@@ -166,7 +169,8 @@ def _lista_correos(valor) -> list[dict]:
 
 
 def prueba_forzada() -> bool:
-    """La versión de desarrollo nunca le escribe a un cliente de verdad."""
+    """Si el modo de prueba está encendido: solo en la versión de desarrollo,
+    que nunca le escribe a un cliente de verdad. En una publicada, nunca."""
     return _es_dev()
 
 
@@ -183,8 +187,8 @@ def cargar() -> dict:
     a["areas"] = {k: _lista_correos(areas.get(k)) for k in AREAS}
     a["cotizaciones"]["al_cliente"] = bool(a["cotizaciones"].get("al_cliente"))
     a["automaticos"] = {k: bool(v) for k, v in a["automaticos"].items()}
-    if prueba_forzada():
-        a["prueba"]["activo"] = True
+    # El switch guardado no cuenta: lo decide la versión (ver prueba_forzada).
+    a["prueba"]["activo"] = prueba_forzada()
     return a
 
 

@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { api } from "@/services/api";
+import { useDatos } from "@/hooks/useDatos";
+import { useAvisos } from "@/context/AvisosContext";
 import { useMotionValue } from "motion/react";
 import { Link } from "react-router";
 import Pagina from "@/components/Pagina/Pagina";
@@ -35,11 +38,76 @@ export default function IndiceDesarrollo() {
           <ul className="indice__lista">
             {MIGRADAS.map((p) => <Entrada key={p.nombre} {...p} />)}
           </ul>
+          <CorreoDePrueba />
           <MuestraCorreoEnviado />
           <Muestrario />
         </div>
       </main>
     </Pagina>
+  );
+}
+
+/* Lo de prueba de los correos (Bruno, 2026-11-14: fuera de la vista de los
+   usuarios, acá y no en Configuración › Correos). En la versión de
+   desarrollo el modo de prueba está siempre encendido: todo correo va a la
+   dirección de prueba. En una publicada, siempre apagado (core.correos). */
+function CorreoDePrueba() {
+  const aviso = useAvisos();
+  const { datos, recargar } = useDatos(() => api.obtener_ajustes_correos(), []);
+  const [enviando, setEnviando] = useState(false);
+  const [direccion, setDireccion] = useState(null);   // null: la guardada
+  const a = datos?.ajustes;
+  const guardada = a?.prueba.direccion || "";
+  const valor = direccion ?? guardada;
+  const destino = a ? (a.prueba.activo ? guardada : a.cuenta.remitente) : "";
+
+  async function guardarDireccion() {
+    const r = await api.guardar_ajustes_correos({ prueba: { direccion: valor.trim() } });
+    if (!r?.ok) { aviso(Object.values(r?.errores || {})[0] || "No se pudo guardar.", "error"); return; }
+    setDireccion(null);
+    await recargar();
+    aviso("Dirección de prueba guardada.", "info");
+  }
+
+  async function enviar() {
+    if (enviando) return;
+    if (!datos?.contrasena_guardada) { aviso("Primero escribe la contraseña en Configuración › Correos.", "error"); return; }
+    setEnviando(true);
+    try {
+      const r = await api.enviar_correo_de_prueba();
+      // Si salió, la animación y el aviso "Enviado a …" los muestra components/CorreoEnviado.
+      if (!r?.ok) aviso(r?.error || "No se pudo enviar.", "error", 8000);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="muestrario" data-tema="cotizaciones">
+      <h2 className="seccion-titulo">Correos · Prueba</h2>
+      <div className="muestrario__fila">
+        <span className="muestrario__titulo">Modo de prueba</span>
+        <span>{a ? (a.prueba.activo ? "Encendido (siempre, en esta versión)" : "Apagado") : "…"}</span>
+      </div>
+      <label className="muestrario__fila">
+        <span className="muestrario__titulo">Dirección de prueba</span>
+        <span className="muestra-correo__acciones">
+          <input className="entrada" type="email" autoComplete="off" value={valor} disabled={!a}
+                 onChange={(e) => setDireccion(e.target.value)} />
+          {valor.trim() !== guardada && (
+            <button className="btn btn--secundario btn--chico" type="button" onClick={guardarDireccion}>Guardar</button>
+          )}
+        </span>
+      </label>
+      <div className="muestrario__fila">
+        <span className="muestrario__titulo">{destino ? `A ${destino}` : "…"}</span>
+        <div className="muestra-correo__acciones">
+          <button className="btn btn--primario btn--chico" type="button" disabled={!datos || enviando} onClick={enviar}>
+            {enviando ? "Enviando…" : "Enviar un correo de prueba"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
