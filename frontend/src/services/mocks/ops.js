@@ -3,6 +3,8 @@
    lista el mock del menú (9012, 9011, 9008). Fechas en dd/mm/aaaa, como las
    manda Python. */
 
+import { simularEnvio } from "./correos";
+
 const dma = (dias) => {
   const d = new Date();
   d.setDate(d.getDate() + dias);
@@ -21,11 +23,14 @@ const backlight = (tela, caja, extra) => ({
 const OPS = [
   { numero: 9012, nombre: "Campaña verano", empresa: "Tiendas Ejemplo SpA", ingreso: -3, entrega: 5, estado: "activa",
     despacho: true, instalacion: true, tiene_backlight: true,
+    aviso_op: { tipo: "op_nueva", estado: "enviado", fecha: "10/11/2026 09:14", para: ["produccion@texdigital.cl"], prueba: true },
     productos: [estandar("Pendón roller", "Poliéster satinado", { estructuras: ["Roller 85"], tema: "Verano 2027" }),
                 backlight("Tela backlit", "PERFIL 100 MM SIMPLE", { tema: "Vitrina", obs: "Entregar armada" }),
                 estandar("Lienzo", "Lona mate", { ancho: 6, alto: 3, cantidad: 1, ml: 18, terminaciones: ["Ojetillos"], tema: "Fachada" })] },
   { numero: 9011, nombre: "Menú de pared", empresa: "Café del Puerto", ingreso: -8, entrega: -2, estado: "activa",
     despacho: false, instalacion: false, tiene_backlight: false,
+    aviso_op: { tipo: "op_nueva", estado: "error", fecha: "13/11/2026 10:02", para: ["produccion@texdigital.cl"],
+                error: "No se pudo conectar con mail.texdigital.cl.", intentos: 3 },
     productos: [estandar("Lienzo", "Lona mate", { ancho: 1.2, alto: 0.8, cantidad: 2, ml: 2.4 })] },
   { numero: 9008, nombre: "Señalética interior", empresa: "Clínica Norte", ingreso: -12, entrega: 1, estado: "activa",
     despacho: true, instalacion: false, tiene_backlight: true,
@@ -58,7 +63,12 @@ export default {
   },
 
   imprimir_op: (numero) => console.info("[mock] imprimir_op", numero),
-  recotizar_op: (numero) => { console.info("[mock] recotizar_op", numero); return buscar(numero)?.estado === "activa"; },
+  recotizar_op: (numero, para) => {
+    console.info("[mock] recotizar_op", numero, para);
+    if (para?.length) simularEnvio(para, `OP ${numero} recotizada`);
+    return buscar(numero)?.estado === "activa";
+  },
+  reenviar_op: (numero, para) => { simularEnvio(para, `OP ${numero}`); return { ok: true, para }; },
   completar_op(numero) {
     const op = buscar(numero);
     if (op?.estado !== "activa") return false;

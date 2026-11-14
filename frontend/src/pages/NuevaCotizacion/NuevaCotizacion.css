@@ -345,40 +345,6 @@
   .resumen__acciones { display: flex; gap: var(--e-2); flex-wrap: wrap; justify-content: flex-end; }
   .resumen__guardar { display: grid; gap: var(--e-3); justify-items: end; max-width: 30rem; }
 
-  /* Aviso de cotización nueva (AvisoAlCrear.jsx): compacto, sobre los
-     botones de guardar. Los correos son chips chicos con su ×. */
-  .aviso-crear { display: grid; gap: var(--e-2); justify-items: end; }
-  .aviso-crear__titulo { font-size: var(--t-xs); font-weight: var(--peso-medio); color: var(--c-texto-suave); }
-  .aviso-crear__lista {
-    display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--e-1);
-    margin: 0; padding: 0; list-style: none;
-  }
-  .aviso-crear__chip {
-    display: inline-flex; align-items: center; gap: 2px;
-    padding: 1px 2px 1px var(--e-2); border-radius: var(--r-full);
-    background: var(--c-superficie-2); border: 1px solid var(--c-borde);
-    font-size: var(--t-xs); color: var(--c-texto);
-  }
-  .aviso-crear__chip button {
-    display: grid; place-items: center; width: 1.1rem; height: 1.1rem; padding: 0;
-    border: 0; border-radius: var(--r-full); background: none; cursor: pointer;
-    font: inherit; line-height: 1; color: var(--c-texto-suave);
-  }
-  .aviso-crear__chip button:hover { background: var(--c-borde); color: var(--c-texto); }
-  .aviso-crear__agregar {
-    padding: 1px var(--e-2); border: 1px dashed var(--c-borde-fuerte); border-radius: var(--r-full);
-    background: none; cursor: pointer; font: inherit; font-size: var(--t-xs); color: var(--c-texto-suave);
-  }
-  .aviso-crear__agregar:hover { color: var(--c-texto); border-color: var(--c-tema-borde); }
-  .aviso-crear__nuevo {
-    width: 13rem; padding: 1px var(--e-2); border: 1px solid var(--c-borde-fuerte); border-radius: var(--r-full);
-    background: var(--c-superficie); font: inherit; font-size: var(--t-xs); color: var(--c-texto);
-  }
-  .aviso-crear__nuevo:focus { outline: 2px solid var(--c-foco); outline-offset: 1px; }
-  .aviso-crear__nuevo[data-invalido] { border-color: var(--c-error); }
-  .aviso-crear__nota { margin: 0; font-size: var(--t-xs); text-align: right; }
-  .aviso-crear__nota--aviso { color: var(--c-aviso); }
-  .aviso-crear__nota--suave { color: var(--c-texto-tenue); }
   .tipo-chip {
     display: inline-block; padding: 0 var(--e-2); border-radius: var(--r-full);
     font-size: var(--t-xs); font-weight: var(--peso-medio);

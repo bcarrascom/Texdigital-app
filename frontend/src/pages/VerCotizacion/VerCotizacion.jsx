@@ -14,7 +14,6 @@ import { AvisoPrecios, DialogoPrecios } from "./CambiosPrecios";
 import { lineaParaDialogo, PieProducto, PlataAjustes } from "./Descuentos";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import DialogoEnviarCorreo from "./EnviarCorreo";
-import { trasCorreoEnviado } from "@/components/CorreoEnviado/CorreoEnviado";
 import IconoCorreo from "@/assets/svg/mail.svg?react";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoListo from "@/assets/svg/check.svg?react";
@@ -130,11 +129,10 @@ export default function VerCotizacion() {
 
   /* El correo salió (ver ui/api_correos.py): la hoja muestra el último envío,
      el sobre se cierra y se va (components/CorreoEnviado) y después el aviso. */
-  async function correoEnviado(r) {
+  function correoEnviado(r) {
     setDialogo(null);
     actualizar((c) => ({ ...c, ultimo_correo: r.ultimo, estado_correo: "al_dia" }));
-    await trasCorreoEnviado();
-    aviso(`${r.prueba ? "Correo de prueba enviado" : "Correo enviado"} a ${r.a.join(", ")}.`, "info", 6000);
+    // La animación y el aviso "Enviado a …" los muestra components/CorreoEnviado.
   }
 
   const editar = () => navigate(rutas.editarCotizacion(numero));

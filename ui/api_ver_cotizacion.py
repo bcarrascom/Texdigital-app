@@ -28,7 +28,7 @@ from core.repositorio_materiales import (
 from core.reportes_inventario import actualizar_reportes
 from ui.dialogo_aprobar import promover_a_op
 from core import correos
-from ui.api_correos import estado_envio, resumen_envio
+from ui.api_correos import ApiCorreos, estado_envio, resumen_envio
 
 
 def _iso_a_dma(iso: str) -> str:
@@ -319,7 +319,7 @@ class ApiVerCotizacion:
         return list(vistos.values())
 
     def aprobar_cotizacion(
-        self, numero, ingreso, entrega, consumos_manuales: dict | None = None,
+        self, numero, ingreso, entrega, consumos_manuales: dict | None = None, aviso_para=None,
     ) -> dict:
         """Único punto real de "aprobación" del sistema (no existe un
         estado de OP pendiente-de-aprobar aparte, ver ui/dialogo_aprobar.py)
@@ -346,7 +346,22 @@ class ApiVerCotizacion:
         Todo el cuerpo corre bajo self._lock_aprobar (ver __init__): dos
         llamadas concurrentes a esta función (pywebview corre cada llamada
         JS→Python en su propio hilo) quedan serializadas, así la segunda
-        siempre ve el resultado de la primera antes de decidir nada."""
+        siempre ve el resultado de la primera antes de decidir nada.
+
+        `aviso_para`: a quién va el correo de la OP nueva, tal como lo dejó el
+        diálogo Aprobar (que muestra la lista de "Reciben las OPs"). Vacío o
+        con los correos automáticos de OPs apagados, no sale. El correo va a
+        la bandeja (core/bandeja.py): si no se pudo armar, la OP igual queda
+        aprobada y la respuesta trae {"aviso": {"ok": False, "error"}}."""
+        r = self._aprobar(numero, ingreso, entrega, consumos_manuales)
+        if r.get("ok") and aviso_para and correos.automatico_activo("ops"):
+            try:
+                r["aviso"] = ApiCorreos().avisar_op_nueva(numero, aviso_para)
+            except Exception as e:
+                r["aviso"] = {"ok": False, "error": f"No se pudo preparar el correo de la OP: {e}"}
+        return r
+
+    def _aprobar(self, numero, ingreso, entrega, consumos_manuales: dict | None = None) -> dict:
         with self._lock_aprobar:
             datos = cargar_cotizacion(int(numero))
             if datos is None:

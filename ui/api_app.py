@@ -29,7 +29,7 @@ from datetime import datetime
 from core import config as _config
 from core.config import MODULOS_HABILITADOS
 from core import catalogo as _catalogo
-from core import correos
+from core import bandeja, correos
 from core.repositorio import cargar_preferencias, guardar_preferencia as _guardar_preferencia
 from core.repositorio_inventario import migrar_formato_viejo as _migrar_inventario_formato_viejo
 from core.rutas import DOCS as _DOCS, FRONTEND
@@ -45,7 +45,7 @@ from ui.api_asignar_despacho import ApiAsignarDespacho
 from ui.api_gestionar_direcciones import ApiGestionarDirecciones
 from ui.api_inventario import ApiInventario
 from ui.api_configuracion import ApiConfiguracion
-from ui.api_correos import ApiCorreos
+from ui.api_correos import ApiCorreos, anotar_aviso
 from ui.api_actualizacion import ApiActualizacion
 
 
@@ -121,8 +121,15 @@ class ApiApp:
         )
         self._ventana.events.closing += self._al_cerrar_nativo
         # Cada correo que sale, salga de donde salga, muestra la animación
-        # "Correo enviado" (ver core.correos.al_enviar y components/CorreoEnviado).
+        # "Correo enviado" y después su aviso (ver core.correos.al_enviar y
+        # components/CorreoEnviado).
         correos.al_enviar(self._correo_enviado)
+        # La bandeja de los correos automáticos (core/bandeja.py): anota en la
+        # OP o cotización cómo va cada uno, avisa si uno no pudo salir, y
+        # arranca el hilo que los envía (lo que quedó de antes sale ya).
+        bandeja.al_cambiar(anotar_aviso)
+        bandeja.al_cambiar(self._aviso_bandeja)
+        bandeja.iniciar()
         return self._ventana
 
     def _al_cerrar_nativo(self):
@@ -179,9 +186,23 @@ class ApiApp:
         if self._ventana is not None:
             self._ventana.set_title(titulo or "TexDigital")
 
-    def _correo_enviado(self) -> None:
+    def _correo_enviado(self, msg, destinatarios) -> None:
+        if self._ventana is None:
+            return
+        asunto = str(msg.get("Subject", "")).removeprefix("[Prueba] ")
+        texto = f"Enviado a {', '.join(destinatarios)}: {asunto}"
+        self._ventana.run_js(f"window.TD && TD.correoEnviado && TD.correoEnviado({json.dumps(texto)})")
+
+    def _aviso_bandeja(self, item, estado) -> None:
+        """La bandeja cambió: la ventana se entera (td:bandeja; Ver OP relee
+        el estado de su correo). Un correo que no pudo salir se avisa la
+        primera vez; después se reintenta solo, sin repetir el aviso."""
         if self._ventana is not None:
-            self._ventana.run_js("window.TD && TD.correoEnviado && TD.correoEnviado()")
+            self._ventana.run_js("window.dispatchEvent(new CustomEvent('td:bandeja'))")
+        if estado == "error" and item.get("intentos") == 1:
+            asunto = item.get("meta", {}).get("asunto", "un correo")
+            self._aviso(f"No se pudo enviar «{asunto}»: {item.get('error')} Queda pendiente y se volverá a intentar.",
+                        "error", 10000)
 
     def _aviso(self, texto: str, tipo: str = "aviso", ms: int = 5000) -> None:
         if self._ventana is None:
@@ -252,8 +273,8 @@ class ApiApp:
     def verificar_materiales_cotizacion(self, numero) -> list[dict]:
         return self._ver_cotizacion.verificar_materiales(numero)
 
-    def aprobar_cotizacion(self, numero, ingreso, entrega, consumos_manuales: dict | None = None) -> dict:
-        return self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega, consumos_manuales)
+    def aprobar_cotizacion(self, numero, ingreso, entrega, consumos_manuales: dict | None = None, aviso_para=None) -> dict:
+        return self._ver_cotizacion.aprobar_cotizacion(numero, ingreso, entrega, consumos_manuales, aviso_para)
 
     def materiales_manuales_pendientes(self, numero) -> list[dict]:
         return self._ver_cotizacion.materiales_manuales_pendientes(numero)
@@ -272,11 +293,14 @@ class ApiApp:
 
     # recotizar_op/completar_op devuelven si se pudo: la pantalla decide
     # adónde ir después.
-    def recotizar_op(self, numero) -> bool:
-        ok = self._ver_op.recotizar_op(numero)
+    def recotizar_op(self, numero, aviso_para=None) -> bool:
+        ok = self._ver_op.recotizar_op(numero, aviso_para)
         if not ok:
             self._aviso("No se pudo recotizar: la OP ya no está activa.", "error")
         return ok
+
+    def reenviar_op(self, numero, para) -> dict:
+        return self._ver_op.reenviar_op(numero, para)
 
     def completar_op(self, numero) -> bool:
         ok = self._ver_op.completar_op(numero)
@@ -445,6 +469,12 @@ class ApiApp:
     def abrir_carpeta_correos(self) -> None:
         self._correos.abrir_carpeta_correos()
 
+    def historial_correos(self, anio=None, mes=None) -> dict:
+        return self._correos.historial_correos(anio, mes)
+
+    def abrir_correo_historial(self, archivo) -> bool:
+        return self._correos.abrir_correo_historial(archivo)
+
     def guardar_contrasena_correo(self, clave) -> dict:
         return self._correos.guardar_contrasena_correo(clave)
 
@@ -463,8 +493,14 @@ class ApiApp:
     def enviar_correo_cotizacion(self, numero, datos) -> dict:
         return self._correos.enviar_correo_cotizacion(numero, datos)
 
-    def correo_al_crear(self) -> dict:
-        return self._correos.correo_al_crear()
+    def opciones_aviso(self, parte) -> dict:
+        return self._correos.opciones_aviso(parte)
+
+    def estado_bandeja(self) -> dict:
+        return self._correos.estado_bandeja()
+
+    def reintentar_bandeja(self) -> None:
+        self._correos.reintentar_bandeja()
 
     def enviar_aviso_cotizacion_nueva(self, numero, para) -> dict:
         return self._correos.enviar_aviso_cotizacion_nueva(numero, para)

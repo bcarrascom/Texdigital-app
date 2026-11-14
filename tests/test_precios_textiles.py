@@ -19,6 +19,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.ajustes_globales as ajustes_globales
+import core.catalogo as catalogo
 import core.config as config
 import core.repositorio as repo
 import core.repositorio_inventario as repo_inv
@@ -53,6 +54,9 @@ class _Base(unittest.TestCase):
             mock.patch.dict(repo.TEXTILES_VALORES, {LONA: 10000.0, GASA: 8000.0}, clear=True),
             mock.patch.dict(repo.TEXTILES_ANCHOS, {LONA: 1.5, GASA: 1.5}),
             mock.patch.dict(config.MODULOS_HABILITADOS, {"inventario": True}),
+            # Cada test parte con el catálogo "sin aplicar": si no, lo que dejó
+            # el test anterior decide si refrescar() pisa los textiles de arriba.
+            mock.patch.object(catalogo, "_aplicado", catalogo._SIN_APLICAR),
         ]
         for p in parches:
             p.start()

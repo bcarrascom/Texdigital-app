@@ -2,6 +2,7 @@ import { api } from "@/services/api";
 import { useApp } from "@/context/AppContext";
 import { useAtajo } from "@/hooks/useAtajo";
 import { useVolver } from "@/hooks/useVolver";
+import { MANUAL_VISIBLE } from "@/utils/manual";
 
 /* Cabecera de las pantallas internas (el menú principal no la usa):
    ← Volver · título · [lo que la página agregue] · A− 100% A+ · ?
@@ -29,9 +30,11 @@ export default function Cabecera({ titulo, onVolver, bloqueada = false, children
       <span className="cabecera__sep" />
       {children}
       <ControlTexto />
-      <button className="cab-btn cab-btn--icono" title="Manual de uso" onClick={() => api.abrir_manual()}>
-        ?
-      </button>
+      {MANUAL_VISIBLE && (
+        <button className="cab-btn cab-btn--icono" title="Manual de uso" onClick={() => api.abrir_manual()}>
+          ?
+        </button>
+      )}
     </header>
   );
 }

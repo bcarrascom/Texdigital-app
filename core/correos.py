@@ -41,6 +41,8 @@ core.ajustes_globales):
      "prueba": {"activo", "direccion"},
      "cotizaciones": {"al_cliente": bool, "asunto", "mensaje", "copia": [{"correo", "nombre"}]},
      "cotizaciones_nuevas": {"asunto", "mensaje", "para": [{"correo", "nombre"}]},
+     "ops": {"asunto", "mensaje"},              (OP nueva, con el PDF; a areas.ops)
+     "ops_recotizada": {"asunto", "mensaje"},   (OP recotizada; a areas.ops)
      "areas": {"ops" | "inventario" | "despachos": [{"correo", "nombre"}]},
      "automaticos": {"activo", "cotizaciones", "ops", "inventario", "despachos"}}   (bool)
 
@@ -61,8 +63,10 @@ import smtplib
 import socket
 import ssl
 from datetime import datetime
+from email import policy
 from email.message import EmailMessage
-from email.utils import format_datetime, formataddr, make_msgid
+from email.parser import BytesParser
+from email.utils import format_datetime, formataddr, make_msgid, parsedate_to_datetime
 from pathlib import Path
 
 from core import ajustes_globales, credenciales
@@ -81,7 +85,8 @@ SERVICIO_CREDENCIAL = "SistemaGestion-correo"
 ESPERA_SMTP_S = 30
 
 AREAS = ("ops", "inventario", "despachos")
-SECCIONES = ("cuenta", "prueba", "cotizaciones", "cotizaciones_nuevas", "automaticos")
+SECCIONES = ("cuenta", "prueba", "cotizaciones", "cotizaciones_nuevas", "ops", "ops_recotizada", "automaticos")
+PLANTILLAS = ("cotizaciones", "cotizaciones_nuevas", "ops", "ops_recotizada")   # las que tienen asunto y mensaje
 # Las partes del programa que mandan correos automáticos, cada una con su switch.
 PARTES_AUTOMATICAS = ("cotizaciones",) + AREAS
 
@@ -92,6 +97,15 @@ VARIABLES_COTIZACION = {
     "trabajo":  "El nombre del trabajo",
     "total":    "El total con IVA",
     "fecha":    "La fecha de la cotización",
+}
+
+VARIABLES_OP = {
+    "numero":   "El N° de la OP",
+    "cliente":  "La empresa",
+    "contacto": "El contacto (o la empresa, si no tiene)",
+    "trabajo":  "El nombre del trabajo",
+    "ingreso":  "La fecha de ingreso",
+    "entrega":  "La fecha de entrega",
 }
 
 POR_DEFECTO = {
@@ -117,6 +131,21 @@ POR_DEFECTO = {
                     "Va adjunta en PDF.\n\n"
                     "Correo automático del Sistema de Gestión."),
         "para": [],
+    },
+    # Los correos de las OPs, a los de "Reciben las OPs" (areas.ops).
+    "ops": {
+        "asunto": "OP {numero} - {cliente}",
+        "mensaje": ("Se aprobó la cotización N° {numero} de {cliente} ({trabajo}) y pasó a OP.\n\n"
+                    "Ingreso: {ingreso}\nEntrega: {entrega}\n\n"
+                    "Va adjunta la OP en PDF.\n\n"
+                    "Correo automático del Sistema de Gestión."),
+    },
+    "ops_recotizada": {
+        "asunto": "OP {numero} recotizada - {cliente}",
+        "mensaje": ("La OP {numero} de {cliente} ({trabajo}) se recotizó: volvió a Cotizaciones "
+                    "y ya no está en producción.\n\n"
+                    "No sigan trabajando en ella hasta que se apruebe de nuevo.\n\n"
+                    "Correo automático del Sistema de Gestión."),
     },
     "areas": {a: [] for a in AREAS},
     "automaticos": {"activo": True, **{p: True for p in ("cotizaciones", "ops", "inventario", "despachos")}},
@@ -205,7 +234,7 @@ def validar(a: dict) -> dict:
         e["cuenta.puerto"] = "Un número entre 1 y 65535."
     if prueba.get("activo") and not correo_valido(prueba.get("direccion")):
         e["prueba.direccion"] = "El correo no es válido."
-    for seccion in ("cotizaciones", "cotizaciones_nuevas"):
+    for seccion in PLANTILLAS:
         if not str(a[seccion].get("asunto") or "").strip():
             e[f"{seccion}.asunto"] = "Falta el asunto."
         if not str(a[seccion].get("mensaje") or "").strip():
@@ -228,7 +257,7 @@ def guardar(datos: dict) -> dict:
     a["prueba"]["activo"] = bool(a["prueba"].get("activo"))
     a["automaticos"] = {k: bool(v) for k, v in a["automaticos"].items() if k == "activo" or k in PARTES_AUTOMATICAS}
     a["prueba"]["direccion"] = str(a["prueba"].get("direccion") or "").strip()
-    for seccion in ("cotizaciones", "cotizaciones_nuevas"):
+    for seccion in PLANTILLAS:
         a[seccion]["asunto"] = " ".join(str(a[seccion].get("asunto") or "").split())
         a[seccion]["mensaje"] = str(a[seccion].get("mensaje") or "").strip()
     a["cotizaciones"]["copia"] = _lista_correos(a["cotizaciones"].get("copia"))
@@ -281,6 +310,18 @@ def rellenar(texto: str, valores: dict) -> str:
     """Cambia cada {variable} conocida por su valor; una que no se conoce
     queda escrita tal cual (así se nota en la vista previa)."""
     return _VARIABLE.sub(lambda m: str(valores[m.group(1)]) if m.group(1) in valores else m.group(0), texto or "")
+
+
+def valores_op(datos: dict) -> dict:
+    empresa = datos.get("Empresa", "")
+    return {
+        "numero":   datos.get("Cotizacion", ""),
+        "cliente":  empresa,
+        "contacto": datos.get("Contacto", "") or empresa,
+        "trabajo":  datos.get("Nombre", ""),
+        "ingreso":  datos.get("Fecha_ingreso", ""),
+        "entrega":  datos.get("Fecha_entrega", ""),
+    }
 
 
 def valores_cotizacion(datos: dict) -> dict:
@@ -349,9 +390,9 @@ def _texto_a_html(texto: str) -> str:
 
 
 def armar_mensaje(*, ajustes: dict, para: list[str], copia: list[str], asunto: str, mensaje: str,
-                  adjunto: Path, nombre_adjunto: str) -> tuple[EmailMessage, list[str]]:
+                  adjunto: Path | None = None, nombre_adjunto: str = "") -> tuple[EmailMessage, list[str]]:
     """El correo listo para salir, y a quién va de verdad (en modo de prueba,
-    solo a la dirección de prueba)."""
+    solo a la dirección de prueba). Sin `adjunto`, va sin PDF."""
     cuenta, prueba = ajustes["cuenta"], ajustes["prueba"]
     msg = EmailMessage()
     msg["From"] = formataddr((cuenta["nombre"], cuenta["remitente"]))
@@ -373,17 +414,130 @@ def armar_mensaje(*, ajustes: dict, para: list[str], copia: list[str], asunto: s
         msg["Subject"] = asunto
     msg.set_content(mensaje)
     msg.add_alternative(_texto_a_html(mensaje), subtype="html")
-    msg.add_attachment(Path(adjunto).read_bytes(), maintype="application", subtype="pdf", filename=nombre_adjunto)
+    if adjunto is not None:
+        msg.add_attachment(Path(adjunto).read_bytes(), maintype="application", subtype="pdf", filename=nombre_adjunto)
     return msg, reales
 
 
-def guardar_eml(msg: EmailMessage, nombre: str) -> Path:
-    """Deja el correo en Correos/AAAA/MM/<fecha hora> <nombre>.eml."""
+# ── Historial: la copia de cada correo que salió ──────────────────────────
+# Bruno (2026-11-13): cada correo que envía la app queda en
+# SGTD/Correos/<año>/<mes>/, con el nombre "<asunto> - <operación>.eml", y
+# Configuración › Correos › Historial de correos los muestra mes a mes.
+# La operación va también en la cabecera X-Operacion de la copia (no en el
+# correo que sale): el historial la lee de ahí.
+
+OPERACIONES = {
+    "cotizacion_cliente": "envío al cliente",
+    "cotizacion_nueva": "cotización nueva",
+    "op_nueva": "aprobación",
+    "op_reenviada": "reenvío de OP",
+    "op_recotizada": "recotización",
+    "prueba": "prueba",
+}
+_NO_VA_EN_NOMBRE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _nombre_archivo(asunto: str, operacion: str) -> str:
+    """"<asunto> - <operación>", sin los caracteres que Windows no acepta."""
+    nombre = _NO_VA_EN_NOMBRE.sub(" ", f"{asunto} - {operacion}" if asunto else operacion)
+    nombre = re.sub(r"\s+", " ", nombre).strip()[:150].rstrip(". ")
+    return nombre or "Correo"
+
+
+def guardar_eml(msg: EmailMessage, operacion: str) -> Path:
+    """Deja la copia en Correos/AAAA/MM/<asunto> - <operación>.eml (con
+    " (2)", " (3)"… si ya hay uno igual). `operacion`: una clave de
+    OPERACIONES o el texto mismo."""
+    texto = OPERACIONES.get(operacion, operacion)
+    del msg["X-Operacion"]
+    msg["X-Operacion"] = texto
     ahora = datetime.now()
     destino = carpeta() / f"{ahora:%Y}" / f"{ahora:%m}"
     destino.mkdir(parents=True, exist_ok=True)
-    ruta = destino / f"{ahora:%Y-%m-%d %H.%M.%S} {nombre}.eml"
+    base = _nombre_archivo(str(msg["Subject"] or ""), texto)
+    ruta, n = destino / f"{base}.eml", 2
+    while ruta.exists():
+        ruta, n = destino / f"{base} ({n}).eml", n + 1
     ruta.write_bytes(bytes(msg))
+    return ruta
+
+
+def meses_historial() -> list[dict]:
+    """Los meses con correos guardados, del más nuevo al más viejo:
+    [{"anio", "mes", "cantidad"}]."""
+    meses = []
+    for d_anio in carpeta().iterdir():
+        if not (d_anio.is_dir() and d_anio.name.isdigit()):
+            continue
+        for d_mes in d_anio.iterdir():
+            if d_mes.is_dir() and d_mes.name.isdigit():
+                cantidad = sum(1 for _ in d_mes.glob("*.eml"))
+                if cantidad:
+                    meses.append({"anio": int(d_anio.name), "mes": int(d_mes.name), "cantidad": cantidad})
+    return sorted(meses, key=lambda m: (m["anio"], m["mes"]), reverse=True)
+
+
+def _operacion_por_nombre(nombre: str) -> str:
+    """Las copias de antes del 2026-11-13 ("2026-11-10 18.36.28 Cotización
+    1004.eml") no tienen X-Operacion: se saca del nombre."""
+    m = re.match(r"\d{4}-\d\d-\d\d \d\d\.\d\d\.\d\d (.+)\.eml$", nombre)
+    t = m.group(1) if m else ""
+    if t.startswith("Cotización nueva"):
+        return OPERACIONES["cotizacion_nueva"]
+    if t.startswith("Cotización"):
+        return OPERACIONES["cotizacion_cliente"]
+    if t.startswith("OP"):
+        return OPERACIONES["op_recotizada" if t.endswith("recotizada") else "op_nueva"]
+    return ""
+
+
+def _direcciones(valor) -> list[str]:
+    return [c.strip() for c in str(valor or "").split(",") if c.strip()]
+
+
+def leer_copia(ruta: Path) -> dict | None:
+    """Lo que el historial muestra de una copia. Solo lee las cabeceras (el
+    principio del archivo, no el PDF)."""
+    try:
+        with open(ruta, "rb") as f:
+            inicio = f.read(65536)
+        cab = BytesParser(policy=policy.default).parsebytes(inicio, headersonly=True)
+        asunto = str(cab["Subject"] or "")
+        originales = cab["X-Destinatarios-Originales"]
+    except (OSError, ValueError, TypeError):
+        return None
+    prueba = originales is not None or asunto.startswith("[Prueba] ")
+    try:
+        fecha = parsedate_to_datetime(str(cab["Date"])).astimezone().replace(tzinfo=None)
+    except (TypeError, ValueError):
+        fecha = datetime.fromtimestamp(ruta.stat().st_mtime)
+    return {
+        "archivo": ruta.relative_to(carpeta()).as_posix(),
+        "fecha": fecha.isoformat(timespec="seconds"),
+        "asunto": asunto.removeprefix("[Prueba] "),
+        "operacion": str(cab["X-Operacion"] or "") or _operacion_por_nombre(ruta.name),
+        "para": _direcciones(originales) if prueba and originales else _direcciones(cab["To"]),
+        "copia": [] if prueba else _direcciones(cab["Cc"]),
+        "prueba": prueba,
+    }
+
+
+def historial(anio: int, mes: int) -> list[dict]:
+    """Los correos que salieron ese mes, del más nuevo al más viejo."""
+    d = carpeta() / f"{int(anio):04d}" / f"{int(mes):02d}"
+    if not d.is_dir():
+        return []
+    copias = [c for c in (leer_copia(r) for r in d.glob("*.eml")) if c]
+    return sorted(copias, key=lambda c: c["fecha"], reverse=True)
+
+
+def ruta_copia(archivo: str) -> Path | None:
+    """La ruta de una copia del historial ("2026/11/….eml"), solo si está
+    dentro de la carpeta Correos."""
+    raiz = carpeta().resolve()
+    ruta = (raiz / str(archivo)).resolve()
+    if ruta.suffix.lower() != ".eml" or raiz not in ruta.parents or not ruta.is_file():
+        return None
     return ruta
 
 
@@ -456,7 +610,8 @@ _al_enviar = []
 
 
 def al_enviar(funcion) -> None:
-    """Anota `funcion()`, que se llama después de cada correo que sale."""
+    """Anota `funcion(msg, destinatarios)`, que se llama después de cada
+    correo que sale (con a quién salió de verdad)."""
     if funcion not in _al_enviar:
         _al_enviar.append(funcion)
 
@@ -484,7 +639,7 @@ def enviar(msg: EmailMessage, destinatarios: list[str], ajustes: dict | None = N
             pass
     for funcion in list(_al_enviar):
         try:
-            funcion()
+            funcion(msg, destinatarios)
         except Exception:   # la animación nunca puede hacer fallar un envío
             pass
     if rechazados:

@@ -5,7 +5,7 @@
 
 import ejemplos from "./cotizacionesDescuentos.json";
 import { montoManual } from "@/components/Descuentos/Descuentos";
-import { correoAlCliente } from "./correos";
+import { correoAlCliente, simularEnvio } from "./correos";
 
 /* Qué devuelve lista_precios.cambios() para la 9015, hasta que se decide. */
 let cambios9015 = {
@@ -143,9 +143,10 @@ export default {
 
   materiales_manuales_pendientes: () => [{ id: "m-1", nombre: "Cinta doble faz", tipo: "unidad" }],
 
-  aprobar_cotizacion: (numero, ingreso, entrega, consumos) => {
-    console.info("[mock] aprobar_cotizacion", numero, ingreso, entrega, consumos);
-    return { ok: true };
+  aprobar_cotizacion: (numero, ingreso, entrega, consumos, para) => {
+    console.info("[mock] aprobar_cotizacion", numero, ingreso, entrega, consumos, para);
+    if (para?.length) simularEnvio(para, `OP ${numero}`);
+    return { ok: true, aviso: para?.length ? { ok: true, para } : undefined };
   },
 
   /* Solo las 9014 … 9010 (las de los descuentos) los recalculan. */

@@ -773,8 +773,11 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 .aviso--aviso { background: var(--c-aviso-suave);  border-color: #EBD5A8; color: var(--c-aviso); }
 .aviso--error { background: var(--c-error-suave);  border-color: #EFC4BF; color: var(--c-error); }
 
+/* Es un popover (la capa de los diálogos, ver AvisosContext): lo demás
+   anula los estilos que el navegador le pone a un popover. */
 .pila-avisos {
-  position: fixed; right: var(--e-5); bottom: var(--e-5);
+  position: fixed; inset: auto; right: var(--e-5); bottom: var(--e-5);
+  margin: 0; padding: 0; border: 0; background: none; overflow: visible; color: inherit;
   display: grid; gap: var(--e-2); z-index: 200; pointer-events: none;
 }
 /* La entrada/salida la anima motion (ver context/AvisosContext.jsx): una

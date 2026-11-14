@@ -68,6 +68,12 @@ class _ConRutaTemporalYCatalogo(unittest.TestCase):
         self._parche_anchos.start()
         self.addCleanup(self._parche_anchos.stop)
 
+        # Que calcular_faltantes no lea el catalogo.json real (DropboxDev):
+        # pisaría los anchos de arriba y el resultado dependería del orden.
+        parche = mock.patch("core.catalogo.refrescar", lambda *a, **k: None)
+        parche.start()
+        self.addCleanup(parche.stop)
+
 
 class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
 

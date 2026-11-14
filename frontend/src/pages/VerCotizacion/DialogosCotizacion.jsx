@@ -2,6 +2,8 @@ import { useState } from "react";
 import { api } from "@/services/api";
 import { useApp } from "@/context/AppContext";
 import Dialogo from "@/components/Dialogo/Dialogo";
+import ListaDestinatarios, { useDestinatarios } from "@/components/ListaDestinatarios/ListaDestinatarios";
+import { useAvisos } from "@/context/AvisosContext";
 import * as fmt from "@/utils/formato";
 
 /* Los diálogos de VerCotizacion: eliminar, el bloqueo por falta de stock y
@@ -73,6 +75,10 @@ export function DialogoAprobar({ abierto, cot, manuales, onCerrar, onEditar, onA
 
 function FormularioAprobar({ cot, manuales, onCerrar, onEditar, onAprobada }) {
   const { contexto } = useApp();
+  const avisar = useAvisos();
+  // A quién va el correo de la OP nueva (Bruno, 2026-11-11/13): se ve antes
+  // de aprobar, y se puede sacar a alguien o sumar otro solo esta vez.
+  const avisoOp = useDestinatarios("ops");
   // La fecha de hoy la pone Python (hoy_iso): la del sistema puede estar
   // corrida y tiene que ser la misma que usa el resto de la app.
   const [ingreso, setIngreso] = useState(contexto.hoy_iso || new Date().toISOString().slice(0, 10));
@@ -89,9 +95,14 @@ function FormularioAprobar({ cot, manuales, onCerrar, onEditar, onAprobada }) {
       Object.entries(consumos).map(([id, v]) => [id, fmt.aNumero(v)]).filter(([, v]) => v > 0),
     );
     setEnviando(true);
-    const r = (await api.aprobar_cotizacion(cot.numero, ingreso, entrega, consumosManuales)) || {};
+    const r = (await api.aprobar_cotizacion(cot.numero, ingreso, entrega, consumosManuales, avisoOp.para)) || {};
     setEnviando(false);
-    if (r.ok) { onCerrar(); onAprobada(); return; }
+    if (r.ok) {
+      // El correo va a la bandeja: cuando sale, la animación y su aviso
+      // aparecen solos. Acá solo se avisa si no se pudo ni preparar.
+      if (r.aviso && !r.aviso.ok) avisar(`La OP quedó aprobada, pero su correo no: ${r.aviso.error}`, "error", 10000);
+      onCerrar(); onAprobada(); return;
+    }
     // Stock insuficiente (red de seguridad: el stock cambió mientras el
     // diálogo estaba abierto) o la cotización ya no existe: NO se cierra, se
     // muestra qué falta, sin perder las fechas cargadas.
@@ -107,7 +118,6 @@ function FormularioAprobar({ cot, manuales, onCerrar, onEditar, onAprobada }) {
           <label className="campo__etiqueta" htmlFor="fecha-ingreso" data-requerido>Fecha de ingreso</label>
           <input className="entrada" id="fecha-ingreso" type="date" value={ingreso}
                  onChange={(e) => setIngreso(e.target.value)} />
-          <span className="campo__ayuda">Hoy, salvo que la cambies.</span>
         </div>
         <div className="campo" data-invalido={entregaInvalida || undefined}>
           <label className="campo__etiqueta" htmlFor="fecha-entrega" data-requerido>Fecha de entrega</label>
@@ -127,6 +137,10 @@ function FormularioAprobar({ cot, manuales, onCerrar, onEditar, onAprobada }) {
           ))}
         </div>
       )}
+
+      <div className="dlg-aprobar__correo">
+        <ListaDestinatarios titulo="Se le enviará un correo a" {...avisoOp} />
+      </div>
 
       {manuales.length > 0 && (
         <div className="dlg-materiales-manuales">

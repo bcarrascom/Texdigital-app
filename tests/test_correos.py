@@ -10,8 +10,10 @@ Correr con:  python -m unittest tests.test_correos -v
 """
 
 import email
+import json
 import smtplib
 import sys
+from datetime import datetime
 import tempfile
 import unittest
 from email import policy
@@ -21,6 +23,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import core.ajustes_globales as ajustes_globales
+import core.bandeja as bandeja
 import core.correos as correos
 import core.repositorio as repo
 import ui.api_correos as api_correos
@@ -50,7 +53,9 @@ class _Base(unittest.TestCase):
                                 (correos, ("credenciales", falso)),
                                 (correos, ("prueba_forzada", lambda: False)),
                                 (repo, ("CLIENTES_PATH", self.base / "clientes.json")),
-                                (repo, ("CONTACTOS_PATH", self.base / "contactos.json"))):
+                                (repo, ("CONTACTOS_PATH", self.base / "contactos.json")),
+                                (bandeja, ("DATOS", self.base / "local")),
+                                (bandeja, ("_al_cambiar", []))):
             p = mock.patch.object(objetivo, *valor)
             p.start()
             self.addCleanup(p.stop)
@@ -201,7 +206,8 @@ class TestEnviarCotizacion(_Base):
         def guardar(datos):
             self.guardada = datos
 
-        for nombre, valor in (("_documento", documento), ("html_a_pdf", pdf), ("guardar_cotizacion", guardar)):
+        for nombre, valor in (("_documento", documento), ("html_a_pdf", pdf), ("guardar_cotizacion", guardar),
+                              ("cargar_cotizacion", lambda numero: self.guardada)):
             p = mock.patch.object(api_correos, nombre, valor)
             p.start()
             self.addCleanup(p.stop)
@@ -210,6 +216,7 @@ class TestEnviarCotizacion(_Base):
         p.start()
         self.addCleanup(p.stop)
         self.api = api_correos.ApiCorreos()
+        bandeja.al_cambiar(api_correos.anotar_aviso)
 
     def _enviar(self, **cambios):
         d = {"para": ["rperez@galerianorte.cl"], "copia": [], "asunto": "Cotización 1004", "mensaje": "Hola", **cambios}
@@ -263,37 +270,47 @@ class TestEnviarCotizacion(_Base):
     def test_aviso_de_cotizacion_nueva(self):
         correos.guardar({"cotizaciones_nuevas": {"para": [{"correo": "ventas@texdigital.cl", "nombre": "Ventas"}]}})
         r = self.api.enviar_aviso_cotizacion_nueva(1004, ["ventas@texdigital.cl", "jefe@texdigital.cl"])
-        self.assertTrue(r["ok"] and r["prueba"])
+        self.assertTrue(r["ok"])
+        # No sale en el momento: queda en la bandeja, y la bandeja lo envía.
+        self.assertFalse(self.enviados)
+        [item] = bandeja.pendientes()
+        self.assertEqual(item["destinatarios"], ["brosky.spam@gmail.com"])
+        self.assertEqual(item["meta"]["para"], ["ventas@texdigital.cl", "jefe@texdigital.cl"])
+        self.assertEqual(bandeja.procesar(), 1)
         [(msg, para)] = self.enviados
-        self.assertEqual(para, ["brosky.spam@gmail.com"])
         self.assertIn("Nueva cotización 1004 - Galería Norte", msg["Subject"])
-        self.assertEqual(self.guardada["AvisoCreacion"]["para"], ["ventas@texdigital.cl", "jefe@texdigital.cl"])
-        # Es otro correo que el del cliente: no cuenta como envío al cliente.
+        self.assertTrue(list((self.base / "SGTD" / "Correos").rglob("*Nueva cotización 1004 - Galería Norte - cotización nueva.eml")))
+        # Queda anotado en la cotización, y no cuenta como envío al cliente.
+        [aviso] = self.guardada["Avisos"]
+        self.assertEqual((aviso["tipo"], aviso["estado"]), ("cotizacion_nueva", "enviado"))
         self.assertNotIn("Correos", self.guardada)
-        self.assertTrue(list((self.base / "SGTD" / "Correos").rglob("* Cotización nueva 1004.eml")))
 
     def test_aviso_apagado_no_sale(self):
         correos.guardar({"automaticos": {"activo": False}})
-        self.assertFalse(self.api.correo_al_crear()["activo"])
+        self.assertFalse(self.api.opciones_aviso("cotizaciones")["activo"])
         r = self.api.enviar_aviso_cotizacion_nueva(1004, ["ventas@texdigital.cl"])
         self.assertTrue(r["apagado"])
-        self.assertFalse(self.enviados)
-        self.assertNotIn("AvisoCreacion", self.guardada)
+        self.assertFalse(bandeja.pendientes())
 
     def test_aviso_sin_destinatarios_o_con_uno_malo(self):
         self.assertEqual(self.api.enviar_aviso_cotizacion_nueva(1004, []), {"ok": False, "error": "Falta a quién enviarlo."})
         self.assertFalse(self.api.enviar_aviso_cotizacion_nueva(1004, ["malo"])["ok"])
-        self.assertFalse(self.enviados)
+        self.assertFalse(bandeja.pendientes())
 
-    def test_lo_que_ve_el_resumen_del_cotizador(self):
+    def test_lo_que_ven_las_listas_de_destinatarios(self):
         correos.guardar({"cotizaciones_nuevas": {"para": [{"correo": "ventas@texdigital.cl", "nombre": "Ventas"}]},
                          "cotizaciones": {"copia": [{"correo": "jefe@texdigital.cl", "nombre": "Jefe"},
                                                     {"correo": "VENTAS@texdigital.cl", "nombre": ""}]},
                          "areas": {"ops": [{"correo": "produccion@texdigital.cl", "nombre": "Producción"}]}})
-        r = self.api.correo_al_crear()
+        r = self.api.opciones_aviso("cotizaciones")
         self.assertEqual([f["correo"] for f in r["inscritos"]], ["ventas@texdigital.cl"])
         # Para sumar a alguien: los demás guardados en la app, sin los inscritos ni repetidos.
         self.assertEqual([f["correo"] for f in r["guardados"]], ["jefe@texdigital.cl", "produccion@texdigital.cl"])
+        r = self.api.opciones_aviso("ops")
+        self.assertEqual([f["correo"] for f in r["inscritos"]], ["produccion@texdigital.cl"])
+        self.assertTrue(r["activo"])
+        correos.guardar({"automaticos": {"ops": False}})
+        self.assertFalse(self.api.opciones_aviso("ops")["activo"])
 
     def test_preparar_rellena_la_plantilla(self):
         p = self.api.preparar_correo_cotizacion(1004)
@@ -379,7 +396,7 @@ class TestSmtp(_Base):
 
     def test_cada_correo_que_sale_avisa_para_la_animacion(self):
         salieron = []
-        aviso = lambda: salieron.append(1)
+        aviso = lambda msg, para: salieron.append(1)
         correos.al_enviar(aviso)
         self.addCleanup(correos._al_enviar.remove, aviso)
         with self.assertRaises(correos.ErrorEnvio):   # sin contraseña no sale: no avisa
@@ -389,7 +406,7 @@ class TestSmtp(_Base):
         correos.enviar(*correos.mensaje_de_prueba())
         self.assertEqual(salieron, [1])
         # Una animación que falla no hace fallar el envío.
-        def rota():
+        def rota(msg, para):
             raise RuntimeError("sin ventana")
         correos.al_enviar(rota)
         self.addCleanup(correos._al_enviar.remove, rota)
@@ -417,3 +434,132 @@ class TestDesarrollo(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBandeja(_Base):
+    """La bandeja de salida (core/bandeja.py): guarda, envía, reintenta."""
+
+    def setUp(self):
+        super().setUp()
+        self.estados = []
+        bandeja.al_cambiar(lambda item, estado: self.estados.append(estado))
+        self.enviados = []
+        self.falla = None
+
+        def enviar(msg, para, ajustes=None):
+            if self.falla:
+                raise correos.ErrorEnvio(self.falla)
+            self.enviados.append((msg["Subject"], para))
+        p = mock.patch.object(correos, "enviar", enviar)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _encolar(self, asunto="OP 1005 - Cliente"):
+        msg, reales = correos.armar_mensaje(ajustes=correos.cargar(), para=["produccion@texdigital.cl"], copia=[],
+                                            asunto=asunto, mensaje="Hola")
+        return bandeja.encolar(msg, reales, {"tipo": "op_nueva", "numero": 1005, "asunto": asunto, "operacion": "op_nueva"})
+
+    def test_guarda_primero_y_despues_envia(self):
+        item = self._encolar()
+        self.assertTrue((bandeja.carpeta() / f"{item['id']}.eml").is_file())
+        self.assertEqual(self.estados, ["pendiente"])
+        self.assertEqual(bandeja.procesar(), 1)
+        self.assertEqual(self.enviados, [("[Prueba] OP 1005 - Cliente", ["brosky.spam@gmail.com"])])
+        self.assertEqual(self.estados, ["pendiente", "enviado"])
+        self.assertEqual(bandeja.pendientes(), [])
+        self.assertFalse(list(bandeja.carpeta().iterdir()))
+        self.assertTrue(list((self.base / "SGTD" / "Correos").rglob("*OP 1005 - Cliente - aprobación.eml")))
+
+    def test_sin_internet_queda_y_se_reintenta(self):
+        self._encolar()
+        self.falla = "No se pudo conectar con mail.texdigital.cl."
+        self.assertEqual(bandeja.procesar(), 0)
+        self.assertEqual(bandeja.procesar(), 0)
+        [item] = bandeja.pendientes()
+        self.assertEqual((item["intentos"], item["error"]), (2, "No se pudo conectar con mail.texdigital.cl."))
+        self.falla = None
+        self.assertEqual(bandeja.procesar(), 1)
+        self.assertEqual(self.estados, ["pendiente", "error", "error", "enviado"])
+        self.assertEqual(bandeja.pendientes(), [])
+
+    def test_el_estado_queda_en_la_op(self):
+        ruta = self.base / "1005.json"
+        ruta.write_text(json.dumps({"Cotizacion": 1005, "Empresa": "Cliente"}), encoding="utf-8")
+        bandeja.al_cambiar(api_correos.anotar_aviso)
+        with mock.patch.object(api_correos.repo_ops, "_ruta_de_op", lambda numero: ruta):
+            self._encolar()
+            self.falla = "Sin internet."
+            bandeja.procesar()
+            [aviso] = json.loads(ruta.read_text(encoding="utf-8"))["Avisos"]
+            self.assertEqual((aviso["estado"], aviso["error"], aviso["intentos"]), ("error", "Sin internet.", 1))
+            self.falla = None
+            bandeja.procesar()
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        [aviso] = datos["Avisos"]
+        self.assertEqual((aviso["estado"], aviso["error"]), ("enviado", None))
+        self.assertEqual(api_correos.resumen_aviso(api_correos.ultimo_aviso(datos, "op_nueva"))["estado"], "enviado")
+
+    def test_op_nueva_y_recotizada(self):
+        op = {"Cotizacion": 1005, "Nombre": "Toldo", "Empresa": "Cliente", "Contacto": "Ana",
+              "Fecha_ingreso": "13/11/2026", "Fecha_entrega": "20/11/2026", "productos": []}
+        html = self.base / "op.html"
+        html.write_text("<html>op</html>", encoding="utf-8")
+
+        def pdf(ruta_html, destino, **_):
+            Path(destino).write_bytes(b"%PDF-1.4")
+            return Path(destino)
+        api = api_correos.ApiCorreos()
+        with mock.patch.object(api_correos, "cargar_op", lambda numero: op), \
+             mock.patch.object(api_correos, "generar_html_op", lambda datos: html), \
+             mock.patch.object(api_correos, "html_a_pdf", pdf):
+            self.assertTrue(api.avisar_op_nueva(1005, ["produccion@texdigital.cl"])["ok"])
+            self.assertTrue(api.avisar_op_recotizada(1005, ["produccion@texdigital.cl"], op)["ok"])
+        bandeja.procesar()
+        asuntos = [a for a, _ in self.enviados]
+        self.assertEqual(asuntos, ["[Prueba] OP 1005 - Cliente", "[Prueba] OP 1005 recotizada - Cliente"])
+
+
+class TestHistorial(_Base):
+    """La copia de cada correo que sale: SGTD/Correos/<año>/<mes>/<asunto> - <operación>.eml."""
+
+    def _msg(self, asunto="OP 1005 - Cliente", para=("produccion@texdigital.cl",)):
+        msg, _ = correos.armar_mensaje(ajustes=correos.cargar(), para=list(para), copia=[], asunto=asunto, mensaje="Hola")
+        return msg
+
+    def test_nombre_carpeta_y_repetidos(self):
+        hoy = datetime.now()
+        a = correos.guardar_eml(self._msg('OP 1005 - Cliente: "A/B"'), "op_nueva")
+        b = correos.guardar_eml(self._msg('OP 1005 - Cliente: "A/B"'), "op_nueva")
+        self.assertEqual(a.parent, self.base / "SGTD" / "Correos" / f"{hoy:%Y}" / f"{hoy:%m}")
+        self.assertEqual(a.name, "[Prueba] OP 1005 - Cliente A B - aprobación.eml")
+        self.assertEqual(b.name, "[Prueba] OP 1005 - Cliente A B - aprobación (2).eml")
+
+    def test_el_historial_lee_las_copias(self):
+        correos.guardar_eml(self._msg("OP 1005 recotizada - Cliente"), "op_recotizada")
+        correos.guardar_eml(self._msg("Nueva cotización 1004 - Galería"), "cotizacion_nueva")
+        hoy = datetime.now()
+        r = api_correos.ApiCorreos().historial_correos()
+        self.assertEqual((r["anio"], r["mes"]), (hoy.year, hoy.month))
+        self.assertEqual(r["meses"], [{"anio": hoy.year, "mes": hoy.month, "cantidad": 2}])
+        por_operacion = {c["operacion"]: c for c in r["correos"]}
+        self.assertEqual(set(por_operacion), {"recotización", "cotización nueva"})
+        c = por_operacion["recotización"]
+        # En modo de prueba: el asunto sin "[Prueba]" y a quién iba de verdad.
+        self.assertEqual((c["asunto"], c["para"], c["prueba"]), ("OP 1005 recotizada - Cliente", ["produccion@texdigital.cl"], True))
+        self.assertIsNotNone(correos.ruta_copia(c["archivo"]))
+
+    def test_un_mes_sin_correos(self):
+        self.assertEqual(api_correos.ApiCorreos().historial_correos(2020, 1)["correos"], [])
+
+    def test_no_abre_nada_fuera_de_la_carpeta(self):
+        (self.base / "SGTD" / "secreto.eml").parent.mkdir(parents=True, exist_ok=True)
+        (self.base / "SGTD" / "secreto.eml").write_bytes(b"x")
+        self.assertIsNone(correos.ruta_copia("../secreto.eml"))
+        self.assertIsNone(correos.ruta_copia("2026/11/no-existe.eml"))
+
+    def test_el_correo_de_prueba_queda_en_el_historial(self):
+        self.almacen[(correos.SERVICIO_CREDENCIAL, "sistema@texdigital.cl")] = "x"
+        with mock.patch.object(correos, "enviar", lambda msg, para, ajustes=None: None):
+            self.assertTrue(api_correos.ApiCorreos().enviar_correo_de_prueba()["ok"])
+        [c] = api_correos.ApiCorreos().historial_correos()["correos"]
+        self.assertEqual(c["operacion"], "prueba")

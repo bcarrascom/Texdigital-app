@@ -220,3 +220,8 @@
   .precios-impacto__fila--total b { font-weight: var(--peso-fuerte); color: var(--c-tema-fuerte); }
   .precios-nota { margin-top: var(--e-4); font-size: var(--t-xs); }
 }
+
+.pag-ver-cotizacion {
+  /* A quién va el correo de la OP (components/ListaDestinatarios). */
+  .dlg-aprobar__correo { margin-top: var(--e-4); }
+}

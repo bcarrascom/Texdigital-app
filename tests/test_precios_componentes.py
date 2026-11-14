@@ -54,6 +54,8 @@ class _Base(unittest.TestCase):
             mock.patch.dict(repo.PRECIOS_CAJAS, CAJAS, clear=True),
             # Sin materiales de Inventario.
             mock.patch.object(repo_mat, "cobro_materiales_producto", lambda d: None),
+            # Que no lea el catalogo.json real (DropboxDev): pisaría los textiles de arriba.
+            mock.patch("core.catalogo.refrescar", lambda *a, **k: None),
         ]
         for p in parches:
             p.start()

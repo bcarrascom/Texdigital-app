@@ -10,11 +10,11 @@ import Campo from "@/components/Campo/Campo";
 import Dialogo from "@/components/Dialogo/Dialogo";
 import Segmento from "@/components/Segmento/Segmento";
 import NavFlotante from "@/components/NavFlotante/NavFlotante";
-import { trasCorreoEnviado } from "@/components/CorreoEnviado/CorreoEnviado";
 import IconoAviso from "@/assets/svg/circle-alert.svg?react";
 import IconoCotizaciones from "@/assets/svg/file-text.svg?react";
 import IconoOps from "@/assets/svg/clipboard-list.svg?react";
 import IconoCarpeta from "@/assets/svg/folder-open.svg?react";
+import IconoHistorial from "@/assets/svg/history.svg?react";
 import IconoClientes from "@/assets/svg/users.svg?react";
 import IconoCorreo from "@/assets/svg/mail.svg?react";
 import IconoCheck from "@/assets/svg/check.svg?react";
@@ -23,6 +23,7 @@ import IconoMas from "@/assets/svg/plus.svg?react";
 import { BarraGuardar, Fila, Grupo, NotaSoloLectura } from "./Ajustes";
 import { useCambiosPendientes } from "./cambiosPendientes";
 import { correoValido } from "@/utils/formato";
+import HistorialCorreos from "./HistorialCorreos";
 
 /* Configuración › Correos (pedido de Bruno, 2026-11-09; ver core/correos.py
    y CLAUDE.md, "Correos automáticos"). Dos partes (orden de Bruno, 2026-11-11):
@@ -67,6 +68,8 @@ const aBorrador = (a) => ({
   alCliente: !!a.cotizaciones.al_cliente, asunto: a.cotizaciones.asunto, mensaje: a.cotizaciones.mensaje,
   copia: a.cotizaciones.copia.map((f) => ({ ...f })),
   nuevasAsunto: a.cotizaciones_nuevas.asunto, nuevasMensaje: a.cotizaciones_nuevas.mensaje,
+  opsAsunto: a.ops.asunto, opsMensaje: a.ops.mensaje,
+  recAsunto: a.ops_recotizada.asunto, recMensaje: a.ops_recotizada.mensaje,
   nuevasPara: a.cotizaciones_nuevas.para.map((f) => ({ ...f })),
   autoActivo: !!a.automaticos.activo, autoCotizaciones: !!a.automaticos.cotizaciones, autoOps: !!a.automaticos.ops,
   areas: Object.fromEntries(AREAS.map(({ clave }) => [clave, (a.areas[clave] || []).map((f) => ({ ...f }))])),
@@ -77,6 +80,8 @@ const desdeBorrador = (b) => ({
   prueba: { activo: b.pruebaActivo, direccion: b.pruebaDireccion.trim() },
   cotizaciones: { al_cliente: b.alCliente, asunto: b.asunto, mensaje: b.mensaje, copia: b.copia },
   cotizaciones_nuevas: { asunto: b.nuevasAsunto, mensaje: b.nuevasMensaje, para: b.nuevasPara },
+  ops: { asunto: b.opsAsunto, mensaje: b.opsMensaje },
+  ops_recotizada: { asunto: b.recAsunto, mensaje: b.recMensaje },
   automaticos: { activo: b.autoActivo, cotizaciones: b.autoCotizaciones, ops: b.autoOps },
   areas: b.areas,
 });
@@ -94,6 +99,10 @@ function validar(b) {
   if (!b.mensaje.trim()) e["cotizaciones.mensaje"] = "Falta el mensaje.";
   if (!b.nuevasAsunto.trim()) e["cotizaciones_nuevas.asunto"] = "Falta el asunto.";
   if (!b.nuevasMensaje.trim()) e["cotizaciones_nuevas.mensaje"] = "Falta el mensaje.";
+  if (!b.opsAsunto.trim()) e["ops.asunto"] = "Falta el asunto.";
+  if (!b.opsMensaje.trim()) e["ops.mensaje"] = "Falta el mensaje.";
+  if (!b.recAsunto.trim()) e["ops_recotizada.asunto"] = "Falta el asunto.";
+  if (!b.recMensaje.trim()) e["ops_recotizada.mensaje"] = "Falta el mensaje.";
   const lista = (filas, clave) => {
     const vistos = new Set();
     filas.forEach((f, i) => {
@@ -128,6 +137,10 @@ function describirCambios(o, a) {
   }
   campo("Asunto del aviso de cotización nueva", o.nuevasAsunto, a.nuevasAsunto);
   if (o.nuevasMensaje !== a.nuevasMensaje) c.push("Mensaje del aviso de cotización nueva");
+  campo("Asunto del correo de la OP", o.opsAsunto, a.opsAsunto);
+  if (o.opsMensaje !== a.opsMensaje) c.push("Mensaje del correo de la OP");
+  campo("Asunto del aviso de OP recotizada", o.recAsunto, a.recAsunto);
+  if (o.recMensaje !== a.recMensaje) c.push("Mensaje del aviso de OP recotizada");
   if (o.alCliente !== a.alCliente) c.push(`Correos a clientes: ${a.alCliente ? "activados" : "desactivados"}`);
   campo("Asunto del correo al cliente", o.asunto, a.asunto);
   if (o.mensaje !== a.mensaje) c.push("Mensaje del correo al cliente");
@@ -151,8 +164,10 @@ export default function Correos() {
   const [borrador, setBorrador] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [pidiendo, setPidiendo] = useState(false);   // el diálogo de la contraseña
+  const [viendoHistorial, setViendoHistorial] = useState(false);
   const [probando, setProbando] = useState(false);
-  const ultimoCampo = useRef({ nuevasMensaje: "nuevasMensaje", mensaje: "mensaje" });   // por plantilla, adónde va una variable
+  // Por plantilla, adónde va una variable (el último campo que se tocó de los dos).
+  const ultimoCampo = useRef({ nuevasMensaje: "nuevasMensaje", mensaje: "mensaje", opsMensaje: "opsMensaje", recMensaje: "recMensaje" });
 
   const original = useMemo(() => (datos ? aBorrador(datos.ajustes) : null), [datos]);
   const actual = borrador || original;
@@ -217,12 +232,8 @@ export default function Correos() {
     setProbando(true);
     try {
       const r = await api.enviar_correo_de_prueba();
-      if (r?.ok) {
-        setProbando(false);
-        await trasCorreoEnviado();
-        aviso(`Correo de prueba enviado a ${r.a.join(", ")}. Revisa que haya llegado (o el spam).`, "info", 6000);
-      }
-      else aviso(r?.error || "No se pudo enviar.", "error", 8000);
+      // Si salió, la animación y el aviso "Enviado a …" los muestra components/CorreoEnviado.
+      if (!r?.ok) aviso(r?.error || "No se pudo enviar.", "error", 8000);
     } finally {
       setProbando(false);
     }
@@ -278,7 +289,12 @@ export default function Correos() {
               detalle={actual.pruebaActivo ? `a ${actual.pruebaDireccion || "la dirección de prueba"}` : `a ${actual.remitente}`}
               onClick={conClave && !hayCambios ? correoDePrueba
                 : () => aviso(hayCambios ? "Guarda los cambios antes de probar." : "Primero escribe la contraseña.", "error")} />
+        <Fila icono={IconoHistorial} color="#5E6AD2" etiqueta="Historial de correos" onClick={() => setViendoHistorial(true)} />
         <Fila icono={IconoCarpeta} color="#8E8E93" etiqueta="Abrir la carpeta de correos" onClick={() => api.abrir_carpeta_correos()} />
+        {datos.pendientes > 0 && (
+          <Fila icono={IconoAviso} color="#E8772E" etiqueta="Correos sin enviar" detalle={`${datos.pendientes} en este computador`}
+                onClick={() => { api.reintentar_bandeja(); aviso("Se está intentando enviarlos de nuevo.", "info"); }} />
+        )}
       </Grupo>
 
       <Grupo titulo="Correos automáticos">
@@ -320,6 +336,12 @@ export default function Correos() {
             <ListaCorreos titulo="Reciben las OPs" ejemplo="produccion@texdigital.cl"
                           filas={actual.areas.ops} clave="areas.ops" errores={errores} soloLectura={soloLectura}
                           onCambiar={(filas) => cambiar({ areas: { ...actual.areas, ops: filas } })} />
+            <h3 className="correos-subtitulo">Al aprobar una cotización</h3>
+            <Plantilla titulo="Mensaje de la OP" prefijo="ops" seccion="ops" porDefecto={datos.por_defecto.ops}
+                       variables={datos.variables_op} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
+            <h3 className="correos-subtitulo">Al recotizar una OP</h3>
+            <Plantilla titulo="Mensaje del aviso" prefijo="rec" seccion="ops_recotizada" porDefecto={datos.por_defecto.recotizada}
+                       variables={datos.variables_op} {...{ actual, datos, errores, soloLectura, cambiar, ultimoCampo, insertarVariable }} />
             </>
           )}
         </motion.div>
@@ -332,6 +354,9 @@ export default function Correos() {
         <FormularioContrasena correo={original.remitente} onCerrar={() => setPidiendo(false)}
                               onHecho={async () => { setPidiendo(false); await recargar(); aviso("Contraseña guardada en este computador.", "info"); }} />
       </Dialogo>
+      <Dialogo abierto={viendoHistorial} onCerrar={() => setViendoHistorial(false)} className="dlg--desenfoque dlg-historial-correos">
+        <HistorialCorreos onCerrar={() => setViendoHistorial(false)} />
+      </Dialogo>
     </>
   );
 }
@@ -339,7 +364,8 @@ export default function Correos() {
 /* A qué sección de abajo pertenece un error de validar() (los de la cuenta y
    el modo de prueba son de arriba: no marcan ninguna). */
 const enSeccion = (clave, seccion) =>
-  seccion === "cotizaciones" ? clave.startsWith("cotizaciones") : clave.startsWith(`areas.${seccion}`);
+  seccion === "cotizaciones" ? clave.startsWith("cotizaciones")
+    : clave.startsWith(`areas.${seccion}`) || clave.startsWith(`${seccion}.`) || clave.startsWith(`${seccion}_`);
 
 /* Cotizaciones: dos correos distintos (Bruno, 2026-11-11), cada uno con su
    lista, su asunto y su mensaje.
@@ -384,7 +410,7 @@ function SeccionCotizaciones({ actual, datos, errores, soloLectura, cambiar, ult
 
 /* Asunto y mensaje de un correo, con sus variables y "Volver al que traía la
    app". `prefijo`: "" (al cliente: asunto, mensaje) o "nuevas" (nuevasAsunto…). */
-function Plantilla({ titulo, pie, prefijo, seccion, porDefecto, actual, datos, errores, soloLectura, cambiar, ultimoCampo,
+function Plantilla({ titulo, pie, prefijo, seccion, porDefecto, variables, actual, datos, errores, soloLectura, cambiar, ultimoCampo,
                      insertarVariable }) {
   const kAsunto = prefijo ? `${prefijo}Asunto` : "asunto";
   const kMensaje = prefijo ? `${prefijo}Mensaje` : "mensaje";
@@ -405,7 +431,7 @@ function Plantilla({ titulo, pie, prefijo, seccion, porDefecto, actual, datos, e
       <div className="fila-ajuste fila-correo">
         <span className="fila-correo__etiqueta">Variables</span>
         <div className="correo-variables">
-          {datos.variables.map((v) => (
+          {(variables || datos.variables).map((v) => (
             <button key={v.clave} type="button" className="correo-variable" title={v.texto} disabled={soloLectura}
                     onMouseDown={(e) => e.preventDefault()} onClick={() => insertarVariable(kMensaje, v.clave)}>
               <code>{`{${v.clave}}`}</code><span>{v.texto}</span>
