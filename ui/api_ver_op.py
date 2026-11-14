@@ -16,6 +16,8 @@ from core.precios import calcular_ml
 from core.repositorio import TEXTILES_ANCHOS
 from core.presentar_op import generar_html
 from ui.dialogo_recotizar import recotizar_op as _recotizar_op
+from core import correos
+from ui.api_correos import ApiCorreos, resumen_aviso, ultimo_aviso
 
 
 def _metros_producto(p_interno: dict) -> tuple[float | None, float | None]:
@@ -93,6 +95,9 @@ def op_a_json(datos: dict) -> dict:
         # core/repositorio_despachos.py::_nombre_producto, mismo chequeo).
         "tiene_backlight":   any("Caja" in p for p in productos_json),
         "op_inser":          op_inser_marcada(datos),
+        # El correo de la OP a producción (ver ui/api_correos.anotar_aviso):
+        # enviado, pendiente o con error. None si no se envió ninguno.
+        "aviso_op":          resumen_aviso(ultimo_aviso(datos, "op_nueva")),
     }
 
 
@@ -129,8 +134,22 @@ class ApiVerOp:
         ruta_html = generar_html(datos)
         webbrowser.open(ruta_html.as_uri())
 
-    def recotizar_op(self, numero) -> bool:
-        return _recotizar_op(numero)
+    def recotizar_op(self, numero, aviso_para=None) -> bool:
+        """`aviso_para`: a quién avisar que se recotizó, tal como lo dejó el
+        diálogo Recotizar. Vacío o con los correos automáticos de OPs
+        apagados, no sale ningún correo."""
+        datos = cargar_op(int(numero))
+        ok = _recotizar_op(numero)
+        if ok and datos is not None and aviso_para and correos.automatico_activo("ops"):
+            try:
+                ApiCorreos().avisar_op_recotizada(numero, aviso_para, datos)
+            except Exception:
+                pass   # la OP ya se recotizó; el aviso no puede deshacerlo
+        return ok
+
+    def reenviar_op(self, numero, para) -> dict:
+        """"Reenviar" de Ver OP: la OP, con su PDF, a quienes se elija."""
+        return ApiCorreos().avisar_op_nueva(numero, para, reenvio=True)
 
     def completar_op(self, numero) -> bool:
         """Botón "Completar" de ver-op.html — hasta ahora esto solo se
