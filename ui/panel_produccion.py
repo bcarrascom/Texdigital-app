@@ -60,7 +60,7 @@ Dropbox (igual que con el resto de la app), no hace falta nada más.
 import json
 import os
 import sys
-import webbrowser
+from core.navegador import abrir_html
 
 import webview
 
@@ -136,7 +136,7 @@ class _ApiPanelProduccion:
         try:
             from core.presentar_op import generar_html
             ruta_html = generar_html(datos)
-            webbrowser.open(ruta_html.as_uri())
+            abrir_html(ruta_html)
             return True
         except Exception as e:
             print("No se pudo generar el HTML de la OP:", e)

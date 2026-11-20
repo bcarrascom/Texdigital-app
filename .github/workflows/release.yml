@@ -108,6 +108,16 @@ jobs:
           --add-data "frontend/dist:frontend/dist"
           --hidden-import "PIL._tkinter_finder" main.py
 
+      # Para imprimir, la app le pide al navegador por AppleScript una
+      # pestaña nueva (core/navegador.py). macOS pide permiso con este texto;
+      # sin él, puede negarlo sin preguntar. Cambiar el Info.plist rompe la
+      # firma ad hoc que pone PyInstaller: se vuelve a firmar.
+      - name: Permiso para controlar el navegador (macOS)
+        if: matrix.os == 'macos-26-intel'
+        run: |
+          plutil -insert NSAppleEventsUsageDescription -string "Para abrir las cotizaciones y OPs en una pestaña del navegador." "dist/Sistema de Gestion.app/Contents/Info.plist"
+          codesign --force --deep --sign - "dist/Sistema de Gestion.app"
+
       - name: Crear archivo (Windows)
         if: matrix.os == 'windows-latest'
         run: Compress-Archive -Path "dist/Sistema de Gestion" -DestinationPath "SistemaGestion-windows.zip"

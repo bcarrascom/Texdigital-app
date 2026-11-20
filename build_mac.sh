@@ -52,6 +52,15 @@ python3 -m PyInstaller \
     --hidden-import "PIL._tkinter_finder" \
     main.py
 
+# Para imprimir, la app le pide al navegador por AppleScript una pestaña
+# nueva (core/navegador.py). macOS pide permiso con este texto; sin él,
+# puede negarlo sin preguntar. Cambiar el Info.plist rompe la firma ad hoc
+# que pone PyInstaller: se vuelve a firmar.
+plutil -insert NSAppleEventsUsageDescription \
+    -string "Para abrir las cotizaciones y OPs en una pestaña del navegador." \
+    "dist/${APP_NAME}.app/Contents/Info.plist"
+codesign --force --deep --sign - "dist/${APP_NAME}.app"
+
 echo ""
 echo "=== Creando acceso directo en el Escritorio ==="
 DESKTOP="$HOME/Desktop"

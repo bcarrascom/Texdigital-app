@@ -7,7 +7,7 @@ es ApiApp quien decide a dónde ir después.
 """
 
 import threading
-import webbrowser
+from core.navegador import abrir_html
 
 from core.repositorio_cotizaciones import (
     cargar_cotizacion,
@@ -269,7 +269,7 @@ class ApiVerCotizacion:
             return
         datos = recalcular_descuentos(datos)
         ruta_html = generar_html(datos)
-        webbrowser.open(ruta_html.as_uri())
+        abrir_html(ruta_html)
 
     def verificar_materiales(self, numero) -> list[dict]:
         """Chequeo previo al botón "Aprobar →" de la cabecera — ANTES de
