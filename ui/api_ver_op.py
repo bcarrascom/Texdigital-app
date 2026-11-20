@@ -5,7 +5,7 @@ Lógica de ver-op.html — instanciada una sola vez por ui.api_app.ApiApp
 (ver core/presentar_op.py, mismo criterio acá).
 """
 
-import webbrowser
+from core.navegador import abrir_html
 
 from core.repositorio_ops import (
     cargar_op, estado_op, listar_todas_las_ops, ESTADO_ACTIVA,
@@ -26,7 +26,7 @@ def _metros_producto(p_interno: dict) -> tuple[float | None, float | None]:
     backlight, ML para el resto)."""
     if "tela" in p_interno:
         area = p_interno.get("alto", 0.0) * p_interno.get("ancho", 0.0) * p_interno.get("cantidad", 0)
-        return None, area
+        return None, round(area, 2)
     ancho_tela = TEXTILES_ANCHOS.get(p_interno.get("textil", ""))
     _, ml = calcular_ml(p_interno, ancho_tela)
     return (ml or 0.0), None
@@ -132,7 +132,7 @@ class ApiVerOp:
         if datos is None:
             return
         ruta_html = generar_html(datos)
-        webbrowser.open(ruta_html.as_uri())
+        abrir_html(ruta_html)
 
     def recotizar_op(self, numero, aviso_para=None) -> bool:
         """`aviso_para`: a quién avisar que se recotizó, tal como lo dejó el

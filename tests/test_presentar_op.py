@@ -704,3 +704,41 @@ class TestRotuloSegunCaja(_ConCarpetaTemporal):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOpMixta(_ConCarpetaTemporal):
+    """OP con un producto normal primero y backlight después (la OP 7701):
+    antes las columnas de corte dependían solo del primer producto, y las
+    filas backlight tenían 2 celdas más que el encabezado (sus M² se
+    imprimían fuera de la tabla). Y el total de M² sumaba los valores sin
+    redondear: 2,11 + 5,13 daba 7,23."""
+
+    def _op(self):
+        op = _op_normal(9701)
+        op["productos"] += [
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 1.8, "Alto": 1.17,
+             "Cantidad": 1, "Tema": "Uno", "Obs": ""},
+            {"Tela": "Popelina 155", "Caja": "Sin caja", "Ancho": 2.88, "Alto": 1.78,
+             "Cantidad": 1, "Tema": "Dos", "Obs": ""},
+        ]
+        return op
+
+    def _html(self):
+        from core.presentar_op import generar_html
+        return generar_html(self._op()).read_text(encoding="utf-8")
+
+    def test_todas_las_filas_tienen_las_columnas_del_encabezado(self):
+        html = self._html()
+        self.assertIn("Corte ancho", html)
+        cuerpo = html[html.index("<tbody"):html.index("</tbody>")]
+        filas = cuerpo.split("<tr")[1:]
+        self.assertEqual(len(filas), 4)  # 3 productos + totales
+        for fila in filas:
+            self.assertEqual(fila.count("<td"), 7)
+
+    def test_el_total_de_m2_suma_lo_que_muestran_las_filas(self):
+        html = self._html()
+        self.assertIn("2,11 M²", html)
+        self.assertIn("5,13 M²", html)
+        self.assertIn("7,24 M²", html)
+        self.assertNotIn("7,23", html)
