@@ -121,22 +121,28 @@ def _excedente_cm(m2: float) -> float:
 def _metrica_producto(interno: dict) -> tuple[float, str]:
     """(cantidad_de_metros, unidad) de un producto — M² para backlight
     (Alto×Ancho×Cantidad), ML para el resto (misma fórmula que
-    core.precios, pero acá es una medida física, no un costo)."""
+    core.precios, pero acá es una medida física, no un costo).
+    Los M² van redondeados a 2 decimales, que es lo que se imprime: los
+    totales suman lo mismo que muestran las filas (antes 2,106 + 5,126
+    se mostraban 2,11 y 5,13 y sumaban 7,23)."""
     if "tela" in interno:
         area = interno.get("alto", 0.0) * interno.get("ancho", 0.0) * interno.get("cantidad", 0)
-        return area, "M²"
+        return round(area, 2), "M²"
     ancho_tela = TEXTILES_ANCHOS.get(interno.get("textil", ""))
     _, ml = calcular_ml(interno, ancho_tela)
     return (ml or 0.0), "ML"
 
 
-def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMINADA") -> tuple[str, float, str]:
+def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMINADA",
+                   tabla_backlight: bool = False) -> tuple[str, float, str]:
     """Fila de la tabla de productos (sin precios). Devuelve el HTML de la
     fila, más (metros, unidad) para acumular en los totales. `terminaciones_caja`
     es el valor de la OP completa (esquema viejo) y solo se usa como respaldo del
     que traiga el producto (ver _terminaciones_caja_de); importa únicamente para
     productos backlight (agrega 2 columnas de corte de tela, ver _corte) — se
-    ignora para el resto."""
+    ignora para el resto. `tabla_backlight` dice si la tabla tiene esas 2
+    columnas: un producto normal en una OP que también trae backlight lleva
+    2 celdas vacías, para no correr las columnas."""
     cantidad = p.get("Cantidad", 0)
     tema = p.get("Tema", "").strip() or "—"
     obs = p.get("Obs", "").strip()
@@ -185,7 +191,9 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         medidas += f'<div class="prod-obs">{_fmt_margen_cm(tc)}</div>'
         medidas += f'<div class="prod-obs">Excedente: {excedente} cm</div>'
     else:
-        celdas_corte = ""
+        celdas_corte = """
+        <td class="num"></td>
+        <td class="num"></td>""" if tabla_backlight else ""
         nombre = p.get("producto", "")
         detalle = p.get("Tela", "")
         # Los ajustes manuales (montos escritos directo, ver
@@ -416,7 +424,10 @@ def generar_html(op: dict) -> Path:
     numero = op.get("Cotizacion", "")
     productos_raw = op.get("productos", [])
     productos_internos = [producto_desde_json(p) for p in productos_raw]
-    es_backlight = bool(productos_raw) and "Caja" in productos_raw[0]
+    # Con un solo backlight la tabla lleva las columnas de corte, aunque el
+    # primer producto sea normal (antes se miraba solo el primero, y en una
+    # OP mixta las filas backlight tenían 2 celdas más que el encabezado).
+    es_backlight = any("Caja" in p for p in productos_raw)
     terminaciones_caja = op.get("TerminacionesCaja", "CAJA TERMINADA")
 
     nombre_trabajo = op.get("Nombre", "").strip()
@@ -451,7 +462,7 @@ def generar_html(op: dict) -> Path:
     total_ml = 0.0
     total_m2 = 0.0
     for p, interno in zip(productos_raw, productos_internos):
-        fila, metros, unidad = _fila_producto(p, interno, terminaciones_caja)
+        fila, metros, unidad = _fila_producto(p, interno, terminaciones_caja, es_backlight)
         filas_html.append(fila)
         total_cantidad += p.get("Cantidad", 0)
         if unidad == "ML":

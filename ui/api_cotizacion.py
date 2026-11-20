@@ -20,7 +20,7 @@ interno ↔ JSON guardado), pero para el esquema del NAVEGADOR.
 """
 
 import re
-import webbrowser
+from core.navegador import abrir_html
 from datetime import datetime
 
 from core.repositorio import (
@@ -648,7 +648,7 @@ class ApiCotizacion:
 
         if abrir:
             ruta_html = generar_html(json_dict)
-            webbrowser.open(ruta_html.as_uri())
+            abrir_html(ruta_html)
 
         return {"numero": numero}
 

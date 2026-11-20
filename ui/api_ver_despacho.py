@@ -6,7 +6,7 @@ ui/api_asignar_despacho.py — cada producto ya tiene su dirección puesta):
 acá se generan las guías de despacho, posiblemente parciales.
 """
 
-import webbrowser
+from core.navegador import abrir_html
 
 from core import repositorio_despachos
 from core.presentar_despacho import generar_html
@@ -80,7 +80,7 @@ class ApiVerDespacho:
             print("No se pudo generar la guía de despacho:", e)
             return None
         ruta_html = generar_html(guia)
-        webbrowser.open(ruta_html.as_uri())
+        abrir_html(ruta_html)
         return guia
 
     def reimprimir_guia(self, numero_guia) -> bool:
@@ -88,5 +88,5 @@ class ApiVerDespacho:
         if guia is None:
             return False
         ruta_html = generar_html(guia)
-        webbrowser.open(ruta_html.as_uri())
+        abrir_html(ruta_html)
         return True
