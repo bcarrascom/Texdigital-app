@@ -240,17 +240,27 @@ class TestPrecios(unittest.TestCase):
                      "alto": 2.0, "ancho": 1.0, "cantidad": 3}          # total 6.000
         totales = costo_cotizacion([no_backlight, backlight], descuento_pct=10, **CATALOGOS)
 
-        neto_esperado = 2340 + 6000
-        descuento_esperado = neto_esperado * 0.10
-        neto_total_esperado = neto_esperado - descuento_esperado
-        iva_esperado = neto_total_esperado * 0.19
-        total_esperado = neto_total_esperado + iva_esperado
+        # Neto 8.340, descuento 834, neto total 7.506; IVA 1.426,14 → 1.426.
+        self.assertEqual(totales["neto"], 8340)
+        self.assertEqual(totales["descuento"], 834)
+        self.assertEqual(totales["neto_total"], 7506)
+        self.assertEqual(totales["iva"], 1426)
+        self.assertEqual(totales["total"], 8932)
 
-        self.assertAlmostEqual(totales["neto"], neto_esperado)
-        self.assertAlmostEqual(totales["descuento"], descuento_esperado)
-        self.assertAlmostEqual(totales["neto_total"], neto_total_esperado)
-        self.assertAlmostEqual(totales["iva"], iva_esperado)
-        self.assertAlmostEqual(totales["total"], total_esperado)
+    def test_totales_en_pesos_enteros_como_el_sii(self):
+        # Reclamo de un cliente (2026-11-24): con el neto con decimales, el
+        # total salía $667.199,2 y se mostraba $667.199; el SII redondea el
+        # neto, calcula el IVA sobre ese neto y lo redondea: $667.200.
+        totales = costo_cotizacion([], despacho=560671.6, **CATALOGOS)
+        self.assertEqual(totales["neto_total"], 560672)
+        self.assertEqual(totales["iva"], 106528)        # 106.527,68
+        self.assertEqual(totales["total"], 667200)
+
+    def test_el_iva_redondea_el_medio_peso_hacia_arriba(self):
+        # 150 × 19 % = 28,5 → 29 (el round() de Python daría 28).
+        totales = costo_cotizacion([], despacho=150, **CATALOGOS)
+        self.assertEqual(totales["iva"], 29)
+        self.assertEqual(totales["total"], 179)
 
     def test_7_costo_cotizacion_con_despacho(self):
         # El despacho no es un producto (sin medidas, no va en la lista
@@ -263,10 +273,10 @@ class TestPrecios(unittest.TestCase):
                                     despacho=15000, **CATALOGOS)
 
         neto_esperado = 1140 + 15000
-        self.assertAlmostEqual(totales["neto"], neto_esperado)
-        self.assertAlmostEqual(totales["neto_total"], neto_esperado)
-        self.assertAlmostEqual(totales["iva"], neto_esperado * 0.19)
-        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+        self.assertEqual(totales["neto"], neto_esperado)
+        self.assertEqual(totales["neto_total"], neto_esperado)
+        self.assertEqual(totales["iva"], 3067)          # 3.066,6
+        self.assertEqual(totales["total"], neto_esperado + 3067)
 
     def test_8_costo_cotizacion_sin_despacho_es_compatible_con_cotizaciones_viejas(self):
         # Sin pasar `despacho` (o pasando None/0), el comportamiento debe
@@ -288,10 +298,10 @@ class TestPrecios(unittest.TestCase):
                                     instalacion=20000, **CATALOGOS)
 
         neto_esperado = 1140 + 20000
-        self.assertAlmostEqual(totales["neto"], neto_esperado)
-        self.assertAlmostEqual(totales["neto_total"], neto_esperado)
-        self.assertAlmostEqual(totales["iva"], neto_esperado * 0.19)
-        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+        self.assertEqual(totales["neto"], neto_esperado)
+        self.assertEqual(totales["neto_total"], neto_esperado)
+        self.assertEqual(totales["iva"], 4017)          # 4.016,6
+        self.assertEqual(totales["total"], neto_esperado + 4017)
 
     def test_10_costo_cotizacion_con_despacho_e_instalacion(self):
         # Ambos son montos aparte, se suman los dos al mismo neto.
@@ -301,8 +311,8 @@ class TestPrecios(unittest.TestCase):
                                     despacho=15000, instalacion=20000, **CATALOGOS)
 
         neto_esperado = 1140 + 15000 + 20000
-        self.assertAlmostEqual(totales["neto"], neto_esperado)
-        self.assertAlmostEqual(totales["total"], neto_esperado * 1.19)
+        self.assertEqual(totales["neto"], neto_esperado)
+        self.assertEqual(totales["total"], neto_esperado + 6867)   # IVA 6.866,6
 
     def test_11_costo_cotizacion_sin_instalacion_es_compatible_con_cotizaciones_viejas(self):
         # Sin pasar `instalacion` (o pasando None/0), el comportamiento debe
@@ -707,8 +717,9 @@ class TestExplicarDescuento(unittest.TestCase):
         self.assertAlmostEqual(e["productos"][0]["monto"], 114.0)
         self.assertAlmostEqual(e["despacho"]["monto"], 500.0)
         self.assertEqual(t["fuente_descuento"], "manual")
-        self.assertAlmostEqual(t["descuento"], 7500 + 114 + 500)
-        self.assertAlmostEqual(t["total"], (t["neto"] - t["descuento"]) * 1.19)
+        self.assertEqual(t["descuento"], 7500 + 114 + 500)
+        self.assertEqual(t["neto_total"], t["neto"] - t["descuento"])
+        self.assertEqual(t["total"], t["neto_total"] + round(t["neto_total"] * 0.19))
 
     def test_un_manual_puede_descontar_el_minimo_y_no_pasa_del_precio(self):
         prods, kw = self._gana_contacto()
@@ -730,7 +741,8 @@ class TestExplicarDescuento(unittest.TestCase):
         man = {"pedido": {"tipo": "pct", "valor": 10}}
         con = costo_cotizacion(prods, 10, manuales=man, **kw)
         queda = sin["neto"] - sin["descuento"]
-        self.assertAlmostEqual(con["descuento"], sin["descuento"] + queda * 0.10)
+        # En pesos enteros: puede diferir en menos de $1 del cálculo con decimales.
+        self.assertAlmostEqual(con["descuento"], sin["descuento"] + queda * 0.10, delta=0.5)
         # Reparto por linea (reportes): la fraccion de cada uno sube parejo.
         lineas = descuento_por_linea(prods, 10, manuales=man, **kw)
         self.assertAlmostEqual(lineas[1]["impresion"], 0.10 + 0.90 * 0.10)

@@ -98,6 +98,8 @@ Descuento-textil (ver descuento_textil/costo_cotizacion, confirmado con el
   d["textil"]), aplicado solo al costo de impresión de esos productos.
 """
 
+from decimal import Decimal, ROUND_HALF_UP
+
 from core.repositorio import (
     TEXTILES_ANCHOS,
     TEXTILES_VALORES,
@@ -145,9 +147,15 @@ def _con_piso(valor: float, piso: float) -> float:
     return piso if 0 < valor < piso else valor
 
 
+def redondear_pesos(valor: float) -> int:
+    """A pesos enteros, con el ,5 hacia arriba (como el SII; el round() de
+    Python lleva el ,5 al par)."""
+    return int(Decimal(str(valor)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def formatear_clp(valor: float) -> str:
     """$1.234.567 — formato chileno, sin decimales."""
-    return "$" + f"{round(valor):,}".replace(",", ".")
+    return "$" + f"{redondear_pesos(valor):,}".replace(",", ".")
 
 
 def calcular_ml(d: dict, ancho_tela: float | None) -> tuple[float | None, float | None]:
@@ -799,11 +807,20 @@ def _costo_automatico(productos: list[dict], descuento_pct: float = 0.0,
 
 
 def _con_iva(totales: dict, reglas: dict | None) -> dict:
-    """Completa neto_total, iva, iva_pct y total a partir de neto y descuento."""
-    neto_total = totales["neto"] - totales["descuento"]
+    """Completa neto_total, iva, iva_pct y total a partir de neto y descuento.
+
+    En pesos enteros, como lo calcula el SII: neto y descuento redondeados,
+    el IVA redondeado sobre el neto total ya entero, y total = neto total +
+    IVA. Antes se redondeaba solo al mostrar, y el total podía quedar $1
+    abajo del de la factura (reclamo de un cliente, 2026-11-24: la app decía
+    $667.199 y el SII $667.200)."""
+    neto = redondear_pesos(totales["neto"])
+    descuento = redondear_pesos(totales["descuento"])
+    neto_total = neto - descuento
     iva_pct = float(_reglas(reglas)["iva"])
-    iva = neto_total * iva_pct / 100
-    return {**totales, "neto_total": neto_total, "iva": iva, "iva_pct": iva_pct, "total": neto_total + iva}
+    iva = redondear_pesos(neto_total * iva_pct / 100)
+    return {**totales, "neto": neto, "descuento": descuento, "neto_total": neto_total,
+            "iva": iva, "iva_pct": iva_pct, "total": neto_total + iva}
 
 
 def costo_cotizacion(productos: list[dict], descuento_pct: float = 0.0,
