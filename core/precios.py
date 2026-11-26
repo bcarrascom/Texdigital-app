@@ -378,18 +378,35 @@ def costo_producto(
         perfil = d["caja"].get("perfil") if isinstance(d.get("caja"), dict) else None
         costo_materiales += ((cobro_bl or {}).get("estructuras") or {}).get(perfil, 0.0)
 
+        # Terminaciones (pedido de Bruno, 2026-11-26): un backlight también
+        # puede llevarlas. Solo las que se cobran por unidad (× Cantidad) y los
+        # montos escritos a mano: un backlight se cobra por M², no tiene ML
+        # impresos con que multiplicar una terminación por ML — el cotizador no
+        # deja agregarlas (ver cat.terminaciones_unit), y si una llega igual
+        # (p. ej. se cambió a "por ML" en Configuración), no cobra.
+        detalle_terminaciones = {}
+        for t in d.get("terminaciones") or []:
+            valor_manual = parsear_valor_manual(t)
+            if valor_manual is not None:
+                detalle_terminaciones[t] = valor_manual
+            elif modelo == "legado":
+                detalle_terminaciones[t] = (terminaciones_legado_valores.get(t) or {}).get("valorUNIT", 0.0) * cantidad
+            else:
+                detalle_terminaciones[t] = terminaciones_valores.get(t, 0.0) * cantidad
+        costo_terminaciones = sum(detalle_terminaciones.values())
+
         resultado = {
             "ml_o_area":          area,
             "costo_impresion":    costo_impresion,
-            "costo_terminaciones": 0.0,
+            "costo_terminaciones": costo_terminaciones,
             "costo_estructuras":   0.0,
             "costo_caja":         costo_caja,
             "costo_materiales":   costo_materiales,
             "detalle_estructuras":  {},
-            "detalle_terminaciones": {},
+            "detalle_terminaciones": detalle_terminaciones,
             "detalle_caja":       detalle_caja,
             "detalle_materiales": detalle_materiales_bl,
-            "total":               costo_impresion + costo_caja + costo_materiales,
+            "total":               costo_impresion + costo_caja + costo_materiales + costo_terminaciones,
         }
     else:
         ancho_tela = textiles_anchos.get(d.get("textil", ""))

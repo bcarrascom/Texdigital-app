@@ -55,7 +55,7 @@ def _producto_a_json_pantalla(p_interno: dict) -> dict:
         "textil":        "" if es_bl else p_interno.get("textil", ""),
         "impresion":     "" if es_bl else p_interno.get("impresion", ""),
         "estructuras":   [] if es_bl else list(p_interno.get("estructuras", [])),
-        "terminaciones": [] if es_bl else list(p_interno.get("terminaciones", [])),
+        "terminaciones": list(p_interno.get("terminaciones", [])),
         "tela":          p_interno.get("tela", "") if es_bl else "",
         "caja":          _texto_caja(p_interno.get("caja", "")) if es_bl else "",
         "tema":          p_interno.get("tema", ""),

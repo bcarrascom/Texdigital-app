@@ -198,8 +198,10 @@ const PanelProducto = forwardRef(function PanelProducto(
               )}
             </div>
 
-            {/* Estructuras y terminaciones: solo estándar, lado a lado */}
-            {!bl && (
+            {/* Estructuras y terminaciones lado a lado; un backlight lleva solo
+                terminaciones, y solo las que se cobran por unidad: se cobra por
+                M², no tiene ML con que multiplicar una por ML. */}
+            {!bl ? (
               <div className="grupo fila-listas">
                 <ListaAditiva titulo="Estructuras" lista="lista-estructuras" items={p.estructuras}
                               montos={c.detalle_estructuras} permitidasSinTextil={cat.estructuras_unit}
@@ -207,6 +209,13 @@ const PanelProducto = forwardRef(function PanelProducto(
                 <ListaAditiva titulo="Terminaciones" lista="lista-terminaciones" items={p.terminaciones}
                               montos={c.detalle_terminaciones} permitidasSinTextil={cat.terminaciones_unit}
                               sinTextil={!p.textil.trim()} onCambiar={(v) => onCambiar({ terminaciones: v })} />
+              </div>
+            ) : (
+              <div className="grupo fila-listas">
+                <ListaAditiva titulo="Terminaciones" lista="lista-terminaciones-bl" items={p.terminaciones || []}
+                              montos={c.detalle_terminaciones} permitidasSinTextil={cat.terminaciones_unit}
+                              sinTextil avisoSoloUnidad="Un backlight solo admite terminaciones que se cobren por unidad."
+                              onCambiar={(v) => onCambiar({ terminaciones: v })} />
               </div>
             )}
           </div>
@@ -236,7 +245,8 @@ function Selector({ valor, opciones, onCambiar }) {
    0..N ítems de un catálogo, sin duplicados, o un monto escrito a mano en vez
    de un nombre (ver core.precios.parsear_valor_manual). Cada pastilla muestra
    lo que cobra ese ítem, según el último cálculo de Python. */
-function ListaAditiva({ titulo, lista, items, montos, permitidasSinTextil, sinTextil, onCambiar }) {
+function ListaAditiva({ titulo, lista, items, montos, permitidasSinTextil, sinTextil, onCambiar,
+                        avisoSoloUnidad = "Sin textil, este producto solo admite ítems que se cobren por unidad." }) {
   const aviso = useAvisos();
   const [texto, setTexto] = useState("");
 
@@ -247,7 +257,7 @@ function ListaAditiva({ titulo, lista, items, montos, permitidasSinTextil, sinTe
     /* Sin textil no hay de dónde sacar ML impresos — un ítem que se cobra por
        ML quedaría gratis. Los montos escritos a mano se suman directo. */
     if (!esMonto(t) && sinTextil && !(permitidasSinTextil || []).includes(t)) {
-      aviso("Sin textil, este producto solo admite ítems que se cobren por unidad.", "aviso");
+      aviso(avisoSoloUnidad, "aviso");
       return;
     }
     onCambiar([...items, t]);
@@ -351,6 +361,7 @@ function Cifras({ p, c }) {
       {(c.materiales_inventario || []).map((m) => (
         <Cifra key={m.nombre} et={m.nombre} val={`${fmt.cantidad(m.consumo)} ${m.unidad} · ${fmt.pesos(m.monto)}`} />
       ))}
+      {c.costo_terminaciones > 0 && <Cifra et="Terminaciones" val={fmt.pesos(c.costo_terminaciones)} />}
       {c.valor_unitario != null && <Cifra et="Valor unitario" val={fmt.pesos(c.valor_unitario)} />}
       {c.total != null && <Cifra et="Total producto" val={fmt.pesos(c.total)} total />}
     </>

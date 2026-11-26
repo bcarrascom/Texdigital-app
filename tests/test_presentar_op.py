@@ -132,6 +132,23 @@ class TestGenerarHtml(unittest.TestCase):
         html = ruta.read_text(encoding="utf-8")
         self.assertIn("1,495 m", html)
 
+    def test_backlight_sin_terminaciones_dice_solo_tela_impresa(self):
+        from core.presentar_op import generar_html
+        html = generar_html(_op_backlight(9010)).read_text(encoding="utf-8")
+        self.assertIn("Solo tela impresa", html)
+
+    def test_backlight_con_terminaciones_las_muestra_y_no_dice_solo_tela(self):
+        # Pedido de Bruno, 2026-11-26.
+        from core.presentar_op import generar_html
+        op = _op_backlight(9011)
+        op["productos"][0]["Terminaciones"] = ["Ojetillos", "$5.000"]
+        html = generar_html(op).read_text(encoding="utf-8")
+        self.assertNotIn("Solo tela impresa", html)
+        self.assertIn("<b>Terminaciones:</b> Ojetillos</div>", html)
+        # Y en el recuento del pie, sin el monto a mano.
+        self.assertIn('<div class="mat-item">Ojetillos</div>', html)
+        self.assertNotIn('<div class="mat-item">$5.000</div>', html)
+
     def test_no_backlight_no_muestra_columnas_de_corte(self):
         from core.presentar_op import generar_html
         ruta = generar_html(_op_normal(9004))
@@ -386,6 +403,29 @@ class TestTerminacionesCajaViajaEnLaCadena(unittest.TestCase):
             "cantidad": 1, "terminaciones_caja": "AREA VISUAL",
         })
         self.assertEqual(frontend["terminaciones_caja"], "AREA VISUAL")
+
+
+class TestTerminacionesDeBacklightViajanEnLaCadena(unittest.TestCase):
+    """Las terminaciones de un backlight (2026-11-26): del cotizador al JSON
+    guardado y de vuelta al cotizador al editar."""
+
+    def test_ida_y_vuelta(self):
+        from ui.api_cotizacion import _producto_a_interno, _interno_a_frontend
+        from core.repositorio_cotizaciones import mapear_producto, producto_desde_json
+        interno = _producto_a_interno({
+            "tipo": "backlight", "tela": "Popelina 155", "perfil": "Sin caja",
+            "ancho": "1", "alto": "1", "cantidad": "1", "terminaciones": ["Ojetillos"],
+        })
+        guardado = mapear_producto(interno)
+        self.assertEqual(guardado["Terminaciones"], ["Ojetillos"])
+        self.assertEqual(_interno_a_frontend(producto_desde_json(guardado))["terminaciones"], ["Ojetillos"])
+
+    def test_sin_terminaciones_se_guarda_como_siempre(self):
+        from core.repositorio_cotizaciones import mapear_producto, producto_desde_json
+        guardado = mapear_producto({"tela": "Popelina 155", "caja": "Sin caja", "ancho": 1.0,
+                                    "alto": 1.0, "cantidad": 1, "terminaciones": []})
+        self.assertNotIn("Terminaciones", guardado)
+        self.assertEqual(producto_desde_json(guardado)["terminaciones"], [])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

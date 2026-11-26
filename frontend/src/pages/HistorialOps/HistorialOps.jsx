@@ -202,7 +202,7 @@ function resumenProducto(p) {
   return {
     nombre: bl ? (p.caja && p.caja !== "Sin caja" ? "Backlight + Caja" : "Backlight") : p.producto || "—",
     textil: bl ? p.tela : p.textil,
-    extras: bl ? [] : [...(p.estructuras || []), ...(p.terminaciones || [])],
+    extras: bl ? [...(p.terminaciones || [])] : [...(p.estructuras || []), ...(p.terminaciones || [])],
   };
 }
 

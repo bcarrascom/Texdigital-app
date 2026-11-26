@@ -162,6 +162,29 @@ class TestPrecios(unittest.TestCase):
         self.assertEqual(costo["total"], 6000.0)
         self.assertEqual(costo["valor_unitario"], 2000.0)   # 6000 / 3
 
+    def test_4c_backlight_con_terminaciones_por_unidad(self):
+        # Un backlight también puede llevar terminaciones (pedido de Bruno,
+        # 2026-11-26): valor × Cantidad, más un monto a mano tal cual.
+        d = {"tela": "Popelina Test", "caja": "Sin caja",
+             "alto": 2.0, "ancho": 1.0, "cantidad": 3,
+             "terminaciones": ["Basta", "$5.000"]}
+        costo = costo_producto(d, **CATALOGOS)
+        self.assertEqual(costo["detalle_terminaciones"], {"Basta": 3 * 1140, "$5.000": 5000.0})
+        self.assertEqual(costo["costo_terminaciones"], 3 * 1140 + 5000)
+        self.assertEqual(costo["total"], 6000 + 3 * 1140 + 5000)
+
+    def test_4d_backlight_terminaciones_del_modelo_legado(self):
+        # Modelo legado (el de la app): solo las por unidad cobran en un
+        # backlight; una por ML no tiene ML con que multiplicarse.
+        d = {"tela": "Popelina Test", "caja": "Sin caja",
+             "alto": 2.0, "ancho": 1.0, "cantidad": 2,
+             "terminaciones": ["Ojetillos", "Ribete"]}
+        costo = costo_producto(d, **{**CATALOGOS, "modelo": "legado"},
+                               terminaciones_legado_valores={"Ojetillos": {"valorUNIT": 14500},
+                                                             "Ribete": {"valorML": 900}})
+        self.assertEqual(costo["detalle_terminaciones"], {"Ojetillos": 29000, "Ribete": 0.0})
+        self.assertEqual(costo["total"], 4000 + 29000)
+
     def test_4b_backlight_con_caja_suma_costo_impresion_mas_caja(self):
         # Misma caja del ejemplo real (fila 5 de la cotización N° 7359):
         # 0.925 x 0.700, PERFIL 100 MM SIMPLE, M12, Trovicel 122, cantidad 3.

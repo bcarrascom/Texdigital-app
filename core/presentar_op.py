@@ -149,6 +149,11 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
     tema_celda = f'{tema}<div class="prod-obs">Observación: {obs}</div>' if obs else tema
     medidas = f"{_fmt_medida(p.get('Ancho', 0))} × {_fmt_medida(p.get('Alto', 0))} m"
     metros, unidad = _metrica_producto(interno)
+    # Los ajustes manuales (montos escritos directo, ver
+    # core.precios.parsear_valor_manual) no son un material real — no
+    # se muestran acá, la OP es solo para producción.
+    terminaciones = [t for t in interno.get("terminaciones", [])
+                     if parsear_valor_manual(t) is None]
 
     if "Caja" in p:
         caja = p.get("Caja")
@@ -162,7 +167,8 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
             detalle = caja.get("perfil", "")
         else:
             nombre = f"Backlight · {p.get('Tela', '')}"
-            detalle = "Solo tela impresa"
+            # Con terminaciones ya no es "solo" tela (pedido de Bruno, 2026-11-26).
+            detalle = "" if terminaciones else "Solo tela impresa"
         # Qué se midió (caja terminada vs área visual) va en la línea de detalle
         # del producto, no escondido en una sub-línea: es lo que decide el corte
         # de TODA la pieza, y el taller tiene que poder verlo sin buscarlo
@@ -173,7 +179,10 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         # margen igual se imprime más abajo, que es lo que el que corta necesita.
         if not con_caja:
             detalle = f"{detalle} · {etiqueta_tc}" if detalle else etiqueta_tc
-        extras_html = ""
+        extras_html = (
+            f'<div class="prod-extras"><b>Terminaciones:</b> {" · ".join(terminaciones)}</div>'
+            if terminaciones else ""
+        )
         corte_ancho = _fmt_medida(_corte(p.get("Ancho", 0), tc))
         corte_alto  = _fmt_medida(_corte(p.get("Alto", 0), tc))
         celdas_corte = f"""
@@ -196,16 +205,11 @@ def _fila_producto(p: dict, interno: dict, terminaciones_caja: str = "CAJA TERMI
         <td class="num"></td>""" if tabla_backlight else ""
         nombre = p.get("producto", "")
         detalle = p.get("Tela", "")
-        # Los ajustes manuales (montos escritos directo, ver
-        # core.precios.parsear_valor_manual) no son un material real — no
-        # se muestran acá, la OP es solo para producción.
         partes_extra = []
         estructuras = [e for e in interno.get("estructuras", [])
                        if parsear_valor_manual(e) is None]
         if estructuras:
             partes_extra.append(f"<b>Estructuras:</b> {' · '.join(estructuras)}")
-        terminaciones = [t for t in interno.get("terminaciones", [])
-                         if parsear_valor_manual(t) is None]
         if terminaciones:
             partes_extra.append(f"<b>Terminaciones:</b> {' · '.join(terminaciones)}")
         extras_html = (
@@ -301,6 +305,9 @@ def _recuento_materiales(productos_raw: list[dict], productos_internos: list[dic
             elif isinstance(caja_dict, str) and caja_dict.strip() and caja_dict.strip().lower() != "sin caja":
                 clave = ("Perfil", caja_dict.strip())
                 caja[clave] = caja.get(clave, 0.0) + ml_perfil
+            for nombre in interno.get("terminaciones", []):
+                if parsear_valor_manual(nombre) is None:
+                    terminaciones[nombre] = terminaciones.get(nombre, 0.0) + metros
         else:
             tela = interno.get("textil", "")
             slot = textiles.setdefault(tela, {"ML": 0.0, "M²": 0.0})

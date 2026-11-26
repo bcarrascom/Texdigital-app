@@ -86,5 +86,28 @@ class TestObservacionAlImprimir(_ConRutaTemporal):
         self.assertIn('<div class="prod-obs">Observación: Ojales cada 50cm</div>', html)
 
 
+class TestBacklightConTerminaciones(_ConRutaTemporal):
+    """Un backlight también puede llevar terminaciones (pedido de Bruno,
+    2026-11-26): ya no es "solo tela impresa"."""
+
+    def test_sin_terminaciones_sigue_diciendo_solo_tela_impresa(self):
+        html = generar_html(_cotizacion_backlight(9010)).read_text(encoding="utf-8")
+        self.assertIn("Solo tela impresa", html)
+
+    def test_con_terminaciones_las_muestra_y_no_dice_solo_tela(self):
+        cot = _cotizacion_backlight(9011)
+        cot["productos"][0]["Terminaciones"] = ["Ojetillos"]
+        html = generar_html(cot).read_text(encoding="utf-8")
+        self.assertNotIn("Solo tela impresa", html)
+        self.assertIn("<b>Terminaciones:</b> Ojetillos", html)
+
+    def test_un_monto_a_mano_no_se_muestra_ni_cambia_el_detalle(self):
+        cot = _cotizacion_backlight(9012)
+        cot["productos"][0]["Terminaciones"] = ["$5.000"]
+        html = generar_html(cot).read_text(encoding="utf-8")
+        self.assertIn("Solo tela impresa", html)
+        self.assertNotIn("$5.000</", html)
+
+
 if __name__ == "__main__":
     unittest.main()

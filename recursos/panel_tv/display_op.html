@@ -334,8 +334,14 @@ function esValorManual(texto){
    terminaciones"), igual que ya se oculta "sin luces"/Traseras en 0 para
    los productos con caja. */
 function detalleExtra(p){
-  if(esBacklight(p)) return [];
   const items = [];
+  /* Un backlight no tiene estructuras ni impresión, pero sí puede llevar
+     terminaciones (2026-11-26). */
+  if(esBacklight(p)){
+    const terminaciones = (Array.isArray(p.Terminaciones) ? p.Terminaciones : []).filter(n => !esValorManual(n));
+    if(terminaciones.length) items.push({ k: "Terminaciones", v: terminaciones.join(" · ") });
+    return items;
+  }
   const estructuras = (Array.isArray(p.Estructuras) ? p.Estructuras
     : ((p.Estructura || "").trim().toLowerCase() !== "sin estructura" && p.Estructura ? [p.Estructura] : []))
     .filter(n => !esValorManual(n));

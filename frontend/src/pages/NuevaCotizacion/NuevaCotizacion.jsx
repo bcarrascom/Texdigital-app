@@ -16,7 +16,7 @@ import { enviarAvisoCreacion } from "./AvisoAlCrear";
 import { useDestinatarios } from "@/components/ListaDestinatarios/ListaDestinatarios";
 import { DialogoDescuentoLinea, DialogoDescuentoPedido, DialogoRestablecer } from "@/components/Descuentos/Descuentos";
 import { DialogoMateriales, DialogoQuitar } from "./DialogosNuevaCotizacion";
-import { completo, esVacio, firma, normalizar, productoVacio } from "./producto";
+import { completo, esMonto, esVacio, firma, normalizar, productoVacio } from "./producto";
 import * as fmt from "@/utils/formato";
 import "./NuevaCotizacion.css";
 
@@ -276,7 +276,12 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
      corta apenas aparece uno que ya tiene algo cargado. */
   function cambiarTipo(i, tipo) {
     cambiarProductos((lista) => {
-      const nueva = lista.map((p, j) => (j === i ? normalizar({ ...p, tipo }, cat) : p));
+      /* Un backlight solo lleva terminaciones por unidad (ver PanelProducto):
+         al pasarle uno estándar, las por ML no lo siguen. */
+      const soloUnidad = (ts) => ts.filter((t) => esMonto(t) || (cat.terminaciones_unit || []).includes(t));
+      const nueva = lista.map((p, j) => (j === i
+        ? normalizar({ ...p, tipo, ...(tipo === "backlight" ? { terminaciones: soloUnidad(p.terminaciones || []) } : {}) }, cat)
+        : p));
       for (let j = i + 1; j < nueva.length && esVacio(nueva[j], cat); j++) nueva[j] = { ...nueva[j], tipo };
       return nueva;
     });
@@ -524,6 +529,7 @@ function Pizarra({ cat, estado: estadoInicial, extras: extrasIniciales, numeroEd
       <Datalist id="lista-textiles" valores={cat.textiles} />
       <Datalist id="lista-estructuras" valores={cat.estructuras} />
       <Datalist id="lista-terminaciones" valores={cat.terminaciones} />
+      <Datalist id="lista-terminaciones-bl" valores={cat.terminaciones_unit} />
       <Datalist id="lista-empresas" valores={(cat.clientes || []).map((c) => c.empresa)} />
       <Datalist id="lista-contactos" valores={(cat.contactos || []).map((c) => c.contacto)} />
 

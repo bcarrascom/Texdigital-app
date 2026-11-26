@@ -52,6 +52,15 @@ def _fila_producto(p: dict, interno: dict, kwargs: dict, ml_o_area_facturable: f
     obs = p.get("Obs", "").strip()
     obs_html = f'<div class="prod-obs">Observación: {obs}</div>' if obs else ""
 
+    # Los ajustes manuales (montos escritos directo, ver
+    # core.precios.parsear_valor_manual) se suman al total pero NUNCA
+    # se muestran acá — el cliente solo ve el total del producto, no
+    # el detalle de un parche puntual de precio.
+    estructuras = [e for e in interno.get("estructuras", [])
+                   if parsear_valor_manual(e) is None]
+    terminaciones = [t for t in interno.get("terminaciones", [])
+                     if parsear_valor_manual(t) is None]
+
     if "Caja" in p:
         caja = p.get("Caja")
         con_caja = isinstance(caja, dict)
@@ -61,10 +70,11 @@ def _fila_producto(p: dict, interno: dict, kwargs: dict, ml_o_area_facturable: f
             detalle = caja.get("perfil", "")
         else:
             nombre = f"Backlight · {p.get('Tela', '')}"
-            detalle = "Solo tela impresa"
+            # Con terminaciones ya no es "solo" tela (pedido de Bruno, 2026-11-26).
+            detalle = "" if terminaciones else "Solo tela impresa"
         if tema:
             detalle = f"{detalle} · Tema: {tema}" if detalle else f"Tema: {tema}"
-        extras_html = ""
+        estructuras = []   # un backlight no tiene
     else:
         nombre = p.get("producto", "")
         tema = p.get("Tema", "")
@@ -72,23 +82,15 @@ def _fila_producto(p: dict, interno: dict, kwargs: dict, ml_o_area_facturable: f
         if tema:
             detalle = f"{detalle} · Tema: {tema}" if detalle else f"Tema: {tema}"
 
-        # Los ajustes manuales (montos escritos directo, ver
-        # core.precios.parsear_valor_manual) se suman al total pero NUNCA
-        # se muestran acá — el cliente solo ve el total del producto, no
-        # el detalle de un parche puntual de precio.
-        partes_extra = []
-        estructuras = [e for e in interno.get("estructuras", [])
-                       if parsear_valor_manual(e) is None]
-        if estructuras:
-            partes_extra.append(f"<b>Estructuras:</b> {' · '.join(estructuras)}")
-        terminaciones = [t for t in interno.get("terminaciones", [])
-                         if parsear_valor_manual(t) is None]
-        if terminaciones:
-            partes_extra.append(f"<b>Terminaciones:</b> {' · '.join(terminaciones)}")
-        extras_html = (
-            f'<div class="prod-extras">{"<br>".join(partes_extra)}</div>'
-            if partes_extra else ""
-        )
+    partes_extra = []
+    if estructuras:
+        partes_extra.append(f"<b>Estructuras:</b> {' · '.join(estructuras)}")
+    if terminaciones:
+        partes_extra.append(f"<b>Terminaciones:</b> {' · '.join(terminaciones)}")
+    extras_html = (
+        f'<div class="prod-extras">{"<br>".join(partes_extra)}</div>'
+        if partes_extra else ""
+    )
 
     return f"""      <tr>
         <td>

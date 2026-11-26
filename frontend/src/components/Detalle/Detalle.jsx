@@ -117,7 +117,7 @@ function FichaProducto({ p, i, mirando, pie, onMirar, onSoltar }) {
   const textil = bl ? "" : p.textil || p.tela;
   const etiquetas = [
     ...(bl
-      ? [p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja"]
+      ? [p.caja && p.caja !== "Sin caja" ? p.caja : "Sin caja", ...(p.terminaciones || [])]
       : [p.impresion, ...(p.estructuras || []), ...(p.terminaciones || [])]),
     p.obs && "Obs: " + p.obs,
   ].filter(Boolean);
