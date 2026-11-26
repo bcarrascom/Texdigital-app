@@ -45,9 +45,10 @@ export default memo(function Historial({ entradas = [], vista, onDeshacer, vacio
       </div>
       {lista.length ? (
         <div className="timeline">
-          {lista.map((e) => (
-            <Tarjeta key={e.id} {...vista(e)} onDeshacer={e.id === idMasReciente && onDeshacer ? () => onDeshacer(e) : null} />
-          ))}
+          {lista.map((e) => {
+            const v = vista(e);   // v.fijo: una entrada que no se deshace
+            return <Tarjeta key={e.id} {...v} onDeshacer={e.id === idMasReciente && onDeshacer && !v.fijo ? () => onDeshacer(e) : null} />;
+          })}
         </div>
       ) : <p className="estado-vacio">{vacio}</p>}
     </section>

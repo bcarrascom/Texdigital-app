@@ -235,6 +235,92 @@ class TestCrearYEditarRollo(_ConRutaTemporalYCatalogo):
         self.assertEqual(r["estado"], "activo")
 
 
+class TestCambiarNumeroRollo(_ConRutaTemporalYCatalogo):
+    """Editar rollo › Número (pedido de Bruno, 2026-11-26)."""
+
+    def setUp(self):
+        super().setUp()
+        import core.repositorio_ops as repo_ops
+        self._ops = Path(self._tmp.name) / "OPs"
+        parche = mock.patch.object(repo_ops, "_ruta_base", lambda: self._ops)
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _op(self, carpeta, numero, id_rollo):
+        import json
+        ruta = self._ops / carpeta / f"{numero}.json"
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_text(json.dumps({"OP": numero, "productos": [{"RollosUsados": [{"id": id_rollo, "metros": 3.0}]}]}),
+                        encoding="utf-8")
+        return ruta
+
+    @staticmethod
+    def _rollo_de(ruta):
+        import json
+        return json.loads(ruta.read_text(encoding="utf-8"))["productos"][0]["RollosUsados"][0]["id"]
+
+    def test_cambia_el_numero_y_el_archivo(self):
+        r = repo_inv.crear_rollo("TelaTest", 100)          # 0001
+        repo_inv.crear_rollo("TelaTest", 50)               # 0002
+        editado = repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id="40")
+        self.assertEqual(editado["id"], "0040")
+        self.assertTrue((repo_inv.carpeta_activos() / "0040.json").exists())
+        self.assertFalse((repo_inv.carpeta_activos() / "0001.json").exists())
+        self.assertIsNone(repo_inv.obtener_rollo("0001"))
+        self.assertEqual(repo_inv.obtener_rollo("0040")["metros_restantes"], 100.0)
+        u = editado["usos"][-1]
+        self.assertEqual((u["tipo"], u["id_anterior"], u["id_nuevo"]), ("numero", "0001", "0040"))
+        # El automático: el mayor + 1.
+        self.assertEqual(repo_inv.siguiente_id(), "0041")
+
+    def test_el_numero_viejo_queda_libre(self):
+        r = repo_inv.crear_rollo("TelaTest", 100, id_="9")
+        repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id="5")
+        self.assertEqual(repo_inv.validar_id("9"), ("0009", None))
+        self.assertEqual(repo_inv.siguiente_id(), "0006")
+
+    def test_no_deja_repetir_y_no_cambia_nada(self):
+        a = repo_inv.crear_rollo("TelaTest", 100)
+        b = repo_inv.crear_rollo("TelaTest", 50)
+        with self.assertRaises(ValueError):
+            repo_inv.editar_rollo(a["id"], "Backlight Test", proveedor="Otro", nuevo_id=b["id"])
+        guardado = repo_inv.obtener_rollo(a["id"])
+        self.assertEqual((guardado["nombre_textil"], guardado["proveedor"]), ("TelaTest", ""))
+
+    def test_no_deja_usar_el_de_un_decomisionado(self):
+        viejo = repo_inv.crear_rollo("TelaTest", 10)
+        r = repo_inv.crear_rollo("TelaTest", 100)
+        repo_inv.decomisionar_rollo(viejo["id"])
+        with self.assertRaisesRegex(ValueError, "decomisionado"):
+            repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id=viejo["id"])
+
+    def test_el_mismo_numero_no_es_un_cambio(self):
+        r = repo_inv.crear_rollo("TelaTest", 100, id_="0012")
+        for mismo in ("12", "0012", "", None):
+            editado = repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id=mismo)
+            self.assertEqual(editado["id"], "0012")
+        self.assertFalse(any(u["tipo"] == "numero" for u in repo_inv.obtener_rollo("0012")["usos"]))
+
+    def test_las_ops_en_curso_pasan_al_numero_nuevo(self):
+        r = repo_inv.crear_rollo("TelaTest", 100)
+        activa = self._op("JSON", 7001, r["id"])
+        pendiente = self._op("Pendiente", 7002, r["id"])
+        completada = self._op("Completadas", 7003, r["id"])
+        otra = self._op("JSON", 7004, "0099")
+        historial = self._op("Historial/2026/11", 7000, r["id"])
+        repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id="77")
+        for ruta in (activa, pendiente, completada):
+            self.assertEqual(self._rollo_de(ruta), "0077", ruta)
+        self.assertEqual(self._rollo_de(otra), "0099")
+        self.assertEqual(self._rollo_de(historial), "0001")
+
+    def test_el_cambio_de_numero_no_se_deshace(self):
+        r = repo_inv.crear_rollo("TelaTest", 100)
+        editado = repo_inv.editar_rollo(r["id"], "TelaTest", nuevo_id="3")
+        self.assertIsNone(repo_inv.eliminar_ajuste("0003", editado["usos"][-1]["id"]))
+        self.assertEqual(repo_inv.obtener_rollo("0003")["usos"][-1]["tipo"], "numero")
+
+
 class TestDecomisionarRollo(_ConRutaTemporalYCatalogo):
 
     def test_decomisionar_saca_el_rollo_de_la_lista_activa(self):

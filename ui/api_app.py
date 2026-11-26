@@ -595,9 +595,9 @@ class ApiApp:
 
     def editar_rollo(
         self, id_, nombre_textil,
-        precio_compra=0.0, valor=None, proveedor="",
+        precio_compra=0.0, valor=None, proveedor="", nuevo_id=None,
     ) -> dict | None:
-        return self._inventario.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor)
+        return self._inventario.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor, nuevo_id)
 
     def cambiar_estado_rollo(self, id_, activo: bool) -> dict | None:
         return self._inventario.cambiar_estado_rollo(id_, activo)

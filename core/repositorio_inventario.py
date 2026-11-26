@@ -415,17 +415,29 @@ def crear_rollo(
 def editar_rollo(
     id_: str, nombre_textil: str,
     precio_compra: float = 0.0, valor: float | None = None, proveedor: str = "",
+    nuevo_id: str | None = None,
 ) -> dict | None:
     """nombre_textil/precio_compra/valor/proveedor son editables después de
     creado — metros_iniciales/restantes se manejan aparte (ver
     ajustar_restante) y Estado tiene su propio toggle (ver
     cambiar_estado_rollo), para que ninguno de los dos se pise sin dejar
-    rastro por acá. El ancho es el del textil (ver ancho_rollo)."""
+    rastro por acá. El ancho es el del textil (ver ancho_rollo).
+
+    `nuevo_id`: otro número para el rollo (pedido de Bruno, 2026-11-26), con
+    las reglas de un número elegido a mano (ver validar_id; ValueError si no
+    se puede usar, y entonces no se cambia nada). Ver _renumerar."""
     from core.repositorio import TEXTILES_ANCHOS
 
     r = obtener_rollo(id_)
     if r is None:
         return None
+    nuevo_id = _normalizar_id(nuevo_id)
+    if nuevo_id and nuevo_id != r["id"]:
+        nuevo_id, error = validar_id(nuevo_id)
+        if error:
+            raise ValueError(error)
+    else:
+        nuevo_id = None
     r["nombre_textil"] = nombre_textil.strip()
     # El que traía guardado (de antes de 2026-11-04) sobra apenas su textil
     # tiene ancho en el catálogo.
@@ -434,8 +446,67 @@ def editar_rollo(
     r["precio_compra"] = float(precio_compra) if precio_compra else 0.0
     _fijar_valor(r, float(valor) if valor is not None else None)
     r["proveedor"] = (proveedor or "").strip()
-    _escribir_rollo(carpeta_activos(), r)
+    if nuevo_id:
+        _renumerar(r, nuevo_id)
+    else:
+        _escribir_rollo(carpeta_activos(), r)
     return r
+
+
+def _normalizar_id(texto) -> str | None:
+    """"42", "#0042" → "0042"; vacío o no numérico → None (lo rechaza validar_id)."""
+    t = str(texto or "").strip().lstrip("#")
+    if not t:
+        return None
+    return f"{int(t):04d}" if t.isascii() and t.isdigit() else t
+
+
+def _renumerar(r: dict, nuevo_id: str) -> None:
+    """Le pone a `r` (activo) el número `nuevo_id`, ya validado: guarda el
+    archivo con el nombre nuevo y borra el viejo. El número viejo queda libre
+    (ningún rollo lo tiene) y el siguiente automático sigue siendo el mayor +
+    1 (ver siguiente_id). Queda una entrada tipo="numero" en el historial, que
+    no se deshace (para volver, se edita el número otra vez).
+
+    Las OPs que todavía se están haciendo (JSON/, Pendiente/, Completadas/)
+    guardan en RollosUsados el número del rollo que les toca: se les cambia,
+    para que la OP y el panel de producción digan el número que tiene el rollo
+    ahora. Las del historial quedan como estaban: son historia. Los consumos
+    van en el propio rollo y se revierten por número de OP (ver
+    revertir_consumo_op), así que no dependen del número del rollo."""
+    viejo = r["id"]
+    restantes = r.get("metros_restantes", 0.0)
+    _agregar_registro(r, tipo="numero", anterior=restantes, nuevo=restantes,
+                      descripcion=f"#{viejo} → #{nuevo_id}", id_anterior=viejo, id_nuevo=nuevo_id)
+    r["id"] = nuevo_id
+    _escribir_rollo(carpeta_activos(), r)
+    (carpeta_activos() / f"{viejo}.json").unlink(missing_ok=True)
+    _renumerar_en_ops(viejo, nuevo_id)
+
+
+def _renumerar_en_ops(viejo: str, nuevo: str) -> int:
+    """Cambia `viejo` por `nuevo` en RollosUsados de las OPs que no están en
+    el historial. Devuelve cuántas OPs cambió."""
+    from core import repositorio_ops
+
+    cambiadas = 0
+    for carpeta in (repositorio_ops.carpeta_json(), repositorio_ops.carpeta_pendiente(),
+                    repositorio_ops.carpeta_completadas()):
+        for archivo in carpeta.glob("*.json"):
+            try:
+                datos = json.loads(archivo.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            cambio = False
+            for producto in datos.get("productos") or []:
+                for usado in producto.get("RollosUsados") or []:
+                    if isinstance(usado, dict) and usado.get("id") == viejo:
+                        usado["id"] = nuevo
+                        cambio = True
+            if cambio:
+                archivo.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+                cambiadas += 1
+    return cambiadas
 
 
 def _fijar_valor(r: dict, nuevo: float | None, descripcion: str = "") -> bool:
@@ -548,7 +619,7 @@ def _agregar_registro(
     numero_op=None, cliente: str | None = None, tema: str | None = None, obs: str | None = None,
     estado_nuevo: str | None = None, valor_venta: float | None = None,
     valor_anterior: float | None = None, valor_nuevo: float | None = None,
-    cobrado: dict | None = None,
+    cobrado: dict | None = None, id_anterior: str | None = None, id_nuevo: str | None = None,
 ) -> None:
     """Un solo formato de entrada para TODO lo que le pasa a un rollo —
     ajuste manual de cantidad, consumo automático o cambio de Activo/
@@ -602,6 +673,9 @@ def _agregar_registro(
     if tipo == "precio":
         entrada["valor_anterior"] = float(valor_anterior) if valor_anterior is not None else None
         entrada["valor_nuevo"] = float(valor_nuevo) if valor_nuevo is not None else None
+    if tipo == "numero":
+        entrada["id_anterior"] = id_anterior
+        entrada["id_nuevo"] = id_nuevo
     r.setdefault("usos", []).append(entrada)
 
 
@@ -673,6 +747,8 @@ def eliminar_ajuste(id_rollo: str, id_ajuste: str) -> dict | None:
         return None
     usos = r.get("usos", [])
     if not usos or usos[-1].get("id") != id_ajuste:
+        return None
+    if usos[-1].get("tipo") == "numero":   # un cambio de número no se deshace (ver _renumerar)
         return None
     objetivo = usos.pop()
     r["metros_restantes"] = objetivo.get("metros_restantes_anterior", r.get("metros_restantes", 0.0))
