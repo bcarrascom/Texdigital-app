@@ -90,10 +90,15 @@ class ApiInventario:
 
     def editar_rollo(
         self, id_: str, nombre_textil: str,
-        precio_compra=0.0, valor=None, proveedor="",
+        precio_compra=0.0, valor=None, proveedor="", nuevo_id=None,
     ) -> dict | None:
+        """El rollo editado, None si no existe, o {"error": mensaje} si el
+        número nuevo no se puede usar (y entonces no se cambia nada)."""
         catalogo.refrescar()
-        return _repo.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor)
+        try:
+            return _repo.editar_rollo(id_, nombre_textil, precio_compra, valor, proveedor, nuevo_id)
+        except ValueError as e:
+            return {"error": str(e)}
 
     def cambiar_estado_rollo(self, id_: str, activo: bool) -> dict | None:
         return _repo.cambiar_estado_rollo(id_, activo)

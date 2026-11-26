@@ -164,12 +164,23 @@ export default {
     rollos.unshift(r);
     return devolverRollo(r);
   },
-  editar_rollo(id, nombre_textil, precio_compra, valor, proveedor) {
+  editar_rollo(id, nombre_textil, precio_compra, valor, proveedor, nuevo_id) {
     const r = rolloPorId(id);
+    let numero = null;
+    if (r && nuevo_id && numeroRollo(nuevo_id) !== r.id) {
+      const v = validarIdRollo(nuevo_id);
+      if (v.error) return { error: v.error };
+      numero = v.id;
+    }
     if (r && r.valor !== valor) {
       r.usos.push(uso("precio", hoy(), r.metros_restantes, r.metros_restantes, { valor_anterior: r.valor, valor_nuevo: valor }));
     }
     if (r) Object.assign(r, { nombre_textil, precio_compra, valor, proveedor });
+    if (r && numero) {
+      r.usos.push(uso("numero", hoy(), r.metros_restantes, r.metros_restantes, { id_anterior: r.id, id_nuevo: numero, descripcion: `#${r.id} → #${numero}` }));
+      r.id = numero;
+      siguienteRollo = Math.max(...rollos.map((x) => parseInt(x.id, 10))) + 1;
+    }
     return devolverRollo(r);
   },
   cambiar_estado_rollo(id, activo) {

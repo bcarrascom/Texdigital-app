@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
 import { api } from "@/services/api";
@@ -33,7 +33,7 @@ import "@/pages/Inventario/Ficha.css";
    la herramienta de corrección manual, con una descripción para poder
    revisarla después. */
 
-const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación", precio: "Precio" };
+const ETIQUETA_TIPO = { ajuste: "Ajuste", consumo: "Consumo", activacion: "Activación", precio: "Precio", numero: "Número" };
 const esActivo = (r) => (r.estado || "activo") === "activo";
 const redondear = (n) => Math.round(n * 100) / 100;
 const SIN_ENTRADAS = [];   // estable entre renders: un [] nuevo rompería el memo del historial
@@ -168,7 +168,17 @@ export default function VerRollo() {
           <Dialogo abierto={dialogo === "editar"} onCerrar={cerrar} className="dlg-ficha">
             <EditarRollo r={r} textiles={datos.textiles} textilCreado={textilCreado} onTextilNuevo={(nombre) => setTextilNuevo({ nombre })}
                          onCerrar={cerrar}
-                         onGuardado={async () => { cerrar(); await recargar(); aviso("Rollo actualizado.", "info"); }} />
+                         onGuardado={async (editado) => {
+                           cerrar();
+                           // Con otro número, la ficha pasa a su dirección nueva (sin dejar la vieja en el historial).
+                           if (editado?.id && editado.id !== r.id) {
+                             navigate(rutas.verRollo(editado.id), { replace: true, state: location.state });
+                             aviso(`Rollo actualizado: ahora es el #${editado.id}.`, "info");
+                             return;
+                           }
+                           await recargar();
+                           aviso("Rollo actualizado.", "info");
+                         }} />
           </Dialogo>
           {/* Por encima de "Editar rollo" y fuera de él: ver Inventario.jsx. */}
           <DialogoTextil abierto={!!textilNuevo} nombreInicial={textilNuevo?.nombre} onCerrar={() => setTextilNuevo(null)}
@@ -254,6 +264,10 @@ function vistaUso(u, abrirOp) {
   // Un consumo de una OP que se recotizó: sus metros volvieron al rollo (ver
   // revertir_consumo_op). Queda a la vista, sin el color de un consumo.
   const revertido = consumo && u.revertido;
+  // Un cambio de número no se deshace (ver core.repositorio_inventario._renumerar).
+  if (u.tipo === "numero") {
+    return { chip: ETIQUETA_TIPO.numero, cambio: `#${u.id_anterior} → #${u.id_nuevo}`, fecha: u.fecha, fijo: true };
+  }
   return {
     chip: revertido ? "Consumo revertido" : ETIQUETA_TIPO[u.tipo] || u.tipo,
     variante: revertido ? undefined : consumo ? "consumo" : precio ? "precio" : activacion ? (activado ? "activo" : "inactivo") : undefined,
@@ -277,7 +291,7 @@ function vistaUso(u, abrirOp) {
 /* Sin ancho: es el del textil, se cambia en Configuración › Textiles. */
 function EditarRollo({ r, textiles, textilCreado, onTextilNuevo, onCerrar, onGuardado }) {
   const [f, setF] = useState({
-    textil: r.nombre_textil || "", proveedor: r.proveedor || "",
+    id: r.id, textil: r.nombre_textil || "", proveedor: r.proveedor || "",
     compra: r.precio_compra ? fmt.clp(r.precio_compra) : "", valor: r.valor != null ? fmt.clp(r.valor) : "",
   });
   const [errores, setErrores] = useState({});
@@ -287,15 +301,33 @@ function EditarRollo({ r, textiles, textilCreado, onTextilNuevo, onCerrar, onGua
   // (los que vienen de la planilla con su nombre de allá).
   const textil = textilDe(textiles, f.textil) || (f.textil.trim() === r.nombre_textil ? r.nombre_textil : null);
 
+  /* El número (pedido de Bruno, 2026-11-26): mismas reglas que en Rollo nuevo,
+     uno que no tenga ni haya tenido otro rollo. Python lo revisa mientras se
+     escribe; el suyo de siempre no se revisa. */
+  const [errorId, setErrorId] = useState(null);
+  const idNuevo = f.id && f.id.padStart(4, "0") !== r.id ? f.id : null;
+  useEffect(() => {
+    setErrorId(null);
+    if (!idNuevo) return;
+    let vigente = true;
+    const espera = setTimeout(() => api.validar_id_rollo(idNuevo).then((x) => vigente && setErrorId(x?.error || null)), 250);
+    return () => { vigente = false; clearTimeout(espera); };
+  }, [idNuevo]);
+
   async function guardar(e) {
     e.preventDefault();
-    const faltan = { textil: !textil };
+    const faltan = { textil: !textil, id: !f.id || !!errorId };
     setErrores(faltan);
     if (Object.values(faltan).some(Boolean)) return;
     const proveedor = f.proveedor.trim();
     if (proveedor) await api.guardar_proveedor(proveedor);
-    await api.editar_rollo(r.id, textil, fmt.leerClp(f.compra) || 0, fmt.leerClp(f.valor), proveedor);
-    onGuardado();
+    const res = await api.editar_rollo(r.id, textil, fmt.leerClp(f.compra) || 0, fmt.leerClp(f.valor), proveedor, idNuevo);
+    if (res?.error) {
+      setErrorId(res.error);
+      setErrores((x) => ({ ...x, id: true }));
+      return;
+    }
+    onGuardado(res);
   }
 
   return (
@@ -314,10 +346,16 @@ function EditarRollo({ r, textiles, textilCreado, onTextilNuevo, onCerrar, onGua
                    value={f.compra} onChange={(e) => set("compra", fmt.clp(e.target.value))} />
           </Campo>
         </div>
-        <Campo id="dre-valor" etiqueta="Valor por ML/M²" className="campo--mitad">
-          <input className="entrada" id="dre-valor" type="text" inputMode="numeric" placeholder="Opcional"
-                 value={f.valor} onChange={(e) => set("valor", fmt.clp(e.target.value))} />
-        </Campo>
+        <div className="fila">
+          <Campo id="dre-id" etiqueta="Número" requerido invalido={errores.id || !!errorId} error={errorId || undefined}>
+            <input className="entrada" id="dre-id" type="text" inputMode="numeric" autoComplete="off" placeholder={r.id}
+                   value={f.id} onChange={(e) => set("id", e.target.value.replace(/[^\d]/g, "").slice(0, 4))} />
+          </Campo>
+          <Campo id="dre-valor" etiqueta="Valor por ML/M²">
+            <input className="entrada" id="dre-valor" type="text" inputMode="numeric" placeholder="Opcional"
+                   value={f.valor} onChange={(e) => set("valor", fmt.clp(e.target.value))} />
+          </Campo>
+        </div>
       </div>
       <div className="dlg__acciones">
         <button className="btn btn--fantasma btn--chico" type="button" onClick={onCerrar}>Cancelar</button>
