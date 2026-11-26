@@ -186,6 +186,7 @@ def _producto_a_interno_base(p: dict) -> dict:
             # retomado de un borrador, no deben poder meter un margen que ya no
             # corresponde.
             "terminaciones_caja": _terminaciones_caja(perfil, p.get("terminaciones_caja")),
+            "terminaciones": list(p.get("terminaciones") or []),
         }
 
     return {
@@ -231,6 +232,7 @@ def _interno_a_frontend(interno: dict) -> dict:
             "ancho": str(ancho), "alto": str(alto), "cantidad": str(cantidad),
             "tema": interno.get("tema", ""), "obs": interno.get("obs", ""),
             "terminaciones_caja": interno.get("terminaciones_caja", "CAJA TERMINADA"),
+            "terminaciones": list(interno.get("terminaciones", [])),
         })
         return base
 
@@ -509,6 +511,8 @@ class ApiCotizacion:
                 "materiales": materiales,
                 "materiales_inventario": materiales_inventario,
                 "costo_materiales": costo.get("costo_materiales", 0.0),
+                "costo_terminaciones": costo["costo_terminaciones"],
+                "detalle_terminaciones": costo["detalle_terminaciones"],
                 "ancho_max": ancho_max,
                 "error": error,
                 "valor_unitario": costo["valor_unitario"],

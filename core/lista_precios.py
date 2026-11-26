@@ -84,7 +84,8 @@ def _usados(internos: list[dict]):
             if d.get("textil"):
                 textiles.setdefault(d["textil"], "ML")
             estructuras |= {e for e in d.get("estructuras") or [] if parsear_valor_manual(e) is None}
-            terminaciones |= {t for t in d.get("terminaciones") or [] if parsear_valor_manual(t) is None}
+        # Los backlight también llevan terminaciones (2026-11-26).
+        terminaciones |= {t for t in d.get("terminaciones") or [] if parsear_valor_manual(t) is None}
     return textiles, estructuras, terminaciones, con_caja
 
 

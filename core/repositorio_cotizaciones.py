@@ -291,7 +291,7 @@ def mapear_producto(d: dict) -> dict:
 
 def _mapear_producto(d: dict) -> dict:
     if "tela" in d:
-        return {
+        json_bl = {
             "Tela":     d.get("tela", ""),
             "Caja":     d.get("caja", ""),
             "Ancho":    float(d.get("ancho", 0.0)),
@@ -307,6 +307,11 @@ def _mapear_producto(d: dict) -> dict:
             # igual que la primera vez.
             "TerminacionesCaja": d.get("terminaciones_caja", "CAJA TERMINADA"),
         }
+        # Un backlight también puede llevar terminaciones (2026-11-26). Solo
+        # si tiene: un backlight sin ellas se guarda igual que siempre.
+        if d.get("terminaciones"):
+            json_bl["Terminaciones"] = list(d["terminaciones"])
+        return json_bl
     return {
         "producto":      d.get("producto", ""),
         "Tela":          d.get("textil", ""),
@@ -357,6 +362,7 @@ def _producto_desde_json(d: dict) -> dict:
             "obs":       d.get("Obs", ""),
             "rotado":    False,
             "terminaciones_caja": d.get("TerminacionesCaja", "CAJA TERMINADA"),
+            "terminaciones": list(d.get("Terminaciones") or []),
         }
     return {
         "producto":      d.get("producto", ""),
